@@ -1,0 +1,1984 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║        THE DENOMINATOR — Cathedral Construction proof score (rev 2)          ║
+# ║       composed from 03-architecture.md, revised against three adversarial    ║
+# ║     reviews (05-review-1/2/3.md, rosetta-prove concert, 2026-09-04)           ║
+# ║                                                                                ║
+# ║  PRIMARY PATTERN : Cathedral Construction — an artifact too large for one     ║
+# ║                    context window is built incrementally toward a frozen     ║
+# ║                    blueprint across bounded self-chaining cycles              ║
+# ║                    (plan-iteration → build → inspect → verify-gate →          ║
+# ║                    convergence-check → maturity-check). The writer never      ║
+# ║                    decides when the course is done: churn (structural) ∧     ║
+# ║                    maturity (pedagogical) decide, both as exit codes.        ║
+# ║                                                                                ║
+# ║  COMPOSING       : Fixed-Point Iteration (tools/churn.sh diffs                ║
+# ║                    cathedral/** between git iteration snapshots; verdict     ║
+# ║                    exit-coded; "no fixed iteration count, no performer's     ║
+# ║                    fatigue"), Soil Maturity Index (tools/maturity_assessor.  ║
+# ║                    py, authored from the FROZEN blueprint by a DIFFERENT     ║
+# ║                    vendor family than any chapter draft — the family          ║
+# ║                    inequality is now GATED, not asserted (sheet-1             ║
+# ║                    instrument-families.json + sheet-6 lineage join);          ║
+# ║                    thresholds pre-registered before the first chapter         ║
+# ║                    exists; exit code controls chain termination),             ║
+# ║                    Memoization Cache (tools/cache_check.py keyed on           ║
+# ║                    dataset-pin sha256 × chapter digest × context hash).      ║
+# ║                    REV 2: the cache is now LOAD-BEARING, not decorative —     ║
+# ║                    verify_gate.sh consults it to SKIP expensive re-checks     ║
+# ║                    of verified-and-unchanged chapters (with an audit          ║
+# ║                    sample so a lying cache is caught), records new            ║
+# ║                    greens, and chain_control merges cached greens into        ║
+# ║                    ledger.verified — the exact set L1's waste guard           ║
+# ║                    consumes. Cache hits skip real work; misses pay.           ║
+# ║                    The Etiquette Law is the substrate: every gate below       ║
+# ║                    is a command with an exit code and an EMPTY fallback       ║
+# ║                    chain — the course's authors never judge their own         ║
+# ║                    convergence. Scaffolding movements: Shipyard Sequence      ║
+# ║                    (commissioning validates the foundation with real         ║
+# ║                    tools before the expensive loop runs) and Andon            ║
+# ║                    discipline (every meter must PROVE it can fail —           ║
+# ║                    mutation fixtures, two-direction calibration, forced       ║
+# ║                    cache miss — before it is trusted to pass).                ║
+# ║                                                                                ║
+# ║  PROBLEM SOLVED  : No proof in the corpus had ever run the Iteration scale    ║
+# ║                    (zero self-chaining anywhere in proof-scores/ —            ║
+# ║                    verified by grep in all three reviews). This score is      ║
+# ║                    the corpus's first self-chaining build loop: it            ║
+# ║                    produces The Denominator, a complete open                  ║
+# ║                    machine-verified data-literacy curriculum (~11             ║
+# ║                    chapters) for working journalists and science              ║
+# ║                    communicators, whose every number is re-derived from       ║
+# ║                    sha256-pinned real datasets (OWID grapher CSV + WHO        ║
+# ║                    GHO OData, live-verified and semantically bound via        ║
+# ║                    the metadata endpoint — the WHS4_100 lesson: a HTTP        ║
+# ║                    200 with rows is not a verified semantic claim), whose     ║
+# ║                    exercises are auto-graded against recomputed               ║
+# ║                    reference answers, and whose COMPLETENESS is decided       ║
+# ║                    by measured convergence plus pedagogical maturity —        ║
+# ║                    never by a writer declaring victory. The                   ║
+# ║                    composition's falsifiability clause is a gate: the         ║
+# ║                    run FAILS unless the ledger records at least one           ║
+# ║                    iteration where structural churn was below threshold       ║
+# ║                    while pedagogical maturity FAILED (if the two gates        ║
+# ║                    never disagree, the composition was redundant).            ║
+# ║                                                                                ║
+# ║  PRODUCES        : ~/workspaces/denominator/ (auto-managed, #58) →            ║
+# ║                    cathedral/ (blueprint.yaml frozen + voice-canon.md +      ║
+# ║                    chapters/*.md with {{num:key}} provenance anchors) ·      ║
+# ║                    data/ (raw/ fetched bytes + pins.yaml with url/sha256/    ║
+# ║                    timestamp/license/semantic-title + extracts/ + manifest)   ║
+# ║                    · scripts/recompute.py + tests · harness/ (pytest         ║
+# ║                    exercise grader + band check + deck compiler +            ║
+# ║                    provenance joiner) · tools/ (check-host.sh, pin_verify.   ║
+# ║                    py, blueprint_check.py, maturity_assessor.py,             ║
+# ║                    thresholds.yaml, churn.sh, cache_check.py,                ║
+# ║                    chain_control.sh, verify_gate.sh, provenance_join.py)      ║
+# ║                    · build-ledger.json + memo-cache.yaml + cache-verdict.     ║
+# ║                    json + churn/maturity/gate reports · site-src/ +           ║
+# ║                    site/ (mkdocs --strict, edition-stamped) ·                ║
+# ║                    deck/denominator.apkg (genanki) · proof-report.md · and   ║
+# ║                    the LIVE course: GitHub Pages site + release asset,       ║
+# ║                    proven at the wire (HTTP 200 + end-to-end asset fetch     ║
+# ║                    + served edition stamp == this build's ledger digest).    ║
+# ║                                                                                ║
+# ║  INSTRUMENTS     : 10 AI-judgment sheets (1 scaffold, 3 extracts, 4           ║
+# ║                    harness, 5 blueprint, 6 assessor authorship by             ║
+# ║                    codex-cli — vendor family GPT, EMPTY fallback:            ║
+# ║                    silent family collapse voids the calibration              ║
+# ║                    claim — 7 meters, 8 planning, 9 chapter drafting          ║
+# ║                    by claude-code, 10 inspection by codex-cli with           ║
+# ║                    graceful fallback, 20 write-up) · 11 deterministic        ║
+# ║                    CLI sheets (2, 11–19, 21: data commissioning,             ║
+# ║                    verify-gate, churn, maturity+chain control,               ║
+# ║                    divergence audit, mkdocs build, deck build,               ║
+# ║                    provenance join, publish+wire smoke, two-path             ║
+# ║                    install, chain terminator — ALL with empty                ║
+# ║                    fallback chains). In the repeating loop (the part         ║
+# ║                    that runs up to 20×), three of six stages are pure        ║
+# ║                    CLI. (Header arithmetic corrected in rev 2 — rev 1        ║
+# ║                    said 11 AI / 10 CLI, off by one in both directions.)       ║
+# ║                                                                                ║
+# ║  CHAIN MECHANICS : Self-chaining via on_success run_job → the staged copy     ║
+# ║                    at self-chain.yaml in the workspace (sheet 1 copies the    ║
+# ║                    running score via its score_dir and the copy's            ║
+# ║                    byte-identity to the recorded origin is VALIDATED —        ║
+# ║                    the chain is pinned to the bytes that started it).        ║
+# ║                    fresh: true + workspace_lifecycle.preserve_patterns      ║
+# ║                    keep the cathedral/ledger/pins/tools across cycles while  ║
+# ║                    per-cycle ephemera is archived per iteration.             ║
+# ║                    VERDICT SURVIVAL (rev 2, the review-1/-2 kill fix):       ║
+# ║                    a red sub-check at L4 or a not-converged verdict at       ║
+# ║                    L5 is a VERDICT, not an error — both sheets capture        ║
+# ║                    the exit code with `|| RC=$?` (no set -e suicide),         ║
+# ║                    write their typed report, and exit 0. The verdict is       ║
+# ║                    consumed downstream: maturity re-runs the harness          ║
+# ║                    (a red L4 guarantees a maturity FAIL), chain_control       ║
+# ║                    records CONTINUE, and the next cycle's L1 reads the        ║
+# ║                    failed gates to route rework. Correction is cheap;         ║
+# ║                    the loop survives the defect class it exists to            ║
+# ║                    iterate on. Only meter ERRORS (exit ≥ 2) and depth         ║
+# ║                    exhaustion fail a sheet.                                   ║
+# ║                    TERMINATION (deterministic): (a) convergence — sheet       ║
+# ║                    21 (CLI) swaps self-chain.yaml for a validated            ║
+# ║                    one-sheet terminator once .converged ∧ the proof          ║
+# ║                    report exists → the chain ends with the job COMPLETED     ║
+# ║                    (the "chain gate fails by design" idiom was REJECTED:      ║
+# ║                    it would mark a successful run FAILED); (b) depth          ║
+# ║                    exhaustion — chain_control.sh records an explicit          ║
+# ║                    FAILED_CONVERGENCE ledger row and exits nonzero at         ║
+# ║                    iteration 20 without convergence → the run dies           ║
+# ║                    loud, never a quiet success; (c) divergence                ║
+# ║                    violation — T1 fails the run if the gates never           ║
+# ║                    disagreed. Recovery: a T-stage failure on the              ║
+# ║                    converged cycle dead-ends the chain by design;            ║
+# ║                    recover with `mzt resume <job-id>` (composer action,      ║
+# ║                    visible).                                                  ║
+# ║                                                                                ║
+# ║  ON_FAILURE      : Evaluated (as 03-architecture.md directed) and            ║
+# ║                    deliberately NOT used: the depth-exhaustion path           ║
+# ║                    already has durable, visible custody via the               ║
+# ║                    chain_control FAILED_CONVERGENCE ledger row +              ║
+# ║                    nonzero exit, and stacking an on_failure hook on a         ║
+# ║                    self-chaining score adds an engine interleaving            ║
+# ║                    (on_failure × on_success × fresh) that no proof            ║
+# ║                    has executed yet. Loud-and-simple beats novel-            ║
+# ║                    and-unproven at the failure boundary. Decision             ║
+# ║                    recorded here so the next composer does not re-            ║
+# ║                    derive it blind.                                          ║
+# ║                                                                                ║
+# ║  PREREQUISITES   : mkdocs, jq, curl, sha256sum, git, python3, uv on PATH      ║
+# ║                    AND `gh` AUTHENTICATED (check-host.sh runs `gh auth       ║
+# ║                    status` — rev 2: the riskiest credential is gated at       ║
+# ║                    sheet 1, not discovered at sheet 18) and the              ║
+# ║                    assessor-author instrument family READY (sheet 1          ║
+# ║                    probes mzt instruments and the family-inequality          ║
+# ║                    gate fails the run at commissioning if assessor and        ║
+# ║                    builder collapse to one vendor); network for OWID/WHO     ║
+# ║                    + uv packages (pandas, numpy, pytest, pyyaml,             ║
+# ║                    textstat, genanki). Rough cost: ~10 AI sheets per         ║
+# ║                    commissioning cycle (once) + 3 AI sheets per loop         ║
+# ║                    cycle (≤20) ≈ $10-40 depending on subscriptions.          ║
+# ║                                                                                ║
+# ║  SIDE EFFECTS    : (unadvertised in rev 1 — now on the tin) Sheet 18          ║
+# ║                    CREATES A PUBLIC GitHub repo under repo_slug if            ║
+# ║                    absent, force-pushes a gh-pages branch, enables            ║
+# ║                    Pages, and cuts a release with the deck attached.          ║
+# ║                    These are irreversible external effects. Sheet 19          ║
+# ║                    writes a second copy of this score into the                ║
+# ║                    marianne-ai-compose checkout it runs from (that is        ║
+# ║                    the two-path proof). Read PREREQUISITES before            ║
+# ║                    running on any host that is not the composer's.            ║
+# ║                                                                                ║
+# ║  TWO-PATH RULE   : Canonical install TODAY: scores/rosetta-corpus/           ║
+# ║                    proof-scores/cathedral-construction.yaml (this            ║
+# ║                    file, post-review rev 2). The examples/rosetta/           ║
+# ║                    copy does NOT exist until the RUN creates it at           ║
+# ║                    sheet 19 (T6), which proves sha256 equality and           ║
+# ║                    mzt-validates each copy FROM ITS INSTALLED PATH.          ║
+# ║                    (Rev 1's header described this run-time outcome           ║
+# ║                    as a present fact — review 3's first finding.             ║
+# ║                    Fixed by saying what is true now.) The self-chain          ║
+# ║                    staging in sheet 1 references the score by its            ║
+# ║                    slug basename via {{ score_dir }} — the file must be       ║
+# ║                    named cathedral-construction.yaml wherever it runs.        ║
+# ║                                                                                ║
+# ║  LIVE-PROBED     : Every data-fetch form in sheet 2 was executed             ║
+# ║                    against the live endpoints at composition time            ║
+# ║                    (2026-09-04, this revision): literal `&` query            ║
+# ║                    separators (rev 1's %26 forms returned HTTP 400),         ║
+# ║                    $top within the server's 1000 cap (rev 1 asked            ║
+# ║                    2000 → HTTP 400), MORT_100 pinned to                      ║
+# ║                    Dim1=SEX_BTSX ∧ Dim2=AGEGROUP_YEARS0-4 ∧ 2015–2021        ║
+# ║                    → exactly 672 rows, single fetch, no pagination           ║
+# ║                    (unfiltered it is 1890 rows — over the cap); the          ║
+# ║                    rate indicator is MDG_0000000007 (under-five              ║
+# ║                    mortality rate, 280 rows) — rev 1 paired the              ║
+# ║                    under-5 death COUNT with the INFANT rate                  ║
+# ║                    (MDG_0000000001): mismatched populations; WHS4_100        ║
+# ║                    (DTP3) and WHS4_117 (HepB3) filtered to the six          ║
+# ║                    course countries → 66 rows each; OWID grapher CSV         ║
+# ║                    header + 21,565 rows confirmed. The grammar was           ║
+# ║                    verified by EXECUTION this time, not extrapolated.        ║
+# ║                                                                                ║
+# ║  EXECUTION MAP   : (3 movements → 21 sheets, serial; no fan-out — the        ║
+# ║                    parallel-drafting declension is recorded in 03-           ║
+# ║                    architecture.md: longitudinal coherence and voice         ║
+# ║                    consistency are what serial drafting protects)            ║
+# ║                                                                                ║
+# ║      1  C1 Scaffold + host/auth/family gates + chain staging [AI]            ║
+# ║      2  C2 Data commissioning + semantic pin gate        [CLI, no fallback]  ║
+# ║      3  C3 Extract scripts + determinism probes         [AI]               ║
+# ║      4  C4 Exercise harness + deterministic toolchain   [AI]               ║
+# ║      5  C5 Blueprint + voice canon freeze (+ledger)     [AI, strong]        ║
+# ║      6  C6 Maturity assessor authorship + calibration   [codex, NO fallb.]  ║
+# ║      7  C7 Meters: churn + cache + chain control        [AI]               ║
+# ║      ============ THE SELF-CHAINING CATHEDRAL LOOP ========================= ║
+# ║      8  L1 plan-iteration (ledger-driven, waste-guarded) [AI]               ║
+# ║      9  L2 build chapters + bank + cards (anchors)      [AI]               ║
+# ║     10  L3 inspect (vendor-diverse, specificity-gated)  [codex→claude]      ║
+# ║     11  L4 verify-gate (RED-TOLERANT: verdict, not death)[CLI, no fallback]  ║
+# ║     12  L5 convergence-check (verdict survives the sheet)[CLI, no fallback]  ║
+# ║     13  L6 maturity-check + chain control (+ledger)     [CLI, no fallback]  ║
+# ║      ============ TERMINATION: AUDIT, DELIVERABLES, PROOF ================== ║
+# ║     14  T1 divergence-clause audit (falsifiability)     [CLI, no fallback]  ║
+# ║     15  T2 mkdocs site (--strict + rendered band)       [CLI, no fallback]  ║
+# ║     16  T3 Anki deck (genanki + bijection + roundtrip)  [CLI, no fallback]  ║
+# ║     17  T4 Provenance page (zero-unresolved anchors)    [CLI, no fallback]  ║
+# ║     18  T5 Publish: Pages + release + WIRE smoke        [CLI, no fallback]  ║
+# ║     19  T6 Two-path install (sha256 + validate each)    [CLI, no fallback]  ║
+# ║     20  T7 Proof write-up (ledger-joined numbers)       [AI]               ║
+# ║     21  T8 Chain terminator swap (deterministic)        [CLI, no fallback]  ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: denominator
+description: >
+  The Denominator — a self-chaining Cathedral Construction proof: an open,
+  machine-verified data-literacy curriculum for working journalists, converged
+  by measured churn + pedagogical maturity, never by a writer declaring victory.
+
+# workspace: intentionally omitted — auto-managed at ~/workspaces/denominator (#58).
+# This is the maximally generic form: ZERO project-specific inputs. The score is
+# portable across hosts; every path below is workspace-templated, score_dir-
+# anchored, or ~-relative (V004-clean).
+
+instrument: claude-code
+instrument_config:
+  timeout_seconds: 3600
+
+# Named instruments — vendor separation is LOAD-BEARING at two points:
+#   assessor-author (sheet 6): a different model family than the chapter
+#     drafts (sheet 9). EMPTY fallback chain — if this family is missing the
+#     run fails loudly, because a silently collapsed family would void the
+#     separation-of-authorship claim. REV 2: the separation is also GATED —
+#     sheet 1 probes the live instrument registry, records resolved families
+#     to reports/instrument-families.json, and a validation FAILS the run at
+#     commissioning if assessor and builder families are equal. A load-bearing
+#     claim now has a load-bearing gate (review 3: "the empty fallback only
+#     catches a missing instrument, not a same-family one").
+#   inspector (sheet 10): vendor-diverse from the builder "where feasible"
+#     (03-architecture.md) — falls back to claude-code gracefully.
+instruments:
+  assessor-author:
+    profile: codex-cli
+    config:
+      timeout_seconds: 3600
+  inspector:
+    profile: codex-cli
+    config:
+      timeout_seconds: 3600
+
+movements:
+  1:
+    name: "Commissioning"
+  2:
+    name: "Cathedral Loop"
+  3:
+    name: "Termination & Deliverables"
+
+sheet:
+  size: 1
+  total_items: 21
+
+  descriptions:
+    1: "C1 scaffold + host/auth/family gates + chain staging"
+    2: "C2 data commissioning + semantic pin gate"
+    3: "C3 extract scripts + determinism probes"
+    4: "C4 exercise harness + deterministic toolchain"
+    5: "C5 blueprint + voice canon freeze"
+    6: "C6 maturity assessor authorship + calibration"
+    7: "C7 meters: churn + cache + chain control"
+    8: "L1 plan-iteration (ledger-driven)"
+    9: "L2 build chapters + bank + cards"
+    10: "L3 inspect (vendor-diverse)"
+    11: "L4 verify-gate (red-tolerant verdict)"
+    12: "L5 convergence-check (verdict survives)"
+    13: "L6 maturity-check + chain control"
+    14: "T1 divergence-clause audit"
+    15: "T2 mkdocs site build"
+    16: "T3 Anki deck build"
+    17: "T4 provenance page join"
+    18: "T5 publish + wire smoke"
+    19: "T6 two-path proof install"
+    20: "T7 proof write-up"
+    21: "T8 chain terminator swap"
+
+  # Serial DAG — recorded declension: parallel chapter drafting was evaluated
+  # and rejected (03-architecture.md, Movement 1); the depth budget fits serial.
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+    7: [6]
+    8: [7]
+    9: [8]
+    10: [9]
+    11: [10]
+    12: [11]
+    13: [12]
+    14: [13]
+    15: [14]
+    16: [15]
+    17: [16]
+    18: [17]
+    19: [18]
+    20: [19]
+    21: [20]
+
+  # Read-and-React skin over the chain: sheets skip themselves on the workspace
+  # state their own outputs describe. Commissioning sheets are idempotence-
+  # guarded (run once, skip on every later cycle); loop sheets yield to the
+  # convergence marker; termination sheets run ONLY on the converged cycle.
+  # Semantics: exit 0 = SKIP, fail-open on error.
+  skip_when:
+    1:
+      command: 'test -x "{workspace}/tools/check-host.sh" -a -f "{workspace}/self-chain.yaml"'
+      description: "Skip when scaffolded and the chain copy is staged"
+    2:
+      command: 'test -f "{workspace}/data/pins.yaml"'
+      description: "Skip when data is commissioned and pinned"
+    3:
+      command: 'test -f "{workspace}/data/extracts/manifest.json"'
+      description: "Skip when extracts exist"
+    4:
+      command: 'test -f "{workspace}/.harness-calibrated"'
+      description: "Skip when the harness is calibrated"
+    5:
+      command: 'test -f "{workspace}/cathedral/blueprint.yaml"'
+      description: "Skip when the blueprint is frozen"
+    6:
+      command: 'test -f "{workspace}/.assessor-calibrated"'
+      description: "Skip when the assessor is calibrated"
+    7:
+      command: 'test -f "{workspace}/.meters-proven"'
+      description: "Skip when the meters are proven"
+    8:
+      command: 'test -f "{workspace}/.converged"'
+      description: "Loop yields once converged"
+    9:
+      command: 'test -f "{workspace}/.converged"'
+      description: "Loop yields once converged"
+    10:
+      command: 'test -f "{workspace}/.converged"'
+      description: "Loop yields once converged"
+    11:
+      command: 'test -f "{workspace}/.converged"'
+      description: "Loop yields once converged"
+    12:
+      command: 'test -f "{workspace}/.converged"'
+      description: "Loop yields once converged"
+    13:
+      command: 'test -f "{workspace}/.converged"'
+      description: "Loop yields once converged"
+    14:
+      command: 'test ! -f "{workspace}/.converged"'
+      description: "Termination runs only when converged"
+    15:
+      command: 'test ! -f "{workspace}/.converged"'
+      description: "Termination runs only when converged"
+    16:
+      command: 'test ! -f "{workspace}/.converged"'
+      description: "Termination runs only when converged"
+    17:
+      command: 'test ! -f "{workspace}/.converged"'
+      description: "Termination runs only when converged"
+    18:
+      command: 'test ! -f "{workspace}/.converged"'
+      description: "Termination runs only when converged"
+    19:
+      command: 'test ! -f "{workspace}/.converged"'
+      description: "Termination runs only when converged"
+    20:
+      command: 'test ! -f "{workspace}/.converged"'
+      description: "Termination runs only when converged"
+    21:
+      command: 'test ! -f "{workspace}/.converged"'
+      description: "Termination runs only when converged"
+
+  per_sheet_instruments:
+    2: cli
+    6: assessor-author
+    10: inspector
+    11: cli
+    12: cli
+    13: cli
+    14: cli
+    15: cli
+    16: cli
+    17: cli
+    18: cli
+    19: cli
+    21: cli
+
+  # THE ETIQUETTE LAW, WRITTEN AS CONFIG: every deterministic gate carries an
+  # explicit EMPTY fallback chain — no AI may reinterpret a failed gate, and a
+  # gate that falls back is this proof's named sin. Sheet 6 joins the empty
+  # set: assessor authorship without its distinct vendor family is a void
+  # calibration, so it fails loudly instead of degrading.
+  per_sheet_fallbacks:
+    2: []
+    6: []
+    11: []
+    12: []
+    13: []
+    14: []
+    15: []
+    16: []
+    17: []
+    18: []
+    19: []
+    21: []
+
+  per_sheet_instrument_config:
+    2: {timeout_seconds: 900}
+    9: {timeout_seconds: 5400}
+    11: {timeout_seconds: 2400}
+    13: {timeout_seconds: 2400}
+    15: {timeout_seconds: 1800}
+    18: {timeout_seconds: 2400}
+    21: {timeout_seconds: 300}
+
+  # Cadenzas carry the frozen contracts to the judgment sheets. required: true
+  # — a missing contract fails BEFORE execution, not after.
+  cadenzas:
+    8:
+      - file: "{{ workspace }}/build-ledger.json"
+        as: context
+        required: true
+    9:
+      - file: "{{ workspace }}/cathedral/voice-canon.md"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/cathedral/blueprint.yaml"
+        as: context
+        required: true
+    10:
+      - file: "{{ workspace }}/cathedral/voice-canon.md"
+        as: skill
+        required: true
+    20:
+      - file: "{{ workspace }}/build-ledger.json"
+        as: context
+        required: true
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 30
+  max_delay_seconds: 900
+
+circuit_breaker:
+  enabled: true
+  failure_threshold: 6
+  recovery_timeout_seconds: 600
+
+# CLI gates run silent subprocesses (pytest, mkdocs, genanki) — stale detection
+# must not kill a healthy verification stage (essentials pitfall 24).
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 1500
+  lookback_sheets: 2
+
+# Durable state across fresh cycles: the cathedral, its ledger, its pins, its
+# tools and the staged chain copy survive; per-cycle ephemera (plan.md,
+# inspection-report.md, gate reports) is archived per iteration and the durable
+# copies live under reports/. The workspace git repo (.git) is what churn.sh
+# diffs against — losing it would lose the fixed point.
+workspace_lifecycle:
+  archive_on_fresh: true
+  max_archives: 25
+  preserve_patterns:
+    - ".iteration"
+    - ".marianne-*"
+    - ".converged"
+    - ".harness-calibrated"
+    - ".assessor-calibrated"
+    - ".meters-proven"
+    - ".score-origin"
+    - ".chain-terminated"
+    - "self-chain.yaml"
+    - "build-ledger.json"
+    - "memo-cache.yaml"
+    - "HOSTS.md"
+    - "proof-report.md"
+    - "divergence-report.json"
+    - "live-smoke.json"
+    - "two-path-report.json"
+    - "cathedral/**"
+    - "data/**"
+    - "harness/**"
+    - "tools/**"
+    - "scripts/**"
+    - "deck/**"
+    - "site/**"
+    - "site-src/**"
+    - "reports/**"
+    - "archive/**"
+    - ".worktrees/**"
+    - ".git/**"
+
+concert:
+  enabled: true
+  max_chain_depth: 20
+  cooldown_between_jobs_seconds: 30
+  inherit_workspace: true
+
+# Self-chain: the staged copy (sheet 1) is the target — the chain is pinned to
+# the bytes that started it. Termination is the deterministic swap in sheet 21.
+on_success:
+  - type: run_job
+    job_path: "{workspace}/self-chain.yaml"
+    description: "Chain to the next cathedral iteration (ends via the sheet-21 terminator swap)"
+    detached: true
+    fresh: true
+
+prompt:
+  variables:
+    course_title: "The Denominator"
+    course_subtitle: "Statistical moves your beat actually demands"
+    audience: "working journalists and science communicators on deadline"
+    repo_slug: "Mzzkc/denominator"
+    pages_url: "https://mzzkc.github.io/denominator/"
+    deck_asset: "denominator.apkg"
+    license: "CC BY-SA 4.0"
+    depth_bound: 20
+    churn_threshold_pct: 2
+    min_exercises_per_chapter: 3
+    flesch_reading_min: 40
+    flesch_reading_max: 65
+    owid_life_expectancy_url: "https://ourworldindata.org/grapher/life-expectancy.csv"
+    who_odata_base: "https://ghoapi.azureedge.net/api"
+    # Semantic expectations moved OUT of the template body into variables
+    # (rev 2, review 3: "changing datasets should mean editing variables,
+    # not score code"). Phrases verified against live IndicatorName titles
+    # on 2026-09-04. NOTE the indicator change from rev 1: the rate is
+    # MDG_0000000007 (UNDER-FIVE mortality rate) — rev 1 paired the under-5
+    # death count with the INFANT rate (MDG_0000000001): mismatched
+    # populations for chapter 1's count-vs-rate comparison.
+    semantic_expectations:
+      MORT_100: "deaths in children aged <5"
+      MDG_0000000007: "Under-five mortality rate"
+      WHS4_117: "Hepatitis B"
+      WHS4_100: "pertussis"
+    chapters:
+      - id: "chapter-01"
+        title: "Counts versus rates"
+        focus: "The same country-year as TOTAL under-5 deaths (WHO MORT_100, both-sex 0-4, aggregated across the 16 cause codes in the extract) and as the under-5 mortality rate per 1,000 live births (MDG_0000000007) — matched populations, the denominator made visible before any formula."
+      - id: "chapter-02"
+        title: "Denominators"
+        focus: "Who is in the bottom of the fraction, who is missing from it, and what each choice does to the story."
+      - id: "chapter-03"
+        title: "Age standardization"
+        focus: "Why two populations with identical health can show different rates, and how to standardize on real pinned data."
+      - id: "chapter-04"
+        title: "Absolute versus relative risk"
+        focus: "Relative always alongside absolute — the risk-communication rule as a non-negotiable gate, not a style preference."
+      - id: "chapter-05"
+        title: "Base rates and the screening paradox"
+        focus: "Real coverage denominators (DTP3 WHS4_100, HepB3 WHS4_117) and herd-threshold arithmetic; the screening paradox built from natural-frequency tables whose test characteristics are LABELED ASSUMPTIONS, never smuggled in as if they were data."
+      - id: "chapter-06"
+        title: "Excess mortality"
+        focus: "Comparing observed to expected deaths; why excess mortality sees what cause-of-death counts miss."
+      - id: "chapter-07"
+        title: "Uncertainty intervals"
+        focus: "Reading and reporting ranges without punting the story; small-sample wiggle on real data."
+      - id: "chapter-08"
+        title: "Sampling bias"
+        focus: "Who never made it into the sample; convenience samples and their lies."
+      - id: "chapter-09"
+        title: "The ecological fallacy"
+        focus: "Country-level patterns that evaporate (or invert) at the individual level."
+      - id: "chapter-10"
+        title: "Preprints versus peer review"
+        focus: "What a preprint does and does not certify; timing a story against the evidence pipeline."
+      - id: "chapter-11"
+        title: "Reading a methods section"
+        focus: "The five questions to ask any study in ninety seconds."
+
+  template: |
+    {% macro output_spec(filename, format="markdown") -%}
+    ## Output Specification
+    - **File**: {{ workspace }}/{{ filename }}
+    - **Format**: {{ format }}
+    - The file must be complete and parseable — a downstream exit-coded tool
+      consumes it, not a forgiving reader.
+    {%- endmacro %}
+
+    {% macro quality_bar(level="standard") -%}
+    {% if level == "gating" -%}
+    DETERMINISM BAR: everything you author here is later EXECUTED as a gate.
+    It must fail loudly and specifically (exit nonzero, named reason) — a
+    checker that cannot fail certifies nothing. No judgment calls at runtime.
+    {%- elif level == "craft" -%}
+    CRAFT BAR: newsroom-native register. Plain, verb-forward sentences doing
+    real work. Absolute risk always alongside relative. Natural frequencies
+    over probabilities. Every denominator named. One worked "click moment"
+    per concept on real pinned data before any formula appears.
+    {%- else -%}
+    STANDARD BAR: correct, complete, calibrated to the audience. Mark
+    uncertainties with [?] rather than smoothing them over.
+    {%- endif %}
+    {%- endmacro %}
+
+    {% macro anchor_rule() -%}
+    PROVENANCE ANCHORS: every number in chapter prose exists ONLY as an anchor
+    of the form {{ '{{' }}num:extract-key{{ '}}' }} — never as a bare literal.
+    Each anchor must resolve to a key in data/extracts/manifest.json; the
+    verify-gate joins them by regex and fails on any unresolved anchor.
+    {%- endmacro %}
+
+    {% macro etiquette_law(gate_cmd) -%}
+    # ETIQUETTE LAW (deterministic sheet — no fallback chain): {{ gate_cmd }}
+    # decides by exit code. If a check fails, fail loudly with the failing
+    # output on stderr. Never invent a workaround for a red gate.
+    {%- endmacro %}
+
+    {% macro constitution() -%}
+    THE CONSTITUTION OF THIS RUN: the LLM writes the course; the scaffolding
+    decides when it stands. Every judgment sheet (planning, writing,
+    inspecting) is bounded by exit-coded gates it does not own. Never edit
+    tools/thresholds.yaml, cathedral/blueprint.yaml, or build-ledger.json to
+    make a gate pass — those are frozen contracts; mutating one is a visible
+    errata event, not a fix.
+    {%- endmacro %}
+
+    {% macro verdict_rule() -%}
+    # VERDICT RULE (rev 2): an exit-1 from this sheet's meter is a VERDICT,
+    # not an error. Capture it with `cmd || RC=$?` — never let a verdict kill
+    # the sheet under errexit. Write the typed report; exit 0. Only exit >= 2
+    # (meter malfunction) fails the sheet. The verdict is consumed downstream
+    # by chain_control via the report file.
+    {%- endmacro %}
+
+    {% if stage not in [2, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21] %}
+    {{ constitution() }}
+    {% endif %}
+
+    {% if stage == 1 %}
+    # C1 — Scaffold, Host/Auth/Family Gates, Chain Staging
+    (Shipyard Sequence: prove the environment — binaries AND credentials AND
+    instrument families — can run the remaining steps, before the expensive
+    loop pays for anything. Rev 2: the riskiest external credential is gated
+    HERE, not discovered at sheet 18 after the whole cathedral is paid for.)
+
+    Create the repository skeleton under {{ workspace }}: cathedral/chapters/,
+    data/raw/, data/extracts/, scripts/tests/, harness/fixtures/, tools/,
+    deck/, site-src/docs/, reports/. Run `git init` and configure a local
+    identity so later commits never depend on ambient host config:
+    `git config user.name "denominator-builder"; git config user.email
+    "denominator@invalid"` (the workspace git repo is what churn.sh diffs
+    across iterations — treat it as load-bearing).
+    Write HOSTS.md recording the host capability snapshot.
+
+    Author `tools/check-host.sh`: it verifies EVERY binary later stages name —
+    git, curl, sha256sum, jq, python3, uv, mkdocs, gh — plus `mzt`, AND the
+    two credential gates: `gh auth status` must exit 0 (the publish path at
+    sheet 18 dies without it — die HERE instead), and `mzt` must resolve
+    (instrument readiness is checked below). Exit nonzero naming each missing
+    item. Prove it can fail: include a `--self-test` mode that asserts a
+    bogus binary is detected as missing (the self-test is itself validated).
+
+    Record the live instrument-family truth AND gate the load-bearing
+    inequality: run `mzt instruments list` (fall back to `mzt config` if the
+    subcommand is absent), resolve the default model and the named profiles
+    (assessor-author → codex-cli, inspector → codex-cli), and derive each
+    vendor family from the RESOLVED MODEL NAME (glm/gpt/gemini/claude/llama/
+    qwen/...), never from the profile label — instrument-name inequality is
+    not vendor diversity. Save to `reports/instrument-families.json`:
+    {"default_profile","default_model","default_family","named":{...
+    {"profile","model","family","ready"}},"assessor_family_distinct":bool,
+    "inspector_family_distinct":bool} where the distinct flags are computed
+    as named-family != default-family. If assessor_family_distinct is false,
+    FAIL THIS SHEET with a named reason: the sheet-6 calibration claim is
+    void without a second family, and an empty fallback chain is exactly the
+    loud failure this design chooses. (A validation re-checks the recorded
+    JSON, so the gate is on disk, not on your word.)
+
+    Stage the self-chain copy and record custody of the original:
+    ```
+    cp "{{ score_dir }}/cathedral-construction.yaml" "{{ workspace }}/self-chain.yaml"
+    readlink -f "{{ score_dir }}/cathedral-construction.yaml" > "{{ workspace }}/.score-origin"
+    ```
+    If the copy fails, STOP — the chain cannot be pinned, and running further
+    would orphan every cycle after the first. (A validation asserts the staged
+    copy is byte-identical to the recorded origin and that the origin basename
+    really is cathedral-construction.yaml — a stale sibling cannot silently
+    become the chain authority.)
+
+    {{ output_spec("HOSTS.md") }}
+    {{ quality_bar("standard") }}
+    {% elif stage == 2 %}
+    # C2 — Data Commissioning + Semantic Pin Gate
+    # Effectivity pins: admitted data carries url, sha256, timestamp, license,
+    # and a semantic title bound via the metadata endpoint.
+    # REV 2: every fetch form below was EXECUTED against the live endpoints at
+    # composition time (2026-09-04). Query separators are LITERAL `&` (rev 1's
+    # %26 forms returned HTTP 400 — the server splits on literal & before
+    # decoding). $top stays within the server's hard cap of 1000 (rev 1 asked
+    # 2000 → HTTP 400). MORT_100 is pinned to SEX_BTSX + AGEGROUP_YEARS0-4 +
+    # 2015–2021 → 672 rows in ONE fetch (unfiltered it is 1890 rows and would
+    # be silently truncated by the cap). The rate indicator is
+    # MDG_0000000007 (under-five mortality rate) so count and rate describe
+    # the SAME population.
+    set -euo pipefail
+    WS="{{ workspace }}"
+    BASE='{{ who_odata_base }}'
+    mkdir -p "$WS/data/raw"
+
+    # --- OWID grapher CSV (verified live: HTTP 200, text/csv, header check) ---
+    curl -sfL '{{ owid_life_expectancy_url }}' -o "$WS/data/raw/owid-life-expectancy.csv"
+
+    # --- WHO GHO OData (every form below verified live 2026-09-04; literal &) ---
+    fetch_who() {
+      code="$1"; filt="$2"
+      curl -sfL "${BASE}/${code}?${filt}" -o "$WS/data/raw/who-${code}.json"
+    }
+    # MORT_100: under-5 DEATH COUNTS by cause; pinned to both-sex 0-4 so the
+    # chapter-1 extract aggregates a well-defined 16-cause total per country-year.
+    fetch_who MORT_100         '%24filter=TimeDim%20ge%202015%20and%20TimeDim%20le%202021%20and%20SpatialDim%20in%20(%27GBR%27,%27JPN%27,%27NGA%27,%27BRA%27,%27SWE%27,%27USA%27)%20and%20Dim1%20eq%20%27SEX_BTSX%27%20and%20Dim2%20eq%20%27AGEGROUP_YEARS0-4%27&%24select=SpatialDim,TimeDim,Dim3,NumericValue'
+    # MDG_0000000007: under-five mortality RATE per 1000 live births — same
+    # population as the count above (rev 1 used the INFANT rate: mismatched).
+    fetch_who MDG_0000000007   '%24filter=TimeDim%20ge%202015%20and%20SpatialDim%20in%20(%27GBR%27,%27JPN%27,%27NGA%27,%27BRA%27,%27SWE%27,%27USA%27)&%24select=SpatialDim,TimeDim,NumericValue'
+    # Coverage indicators for chapter 5's real denominators (filtered to the
+    # six course countries: 66 rows each — small, targeted, under the cap).
+    fetch_who WHS4_117         '%24filter=TimeDim%20ge%202015%20and%20SpatialDim%20in%20(%27GBR%27,%27JPN%27,%27NGA%27,%27BRA%27,%27SWE%27,%27USA%27)&%24select=SpatialDim,TimeDim,NumericValue'
+    fetch_who WHS4_100         '%24filter=TimeDim%20ge%202015%20and%20SpatialDim%20in%20(%27GBR%27,%27JPN%27,%27NGA%27,%27BRA%27,%27SWE%27,%27USA%27)&%24select=SpatialDim,TimeDim,NumericValue'
+
+    # --- Semantic binding: each indicator's TITLE from the metadata endpoint,
+    #     asserted against the expected phrase (from score variables) BEFORE
+    #     the pin is admitted. (The WHS4_100 lesson: a 200 with rows is not a
+    #     verified semantic claim — this concert's sheet 2 found WHS4_100 is
+    #     DTP3 coverage, not life expectancy.)
+    python3 - <<'PYEOF'
+    import json, subprocess, sys, datetime, hashlib, pathlib
+    ws = pathlib.Path("{{ workspace }}")
+    base = "{{ who_odata_base }}"
+    expected = {
+    {% for code, phrase in semantic_expectations.items() %}
+        "{{ code }}": "{{ phrase }}",
+    {% endfor %}
+    }
+    pins = []
+    for code, phrase in expected.items():
+        url = f"{base}/Indicator?%24filter=IndicatorCode%20eq%20%27{code}%27"
+        meta = json.loads(subprocess.run(["curl", "-sfL", url],
+                                         capture_output=True, check=True).stdout)
+        title = meta["value"][0]["IndicatorName"]
+        if phrase.lower() not in title.lower():
+            sys.exit(f"SEMANTIC GATE FAILED for {code}: expected '{phrase}' in '{title}'")
+        raw = ws / "data" / "raw" / f"who-{code}.json"
+        pins.append((f"who-{code}.json", url, title, raw))
+    owid = ws / "data" / "raw" / "owid-life-expectancy.csv"
+    head = owid.read_text(errors="replace").splitlines()[0]
+    if "Life expectancy" not in head:
+        sys.exit(f"SEMANTIC GATE FAILED for OWID csv: header lacks 'Life expectancy': {head!r}")
+    lines = [
+        "pins:",
+        f"  - file: owid-life-expectancy.csv",
+        f"    url: {{ owid_life_expectancy_url }}",
+        f"    sha256: {hashlib.sha256(owid.read_bytes()).hexdigest()}",
+        f"    fetched_utc: {datetime.datetime.now(datetime.timezone.utc).isoformat()}",
+        f"    license: CC BY (Our World in Data)",
+        f"    semantic_title: OWID grapher life-expectancy (header-verified)",
+    ]
+    for fname, url, title, raw in pins:
+        lines += [
+            f"  - file: {fname}",
+            f"    url: {url}",
+            f"    sha256: {hashlib.sha256(raw.read_bytes()).hexdigest()}",
+            f"    fetched_utc: {datetime.datetime.now(datetime.timezone.utc).isoformat()}",
+            f"    license: CC BY-NC-SA 3.0 IGO (WHO GHO)",
+            f"    semantic_title: {title}",
+        ]
+    (ws / "data" / "pins.yaml").write_text("\n".join(lines) + "\n")
+    print("pins.yaml written:", len(lines) // 7, "pins, all semantically bound")
+    PYEOF
+
+    # --- The fail-closed verifier (stdlib only; parses the pins format it
+    #     just wrote — the format is an EDITION contract: pins are snapshots,
+    #     and bytes that move under a frozen pin force re-commissioning as a
+    #     NEW edition, never a quiet mutation. `--live` re-probes the SEMANTIC
+    #     claims (metadata titles + OWID header) over the network so a renamed
+    #     or repurposed upstream indicator is caught at commissioning even
+    #     though bytes are allowed to differ across editions).
+    #     Re-run offline by this score's validation on the commissioning cycle.
+    mkdir -p "$WS/tools"
+    cat > "$WS/tools/pin_verify.py" <<'PYEOF'
+    #!/usr/bin/env python3
+    """Fail-closed pin verifier: every admitted dataset byte-matches its pin.
+    Exits 1 naming the first mismatch. Stdlib only.
+    --live additionally re-fetches semantic claims (WHO Indicator titles,
+    OWID csv header) and asserts the expected phrases still hold."""
+    import hashlib, json, pathlib, re, subprocess, sys
+    ws = pathlib.Path(__file__).resolve().parent.parent
+    EXPECTED = {
+    {% for code, phrase in semantic_expectations.items() %}
+        "{{ code }}": "{{ phrase }}",
+    {% endfor %}
+    }
+    pins_text = (ws / "data" / "pins.yaml").read_text()
+    entries = re.findall(r"- file: (\S+)\n\s+url: (\S+)\n\s+sha256: ([0-9a-f]{64})\n"
+                         r"\s+fetched_utc: (\S+)\n\s+license: ([^\n]+)\n"
+                         r"\s+semantic_title: ([^\n]+)", pins_text)
+    if len(entries) < 5:
+        sys.exit(f"pin_verify: expected >= 5 pins, parsed {len(entries)} — pins.yaml malformed")
+    ok = 0
+    for fname, url, digest, fetched, lic, title in entries:
+        raw = ws / "data" / "raw" / fname
+        if not raw.exists():
+            sys.exit(f"pin_verify MISSING: {fname} (pinned {fetched})")
+        actual = hashlib.sha256(raw.read_bytes()).hexdigest()
+        if actual != digest:
+            sys.exit(f"pin_verify MISMATCH: {fname} pinned {digest[:12]}… got {actual[:12]}… "
+                     f"— the bytes moved under a frozen pin; re-commission as a NEW edition, never mutate")
+        ok += 1
+    print(f"pin_verify: {ok}/{len(entries)} pins verified fail-closed")
+    if "--live" in sys.argv:
+        base = "{{ who_odata_base }}"
+        for code, phrase in EXPECTED.items():
+            u = f"{base}/Indicator?%24filter=IndicatorCode%20eq%20%27{code}%27"
+            meta = json.loads(subprocess.run(["curl", "-sfL", u],
+                                             capture_output=True, check=True).stdout)
+            title = meta["value"][0]["IndicatorName"]
+            if phrase.lower() not in title.lower():
+                sys.exit(f"pin_verify LIVE SEMANTIC DRIFT: {code} title no longer "
+                         f"contains '{phrase}': '{title}' — re-commission as a NEW edition")
+            print(f"live semantic ok: {code} -> {title}")
+        head = (ws / "data" / "raw" / "owid-life-expectancy.csv"
+                ).read_text(errors="replace").splitlines()[0]
+        if "Life expectancy" not in head:
+            sys.exit("pin_verify LIVE: OWID header drifted — re-commission as a NEW edition")
+        print("live semantic ok: OWID header")
+    PYEOF
+    python3 "$WS/tools/pin_verify.py"
+    python3 "$WS/tools/pin_verify.py" --live
+    {{ etiquette_law("tools/pin_verify.py (+ --live semantic re-probe)") }}
+    {% elif stage == 3 %}
+    # C3 — Extract Scripts with Provenance Headers
+    (Shipyard: extracts are trustworthy because determinism is PROVEN, not assumed)
+
+    Author `scripts/recompute.py` (run via `uv run --with pandas --with numpy`):
+    transforms the pinned raw data into per-chapter canonical extract files in
+    `data/extracts/` — including `under5_deaths_total` (who-MORT_100.json
+    grouped by SpatialDim×TimeDim and SUMMED across the Dim3 cause codes —
+    the aggregation contract chapter 1 depends on; the fetch is pinned to
+    SEX_BTSX + AGEGROUP_YEARS0-4 so the sum cannot double-count), rates per
+    1,000 (who-MDG_0000000007.json), and coverage fractions (WHS4_*).
+    Every extract header embeds the pin digest it derived from. Emit
+    `data/extracts/manifest.json` joining extract → pin digest → script
+    version → extract keys (the keys chapter anchors reference). Also author
+    `scripts/tests/test_extracts.py` (pytest) asserting extract invariants:
+    expected columns present, row floors, monotone years, consistent country
+    sets between count and rate extracts, and spot values recomputed IN THE
+    TEST from data/raw — not from your extracts (the test is the independent
+    oracle; it must read data/raw directly, and a validation checks that it
+    does). Include one test asserting the 16-cause sum reproduces a hand-
+    checked country-year total from the raw JSON.
+
+    The script must expose two deterministic modes the gates call:
+    - `--check-determinism`: run the full extraction twice into temp dirs,
+      assert byte-identical digests, exit nonzero on any difference.
+    - `--check-fail-closed`: copy one pinned raw file to a temp workspace,
+      corrupt one byte, and prove that pin verification FAILS BEFORE any
+      extract regenerates (ordering is the safety property). Exit nonzero if
+      the corruption does not trip the pin gate first.
+
+    Run both modes now and paste their exit codes into HOSTS.md's extract row.
+    {{ output_spec("scripts/recompute.py", "python") }}
+    {{ quality_bar("gating") }}
+    {% elif stage == 4 %}
+    # C4 — Exercise Harness + Deterministic Toolchain
+    (Shipyard + Andon: the grader exists BEFORE the chapters, and must be
+    shown able to FAIL before it is trusted to pass)
+
+    Author the full deterministic toolchain the loop and deliverables execute:
+
+    1. `harness/run_exercises.py` — pytest-based grader that loads the
+       question-bank YAML (harness/question-bank.yaml — you also author a
+       seed bank for the fixtures), recomputes every reference answer from
+       data/extracts within the tolerance registry (harness/tolerances.yaml,
+       pre-registered NOW, before any chapter exists), and grades candidate
+       answers. Modes:
+       - `--grade`: grade the bank (exit nonzero on any wrong answer).
+       - `--self-test`: run the sound fixture (must pass ALL) AND the
+         corrupted fixture (must FAIL — a grader that cannot fail certifies
+         nothing). Exit nonzero unless BOTH directions hold.
+    2. `harness/fixtures/` — one sound chapter-shaped fixture and one subtly
+       wrong fixture (an off-by-a-denominator answer).
+    3. `harness/band_check.py` — textstat reading band checker (sources mode
+       and --rendered mode over built site text; band {{ flesch_reading_min }}–
+       {{ flesch_reading_max }} Flesch pre-registered here).
+    4. `deck/build_deck.py` — genanki deck compiler from the question bank +
+       glossary; deterministic deck/model IDs; `--self-test` compiles a
+       fixture bank and round-trips the .apkg as a zip asserting card count
+       and fields; `--verify` re-checks bijection (cards ↔ glossary 1:1) and
+       the round-trip against the real bank.
+    5. `tools/provenance_join.py` — joins every {{ '{{' }}num:key{{ '}}' }}
+       anchor in chapter prose to its extract row; `--check` mode asserts
+       zero unresolved anchors (count equality: anchors in prose == rows on
+       the page) and re-derives N random rows live from the pin; exit-coded.
+    6. `tools/cache_check.py` — the Memoization Cache, now LOAD-BEARING (rev
+       2: rev 1 ran it and discarded the verdict — decorative). Interface:
+       `--stage verify|maturity --workspace PATH` recomputes per-chapter
+       {input_hash = dataset-pin sha256 × chapter-content digest,
+       context_hash = blueprint/voice-canon/thresholds digests} against
+       memo-cache.yaml and writes `cache-verdict.json`
+       {"skip": [chapters whose stored entry matches ALL hashes AND whose
+       stored verdict is green], "recheck": [all others]}; exit 0 normally,
+       exit 2 on internal error (a crash can never impersonate a verdict).
+       `--record-green CHAPTERS` appends/updates green entries after a fully
+       green check. `--self-test`: inject a synthetic pin change and assert
+       the affected chapter moves to recheck (forced miss); assert an
+       unchanged green chapter stays in skip — a cache that never misses is
+       indistinguishable from a cache that never checks.
+    7. `tools/verify_gate.sh` — the L4 composition, and the cache's CONSUMER:
+       first run `cache_check.py --stage verify`, read cache-verdict.json,
+       and run the expensive sub-checks (exercise grading, band, anchor
+       join) ONLY on the recheck set PLUS one audit chapter drawn from the
+       skip set (round-robin: a cached chapter is re-verified at least once
+       every N gates — trust, but sample, so a lying cache is caught within
+       one N-gate window). After a fully green run for a chapter, call
+       `cache_check.py --record-green`. Emit the typed gate-report.json (one
+       row per sub-check, pass/fail + numbers, plus a "cache_skipped" array
+       naming the chapters whose expensive checks were legitimately skipped);
+       exit 0 all green / 1 any sub-check red / 2+ internal error. This is
+       the gate the loop's writers are bounded by — it composes the tools
+       above, it invents no judgments of its own, and its red exit is a
+       VERDICT consumed downstream (see L4), never a reason for the sheet to
+       die.
+       (chain_control later merges cache-verdict.json's skip set into
+       ledger.verified — that merge is what makes L1's waste guard real.)
+
+    On success write the marker `.harness-calibrated` containing the sha256
+    of harness/tolerances.yaml (thresholds are frozen from this moment).
+    {{ output_spec("harness/run_exercises.py", "python") }}
+    {{ quality_bar("gating") }}
+    {% elif stage == 5 %}
+    # C5 — Blueprint + Voice Canon Freeze
+    (Contract at Interfaces: the frozen blueprint is what every downstream
+    stage consumes; freeze-time checks catch in chapter 1 what would otherwise
+    detonate in chapter 9)
+
+    Author `cathedral/blueprint.yaml`: the {{ chapters | length }} chapters
+    below as a DAG with per-chapter contracts (concepts, ≥
+    {{ min_exercises_per_chapter }} auto-graded exercises, deck cards, worked
+    example on pinned data), the prerequisite graph, the reading band, the
+    license ({{ license }}), and the tolerance references. Author
+    `cathedral/voice-canon.md` encoding the newsroom register: plain
+    verb-forward prose, absolute-alongside-relative risk, natural frequencies,
+    named denominators, one click-moment per concept, "so what for your beat".
+
+    Chapters (titles and foci are the contract; ordering IS the prerequisite graph):
+    {% for ch in chapters %}
+    - {{ ch.id }} — {{ ch.title }}: {{ ch.focus }}
+    {% endfor %}
+
+    Author `tools/blueprint_check.py` (deterministic, YAML-parsing — no grep
+    over raw text): validates the schema AND runs DAG acyclicity +
+    prerequisite closure ON THE BLUEPRINT ITSELF — a concept used in chapter 1
+    that no earlier chapter teaches fails HERE, at freeze. Modes:
+    - default: schema + acyclicity + closure checks (exit-coded, per-error).
+    - `--slate N`: additionally assert the blueprint carries exactly N chapter
+      entries (the slate check owns chapter counting — a nested-list layout
+      is VALID YAML and must not be punished by a column-zero grep).
+    - `--nav-check MKDOCS_YAML`: assert the chapter order in a built mkdocs
+      nav equals the blueprint's prerequisite order (navigation embodies
+      pedagogy — used by T2's validation).
+
+    Create `build-ledger.json` (the run's memory across context boundaries):
+    { "blueprint_sha256": <digest of blueprint.yaml as frozen NOW>,
+      "thresholds_sha256": null, "verified": [], "iterations": [] }. The
+    ledger only ever grows by deterministic append; judgment sheets read it,
+    they never write it by hand. (Validations re-derive the blueprint digest
+    from the live bytes and compare against the ledger — a stale or hand-
+    edited digest is caught, not just a missing one.)
+
+    {{ output_spec("cathedral/blueprint.yaml", "yaml") }}
+    {{ quality_bar("craft") }}
+    {% elif stage == 6 %}
+    # C6 — Maturity Assessor Authorship (vendor-separated)
+    (Verify through Diverse Observers: you are a DIFFERENT model family than
+    any future chapter draft — separation of authorship is separation of blind
+    spots, and this sheet has an EMPTY fallback chain because a silent family
+    collapse would void that claim. REV 2: the separation was already GATED at
+    sheet 1 against the live instrument registry; your first act is to JOIN
+    that record to this sheet so the lineage is on disk, not asserted.)
+
+    First: read reports/instrument-families.json (recorded at C1 from the
+    live registry) and write `tools/assessor-lineage.json`:
+    {"assessor_profile", "assessor_family", "builder_profile",
+    "builder_family", "distinct": true/false} — distinct MUST be true; if it
+    is false, STOP with a named reason (the run should already have died at
+    C1; arriving here with distinct=false means the gate was bypassed and
+    the calibration would be void).
+
+    Implement `tools/maturity_assessor.py` from the FROZEN blueprint contract
+    (read cathedral/blueprint.yaml + harness/tolerances.yaml — do not modify
+    them). Pre-registered gates, each reported individually in
+    maturity-report.json so a FAIL is diagnosable (Andon: the failure output
+    is the guidance for the next plan-iteration, not just a red light):
+
+    1. ≥ 1 worked example per concept, on pinned data (anchors resolve).
+    2. ≥ {{ min_exercises_per_chapter }} auto-graded exercises per chapter —
+       the assessor RUNS them via harness/run_exercises.py, it does not count them.
+    3. Prerequisite-graph closure over the actual chapters (every concept
+       used is taught earlier — a graph check, not vibes).
+    4. Glossary bijection: every bolded term defined exactly once; deck cards
+       ↔ glossary 1:1.
+    5. Reading band via harness/band_check.py ({{ flesch_reading_min }}–{{ flesch_reading_max }}).
+    6. Every prose number joined to a provenance record
+       (tools/provenance_join.py --check).
+    7. Alt text present for every chart reference.
+
+    Author `tools/thresholds.yaml` holding every threshold ABOVE (they are
+    pre-registered NOW — before a word of any chapter exists — and recorded
+    by digest in the ledger, so later edits are visible events, and the
+    assessor becomes a fixed rule).
+
+    `--calibrate` mode: run against a mature synthetic fixture (must PASS)
+    and a shallow one — missing worked example, dangling concept, off-band
+    readability, unprovenanced number (must FAIL each, for the recorded
+    reason). Exit nonzero unless calibration holds in BOTH directions.
+
+    Append thresholds_sha256 to build-ledger.json (deterministic append via
+    python3 — never hand-edit the ledger), then write the marker
+    `.assessor-calibrated`.
+    {{ output_spec("tools/maturity_assessor.py", "python") }}
+    {{ quality_bar("gating") }}
+    {% elif stage == 7 %}
+    # C7 — Meters: Churn, Cache, Chain Control
+    (Andon: prove-they-fail before trusting their green. Behavioral
+    Pre-Mortem: the FIRST cycle is a boundary condition — specify it, don't
+    discover it in production.)
+
+    Author three deterministic meters with self-tests:
+
+    1. `tools/churn.sh` — Fixed-Point's convergence check. Commits cathedral/
+       ** to the workspace git repo and tags iteration-N (the .iteration
+       counter is authoritative), diffs iteration N−1 → N, computes the
+       added+modified+deleted line share, compares against
+       {{ churn_threshold_pct }}% from tools/thresholds.yaml, writes
+       churn-report.json (the NUMBER, not a paraphrase), exits 0 converged /
+       1 not converged / 2+ error. FIRST-CYCLE RULE (rev 2, review 3: there
+       is no N−1 tag on cycle 1 — unspecified behavior at the exact branch
+       the first cycle must take): when no previous tag exists, the verdict
+       is NOT CONVERGED (exit 1) and churn-report.json records
+       {"iteration": 1, "churn_pct": null, "first_cycle": true} — a brand-new
+       cathedral is 100% churn; claiming vacuous convergence would be a lie,
+       and exiting ≥2 would kill every first cycle by retry exhaustion.
+       `--self-test`: synthetic tree pairs — a large edit must exit "not
+       converged", a whitespace-only edit must exit "converged", file
+       reordering alone must not read as churn, AND the empty-history case
+       must return the first-cycle verdict (1 with first_cycle:true).
+    2. `tools/cache_check.py` — already AUTHORED at C4 with its self-test;
+       at this stage you VERIFY it end-to-end against the real workspace
+       (empty cache → all chapters recheck; record one synthetic green →
+       only that chapter skips; touch the blueprint → EVERYTHING rechecks,
+       because context_hash covers the frozen contracts). If any behavior
+       deviates, fix it here — L4 trusts this meter with real skips.
+    3. `tools/chain_control.sh` — the loop's odometer and honest terminator
+       bookkeeping. Reads churn-report.json + maturity-report.json + cache-
+       verdict.json (typed artifacts, not prose), increments .iteration,
+       appends the row {iteration, churn_pct, churn_converged, maturity_pass,
+       maturity_gates_failed, thresholds_sha256, verdict} to build-ledger.json
+       (the thresholds_sha256 field makes every row provably the verdict of
+       the SAME pre-registered rule-set — a divergent row manufactured under
+       different thresholds is detectable at T1), merges the cache skip set
+       into ledger.verified, copies this cycle's plan/inspection/reports into
+       reports/iteration-N/, and decides: both green → touch .converged
+       (verdict CONVERGED); otherwise at iteration ≥ {{ depth_bound }} →
+       append verdict FAILED_CONVERGENCE and exit 1 (the depth bound is an
+       EXPLICIT failure, never a quiet success); otherwise exit 0 (verdict
+       CONTINUE). `--self-test` proves all three branches on synthetic
+       states, including a TAMPERED ledger row whose thresholds_sha256 does
+       not match (the negative control: tampering must be detected, not
+       silently appended after).
+
+    Write the marker `.meters-proven`.
+    {{ output_spec("tools/churn.sh", "bash + git") }}
+    {{ quality_bar("gating") }}
+    {% elif stage == 8 %}
+    # L1 — Plan-Iteration
+    (Cathedral Construction: read the accumulated state, choose THIS cycle's
+    increment; correction is cheap because a bad plan surfaces at the L4 gate
+    and a red L4 is a VERDICT that routes rework HERE, not a dead concert)
+
+    Read build-ledger.json (injected below), cathedral/blueprint.yaml, the
+    latest inspection report (check reports/iteration-*/inspection-report.md,
+    newest first — the workspace archive holds older cycles), the latest
+    gate-report.json (or its archived copy under reports/iteration-*/) for
+    any red verify-gate sub-checks, and the latest maturity-report.json gates
+    that failed. Choose the increment: next un-drafted chapters per the
+    blueprint, OR rework routed from inspection findings / red gate rows /
+    failed maturity gates.
+
+    WASTE GUARD (validated): you may not re-draft chapters the ledger shows
+    verified-and-cached unless you carry an explicit cause. Your plan MUST
+    end with exactly one machine line, either:
+    - `PLAN: chapter-NN chapter-NN …` (chapters you will touch), or
+    - `REWORK: <citation>` followed by the PLAN: line — where <citation>
+      names its evidence: a FINDING reference (`chapter-NN §…` from an
+      inspection report) or a failed gate (`gate:<name>` from gate-report
+      / maturity-report). A generic REWORK with no citation fails the
+      validated regex (rev 2, review 2: the bypass is closed).
+
+    {{ output_spec("plan.md") }}
+    {% elif stage == 9 %}
+    # L2 — Build
+    (This is the music, not the etiquette. The LLM writes the course; the
+    scaffolding decides when it stands.)
+
+    Execute plan.md. Draft or rework the planned chapters in
+    cathedral/chapters/ against the frozen blueprint and voice canon
+    (injected below): lede, one worked click-moment per concept on REAL
+    pinned data, the "so what for your beat". Extend
+    harness/question-bank.yaml (≥ {{ min_exercises_per_chapter }} exercises
+    per chapter, reference answers marked as extract keys for recomputation,
+    never authored literals) and the deck-card sources.
+
+    {{ anchor_rule() }}
+
+    Touch ONLY the planned chapters (the waste guard is validated at L1, and
+    the sheet's own validation diffs the git status of cathedral/chapters/
+    against plan.md — an unplanned chapter file is an audible failure, not a
+    style note).
+    {{ quality_bar("craft") }}
+    {% elif stage == 10 %}
+    # L3 — Inspect
+    (Cathedral's named failure mode — "adds but never integrates" — is this
+    stage's reason to exist. You are vendor-diverse from the builder.)
+
+    Review what was just built: voice consistency against the canon
+    (injected below), cross-chapter integration (notation set in chapter 1
+    still holding, terminology stable, no concept used before taught),
+    pedagogical coherence. Read the chapters this cycle touched plus their
+    blueprint contracts and the two chapters around each.
+
+    Write inspection-report.md where every finding is concrete and cited:
+    lines of the form `FINDING: chapter-NN §<section> — <actionable defect>`
+    (≥ 1 required when any defect exists), or — only if genuinely clean — a
+    single line `INTEGRATION: PASS chapters: <every chapter id in this
+    cycle's plan.md, space-separated>` plus one paragraph PER planned chapter
+    on what you checked in it (rev 2, reviews 1–2: the bare `INTEGRATION:
+    PASS` + 150 boilerplate words bypass is closed — the validation now
+    greps for every planned chapter id, so a pass line that could describe
+    any chapter verbatim cannot name the ones that were actually built).
+    A report that could describe any chapter verbatim FAILS review; the
+    specificity gate is validated.
+    {% elif stage == 11 %}
+    # L4 — Verify-Gate (RED-TOLERANT — rev 2)
+    # Etiquette Law: the course's authors never grade their own exercises.
+    # Andon Cord: a red gate routes rework; it does not burn the concert.
+    {{ verdict_rule() }}
+    set -uo pipefail
+    WS="{{ workspace }}"
+    RC=0
+    bash "$WS/tools/verify_gate.sh" "$WS" || RC=$?
+    # 0 = all green; 1 = verdict (some sub-check red) — recorded in
+    # gate-report.json and CONSUMED: maturity re-runs the harness at L6 (a
+    # red exercise check guarantees a maturity FAIL), chain_control records
+    # CONTINUE, and the next cycle's L1 reads the red rows to route rework.
+    # >= 2 = tool malfunction — that IS a sheet failure.
+    if [ "$RC" -ge 2 ]; then exit "$RC"; fi
+    test -s "$WS/gate-report.json" || { echo "gate-report.json missing after verify_gate run"; exit 2; }
+    jq -e '.checks | length >= 5' "$WS/gate-report.json" >/dev/null
+    cat "$WS/gate-report.json"
+    exit 0
+    {{ etiquette_law("tools/verify_gate.sh (verdict captured, report enforced, red routes rework)") }}
+    # verify_gate.sh was authored at C4; if missing, the || RC=$? capture
+    # yields 127 and the sheet dies loudly — no improvised replacement.
+    {% elif stage == 12 %}
+    # L5 — Convergence-Check (Fixed-Point Iteration)
+    # REV 2 — the review-1/-2 kill fix: "not converged" is the normal state
+    # of every cycle that drafts anything. Under `set -e` the bare churn call
+    # killed the script before rc=$? executed (verified by execution in both
+    # reviews) — the loop could never iterate. The verdict now survives the
+    # sheet; chain_control consumes it via churn-report.json.
+    {{ verdict_rule() }}
+    set -uo pipefail
+    RC=0
+    bash "{{ workspace }}/tools/churn.sh" "{{ workspace }}" || RC=$?
+    # 0 = converged, 1 = not converged (a VERDICT, not an error), 2+ = meter
+    # error (fail the sheet — a broken meter must not impersonate a verdict).
+    if [ "$RC" -gt 1 ]; then exit "$RC"; fi
+    cat "{{ workspace }}/churn-report.json"
+    exit 0
+    {{ etiquette_law("tools/churn.sh (verdict captured, report enforced)") }}
+    {% elif stage == 13 %}
+    # L6 — Maturity-Check + Chain Control
+    # Soil Maturity Index: the assessor's exit code controls the loop; the
+    # odometer records the honest verdict; depth exhaustion is EXPLICIT failure.
+    set -uo pipefail
+    WS="{{ workspace }}"
+    MAT=0
+    CCC=0
+    # Cache consult — REV 2: no `|| true`. cache_check exits 0 normally and
+    # 2 on internal error; its verdict lives in cache-verdict.json which
+    # chain_control consumes. An ignored exit code made the cache decorative.
+    python3 "$WS/tools/cache_check.py" --stage maturity --workspace "$WS" || exit 2
+    python3 "$WS/tools/maturity_assessor.py" --workspace "$WS" || MAT=$?
+    if [ "$MAT" -gt 1 ]; then exit "$MAT"; fi   # crash != verdict
+    bash "$WS/tools/chain_control.sh" --workspace "$WS" --maturity-exit "$MAT" || CCC=$?
+    # chain_control: 0 = CONVERGED or CONTINUE (sheet passes); 1 =
+    # FAILED_CONVERGENCE at the depth bound — an explicit, ledgered failure
+    # that MUST kill the run (die loud, never a quiet success).
+    exit "$CCC"
+    {{ etiquette_law("tools/chain_control.sh") }}
+    {% elif stage == 14 %}
+    # T1 — Divergence-Clause Audit
+    # Frame Multiplication as falsifiability: if the two gates never
+    # disagreed, the composition was redundant and the run FAILS its own
+    # hypothesis. REV 2 anti-manufacturing joins (review 2): the validation
+    # re-proves that every ledger row carried the SAME thresholds_sha256 as
+    # the pre-registered rule-set and that iteration numbers are strictly
+    # sequential — a divergent row minted under drifted thresholds, or a gap
+    # spliced into the iteration sequence, is detected here, not trusted.
+    set -euo pipefail
+    WS="{{ workspace }}"
+    jq -e '[.iterations[] | select(.churn_converged == true and .maturity_pass == false)] | length >= 1' \
+      "$WS/build-ledger.json" >/dev/null || {
+        echo "DIVERGENCE CLAUSE VIOLATED: no iteration exists where structural churn";
+        echo "was below threshold while pedagogical maturity FAILED — the two gates";
+        echo "never disagreed, so the composition was redundant. This run is a";
+        echo "failed proof by design."; exit 1; }
+    jq '[.iterations[] | select(.churn_converged == true and .maturity_pass == false)]' \
+      "$WS/build-ledger.json" > "$WS/divergence-report.json"
+    echo "Divergent iterations recorded:"
+    jq -c '.[] | {iteration, churn_pct, maturity_gates_failed}' "$WS/divergence-report.json"
+    {{ etiquette_law("the jq divergence predicate") }}
+    {% elif stage == 15 %}
+    # T2 — Mkdocs Site
+    # Etiquette Law: broken links and missing assets are build failures, not cosmetic.
+    set -euo pipefail
+    WS="{{ workspace }}"
+    # Assemble site-src from the cathedral if not already assembled. The nav's
+    # order IS the prerequisite graph (validated against the blueprint by
+    # blueprint_check.py --nav-check), and the index carries the EDITION
+    # STAMP — the first 12 hex of the frozen blueprint digest — so the wire
+    # smoke at T5 can prove the SERVED site is THIS build, not a stale deploy.
+    if [ ! -f "$WS/site-src/mkdocs.yml" ]; then
+      mkdir -p "$WS/site-src/docs"
+      EDITION=$(jq -r .blueprint_sha256 "$WS/build-ledger.json" | cut -c1-12)
+      cat > "$WS/site-src/mkdocs.yml" <<'MKEOF'
+    site_name: {{ course_title }}
+    site_description: "{{ course_subtitle }} — for {{ audience }}"
+    strict: true
+    theme: readthedocs
+    nav:
+      - Home: index.md
+    MKEOF
+      printf '# %s\n\n%s — for %s. Open curriculum, license: %s.\n\nEdition: %s\n' \
+        "{{ course_title }}" "{{ course_subtitle }}" "{{ audience }}" "{{ license }}" "$EDITION" \
+        > "$WS/site-src/docs/index.md"
+      for f in "$WS"/cathedral/chapters/*.md; do
+        n=$(basename "$f" .md)
+        printf '  - "%s": %s\n' "$(head -1 "$f" | sed 's/^# *//')" "$n" >> "$WS/site-src/mkdocs.yml"
+        cp "$f" "$WS/site-src/docs/"
+      done
+      printf '  - Provenance: provenance.md\n' >> "$WS/site-src/mkdocs.yml"
+    fi
+    mkdocs build --strict -f "$WS/site-src/mkdocs.yml" -d "$WS/site"
+    # Nav order == prerequisite order (navigation embodies pedagogy).
+    python3 "$WS/tools/blueprint_check.py" --nav-check "$WS/site-src/mkdocs.yml"
+    # Alt-text gate: no empty-alt images anywhere in the sources.
+    if grep -rnE '!\[[[:space:]]*\]\(' "$WS/site-src/docs/"; then
+      echo "ALT-TEXT GATE FAILED: chart image(s) without alt text"; exit 1; fi
+    # Reading band re-asserted on RENDERED text, not source.
+    uv run --with textstat python "$WS/harness/band_check.py" --rendered "$WS/site"
+    {{ etiquette_law("mkdocs --strict + nav-check + alt-text grep + rendered band") }}
+    {% elif stage == 16 %}
+    # T3 — Anki Deck
+    set -euo pipefail
+    WS="{{ workspace }}"
+    uv run --with genanki --with pyyaml python "$WS/deck/build_deck.py" \
+      --workspace "$WS" --output "$WS/deck/{{ deck_asset }}"
+    # Bijection (cards ↔ glossary 1:1) + zip round-trip against the bank.
+    uv run --with genanki --with pyyaml python "$WS/deck/build_deck.py" \
+      --workspace "$WS" --verify "$WS/deck/{{ deck_asset }}"
+    test -s "$WS/deck/{{ deck_asset }}"
+    {{ etiquette_law("deck/build_deck.py --verify") }}
+    {% elif stage == 17 %}
+    # T4 — Provenance Page
+    # One click from any number to the extract + script + digest that made it.
+    set -euo pipefail
+    WS="{{ workspace }}"
+    python3 "$WS/tools/provenance_join.py" --workspace "$WS" \
+      --page "$WS/site-src/docs/provenance.md"
+    # Zero unresolved anchors, count equality, N random rows re-derived live.
+    python3 "$WS/tools/provenance_join.py" --check --workspace "$WS"
+    # The page must be IN the built site — rebuild strict with it present.
+    mkdocs build --strict -f "$WS/site-src/mkdocs.yml" -d "$WS/site"
+    {{ etiquette_law("provenance_join.py --check") }}
+    {% elif stage == 18 %}
+    # T5 — Publish + Wire Smoke (REV 2: idempotent, stamp-bound, credential-honest)
+    # Publication is proven at the wire, not assumed from command output. The
+    # served bytes must carry THIS build's edition stamp (first 12 hex of the
+    # frozen blueprint digest) — a stale deploy or someone else's website
+    # cannot pass for this run's success.
+    set -euo pipefail
+    WS="{{ workspace }}"
+    REPO='{{ repo_slug }}'
+    EDITION=$(jq -r .blueprint_sha256 "$WS/build-ledger.json" | cut -c1-12)
+    # The built index must carry the stamp BEFORE anything is published.
+    grep -q "Edition: ${EDITION}" "$WS/site/index.html"
+    # Create the public repo if absent — loudly (rev 2: `gh repo create … ||
+    # true` swallowed credential failure and deferred it to a confusing push
+    # error; the Andon doctrine applies to our own publishing path too).
+    if ! gh repo view "$REPO" >/dev/null 2>&1; then
+      gh repo create "$REPO" --public --description "{{ course_title }} — {{ course_subtitle }}"
+    fi
+    gh auth setup-git >/dev/null 2>&1 || true
+    cd "$WS/site"
+    git init -q 2>/dev/null || true
+    git checkout -q -B gh-pages 2>/dev/null || true
+    git add -A
+    # Idempotent commit (rev 2: a bare `git commit` under set -e died on the
+    # empty diff of every retry — after producing a valid site).
+    if ! git diff --cached --quiet; then
+      git -c user.name="denominator-publisher" -c user.email="noreply@localhost" \
+        commit -qm "publish: {{ course_title }} edition ${EDITION}"
+    fi
+    git push -qf "https://github.com/${REPO}.git" gh-pages
+    gh api "repos/${REPO}/pages" -X POST -f "source[branch]=gh-pages" -f "source[path]=/" 2>/dev/null || \
+      gh api "repos/${REPO}/pages" -X PATCH -f "source[branch]=gh-pages" -f "source[path]=/"
+    gh api "repos/${REPO}/pages" >/dev/null   # Pages MUST be enabled after the above
+    # Deterministic edition tag: one release per edition, not one per retry.
+    TAG="curriculum-${EDITION}"
+    if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+      gh release create "$TAG" "$WS/deck/{{ deck_asset }}" \
+        --repo "$REPO" --title "{{ course_title }} ${TAG}" \
+        --notes "Machine-verified curriculum build. Deck: {{ deck_asset }}."
+    fi
+    # ---- SETTLE-POLL, not sleep 20 (rev 2: first Pages deploys routinely
+    # exceed 20s; poll up to ~150s, then fail loudly with the state) ----
+    URL='{{ pages_url }}'
+    OK=0
+    for i in $(seq 1 15); do
+      if curl -sfL "$URL" -o /tmp/denominator-index.html; then OK=1; break; fi
+      sleep 10
+    done
+    if [ "$OK" -ne 1 ]; then echo "WIRE SMOKE: ${URL} not serving after 150s"; exit 1; fi
+    grep -q "{{ course_title }}" /tmp/denominator-index.html
+    grep -q "Edition: ${EDITION}" /tmp/denominator-index.html   # served == this build
+    ASSET_URL=$(gh api "repos/${REPO}/releases/latest" --jq \
+      '.assets[] | select(.name == "{{ deck_asset }}") | .browser_download_url')
+    ASSET_SIZE=$(gh api "repos/${REPO}/releases/latest" --jq \
+      '.assets[] | select(.name == "{{ deck_asset }}") | .size')
+    test -n "$ASSET_URL" && test "$ASSET_SIZE" -gt 0
+    curl -sfL "$ASSET_URL" -o /dev/null   # end-to-end asset fetch
+    python3 - "$URL" "$ASSET_URL" "$ASSET_SIZE" "{{ course_title }}" "$EDITION" <<'PYEOF'
+    import json, sys
+    json.dump({"pages_url": sys.argv[1], "course_title": sys.argv[4],
+               "edition": sys.argv[5], "pages_http_200": True,
+               "title_found": True, "edition_stamp_found": True,
+               "asset_url": sys.argv[2], "asset_bytes": int(sys.argv[3]),
+               "asset_fetch_ok": True},
+              open("{{ workspace }}/live-smoke.json", "w"), indent=2)
+    PYEOF
+    {{ etiquette_law("settle-poll + stamp grep + gh api wire smoke") }}
+    {% elif stage == 19 %}
+    # T6 — Two-Path Proof Install
+    # Custody discipline: byte-identical at BOTH canonical locations, each
+    # validated FROM ITS INSTALLED PATH. REV 2: the reverse-path arithmetic
+    # is fixed (review 2) — from examples/rosetta the sibling is TWO levels
+    # up, not three: examples/rosetta → examples → repo-root, whereas
+    # proof-scores → rosetta-corpus → scores → repo-root is three.
+    set -euo pipefail
+    WS="{{ workspace }}"
+    # The original installed score — recorded at C1, preserved across cycles.
+    SRC=$(cat "$WS/.score-origin")
+    test -f "$SRC"
+    SD=$(dirname "$SRC")
+    if [ "$(basename "$SD")" = "proof-scores" ]; then
+      DEST="$SD/../../../examples/rosetta/cathedral-construction.yaml"
+    else
+      DEST="$SD/../../scores/rosetta-corpus/proof-scores/cathedral-construction.yaml"
+    fi
+    mkdir -p "$(dirname "$DEST")"
+    cp "$SRC" "$DEST"
+    A=$(sha256sum "$SRC" | awk '{print $1}')
+    B=$(sha256sum "$DEST" | awk '{print $1}')
+    mzt validate "$SRC"  && VA=ok || VA=fail
+    mzt validate "$DEST" && VB=ok || VB=fail
+    python3 - "$A" "$B" "$VA" "$VB" "$SRC" "$DEST" <<'PYEOF'
+    import json, sys
+    a, b, va, vb, src, dest = sys.argv[1:7]
+    json.dump({"digest_a": a, "digest_b": b, "digests_equal": a == b,
+               "mzt_validate_src": va, "mzt_validate_dest": vb,
+               "validated": [va, vb], "src": src, "dest": dest},
+              open("{{ workspace }}/two-path-report.json", "w"), indent=2)
+    sys.exit(0 if (a == b and va == "ok" and vb == "ok") else 1)
+    PYEOF
+    {{ etiquette_law("sha256 equality + mzt validate from each path") }}
+    {% elif stage == 20 %}
+    # T7 — Proof Write-Up
+    (Every quantitative claim joins a ledger or report row — numbers come
+    from jq over the ledger, never from memory. REV 2, review 2: heading
+    checks were process-shaped; the validation now JOINS the report's
+    machine lines to the live ledger values, so a number that does not match
+    its source fails the sheet.)
+
+    Write proof-report.md from the injected build-ledger.json and the gate
+    reports, with EXACTLY these sections:
+    ## Convergence Ledger — jq-sourced table of every iteration
+      (churn_pct, maturity verdict, gates failed), plus convergence depth used.
+    ## The Divergence Iteration — the recorded churn-low/maturity-FAIL row
+      from divergence-report.json, quoted by iteration number.
+    ## Depth & Chain Provenance — iterations consumed, terminator swap,
+      instrument families from reports/instrument-families.json, and this
+      concert's semantic-binding finding (WHS4_100 is DTP3 coverage, not
+      life expectancy) and its correction at commissioning.
+    ## What This Proof Did NOT Establish — teaching quality beyond its
+      proxies (Flesch ≠ comprehension; graph closure ≠ a good teacher);
+      the maturity index's blind spots, stated plainly.
+
+    The report MUST end with these exact machine lines (they are validated
+    against the live ledger — derive them with jq, never from memory):
+        iterations_consumed: <jq '.iterations | length' build-ledger.json>
+        divergence_iteration: <jq -r '.[0].iteration' divergence-report.json>
+        churn_threshold_pct: {{ churn_threshold_pct }}
+        edition: <first 12 hex of .blueprint_sha256>
+
+    {{ quality_bar("standard") }}
+    {% elif stage == 21 %}
+    # T8 — Chain Terminator Swap
+    # Deterministic termination: once converged AND delivered, the staged
+    # chain copy becomes a validated one-sheet terminator. The job ends
+    # COMPLETED; the concert simply has no next cycle. The issue-solver
+    # "gate fails by design" idiom was rejected — it would mark a successful
+    # run FAILED.
+    set -euo pipefail
+    WS="{{ workspace }}"
+    if [ ! -f "$WS/.converged" ]; then echo "not converged — leaving chain intact"; exit 0; fi
+    if [ ! -s "$WS/proof-report.md" ]; then echo "proof report absent — leaving chain intact"; exit 0; fi
+    TMP="$WS/.terminator-candidate.yaml"
+    cat > "$TMP" <<'EOFX'
+    name: denominator-terminal
+    description: Terminal absorber for the converged Denominator concert.
+    instrument: cli
+    instrument_fallbacks: []
+    sheet:
+      size: 1
+      total_items: 1
+    prompt:
+      template: |
+        set -euo pipefail
+        echo "The Denominator converged and delivered; chain terminated by design." > "{{ '{{' }} workspace {{ '}}' }}/.chain-terminated"
+    validations:
+      - type: file_exists
+        path: "{workspace}/.chain-terminated"
+    EOFX
+    mzt validate "$TMP" && mv "$TMP" "$WS/self-chain.yaml" || {
+      echo "terminator candidate failed validation — chain left intact"; exit 1; }
+    echo "chain terminator installed; the concert ends after this cycle."
+    {{ etiquette_law("mzt validate before swap") }}
+    {% endif %}
+
+validations:
+  # ── Sheet 1 · C1 scaffold + host/auth/family gates ─────────────────────────
+  - type: file_exists
+    path: "{workspace}/tools/check-host.sh"
+    condition: "sheet_num == 1"
+    description: "Host checker exists"
+  - type: command_succeeds
+    command: 'bash "{workspace}/tools/check-host.sh"'
+    condition: "sheet_num == 1"
+    stage: 2
+    description: "Host gate RUNS: every named binary present AND gh authenticated (nonzero on any missing)"
+  - type: command_succeeds
+    command: 'bash "{workspace}/tools/check-host.sh" --self-test'
+    condition: "sheet_num == 1"
+    stage: 2
+    description: "NEGATIVE CONTROL (rev 2): the checker proves it detects a bogus binary — a checker that cannot fail certifies nothing"
+  - type: command_succeeds
+    command: |-
+      bash -c 'cd "{workspace}" && ORIGIN=$(cat .score-origin) && test "$(basename "$ORIGIN")" = "cathedral-construction.yaml" && test -f "$ORIGIN" && A=$(sha256sum self-chain.yaml | awk "{print \$1}") && B=$(sha256sum "$ORIGIN" | awk "{print \$1}") && test "$A" = "$B" && test -d .git'
+    condition: "sheet_num == 1"
+    stage: 2
+    description: "Chain custody (rev 2): staged copy byte-identical to the recorded origin, origin basename correct, git repo initialized"
+  - type: command_succeeds
+    command: 'test -f "{workspace}/reports/instrument-families.json" && jq -e ''.assessor_family_distinct == true and .named["assessor-author"].ready == true'' "{workspace}/reports/instrument-families.json"'
+    condition: "sheet_num == 1"
+    stage: 2
+    description: "FAMILY GATE (rev 2): live-registry probe shows the assessor family is READY and DISTINCT from the builder family — the load-bearing claim has a load-bearing gate"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && git log --oneline | head -1 >/dev/null 2>&1 || test -d "{workspace}/.git"'
+    condition: "sheet_num == 1"
+    stage: 2
+    description: "Workspace git repo present for churn diffs"
+
+  # ── Sheet 2 · C2 data commissioning + semantic pin gate ───────────────────
+  - type: file_exists
+    path: "{workspace}/data/pins.yaml"
+    condition: "sheet_num == 2"
+    description: "Pin registry exists"
+  - type: command_succeeds
+    command: 'python3 "{workspace}/tools/pin_verify.py"'
+    condition: "sheet_num == 2"
+    stage: 2
+    description: "Pin verifier RUNS fail-closed over all admitted bytes"
+  - type: command_succeeds
+    command: 'test $(wc -l < "{workspace}/data/raw/owid-life-expectancy.csv") -ge 1000'
+    condition: "sheet_num == 2"
+    stage: 2
+    description: "OWID CSV row floor (live-verified 21,565 rows at composition)"
+  - type: command_succeeds
+    command: |-
+      bash -c 'jq -e ''.value | length >= 500'' "{workspace}/data/raw/who-MORT_100.json" && jq -e ''.value | length >= 100'' "{workspace}/data/raw/who-MDG_0000000007.json" && jq -e ''.value | length >= 50'' "{workspace}/data/raw/who-WHS4_117.json" && jq -e ''.value | length >= 50'' "{workspace}/data/raw/who-WHS4_100.json"'
+    condition: "sheet_num == 2"
+    stage: 3
+    description: "ALL FOUR WHO extracts carry real rows (rev 2: WHS4 floors added; live counts 672/280/66/66)"
+  - type: command_succeeds
+    command: |-
+      bash -c 'grep -qi "deaths in children aged" "{workspace}/data/pins.yaml" && grep -qi "Under-five mortality rate" "{workspace}/data/pins.yaml" && grep -qi "Hepatitis B" "{workspace}/data/pins.yaml" && grep -qi "pertussis" "{workspace}/data/pins.yaml"'
+    condition: "sheet_num == 2"
+    stage: 3
+    description: "Every semantic title recorded in pins — the WHS4_100 correction and the under-5 population match survive on disk"
+  - type: command_succeeds
+    command: 'jq -e ''[.value[].Dim3] | length >= 500'' "{workspace}/data/raw/who-MORT_100.json" >/dev/null && jq -e ''[.value[].Dim3] | unique | length >= 10'' "{workspace}/data/raw/who-MORT_100.json" >/dev/null'
+    condition: "sheet_num == 2"
+    stage: 3
+    description: "MORT_100 carries the cause dimension the chapter-1 aggregation sums over (16 causes live-verified)"
+
+  # ── Sheet 3 · C3 extracts + determinism ───────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/data/extracts/manifest.json"
+    condition: "sheet_num == 3"
+    description: "Extract manifest exists"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && uv run --with pandas --with numpy python scripts/recompute.py --check-determinism'
+    condition: "sheet_num == 3"
+    stage: 2
+    description: "Determinism probe RUNS: double-extract digests identical"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && uv run --with pandas --with numpy python scripts/recompute.py --check-fail-closed'
+    condition: "sheet_num == 3"
+    stage: 3
+    description: "Fail-closed ordering probe RUNS: corrupted byte trips the pin gate before regeneration"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && uv run --with pytest --with pandas --with numpy python -m pytest scripts/tests/test_extracts.py -q'
+    condition: "sheet_num == 3"
+    stage: 4
+    description: "Extract invariant suite (independent in-test recomputation)"
+  - type: content_contains
+    path: "{workspace}/scripts/tests/test_extracts.py"
+    pattern: "data/raw"
+    condition: "sheet_num == 3"
+    stage: 4
+    description: "REV 2: the independent-oracle test reads RAW bytes, not the extracts it polices"
+
+  # ── Sheet 4 · C4 harness + toolchain ──────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/harness/run_exercises.py"
+    condition: "sheet_num == 4"
+    description: "Exercise grader exists"
+  - type: file_exists
+    path: "{workspace}/harness/band_check.py"
+    condition: "sheet_num == 4"
+    description: "REV 2: band checker exists at commissioning, not discovered at the loop edge"
+  - type: file_exists
+    path: "{workspace}/tools/provenance_join.py"
+    condition: "sheet_num == 4"
+    description: "REV 2: provenance joiner exists at commissioning"
+  - type: file_exists
+    path: "{workspace}/tools/verify_gate.sh"
+    condition: "sheet_num == 4"
+    description: "REV 2: the L4 composition exists at commissioning"
+  - type: file_exists
+    path: "{workspace}/tools/cache_check.py"
+    condition: "sheet_num == 4"
+    description: "REV 2: the cache tool exists with its consumer contract"
+  - type: file_exists
+    path: "{workspace}/harness/question-bank.yaml"
+    condition: "sheet_num == 4"
+    description: "REV 2: seed question bank exists"
+  - type: file_exists
+    path: "{workspace}/harness/tolerances.yaml"
+    condition: "sheet_num == 4"
+    description: "REV 2: tolerance registry pre-registered with the harness"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && uv run --with pytest --with pyyaml --with pandas python harness/run_exercises.py --self-test'
+    condition: "sheet_num == 4"
+    stage: 2
+    description: "Grader mutation-calibrates: sound fixture GREEN AND corrupted fixture RED"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && uv run --with genanki --with pyyaml python deck/build_deck.py --self-test'
+    condition: "sheet_num == 4"
+    stage: 3
+    description: "Deck compiler self-test: fixture bank round-trips as zip"
+  - type: command_succeeds
+    command: 'test -f "{workspace}/.harness-calibrated"'
+    condition: "sheet_num == 4"
+    stage: 4
+    description: "Calibration marker written (thresholds frozen)"
+
+  # ── Sheet 5 · C5 blueprint freeze ─────────────────────────
+  - type: file_exists
+    path: "{workspace}/cathedral/blueprint.yaml"
+    condition: "sheet_num == 5"
+    description: "Blueprint frozen"
+  - type: file_exists
+    path: "{workspace}/cathedral/voice-canon.md"
+    condition: "sheet_num == 5"
+    description: "Voice canon frozen"
+  - type: command_succeeds
+    command: 'python3 "{workspace}/tools/blueprint_check.py" --slate 11'
+    condition: "sheet_num == 5"
+    stage: 2
+    description: "REV 2: slate check is YAML-owned (the column-zero grep false-failed valid nested layouts); schema + DAG acyclicity + prerequisite closure + exactly 11 chapters"
+  - type: command_succeeds
+    command: |-
+      bash -c 'cd "{workspace}" && L=$(jq -r .blueprint_sha256 build-ledger.json) && A=$(sha256sum cathedral/blueprint.yaml | awk "{print \$1}") && test "$L" = "$A"'
+    condition: "sheet_num == 5"
+    stage: 3
+    description: "REV 2: the ledger digest EQUALS the live blueprint bytes — a stale or hand-edited digest is caught, not just a missing one"
+  - type: command_succeeds
+    command: 'jq -e ''(.blueprint_sha256 | length) == 64'' "{workspace}/build-ledger.json"'
+    condition: "sheet_num == 5"
+    stage: 3
+    description: "Ledger born with the blueprint digest"
+
+  # ── Sheet 6 · C6 assessor authorship + calibration ────────────────────────
+  - type: file_exists
+    path: "{workspace}/tools/maturity_assessor.py"
+    condition: "sheet_num == 6"
+    description: "Maturity assessor exists"
+  - type: file_exists
+    path: "{workspace}/tools/thresholds.yaml"
+    condition: "sheet_num == 6"
+    description: "Pre-registered thresholds exist"
+  - type: command_succeeds
+    command: 'python3 "{workspace}/tools/maturity_assessor.py" --calibrate'
+    condition: "sheet_num == 6"
+    stage: 2
+    description: "Assessor calibrates BOTH directions: mature fixture PASSES, shallow fixture FAILS"
+  - type: command_succeeds
+    command: 'test -f "{workspace}/tools/assessor-lineage.json" && jq -e ''.distinct == true'' "{workspace}/tools/assessor-lineage.json"'
+    condition: "sheet_num == 6"
+    stage: 2
+    description: "REV 2: assessor lineage JOINED on disk — the family separation is a recorded, checkable fact, not an assertion"
+  - type: command_succeeds
+    command: |-
+      bash -c 'cd "{workspace}" && L=$(jq -r .assessor_family tools/assessor-lineage.json) && F=$(jq -r .default_family reports/instrument-families.json) && test "$L" != "$F"'
+    condition: "sheet_num == 6"
+    stage: 2
+    description: "REV 2: the assessor family in the lineage record is distinct from the builder family in the C1 registry probe"
+  - type: command_succeeds
+    command: 'jq -e ''(.thresholds_sha256 | length) == 64'' "{workspace}/build-ledger.json"'
+    condition: "sheet_num == 6"
+    stage: 3
+    description: "Thresholds digest recorded — later edits are visible events"
+  - type: command_succeeds
+    command: 'test -f "{workspace}/.assessor-calibrated"'
+    condition: "sheet_num == 6"
+    stage: 4
+    description: "Calibration marker written"
+
+  # ── Sheet 7 · C7 meters ───────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'test -x "{workspace}/tools/churn.sh" -a -x "{workspace}/tools/chain_control.sh" -a -f "{workspace}/tools/cache_check.py"'
+    condition: "sheet_num == 7"
+    description: "Meters exist and are executable"
+  - type: command_succeeds
+    command: 'bash "{workspace}/tools/churn.sh" --self-test'
+    condition: "sheet_num == 7"
+    stage: 2
+    description: "Churn meter proves verdicts on synthetic tree pairs INCLUDING the empty-history first cycle"
+  - type: command_succeeds
+    command: 'python3 "{workspace}/tools/cache_check.py" --self-test'
+    condition: "sheet_num == 7"
+    stage: 3
+    description: "Cache live-invalidation probe: injected pin change forces the miss; unchanged green stays skipped"
+  - type: command_succeeds
+    command: 'bash "{workspace}/tools/chain_control.sh" --self-test'
+    condition: "sheet_num == 7"
+    stage: 4
+    description: "Chain control proves CONVERGED / CONTINUE / FAILED_CONVERGENCE branches AND detects a tampered ledger row"
+  - type: command_succeeds
+    command: 'test -f "{workspace}/.meters-proven"'
+    condition: "sheet_num == 7"
+    stage: 5
+    description: "Meters marker written"
+
+  # ── Sheet 8 · L1 plan-iteration ───────────────────────────────────────────
+  - type: command_succeeds
+    command: 'test -s "{workspace}/plan.md"'
+    condition: "sheet_num == 8"
+    description: "Plan exists and is non-empty (output path named in the prompt — rev 2)"
+  - type: command_succeeds
+    command: 'grep -qE ''^(PLAN|REWORK):'' "{workspace}/plan.md"'
+    condition: "sheet_num == 8"
+    stage: 2
+    description: "Plan carries its machine line (PLAN: or REWORK:)"
+  - type: command_succeeds
+    command: |-
+      bash -c 'cd "{workspace}" && if ! grep -q "^REWORK:" plan.md; then exit 0; fi; grep -E "^REWORK:.*(chapter-[0-9]+ §|gate:)" plan.md >/dev/null || { echo "WASTE-GUARD BYPASS: REWORK carries no finding or gate citation"; exit 1; }'
+    condition: "sheet_num == 8"
+    stage: 2
+    description: "REV 2: a REWORK line MUST cite a FINDING (chapter-NN §…) or a failed gate (gate:…) — the generic-REWORK bypass is closed"
+  - type: command_succeeds
+    command: |-
+      bash -c 'cd "{workspace}" && if grep -q "^REWORK:" plan.md; then exit 0; fi;
+      planned=$(grep -oE "chapter-[0-9]+" plan.md | sort -u);
+      test -n "$planned" || exit 1;
+      for c in $planned; do
+        jq -e --arg c "$c" ''(.verified // []) | index($c) | not'' build-ledger.json >/dev/null && exit 0;
+      done;
+      echo "WASTE GUARD: plan re-drafts only verified-and-cached chapters without a REWORK cause"; exit 1'
+    condition: "sheet_num == 8"
+    stage: 3
+    description: "Waste guard: the increment touches un-done work or carries a cause"
+
+  # ── Sheet 9 · L2 build ────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: |-
+      bash -c 'cd "{workspace}" && planned=$(grep -oE "chapter-[0-9]+" plan.md | sort -u);
+      test -n "$planned" || exit 1;
+      for c in $planned; do
+        f="cathedral/chapters/$c.md";
+        test -s "$f" || { echo "missing $f"; exit 1; };
+        grep -q "{num:" "$f" || { echo "no provenance anchor in $f"; exit 1; };
+        test $(wc -w < "$f") -ge 800 || { echo "$f below word floor"; exit 1; };
+      done'
+    condition: "sheet_num == 9"
+    description: "Every planned chapter exists, carries anchors, and has substance"
+  - type: command_succeeds
+    command: |-
+      bash -c 'cd "{workspace}" && planned=$(grep -oE "chapter-[0-9]+" plan.md | sort -u);
+      changed=$(git status --porcelain -- cathedral/chapters/ | awk "{print \$NF}" | sed "s|cathedral/chapters/||; s|\.md$||" | sort -u);
+      for c in $changed; do
+        echo "$planned" | grep -qx "$c" || { echo "UNPLANNED CHAPTER TOUCHED: $c (not in plan.md)"; exit 1; };
+      done'
+    condition: "sheet_num == 9"
+    stage: 2
+    description: "REV 2: build scope is git-audited — only planned chapters changed under cathedral/ (added OR modified)"
+
+  # ── Sheet 10 · L3 inspect ─────────────────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/inspection-report.md"
+    condition: "sheet_num == 10"
+    description: "Inspection report exists"
+  - type: command_succeeds
+    command: 'bash -c ''grep -qE "^FINDING: chapter-[0-9]+ §" "{workspace}/inspection-report.md" || grep -q "^INTEGRATION: PASS" "{workspace}/inspection-report.md"'''
+    condition: "sheet_num == 10"
+    stage: 2
+    description: "Specificity gate: cited findings or an explicit integration pass"
+  - type: command_succeeds
+    command: |-
+      bash -c 'cd "{workspace}" && if ! grep -q "^INTEGRATION: PASS" inspection-report.md; then exit 0; fi;
+      planned=$(grep -oE "chapter-[0-9]+" plan.md | sort -u);
+      test -n "$planned" || exit 1;
+      for c in $planned; do
+        grep -q "$c" inspection-report.md || { echo "PASS line does not account for planned chapter $c — boilerplate pass"; exit 1; };
+      done'
+    condition: "sheet_num == 10"
+    stage: 2
+    description: "REV 2: an INTEGRATION: PASS must name every planned chapter — a generic pass that could describe anything fails"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/inspection-report.md") -ge 150'
+    condition: "sheet_num == 10"
+    stage: 2
+    description: "Inspection has substantive content"
+
+  # ── Sheet 11 · L4 verify-gate (red-tolerant) ───────────────────────────────
+  - type: command_succeeds
+    command: 'test -s "{workspace}/gate-report.json" && jq -e ''.checks | length >= 5'' "{workspace}/gate-report.json"'
+    condition: "sheet_num == 11"
+    description: "REV 2: the typed gate report is the sheet's contract — verify-gate RAN and enumerated its sub-checks (a red sub-check is a recorded verdict, not a dead concert)"
+  - type: command_succeeds
+    command: 'jq -e ''has("cache_skipped")'' "{workspace}/gate-report.json"'
+    condition: "sheet_num == 11"
+    stage: 2
+    description: "REV 2: the report names which chapters were legitimately cache-skipped — the cache's work-avoidance is visible, not decorative"
+
+  # ── Sheet 12 · L5 convergence-check (verdict survives) ─────────────────────
+  - type: command_succeeds
+    command: 'bash -c ''bash "{workspace}/tools/churn.sh" "{workspace}"; rc=$?; test $rc -le 1'''
+    condition: "sheet_num == 12"
+    description: "Churn meter RUNS and returns a verdict (0 converged / 1 not), not a crash"
+  - type: command_succeeds
+    command: 'test -s "{workspace}/churn-report.json" && jq -e ''(.churn_pct == null) or ((.churn_pct | type) == "number")'' "{workspace}/churn-report.json"'
+    condition: "sheet_num == 12"
+    stage: 2
+    description: "Churn report carries the number (or the explicit first-cycle null), not a paraphrase"
+  - type: command_succeeds
+    command: 'jq -e ''(.first_cycle == true and .churn_pct == null) or (.first_cycle != true and (.churn_pct | type) == "number")'' "{workspace}/churn-report.json"'
+    condition: "sheet_num == 12"
+    stage: 2
+    description: "First cycles declare themselves (first_cycle:true with null pct) instead of impersonating a measured verdict"
+
+  # ── Sheet 13 · L6 maturity + chain control ────────────────────────────────
+  - type: command_succeeds
+    command: 'bash -c ''python3 "{workspace}/tools/maturity_assessor.py" --workspace "{workspace}"; rc=$?; test $rc -le 1'''
+    condition: "sheet_num == 13"
+    description: "Assessor RUNS and returns a verdict, not a crash"
+  - type: command_succeeds
+    command: 'test -s "{workspace}/maturity-report.json" && jq -e ''.gates | length >= 6'' "{workspace}/maturity-report.json"'
+    condition: "sheet_num == 13"
+    stage: 2
+    description: "Per-gate enumeration so a FAIL is diagnosable (Andon)"
+  - type: command_succeeds
+    command: 'jq -e ''.iterations | length >= 1'' "{workspace}/build-ledger.json"'
+    condition: "sheet_num == 13"
+    stage: 3
+    description: "Ledger row appended for this cycle by chain control"
+
+  # ── Sheet 14 · T1 divergence audit ────────────────────────────────────────
+  - type: command_succeeds
+    command: 'jq -e ''[.iterations[] | select(.churn_converged == true and .maturity_pass == false)] | length >= 1'' "{workspace}/build-ledger.json"'
+    condition: "sheet_num == 14"
+    description: "DIVERGENCE CLAUSE: a churn-low/maturity-FAIL row exists — or the run fails its own hypothesis"
+  - type: command_succeeds
+    command: 'test -s "{workspace}/divergence-report.json"'
+    condition: "sheet_num == 14"
+    stage: 2
+    description: "Divergence record written"
+  - type: command_succeeds
+    command: 'jq -e ''. as $d | all(.iterations[]; .thresholds_sha256 == $d.thresholds_sha256)'' "{workspace}/build-ledger.json"'
+    condition: "sheet_num == 14"
+    stage: 2
+    description: "REV 2 anti-manufacturing: EVERY iteration row was judged under the SAME pre-registered thresholds digest as the ledger's"
+  - type: command_succeeds
+    command: 'jq -e ''[.iterations[].iteration] as $i | ($i | length) == ($i | unique | length) and ($i | sort) == [range(1; (($i | max) + 1))]'' "{workspace}/build-ledger.json"'
+    condition: "sheet_num == 14"
+    stage: 2
+    description: "REV 2 anti-manufacturing: iteration numbers are strictly sequential 1..N — no spliced or skipped cycles"
+
+  # ── Sheet 15 · T2 mkdocs site ─────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'mkdocs build --strict -f "{workspace}/site-src/mkdocs.yml" -d "{workspace}/site"'
+    condition: "sheet_num == 15"
+    description: "Strict site build RUNS (broken links/missing assets are failures)"
+  - type: command_succeeds
+    command: 'python3 "{workspace}/tools/blueprint_check.py" --nav-check "{workspace}/site-src/mkdocs.yml"'
+    condition: "sheet_num == 15"
+    stage: 2
+    description: "REV 2: nav order equals the blueprint prerequisite order — navigation embodies pedagogy, mechanically"
+  - type: command_succeeds
+    command: |-
+      bash -c 'cd "{workspace}" && E=$(jq -r .blueprint_sha256 build-ledger.json | cut -c1-12) && grep -q "Edition: $E" site/index.html'
+    condition: "sheet_num == 15"
+    stage: 2
+    description: "REV 2: the built index carries this build's edition stamp — the wire smoke has something true to check"
+  - type: command_succeeds
+    command: 'bash -c ''! grep -rnE "!\[[[:space:]]*\]\(" "{workspace}/site-src/docs/"'''
+    condition: "sheet_num == 15"
+    stage: 2
+    description: "No chart image without alt text"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && uv run --with textstat python harness/band_check.py --rendered "{workspace}/site"'
+    condition: "sheet_num == 15"
+    stage: 3
+    description: "Reading band re-asserted on RENDERED text"
+
+  # ── Sheet 16 · T3 deck ────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && uv run --with genanki --with pyyaml python deck/build_deck.py --workspace "{workspace}" --output "{workspace}/deck/denominator.apkg"'
+    condition: "sheet_num == 16"
+    description: "Deck build RUNS (deterministic IDs — rebuild is stable)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && uv run --with genanki --with pyyaml python deck/build_deck.py --workspace "{workspace}" --verify "{workspace}/deck/denominator.apkg"'
+    condition: "sheet_num == 16"
+    stage: 2
+    description: "Bijection gate + .apkg zip round-trip against the bank"
+  - type: command_succeeds
+    command: 'test -s "{workspace}/deck/denominator.apkg"'
+    condition: "sheet_num == 16"
+    stage: 3
+    description: "Deck artifact non-empty"
+
+  # ── Sheet 17 · T4 provenance page ─────────────────────────────────────────
+  - type: command_succeeds
+    command: 'python3 "{workspace}/tools/provenance_join.py" --check --workspace "{workspace}"'
+    condition: "sheet_num == 17"
+    description: "Zero unresolved anchors; N random rows re-derived live from the pin"
+  - type: command_succeeds
+    command: 'test -s "{workspace}/site-src/docs/provenance.md" && mkdocs build --strict -f "{workspace}/site-src/mkdocs.yml" -d "{workspace}/site"'
+    condition: "sheet_num == 17"
+    stage: 2
+    description: "Provenance page exists and is inside a strict-rebuilt site"
+
+  # ── Sheet 18 · T5 publish + wire smoke ────────────────────────────────────
+  - type: command_succeeds
+    command: 'jq -e ''.pages_http_200 == true and .asset_bytes > 0 and .asset_fetch_ok == true and .edition_stamp_found == true'' "{workspace}/live-smoke.json"'
+    condition: "sheet_num == 18"
+    description: "Typed wire-smoke record: Pages 200, asset bytes > 0, end-to-end fetch, and the SERVED edition stamp matches this build"
+  - type: command_succeeds
+    command: |-
+      bash -c 'cd "{workspace}" && URL=$(jq -r .pages_url live-smoke.json) && TITLE=$(jq -r .course_title live-smoke.json) && E=$(jq -r .edition live-smoke.json) && curl -sfL "$URL" -o /tmp/independent-probe.html && grep -q "$TITLE" /tmp/independent-probe.html && grep -q "Edition: $E" /tmp/independent-probe.html'
+    condition: "sheet_num == 18"
+    stage: 2
+    description: "REV 2: independent live probe reads URL/title/stamp FROM THE ARTIFACT — fully repointable (no hardcoded author URL), and it cannot pass against someone else's website because the edition stamp must match this ledger"
+
+  # ── Sheet 19 · T6 two-path install ────────────────────────────────────────
+  - type: command_succeeds
+    command: 'jq -e ''.digests_equal == true and (.validated == ["ok", "ok"])'' "{workspace}/two-path-report.json"'
+    condition: "sheet_num == 19"
+    description: "Both installed copies byte-identical and mzt-validated from their own paths"
+  - type: command_succeeds
+    command: 'test -s "{workspace}/two-path-report.json"'
+    condition: "sheet_num == 19"
+    stage: 2
+    description: "Install report exists"
+
+  # ── Sheet 20 · T7 proof write-up ──────────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/proof-report.md"
+    condition: "sheet_num == 20"
+    description: "Proof report exists"
+  - type: content_contains
+    path: "{workspace}/proof-report.md"
+    pattern: "## Convergence Ledger"
+    condition: "sheet_num == 20"
+    stage: 2
+    description: "Ledger section present"
+  - type: content_contains
+    path: "{workspace}/proof-report.md"
+    pattern: "## The Divergence Iteration"
+    condition: "sheet_num == 20"
+    stage: 2
+    description: "Divergence section present"
+  - type: content_contains
+    path: "{workspace}/proof-report.md"
+    pattern: "## What This Proof Did NOT Establish"
+    condition: "sheet_num == 20"
+    stage: 2
+    description: "Honesty section present — the report names its own limits"
+  - type: command_succeeds
+    command: |-
+      bash -c 'cd "{workspace}" && N=$(jq ".iterations | length" build-ledger.json) && grep -q "iterations_consumed: $N" proof-report.md'
+    condition: "sheet_num == 20"
+    stage: 3
+    description: "REV 2 ledger join: the reported iteration count EQUALS the live ledger value"
+  - type: command_succeeds
+    command: |-
+      bash -c 'cd "{workspace}" && D=$(jq -r ".[0].iteration" divergence-report.json) && grep -q "divergence_iteration: $D" proof-report.md'
+    condition: "sheet_num == 20"
+    stage: 3
+    description: "REV 2 ledger join: the reported divergence iteration EQUALS the divergence record"
+  - type: command_succeeds
+    command: |-
+      bash -c 'cd "{workspace}" && E=$(jq -r .blueprint_sha256 build-ledger.json | cut -c1-12) && grep -q "edition: $E" proof-report.md && grep -q "churn_threshold_pct: 2" proof-report.md'
+    condition: "sheet_num == 20"
+    stage: 3
+    description: "REV 2 ledger join: the reported edition stamp and churn threshold EQUAL the frozen contract values"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/proof-report.md") -ge 600'
+    condition: "sheet_num == 20"
+    stage: 3
+    description: "Proof report has substance"
+
+  # ── Sheet 21 · T8 chain terminator swap ───────────────────────────────────
+  - type: command_succeeds
+    command: 'bash -c ''test ! -f "{workspace}/.converged" || grep -q "denominator-terminal" "{workspace}/self-chain.yaml"'''
+    condition: "sheet_num == 21"
+    description: "Termination custody: converged runs leave the terminator installed in the staged chain copy"
+  - type: command_succeeds
+    command: 'bash -c ''test ! -f "{workspace}/.converged" || mzt validate "{workspace}/self-chain.yaml"'''
+    condition: "sheet_num == 21"
+    stage: 2
+    description: "REV 2: the SWAPPED-IN terminator itself validates — the file the next cycle would execute is proven pronounceable before the chain trusts it"

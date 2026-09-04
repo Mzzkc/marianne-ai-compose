@@ -1,0 +1,1610 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║          THE BREATHING ATLAS — Rashomon Gate proof score (rev 2)             ║
+# ║          revised from three adversarial reviews, 2026-09-03                  ║
+# ║                                                                              ║
+# ║  PRIMARY PATTERN : Rashomon Gate — four independent analytical frames over   ║
+# ║                    ONE shared deterministic evidence base; disagreement is   ║
+# ║                    preserved, then resolved by an explicit editorial act.    ║
+# ║  COMPOSING       : Sugya Weave (editorial synthesis with named dissent),     ║
+# ║                    Talmudic Page (blind round, then cross-referenced second  ║
+# ║                    round; the coordination structure is readable off the     ║
+# ║                    published page — and the page is GATED on showing it),    ║
+# ║                    The Tool Chain (deterministic CLI spine:                  ║
+# ║                    fetch → clean → compute → chart → build → deploy → live   ║
+# ║                    gate), Canary Probe + Threshold-Triggered Switch          ║
+# ║                    (three cheap DATA probes plus a SELF-canary — gh          ║
+# ║                    identity, judgment instrument, pinned stack — before     ║
+# ║                    any LLM token is spent; the spatial probe carries kill    ║
+# ║                    authority over the equity frame's design assumption,      ║
+# ║                    and fails toward its SAFE verdict on noise: supported     ║
+# ║                    requires ≥2 grid cells AND >5% spread AND >0.5 µg/m³).   ║
+# ║                                                                              ║
+# ║  PROBLEM SOLVED  : Single-frame analysis of urban air quality produces       ║
+# ║                    unreliable conclusions because the right lens is unknown. ║
+# ║                    Health counting, spatial equity, meteorological           ║
+# ║                    attribution, and trend estimation give four different,    ║
+# ║                    partially incompatible answers to "is the air here bad,   ║
+# ║                    for whom, and why?". This score manufactures that         ║
+# ║                    disagreement honestly (same bytes, different lenses),     ║
+# ║                    measures it (triangulation), and resolves it editorially   ║
+# ║                    (argued position, named dissent) — then PUBLISHES the     ║
+# ║                    result as a public web page.                              ║
+# ║                                                                              ║
+# ║  PRODUCES        : ~/workspaces/breathing-atlas/ (auto-managed) →            ║
+# ║                    canary/ · raw/ · data/{breathing-atlas.csv, dictionary.md,║
+# ║                    sites.json, resolution-probe.json, stack-freeze.txt} ·    ║
+# ║                    stats/{frames.json, frames.md} · assets/*.png ·           ║
+# ║                    analysis-1..4.md · triangulation.yaml ·                   ║
+# ║                    commentary-1..4.md · editorial-synthesis.md · site/ ·     ║
+# ║                    publish/ — and a PUBLIC repo + GitHub Pages deployment    ║
+# ║                    a resident actually opens, with the dataset, the exact    ║
+# ║                    scripts, the lens definitions, and the dependency freeze  ║
+# ║                    published beside it for reader-side recomputation.        ║
+# ║                                                                              ║
+# ║  INSTRUMENTS     : 5 categories — collection (curl), processing/storage      ║
+# ║                    (jq, pandas, CSV), analysis/visual (scipy, matplotlib),   ║
+# ║                    publishing (git, gh, GitHub Pages), agents (claude-code   ║
+# ║                    with a client-diverse fallback chain codex-cli → opencode ║
+# ║                    — judgment stages ONLY; client-diverse, not provider-     ║
+# ║                    guaranteed: claude-code and opencode may route to the     ║
+# ║                    same provider; codex-cli is the cross-vendor leg).        ║
+# ║                    11 of 15 movements are CLI movements with EMPTY fallback  ║
+# ║                    chains: a tool stage that silently falls back to an LLM   ║
+# ║                    is a lie with a receipt. The byte volume (92 days × 4     ║
+# ║                    pollutants × 11 sites × 2 APIs) flows entirely through    ║
+# ║                    tools; LLM sheets see only the distilled stats/frames.md  ║
+# ║                    (kilobytes, not months of rows) — Forward Observer        ║
+# ║                    economics riding the Tool Chain.                          ║
+# ║                                                                              ║
+# ║  EXECUTION MAP   : (15 movements → 21 expanded sheets; fan-outs at 9 and 11) ║
+# ║                                                                              ║
+# ║      M1  Tuning the Instruments      venv bootstrap + SELF-CANARY [CLI]     ║
+# ║      M2  First Breath — Air Canary   schema probe, 1 city, 2 d   [CLI]      ║
+# ║      M3  First Breath — Met Canary   covariates + joinability    [CLI]      ║
+# ║      M4  The Grid Oracle             spatial probe — KILL GATE   [CLI]      ║
+# ║           │  (zero LLM tokens before M4 answers; gh identity, judgment     ║
+# ║           │   instrument, and pinned stack verified at M1)                 ║
+# ║      M5  The Deep Inhale             full fetch, fail-closed     [CLI]      ║
+# ║      M6  Sorting the Air             tidy CSV, local days        [CLI]      ║
+# ║      M7  The Counting House          frame stats + determinism   [CLI]      ║
+# ║      M8  Painting the Numbers        12 matplotlib PNGs          [CLI]      ║
+# ║      M9  Four Blind Listeners  ×4 ── Rashomon Gate ───────────── [LLM]      ║
+# ║      M10 Where They Agree            triangulation + joins       [LLM]      ║
+# ║      M11 The Second Hearing   ×4 ── Talmudic Page ────────────── [LLM]      ║
+# ║      M12 The Editor's Verdict  ──── Sugya Weave ──────────────── [LLM]      ║
+# ║      M13 Binding the Atlas           stdlib static site          [CLI]      ║
+# ║      M14 Shipping the Atlas          gh repo + Pages             [CLI]      ║
+# ║      M15 The Live Seam               deployed URL + recompute    [CLI]      ║
+# ║                                                                              ║
+# ║  ANTI-FABRICATION SEAMS (all deterministic joins, never LLM judgment):      ║
+# ║    - every stat_ref in an analysis AND in a commentary joins to frames.json ║
+# ║    - if the probe refused the intra-city gradient, the equity analysis must ║
+# ║      cite the refusal finding itself (the kill gate is not advisory)        ║
+# ║    - triangulation counts sum; category ↔ frames_agreeing is a bijection    ║
+# ║      (UNANIMOUS=4, MAJORITY=3, SPLIT=2, UNIQUE=1); every stat cited by any  ║
+# ║      analysis' FINDINGS block is covered by some finding (no dropped voices)║
+# ║    - every XREF target §anchor exists in the named frame's analysis         ║
+# ║    - every editorial citation (T-xxx) joins to a triangulation finding, at  ║
+# ║      least one under SUPPORTING EVIDENCE; DISSENT is non-empty              ║
+# ║    - the deployed page carries sha256(editorial-synthesis.md) as a seal     ║
+# ║    - city pages must SHOW ≥2 rendered cross-references (the Talmudic layer  ║
+# ║      is gated on being visible, not merely present as prose)                ║
+# ║    - published CSV + published script + published freeze recompute          ║
+# ║      frames.json exactly                                                    ║
+# ║                                                                              ║
+# ║  GENERICITY     : no workspace: field (auto-managed, #58); score-shipped    ║
+# ║                    assets reference {{ score_dir }}; GitHub owner/repo are  ║
+# ║                    variables. The two keyless APIs need no credentials;     ║
+# ║                    `gh` must be authenticated AS github_owner (checked at   ║
+# ║                    M1, not discovered broken at M14) and one judgment       ║
+# ║                    instrument must be on PATH. PUBLICATION POLICY: each     ║
+# ║                    run force-pushes `main` of repo_name — the push is       ║
+# ║                    refused unless origin/main is empty or a prior atlas.    ║
+# ║                    Point repo_name at a name you own outright.              ║
+# ║                                                                              ║
+# ║  USAGE          : mzt run <this-file>.yaml                                  ║
+# ║                    mzt status breathing-atlas                               ║
+# ║                    (frame cadenzas ship alongside: frames/frame-*.md)       ║
+# ║                                                                              ║
+# ║  Time: ~45-90+ min (first Pages deploy can add ~10 min)                     ║
+# ║  Cost: ~$3-8 (10 LLM sheets)  |  Sheets: 21                                 ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: breathing-atlas
+description: "Rashomon Gate proof — four blind frames over one deterministic air-quality evidence base, triangulated, cross-referenced, editorially synthesized, and published live."
+
+# workspace: intentionally omitted — auto-managed at <workspace-root>/breathing-atlas (#58).
+# This is the only path decision the score makes, and it makes it portably.
+
+instrument: claude-code
+instrument_config:
+  timeout_seconds: 1800
+
+# Vendor-diverse fallback chain for JUDGMENT sheets only. CLI movements below
+# override this with an explicit empty chain — tools never fall back to minds.
+instrument_fallbacks: [codex-cli, opencode]
+
+movements:
+  # ── Phase 0 · Canary battery — Canary Probe + Threshold-Triggered Switch ────
+  # Instrument: cli across the whole phase. Why: these stages are pure
+  # fetch/parse/decide work with exit codes; an LLM here would approximate
+  # what curl+jq+python compute exactly. Zero LLM tokens before M4 answers.
+  1:
+    name: "Tuning the Instruments"
+    instrument: cli            # Tool Chain: package install is deterministic
+    instrument_fallbacks: []
+  2:
+    name: "First Breath — Air Canary"
+    instrument: cli            # Canary Probe: cheapest exposure to the real API
+    instrument_fallbacks: []
+  3:
+    name: "First Breath — Weather Canary"
+    instrument: cli            # Canary Probe: covariate availability + joinability
+    instrument_fallbacks: []
+  4:
+    name: "The Grid Oracle"
+    instrument: cli            # Threshold-Triggered Switch: kill authority
+    instrument_fallbacks: []
+  # ── Phase 1 · Deterministic evidence substrate — The Tool Chain ─────────────
+  5:
+    name: "The Deep Inhale"
+    instrument: cli            # volume fetch: curl is faster, cheaper, verifiable
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 3600    # 22 files × ~92 days of hourly data
+  6:
+    name: "Sorting the Air"
+    instrument: cli            # pandas row arithmetic, UTC→local, hour-exact join
+    instrument_fallbacks: []
+  7:
+    name: "The Counting House"
+    instrument: cli            # scipy statistics: exceedances, ratios, regressions
+    instrument_fallbacks: []
+  8:
+    name: "Painting the Numbers"
+    instrument: cli            # matplotlib Agg: rendering is a function of the stats
+    instrument_fallbacks: []
+  # ── Phase 2-4 · The Rashomon Gate, the Talmudic Page, the Sugya Weave ───────
+  9:
+    name: "Four Blind Listeners"
+    instrument: claude-code    # Rashomon Gate: applying a LENS to distilled stats
+                               # is judgment; the numbers stay machine-checked
+  10:
+    name: "Where They Agree"
+    instrument: claude-code    # categorizing agreement across four texts is
+                               # semantic; its ARITHMETIC is count-checked
+  11:
+    name: "The Second Hearing"
+    instrument: claude-code    # Talmudic Page: rebut/support/extend after reading
+                               # the others; anchor resolvability is joined
+  12:
+    name: "The Editor's Verdict"
+    instrument: claude-code    # Sugya Weave: irreducible editorial judgment; every
+                               # citation joins to a triangulation finding id
+  # ── Phase 5 · Publication — The Tool Chain, ending at the live seam ─────────
+  13:
+    name: "Binding the Atlas"
+    instrument: cli            # stdlib HTML assembly is a template render
+    instrument_fallbacks: []
+  14:
+    name: "Shipping the Atlas"
+    instrument: cli            # git + gh are API calls with exit codes
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 1800    # includes the bounded Pages deploy poll
+  15:
+    name: "The Live Seam"
+    instrument: cli            # curl the DEPLOYED artifact; recompute from the
+    instrument_fallbacks: []   # PUBLISHED data alone. Workspace-green ≠ deployed.
+
+sheet:
+  size: 1
+  total_items: 15          # movements pre-expansion; engine expands to 21 sheets
+  fan_out:
+    9: 4                   # Rashomon Gate: four blind frames (sheets 9-12)
+    11: 4                  # Talmudic Page: four cross-referencing revisions (14-17)
+  dependencies:            # movement-keyed; engine expands to sheet-keyed DAG
+    2: [1]                 # canaries run serially — cheap, and failures diagnose clean
+    3: [2]                 # met canary joins against the air canary's payload
+    4: [1]                 # probe needs the venv python
+    5: [2, 3, 4]           # full fetch gated on BOTH canaries + the probe verdict
+    6: [5]
+    7: [4, 6]              # statistics branch on the probe decision
+    8: [7]
+    9: [7, 8]              # blind frames read distilled stats + charts
+    10: [9]                # triangulation reads ALL FOUR (fan-in)
+    11: [10]               # second hearing reads the analyses + triangulation
+    12: [11]               # the editor reads the commentaries
+    13: [12]
+    14: [13]
+    15: [14]
+  cadenzas:
+    # Blind round (sheets 9-12 = instances 1-4 = health/equity/meteorology/trend).
+    # Frame lens definitions ship WITH the score ({{ score_dir }}/frames/) —
+    # authored statically, reviewable before first run, blindness-gated by the
+    # movement-1 validation. Injected as skill: methodology BEFORE the body.
+    9:
+      - file: "{{ score_dir }}/frames/frame-health.md"
+        as: skill
+        required: true
+    10:
+      - file: "{{ score_dir }}/frames/frame-equity.md"
+        as: skill
+        required: true
+    11:
+      - file: "{{ score_dir }}/frames/frame-meteorology.md"
+        as: skill
+        required: true
+    12:
+      - file: "{{ score_dir }}/frames/frame-trend.md"
+        as: skill
+        required: true
+    # Second hearing (sheets 14-17): the same lens definitions as context.
+    14:
+      - file: "{{ score_dir }}/frames/frame-health.md"
+        as: context
+        required: true
+    15:
+      - file: "{{ score_dir }}/frames/frame-equity.md"
+        as: context
+        required: true
+    16:
+      - file: "{{ score_dir }}/frames/frame-meteorology.md"
+        as: context
+        required: true
+    17:
+      - file: "{{ score_dir }}/frames/frame-trend.md"
+        as: context
+        required: true
+  descriptions:
+    1: "Bootstrap pinned data stack + self-canary (gh identity, judgment instrument, freeze receipt)"
+    2: "Air canary — schema + all-pollutant null gate, one city, two days"
+    3: "Weather canary — covariates + hour-exact timestamp-array joinability"
+    4: "Spatial-resolution probe — 5 intra-city sites, kill authority over the equity frame"
+    5: "Full fetch — 11 sites × 2 APIs × 92 days, fail-closed on every pollutant and covariate"
+    6: "Clean + unify — tidy CSV, local days, met join, dictionary"
+    7: "Frame statistics — deterministic compute + determinism gate"
+    8: "Charts — 12 matplotlib PNGs"
+    9: "Blind frame analysis — health lens"
+    10: "Blind frame analysis — equity lens"
+    11: "Blind frame analysis — meteorology lens"
+    12: "Blind frame analysis — trend lens"
+    13: "Triangulation — agreement distribution with count check"
+    14: "Second hearing — health commentary with cross-references"
+    15: "Second hearing — equity commentary with cross-references"
+    16: "Second hearing — meteorology commentary with cross-references"
+    17: "Second hearing — trend commentary with cross-references"
+    18: "Editorial synthesis — argued position, named dissent"
+    19: "Static site build — stdlib HTML with synthesis seal"
+    20: "Publish — public repo + GitHub Pages"
+    21: "Live seam — deployed URL answers; published data recomputes"
+
+parallel:
+  enabled: true
+  max_concurrent: 4          # the two 4-way fan-outs are where concurrency lives
+  fail_fast: true
+
+# cross_sheet: deliberately ABSENT. auto_capture_stdout would merely make
+# {{ previous_outputs }} available — no sheet template references it, so it
+# was inert ballast. The real context economics are structural: judgment
+# sheets read the distilled stats/frames.md directly (kilobytes), and the
+# blind round must NOT see other sheets' stdout anyway.
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 30
+
+prompt:
+  variables:
+    # Single point of change for the publishing identity.
+    github_owner: "Mzzkc"
+    repo_name: "breathing-atlas"
+    # Exposure days are LOCAL days (Europe/Amsterdam) — a resident's day.
+    tz: "Europe/Amsterdam"
+    past_days: 92             # API cap ~92; the analysis floor is 90 (min_hours)
+    min_hours: 2052           # 90 × 24 × 0.95 — the fail-closed fetch floor
+    who_limits:
+      pm2_5: 15               # WHO 2021, 24-hour mean, μg/m³
+      nitrogen_dioxide: 25    # WHO 2021, 24-hour mean, μg/m³
+      ozone: 100              # WHO 2021, 8-hour max, μg/m³
+    cities:
+      amsterdam: "Amsterdam"
+      rotterdam: "Rotterdam"
+      eindhoven: "Eindhoven"
+    # 11 sites: 5 intra-city Amsterdam (probe spread), 3 Rotterdam, 3 Eindhoven.
+    sites:
+      ams-centrum:   {city: amsterdam, label: "Centrum — city core",            lat: 52.372, lon: 4.895}
+      ams-west:      {city: amsterdam, label: "West — 19th-century belt",       lat: 52.376, lon: 4.815}
+      ams-noord:     {city: amsterdam, label: "Noord — north of the IJ",        lat: 52.402, lon: 4.872}
+      ams-zuidoost:  {city: amsterdam, label: "Zuidoost — southeast periphery", lat: 52.321, lon: 4.948}
+      ams-durgerdam: {city: amsterdam, label: "Durgerdam — eastern water edge", lat: 52.386, lon: 5.008}
+      rtm-centrum:   {city: rotterdam, label: "Centrum — city core",            lat: 51.922, lon: 4.479}
+      rtm-zuid:      {city: rotterdam, label: "Zuid — south of the Maas",       lat: 51.882, lon: 4.477}
+      rtm-west:      {city: rotterdam, label: "West — port edge",               lat: 51.918, lon: 4.405}
+      ehn-centrum:   {city: eindhoven, label: "Centrum — city core",            lat: 51.441, lon: 5.469}
+      ehn-noord:     {city: eindhoven, label: "Woensel — north",                lat: 51.489, lon: 5.453}
+      ehn-zuid:      {city: eindhoven, label: "South — Strijp edge",            lat: 51.404, lon: 5.450}
+    # The spatial probe: all five intra-city Amsterdam sites — the probe now
+    # fetches exactly what it measures (the intra-city gradient claim).
+    ams_probe_ids: [ams-centrum, ams-west, ams-zuidoost, ams-noord, ams-durgerdam]
+    min_spread_ugm3: 0.5     # absolute floor on the intra-city delta: relative
+                              # spread alone is unbounded as means approach
+                              # zero, so noise must not fund a
+                              # gradient_supported verdict
+    frame_by_instance: {1: health, 2: equity, 3: meteorology, 4: trend}
+    frame_labels:
+      health: "Your health"
+      equity: "Your neighborhood"
+      meteorology: "Where it comes from"
+      trend: "Which way it's heading"
+
+  template: |
+    {# ── Macros: the house style, defined once ─────────────────────────── #}
+    {% macro strict() %}
+    set -euo pipefail
+    cd "{{ workspace }}"
+    {% endmacro %}
+
+    {% macro numbers_rule() %}
+    ## Ground Rules (non-negotiable)
+    - Every number you state MUST carry a `stat_ref:` line naming an existing
+      key from stats/frames.json. A number you cannot cite is not yours to
+      state — write instead that the record does not answer it.
+    - You are one independent analyst. Do not speculate about other
+      analytical lenses or what other analysts might conclude.
+    {% endmacro %}
+
+    {% macro findings_block() %}
+    ## Required Output Shape
+    - Numbered sections headed exactly `## §1 <title>` ... at least four of them.
+    - End with a `## FINDINGS` block, one line per finding, exact format:
+      `- stat_ref: <key from frames.json> — <resident-language meaning>`
+    - Minimum 5 findings. Minimum 300 words total.
+    {% endmacro %}
+
+    {% if stage == 1 %}
+    {{ strict() }}
+    mkdir -p data
+    # ── Self-canary ────────────────────────────────────────────────────────
+    # A canary battery that probes only the DATA supply guards the cheap
+    # half. The score's two most newcomer-fragile dependencies — publish
+    # identity and judgment instruments — die at M14 and M9 respectively
+    # if they are broken. Probe them here, at minute one, loudly.
+    gh auth status >/dev/null 2>&1 || { echo "FAIL: gh is not authenticated — the atlas publishes at M14"; exit 1; }
+    gh_owner="$(gh api user -q .login 2>/dev/null)" || { echo "FAIL: gh api user did not answer"; exit 1; }
+    [ "$gh_owner" = "{{ github_owner }}" ] || { echo "FAIL: gh is authenticated as $gh_owner but the score publishes as {{ github_owner }} — fix github_owner or switch gh account"; exit 1; }
+    command -v claude >/dev/null 2>&1 || command -v codex >/dev/null 2>&1 || command -v opencode >/dev/null 2>&1 || { echo "FAIL: no judgment instrument on PATH (claude/codex/opencode) — M9 would die after eight tool movements"; exit 1; }
+    # ── Pinned data stack ──────────────────────────────────────────────────
+    # Bounded pins: reproducible within a major series, and the exact
+    # resolution is frozen to data/stack-freeze.txt and PUBLISHED, so the
+    # reader recomputes under the environment that produced the numbers.
+    if command -v uv >/dev/null 2>&1; then
+      uv venv --quiet .venv
+      uv pip install --quiet "pandas>=2.2,<3" "scipy>=1.11,<2" "matplotlib>=3.8,<4" "pyyaml>=6,<7"
+      uv pip freeze --python .venv/bin/python > data/stack-freeze.txt
+    else
+      python3 -m venv .venv
+      .venv/bin/pip install --quiet --disable-pip-version-check "pandas>=2.2,<3" "scipy>=1.11,<2" "matplotlib>=3.8,<4" "pyyaml>=6,<7"
+      .venv/bin/pip freeze > data/stack-freeze.txt
+    fi
+    .venv/bin/python -c "import pandas, scipy, matplotlib, yaml; print('data stack ready')"
+    test -s data/stack-freeze.txt
+    grep -q "^pandas==" data/stack-freeze.txt || { echo "FAIL: freeze receipt missing the pandas pin"; exit 1; }
+    echo "self-canary ok — gh=$gh_owner, stack frozen:" && cat data/stack-freeze.txt
+
+    {% elif stage == 2 %}
+    {{ strict() }}
+    mkdir -p canary
+    curl -sf "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={{ sites['ams-centrum'].lat }}&longitude={{ sites['ams-centrum'].lon }}&hourly=pm2_5,pm10,nitrogen_dioxide,ozone&past_days=2&forecast_days=1" -o canary/air.json
+    jq -e '
+      (.hourly.time | length) >= 48
+      and (.hourly_units.pm2_5 == "μg/m³")
+      and (.hourly | has("nitrogen_dioxide"))
+      and (.hourly | has("ozone"))
+      and (. as $doc | (["pm2_5", "pm10", "nitrogen_dioxide", "ozone"] | all(. as $p | (($doc.hourly[$p] | map(select(. == null))) | length) / ($doc.hourly[$p] | length) < 0.25)))
+    ' canary/air.json > /dev/null
+    echo "air canary ok"
+
+    {% elif stage == 3 %}
+    {{ strict() }}
+    curl -sf "https://api.open-meteo.com/v1/forecast?latitude={{ sites['ams-centrum'].lat }}&longitude={{ sites['ams-centrum'].lon }}&hourly=wind_speed_10m,wind_direction_10m,precipitation,temperature_2m&past_days=2&forecast_days=1" -o canary/met.json
+    jq -e '.hourly | has("wind_speed_10m") and has("wind_direction_10m") and has("precipitation") and has("temperature_2m")' canary/met.json > /dev/null
+    python3 - <<'PY'
+    import json
+    air = json.load(open("canary/air.json"))
+    met = json.load(open("canary/met.json"))
+    # Hour-exact joinability means the TIME ARRAYS are equal — equal
+    # lengths are not a join contract. A shifted weather vector of
+    # identical length would pass a length check and corrupt every
+    # meteorological regression downstream.
+    assert air["hourly"]["time"] == met["hourly"]["time"], \
+        "joinability broken: time arrays differ (%d air vs %d met points)" % (
+            len(air["hourly"]["time"]), len(met["hourly"]["time"]))
+    report = {
+        "hourly_points": len(met["hourly"]["time"]),
+        "fields": sorted(k for k in met["hourly"] if k != "time"),
+        "boundary_layer_height": "absent",
+        "dispersion_proxy": "wind_speed_10m",
+    }
+    json.dump(report, open("canary/met-probe.json", "w"), indent=2, sort_keys=True)
+    print("met canary ok: hour-exact timestamps verified, not just lengths")
+    PY
+
+    {% elif stage == 4 %}
+    {{ strict() }}
+    mkdir -p canary/probe
+    {% for id in ams_probe_ids %}
+    curl -sf "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={{ sites[id].lat }}&longitude={{ sites[id].lon }}&hourly=pm2_5&past_days=5&forecast_days=1" -o "canary/probe/{{ id }}.json"
+    {% endfor %}
+    .venv/bin/python - <<'PY'
+    import json
+    ams_probe_ids = {{ ams_probe_ids }}
+    MIN_SPREAD_UGM3 = {{ min_spread_ugm3 }}
+    series = {}
+    for sid in ams_probe_ids:
+        doc = json.load(open("canary/probe/%s.json" % sid))
+        vals = [v for v in doc["hourly"]["pm2_5"] if v is not None]
+        assert vals, "probe site %s returned no non-null PM2.5 hours" % sid
+        series[sid] = {
+            "cell": (round(doc["latitude"], 2), round(doc["longitude"], 2)),
+            "mean": sum(vals) / len(vals),
+            "n": len(vals),
+        }
+    cells = set(s["cell"] for s in series.values())
+    means = sorted(s["mean"] for s in series.values())
+    delta = means[-1] - means[0]
+    denom = max(abs(means[-1]), abs(means[0]), 1e-9)
+    spread_pct = delta / denom * 100.0
+    # TWO bars, not one. Relative spread alone goes unbounded as means
+    # approach zero: in a clean-air window a few tenths of a ug/m3 of
+    # interpolation wiggle yields a huge percentage and the probe would
+    # fund the equity frame's most charged claim with noise. The absolute
+    # floor makes the kill gate fail toward its SAFE verdict.
+    supported = len(cells) >= 2 and spread_pct > 5.0 and delta > MIN_SPREAD_UGM3
+    decision = "gradient_supported" if supported else "gradient_unsupported"
+    json.dump({
+        "probe_sites": ams_probe_ids,
+        "distinct_grid_cells": len(cells),
+        "max_intra_city_delta_ugm3": round(delta, 3),
+        "max_intra_city_spread_pct": round(spread_pct, 2),
+        "decision": decision,
+        "decision_rule": "supported iff >=2 distinct grid cells and spread >5%% and delta >%s ug/m3" % MIN_SPREAD_UGM3,
+    }, open("canary/resolution-probe.json", "w"), indent=2, sort_keys=True)
+    print("grid oracle:", decision, "cells:", len(cells), "delta: %.2f ug/m3, spread: %.2f%%" % (delta, spread_pct))
+    PY
+
+    {% elif stage == 5 %}
+    {{ strict() }}
+    mkdir -p raw data
+    cat > data/sites.json <<'SITES'
+    {
+    {% for id, s in sites.items() %}  "{{ id }}": {"city": "{{ s.city }}", "label": "{{ s.label }}", "latitude": {{ s.lat }}, "longitude": {{ s.lon }}}{% if not loop.last %},{% endif %}{% endfor %}
+    }
+    SITES
+    {% for id, s in sites.items() %}
+    curl -sf "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={{ s.lat }}&longitude={{ s.lon }}&hourly=pm2_5,pm10,nitrogen_dioxide,ozone&past_days={{ past_days }}&forecast_days=1" -o "raw/{{ id }}-air.json"
+    curl -sf "https://api.open-meteo.com/v1/forecast?latitude={{ s.lat }}&longitude={{ s.lon }}&hourly=wind_speed_10m,wind_direction_10m,precipitation,temperature_2m&past_days={{ past_days }}&forecast_days=1" -o "raw/{{ id }}-met.json"
+    {% endfor %}
+    for f in raw/*-air.json; do
+      jq -e "(.hourly.time | length) >= {{ min_hours }}" "$f" > /dev/null || { echo "FAIL short file: $f"; exit 1; }
+    done
+    .venv/bin/python - <<'PY'
+    import json, sys
+    POLS = ("pm2_5", "pm10", "nitrogen_dioxide", "ozone")
+    METS = ("wind_speed_10m", "wind_direction_10m", "precipitation", "temperature_2m")
+    MIN_HOURS = {{ min_hours }}
+    sites = json.load(open("data/sites.json"))
+    fails = []
+    for sid in sorted(sites):
+        air = json.load(open("raw/%s-air.json" % sid))
+        met = json.load(open("raw/%s-met.json" % sid))
+        ta, tm = air["hourly"]["time"], met["hourly"]["time"]
+        if len(ta) < MIN_HOURS or len(tm) < MIN_HOURS:
+            fails.append("%s: under the %d-hour floor" % (sid, MIN_HOURS))
+        if ta != tm:
+            fails.append("%s: air/met time arrays differ — hour-exact join broken" % sid)
+        for doc, keys, tag in ((air, POLS, "air"), (met, METS, "met")):
+            n = len(doc["hourly"]["time"])
+            for k in keys:
+                nulls = sum(1 for v in doc["hourly"][k] if v is None)
+                if nulls / n >= 0.25:
+                    fails.append("%s-%s %s: null fraction %.3f" % (sid, tag, k, nulls / n))
+    if fails:
+        print("\n".join("FAIL " + f for f in fails))
+        sys.exit(1)
+    print("fetch gates ok: %d sites, all pollutants and covariates <25%% nulls, hour-exact joins" % len(sites))
+    PY
+    cp canary/resolution-probe.json data/resolution-probe.json
+    echo "fetch complete: $(ls raw/*.json | wc -l) raw files"
+
+    {% elif stage == 6 %}
+    {{ strict() }}
+    mkdir -p scripts data
+    FETCH_DATE="$(date -u +%Y-%m-%dT%H:%MZ)"
+    cat > scripts/clean_unify.py <<'PY'
+    import argparse
+    import json
+    import pandas as pd
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--raw", default="raw")
+    ap.add_argument("--sites", default="data/sites.json")
+    ap.add_argument("--out", default="data/breathing-atlas.csv")
+    ap.add_argument("--dictionary", default="data/dictionary.md")
+    ap.add_argument("--fetch-date", default="unknown")
+    a = ap.parse_args()
+
+    sites = json.load(open(a.sites))
+    rows = []
+    for sid, meta in sorted(sites.items()):
+        air = json.load(open("%s/%s-air.json" % (a.raw, sid)))
+        met = json.load(open("%s/%s-met.json" % (a.raw, sid)))
+        met_by_t = {}
+        for i, t in enumerate(met["hourly"]["time"]):
+            met_by_t[t] = (
+                met["hourly"]["wind_speed_10m"][i],
+                met["hourly"]["wind_direction_10m"][i],
+                met["hourly"]["precipitation"][i],
+                met["hourly"]["temperature_2m"][i],
+            )
+        for i, t in enumerate(air["hourly"]["time"]):
+            w = met_by_t.get(t)
+            for pol in ("pm2_5", "pm10", "nitrogen_dioxide", "ozone"):
+                rows.append({
+                    "site": sid,
+                    "city": meta["city"],
+                    "label": meta["label"],
+                    "timestamp_utc": t,
+                    "pollutant": pol,
+                    "value": air["hourly"][pol][i],
+                    "wind_speed_10m": w[0] if w else None,
+                    "wind_direction_10m": w[1] if w else None,
+                    "precipitation": w[2] if w else None,
+                    "temperature_2m": w[3] if w else None,
+                })
+    df = pd.DataFrame(rows)
+    ts = pd.to_datetime(df["timestamp_utc"], utc=True)
+    df["local_date"] = ts.dt.tz_convert("{{ tz }}").dt.date.astype(str)
+    dupes = int(df.duplicated(subset=["site", "pollutant", "timestamp_utc"]).sum())
+    assert dupes == 0, "%d duplicate (site, timestamp, pollutant) keys" % dupes
+    df = df.sort_values(["site", "pollutant", "timestamp_utc"])
+    df.to_csv(a.out, index=False)
+    null_report = df.groupby("pollutant")["value"].apply(lambda s: round(float(s.isna().mean()), 4)).to_dict()
+    with open(a.dictionary, "w") as fh:
+        fh.write("# The Breathing Atlas — Data Dictionary\n\n")
+        fh.write("Fetched: %s\n\n" % a.fetch_date)
+        fh.write("Lineage: CAMS model reanalysis interpolated to coordinates, served by\n")
+        fh.write("the Open-Meteo air-quality and forecast APIs. This is MODEL OUTPUT, not\n")
+        fh.write("surface measurement-station data.\n\n")
+        fh.write("APIs:\n- https://air-quality-api.open-meteo.com/v1/air-quality\n")
+        fh.write("- https://api.open-meteo.com/v1/forecast\n\n")
+        fh.write("## Columns\n\n| column | unit | meaning |\n|---|---|---|\n")
+        fh.write("| site | - | stable site id (see sites.json) |\n")
+        fh.write("| city | - | amsterdam / rotterdam / eindhoven |\n")
+        fh.write("| label | - | resident-language site label |\n")
+        fh.write("| timestamp_utc | ISO-8601 | hour, UTC |\n")
+        fh.write("| local_date | YYYY-MM-DD | calendar day in {{ tz }} — a resident's day |\n")
+        fh.write("| pollutant | - | pm2_5, pm10, nitrogen_dioxide, ozone |\n")
+        fh.write("| value | ug/m3 | hourly concentration |\n")
+        fh.write("| wind_speed_10m | km/h | meteorology join (hour-exact) |\n")
+        fh.write("| wind_direction_10m | degrees | meteorology join |\n")
+        fh.write("| precipitation | mm | meteorology join |\n")
+        fh.write("| temperature_2m | C | meteorology join |\n\n")
+        fh.write("## Null fractions per pollutant\n\n")
+        for pol in sorted(null_report):
+            fh.write("- %s: %.4f\n" % (pol, null_report[pol]))
+    print("clean ok:", len(df), "rows")
+    PY
+    .venv/bin/python scripts/clean_unify.py --fetch-date "$FETCH_DATE"
+
+    {% elif stage == 7 %}
+    {{ strict() }}
+    mkdir -p scripts stats
+    cat > scripts/compute_frames.py <<'PY'
+    import argparse
+    import json
+    import pandas as pd
+    from scipy import stats as sps
+
+    WHO = {
+        "pm2_5": ({{ who_limits.pm2_5 }}, "24-hour mean"),
+        "nitrogen_dioxide": ({{ who_limits.nitrogen_dioxide }}, "24-hour mean"),
+        "ozone": ({{ who_limits.ozone }}, "8-hour max"),
+    }
+    TZ = "{{ tz }}"
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data", default="data")
+    ap.add_argument("--out", default="stats/frames.json")
+    ap.add_argument("--md", default="stats/frames.md")
+    a = ap.parse_args()
+
+    sites = json.load(open("%s/sites.json" % a.data))
+    probe = json.load(open("%s/resolution-probe.json" % a.data))
+    df = pd.read_csv("%s/breathing-atlas.csv" % a.data)
+    df["local_date"] = df["local_date"].astype(str)
+
+    F = {"health": [], "equity": [], "meteorology": [], "trend": []}
+
+    def add(frame, key, value, unit, n, note, **extra):
+        rec = {"key": key, "frame": frame, "value": value, "unit": unit, "n": n, "note": note}
+        rec.update(extra)
+        F[frame].append(rec)
+
+    def daily_metric(sub, pol):
+        if pol != "ozone":
+            return sub.groupby(["city", "site", "local_date"])["value"].mean()
+        parts = []
+        for sid, g in sub.groupby("site"):
+            g = g.sort_values("timestamp_utc")
+            idx = pd.DatetimeIndex(pd.to_datetime(g["timestamp_utc"], utc=True), name="ts")
+            s = pd.Series(g["value"].to_numpy(), index=idx, name="value")
+            r = s.rolling("8h", min_periods=6).mean().reset_index()
+            r["site"] = sid
+            r["city"] = g["city"].iloc[0]
+            parts.append(r)
+        roll = pd.concat(parts, ignore_index=True)
+        roll["local_date"] = pd.to_datetime(roll["ts"], utc=True).dt.tz_convert(TZ).dt.date.astype(str)
+        return roll.groupby(["city", "site", "local_date"])["value"].max()
+
+    # Health frame: WHO 2021 exceedance days, counted in LOCAL days.
+    for pol, (limit, window) in WHO.items():
+        daily = daily_metric(df[df.pollutant == pol], pol)
+        over = daily > float(limit)
+        total_days = daily.groupby("city").size()
+        exc_days = over.groupby("city").sum()
+        for city in sorted(total_days.index):
+            add("health", "health_%s_%s_exceed_days" % (city, pol), int(exc_days[city]), "days",
+                int(total_days[city]), "%s vs WHO 2021 guideline %s %s ug/m3" % (window, pol, limit))
+
+    # Equity frame: between-city burden always; intra-city ONLY if the probe allows.
+    for pol in ("pm2_5", "nitrogen_dioxide"):
+        means = df[df.pollutant == pol].groupby("city")["value"].mean()
+        n = int((df.pollutant == pol).sum())
+        for city in sorted(means.index):
+            add("equity", "equity_%s_%s_mean" % (city, pol), round(float(means[city]), 2), "ug/m3", n,
+                "period mean %s across all sites in city" % pol)
+    site_means = df[df.pollutant == "pm2_5"].groupby(["city", "site"])["value"].mean()
+    if probe["decision"] == "gradient_supported":
+        for city in sorted(set(df.city)):
+            g = site_means[city]
+            add("equity", "equity_%s_gradient_pct" % city,
+                round(float((g.max() - g.min()) / g.mean() * 100.0), 2), "percent", int(g.size),
+                "intra-city PM2.5 spread across sites (grid supports a gradient)",
+                lo=round(float(g.min()), 2), hi=round(float(g.max()), 2))
+    else:
+        add("equity", "equity_gradient_unsupported", 1, "flag", len(probe["probe_sites"]),
+            "spatial probe found %d distinct grid cells across %d sites; intra-city gradient NOT claimable; burden compared between cities only"
+            % (probe["distinct_grid_cells"], len(probe["probe_sites"])))
+
+    # Meteorology frame: NO2:PM signature + wind/precipitation regression.
+    for city in sorted(set(df.city)):
+        c = df[df.city == city]
+        no2 = c[c.pollutant == "nitrogen_dioxide"].groupby("local_date")["value"].mean()
+        pm25 = c[c.pollutant == "pm2_5"].groupby("local_date")["value"].mean()
+        ratio = (no2 / pm25).dropna()
+        add("meteorology", "met_%s_no2_pm_ratio_mean" % city, round(float(ratio.mean()), 2), "ratio", int(ratio.size),
+            "mean daily NO2:PM2.5 ratio; high = fresh local traffic, low = transported aerosol")
+        exceed = (pm25 > float(WHO["pm2_5"][0])).astype(int)
+        for name, series in (("wind", c.groupby("local_date")["wind_speed_10m"].mean()),
+                             ("precip", c.groupby("local_date")["precipitation"].mean())):
+            joined = pd.concat([exceed.rename("exc"), series.rename(name)], axis=1).dropna()
+            if joined[name].std() > 0:
+                lr = sps.linregress(joined[name], joined["exc"])
+                add("meteorology", "met_%s_%s_slope" % (city, name), round(float(lr.slope), 5),
+                    "exceed-prob per unit", int(len(joined)),
+                    "regression of PM2.5 exceedance day on daily mean %s" % name,
+                    r=round(float(lr.rvalue), 3), p=round(float(lr.pvalue), 4))
+
+    # Trend frame: Theil-Sen slope of monthly means with confidence bounds.
+    for city in sorted(set(df.city)):
+        for pol in ("pm2_5", "nitrogen_dioxide", "ozone"):
+            c = df[(df.city == city) & (df.pollutant == pol)].copy()
+            c["month"] = c["local_date"].str.slice(0, 7)
+            monthly = c.groupby("month")["value"].mean().sort_index()
+            if len(monthly) >= 3:
+                ts_ = sps.theilslopes(monthly.values, range(len(monthly)))
+                add("trend", "trend_%s_%s_slope" % (city, pol), round(float(ts_.slope), 4),
+                    "ug/m3 per month", int(len(monthly)),
+                    "Theil-Sen slope over %d monthly points; window too short to separate trend from season — direction of travel only, never attribution; negative = improving within this window" % len(monthly),
+                    ci_low=round(float(ts_.low_slope), 4), ci_high=round(float(ts_.high_slope), 4))
+
+    for fr in F:
+        assert len(F[fr]) >= 5, "frame %s has only %d findings" % (fr, len(F[fr]))
+    json.dump(F, open(a.out, "w"), indent=2, sort_keys=True)
+
+    with open(a.md, "w") as fh:
+        fh.write("# Distilled frame statistics\n\n")
+        fh.write("Spatial probe: %s (distinct grid cells: %d, spread: %s%%).\n\n"
+                 % (probe["decision"], probe["distinct_grid_cells"], probe["max_intra_city_spread_pct"]))
+        fh.write("Trend caveat: slopes span only the ~3-4 monthly points this window\n")
+        fh.write("affords; trend and season are confounded at this length. Read them as\n")
+        fh.write("direction of travel, never as attribution.\n\n")
+        for fr in ("health", "equity", "meteorology", "trend"):
+            fh.write("## Frame: %s\n\n" % fr)
+            for rec in F[fr]:
+                fh.write("- `%s` = %s %s (n=%s) — %s\n" % (rec["key"], rec["value"], rec["unit"], rec["n"], rec["note"]))
+    print("frames computed:", sum(len(v) for v in F.values()), "findings")
+    PY
+    .venv/bin/python scripts/compute_frames.py
+
+    {% elif stage == 8 %}
+    {{ strict() }}
+    mkdir -p scripts assets
+    cat > scripts/render_charts.py <<'PY'
+    import json
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    from scipy import stats as sps
+
+    F = json.load(open("stats/frames.json"))
+    df = pd.read_csv("data/breathing-atlas.csv")
+    df["local_date"] = df["local_date"].astype(str)
+    WHO_LINE = {"pm2_5": {{ who_limits.pm2_5 }}, "nitrogen_dioxide": {{ who_limits.nitrogen_dioxide }}, "ozone": {{ who_limits.ozone }}}
+
+    def pick(frame, key):
+        return next(r for r in F[frame] if r["key"] == key)
+
+    POLS = ["pm2_5", "nitrogen_dioxide", "ozone"]
+    POL_NAME = {"pm2_5": "PM2.5", "nitrogen_dioxide": "NO2", "ozone": "O3"}
+    for city in sorted(set(df.city)):
+        # health: exceedance-day bars
+        vals = [pick("health", "health_%s_%s_exceed_days" % (city, p))["value"] for p in POLS]
+        fig, ax = plt.subplots(figsize=(7, 4.5))
+        ax.bar([POL_NAME[p] for p in POLS], vals, color="#4477aa")
+        ax.set_title("%s: days over WHO 2021 guidelines (local days)" % city)
+        ax.set_ylabel("exceedance days")
+        fig.tight_layout()
+        fig.savefig("assets/%s-health.png" % city, dpi=120)
+        plt.close(fig)
+        # equity: measured PM2.5 by site
+        g = df[(df.city == city) & (df.pollutant == "pm2_5")].groupby("site")["value"].mean().sort_values()
+        fig, ax = plt.subplots(figsize=(7, 4.5))
+        ax.barh(list(g.index), list(g.values), color="#ee6677")
+        ax.set_xlabel("mean PM2.5 (ug/m3)")
+        ax.set_title("%s: measured burden by site" % city)
+        fig.tight_layout()
+        fig.savefig("assets/%s-equity.png" % city, dpi=120)
+        plt.close(fig)
+        # meteorology: wind vs exceedance with fit
+        c = df[df.city == city]
+        pm25 = c[c.pollutant == "pm2_5"].groupby("local_date")["value"].mean()
+        wind = c.groupby("local_date")["wind_speed_10m"].mean()
+        j = pd.concat([pm25.rename("pm"), wind.rename("w")], axis=1).dropna()
+        fig, ax = plt.subplots(figsize=(7, 4.5))
+        ax.scatter(j["w"], (j["pm"] > {{ who_limits.pm2_5 }}).astype(int) + 0.0, s=18, alpha=0.55, color="#228833")
+        if j["w"].std() > 0:
+            lr = sps.linregress(j["w"], (j["pm"] > {{ who_limits.pm2_5 }}).astype(int))
+            xs = [j["w"].min(), j["w"].max()]
+            ax.plot(xs, [lr.intercept + lr.slope * x for x in xs], color="#ccbb44")
+        ax.set_xlabel("daily mean wind speed (km/h)")
+        ax.set_ylabel("PM2.5 exceedance day (0/1)")
+        ax.set_title("%s: does wind clean the air?" % city)
+        fig.tight_layout()
+        fig.savefig("assets/%s-meteorology.png" % city, dpi=120)
+        plt.close(fig)
+        # trend: monthly PM2.5 with Theil-Sen line and CI band
+        c2 = df[(df.city == city) & (df.pollutant == "pm2_5")].copy()
+        c2["month"] = c2["local_date"].str.slice(0, 7)
+        monthly = c2.groupby("month")["value"].mean().sort_index()
+        fig, ax = plt.subplots(figsize=(7, 4.5))
+        ax.plot(list(monthly.index), list(monthly.values), "o-", color="#66ccee")
+        if len(monthly) >= 3:
+            t = sps.theilslopes(monthly.values, range(len(monthly)))
+            xs = list(range(len(monthly)))
+            base = float(monthly.iloc[0])
+            ax.plot(xs, [base + t.slope * x for x in xs], "--", color="#aa3377")
+            ax.fill_between(xs, [base + t.low_slope * x for x in xs], [base + t.high_slope * x for x in xs], alpha=0.18, color="#aa3377")
+        ax.set_ylabel("monthly mean PM2.5 (ug/m3)")
+        ax.set_title("%s: direction of travel, with uncertainty" % city)
+        ax.tick_params(axis="x", rotation=30)
+        fig.tight_layout()
+        fig.savefig("assets/%s-trend.png" % city, dpi=120)
+        plt.close(fig)
+    print("charts rendered")
+    PY
+    MPLBACKEND=Agg .venv/bin/python scripts/render_charts.py
+    echo "charts: $(ls assets/*.png | wc -l) pngs"
+
+    {% elif stage == 9 %}
+    {{ numbers_rule() }}
+    # Blind Frame Analysis — the {{ frame_by_instance[instance] }} lens
+
+    Your cadenza (injected above) defines your lens, your questions, and your
+    discipline. It is your ONLY lens. Read exactly these files:
+
+    - {{ workspace }}/stats/frames.md — the distilled statistics (start here)
+    - {{ workspace }}/stats/frames.json — the machine statistics; its keys are the only citable numbers
+    - {{ workspace }}/data/dictionary.md — what this data is, and what it is not
+
+    Every analyst in this round receives these SAME bytes. Whatever the
+    evidence says through your lens, say it plainly, for a resident.
+
+    Write {{ workspace }}/analysis-{{ instance }}.md.
+
+    {{ findings_block() }}
+
+    {% elif stage == 10 %}
+    # Triangulation — measure the agreement before anyone argues
+
+    Four analysts wrote blind; none of them saw the others. Read all four:
+
+    {% for i in range(1, 5) %}- {{ workspace }}/analysis-{{ i }}.md ({{ frame_by_instance[i] }})
+    {% endfor %}
+    Categorize EVERY distinct finding across the four analyses and write
+    {{ workspace }}/triangulation.yaml exactly in this shape:
+
+    ```yaml
+    findings:
+      - id: T-001            # sequential, unique
+        statement: <the finding in one sentence>
+        category: UNANIMOUS  # UNANIMOUS | MAJORITY | SPLIT | UNIQUE
+        frames_agreeing: [health, meteorology]   # frames stating it (UNANIMOUS = all four)
+        stat_refs: [<key from frames.json>]      # every cited stat key, verbatim
+    summary_counts:
+      UNANIMOUS: <n>
+      MAJORITY: <n>
+      SPLIT: <n>
+      UNIQUE: <n>
+    ```
+
+    Rules: the four counts MUST sum to the number of findings. Category and
+    frames_agreeing must agree EXACTLY — UNANIMOUS names all four frames,
+    MAJORITY exactly three, SPLIT exactly two, UNIQUE exactly one; the join
+    gate rejects any other combination. COVERAGE is mandatory: every stat_ref
+    cited in any analysis' FINDINGS block must appear in at least one
+    finding's stat_refs — a dropped finding is a dropped voice. Do NOT
+    resolve disagreements — record their distribution. A finding no other
+    frame echoes is UNIQUE, not noise. Use only stat keys that exist in
+    stats/frames.json.
+
+    {% elif stage == 11 %}
+    {{ numbers_rule() }}
+    # The Second Hearing — revise your analysis having now read the others
+
+    In the blind round you wrote {{ workspace }}/analysis-{{ instance }}.md through the
+    {{ frame_by_instance[instance] }} lens. Now read the other three analyses and the
+    measured agreement:
+
+    {% for i in range(1, 5) %}{% if i != instance %}- {{ workspace }}/analysis-{{ i }}.md ({{ frame_by_instance[i] }})
+    {% endif %}{% endfor %}- {{ workspace }}/triangulation.yaml
+
+    Revise your analysis into {{ workspace }}/commentary-{{ instance }}.md:
+
+    - Keep your §-numbered structure (`## §1 ...` through at least `## §4`);
+      extend it, sharpen it, concede where the evidence forces concession.
+    - Reference the OTHER analysts' arguments where you rebut, support, or
+      extend them. Each cross-reference on its own line, exact format:
+      `XREF: <rebutts|supports|extends> <health|equity|meteorology|trend> §<n>`
+      where §<n> is a numbered section heading IN THAT FRAME'S analysis-*.md.
+      FORMAT WARNING: the line must begin with the literal token `XREF:` at
+      the start of the line. A markdown list item (`- XREF: ...`) or an
+      indented line is invisible to the machine join and fails the sheet.
+    - Where you read another frame's argument and still maintain your
+      position, say so under a `## DISSENT HELD` heading. Disagreement is
+      preserved in this atlas, never averaged away.
+    - End with the same `## FINDINGS` block (stat_ref lines, minimum 5).
+
+    {% elif stage == 12 %}
+    # The Editor's Verdict — take a position and name your dissent
+
+    Read:
+    - {{ workspace }}/triangulation.yaml — the measured agreement distribution
+    {% for i in range(1, 5) %}- {{ workspace }}/commentary-{{ i }}.md ({{ frame_labels[frame_by_instance[i]] }})
+    {% endfor %}- {{ workspace }}/stats/frames.md — the distilled statistics
+
+    Write {{ workspace }}/editorial-synthesis.md. This is editorial synthesis, not
+    summary: commit to the frame that should govern this atlas's story and
+    argue it. Neutral aggregation is failure. Required sections, headed exactly:
+
+    ## POSITION — which frame governs this atlas's story, and why
+    ## SUPPORTING EVIDENCE — every item cites a triangulation finding id as (T-001)
+    ## COUNTERARGUMENTS — the strongest case against your position, stated fairly
+    ## CONCLUSION — what a resident should take away
+    ## DISSENT — named minority positions, recorded, not outvoted
+    ## Verdict — Amsterdam
+    ## Verdict — Rotterdam
+    ## Verdict — Eindhoven
+
+    Each `## Verdict — <City>` section is ONE plain-language paragraph for that
+    city's page: what the air means for a run today, a child's asthma, a street
+    vs the one three kilometers over — answered before any methodology.
+
+    Your editorial position is itself a frame. Say so, in the atlas's own voice.
+    Minimum 400 words; at least three (T-xxx) citations.
+
+    {% elif stage == 13 %}
+    {{ strict() }}
+    mkdir -p scripts
+    cat > scripts/build_site.py <<'PY'
+    import hashlib
+    import json
+    import re
+    import shutil
+    from pathlib import Path
+
+    ws = Path(".")
+    site = ws / "site"
+    (site / "assets").mkdir(parents=True, exist_ok=True)
+
+    editorial = (ws / "editorial-synthesis.md").read_text(encoding="utf-8")
+    seal = hashlib.sha256(editorial.encode("utf-8")).hexdigest()
+    dictionary = (ws / "data" / "dictionary.md").read_text(encoding="utf-8")
+    fetch = re.search(r"^Fetched:\s*(\S+)", dictionary, re.M).group(1)
+
+    LABELS = {{ frame_labels }}
+    INSTANCE_FRAME = {{ frame_by_instance }}
+
+    def esc(text):
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    def md_to_html(text):
+        out = []
+        for line in text.split("\n"):
+            line = line.rstrip()
+            if not line:
+                continue
+            if line.startswith("XREF:"):
+                # The Talmudic layer is presentation, not just validation:
+                # cross-references render as visibly distinct marginalia.
+                out.append('<p class="xref">cross-reference — ' + esc(line[5:].strip()) + "</p>")
+                continue
+            if line.startswith("## "):
+                out.append("<h3>" + esc(line[3:]) + "</h3>")
+            elif line.startswith("# "):
+                out.append("<h3>" + esc(line[2:]) + "</h3>")
+            elif line.startswith("- "):
+                out.append("<li>" + esc(line[2:]) + "</li>")
+            else:
+                out.append("<p>" + esc(line) + "</p>")
+        return "\n".join(out)
+
+    def frame_section(city_slug, frame_id, commentary_text):
+        img = "assets/%s-%s.png" % (city_slug, frame_id)
+        body = md_to_html(commentary_text)
+        return ('<section class="frame"><h2>%s</h2>\n%s\n<img src="%s" alt="%s chart" loading="lazy"></section>'
+                % (LABELS[frame_id], body, img, LABELS[frame_id]))
+
+    PAGE = """<!DOCTYPE html>
+    <html lang="en">
+    <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="atlas-synthesis-sha256" content="__SEAL__">
+    <title>The Breathing Atlas — __CITY__</title>
+    <style>
+    body{font-family:system-ui,sans-serif;max-width:46rem;margin:0 auto;padding:1rem;line-height:1.5}
+    .stamp{color:#567}
+    section.frame{margin-top:2.5rem;border-top:1px solid #ccc;padding-top:1rem}
+    .xref{margin:.2rem 0 .2rem 1rem;padding-left:.6rem;border-left:3px solid #99a;color:#567;font-size:.92em}
+    img{max-width:100%;height:auto}
+    </style>
+    </head>
+    <body>
+    <header>
+    <h1>The Breathing Atlas — __CITY__</h1>
+    <p class="stamp">Data fetched __DATE__ · CAMS model reanalysis via Open-Meteo ·
+    <a href="dictionary.html">what these numbers are</a> · <a href="index.html">all cities</a></p>
+    </header>
+    <main>
+    <section class="verdict"><h2>The short version</h2>
+    __VERDICT__
+    </section>
+    __FRAMES__
+    </main>
+    <footer><p>The editorial position above is itself a frame — one judgment among four,
+    argued openly, with dissent recorded. The dataset, dictionary, and scripts are
+    published beside this page: recompute everything yourself.</p></footer>
+    </body>
+    </html>
+    """
+
+    verdicts = {}
+    for city in ("Amsterdam", "Rotterdam", "Eindhoven"):
+        m = re.search(r"## Verdict — %s\s*\n(.*?)(?=\n## |\Z)" % city, editorial, re.S)
+        assert m, "missing verdict section for " + city
+        verdicts[city] = md_to_html(m.group(1).strip())
+
+    commentaries = {}
+    for i in (1, 2, 3, 4):
+        commentaries[i] = (ws / ("commentary-%d.md" % i)).read_text(encoding="utf-8")
+
+    city_slug = {"Amsterdam": "amsterdam", "Rotterdam": "rotterdam", "Eindhoven": "eindhoven"}
+    for city, slug in city_slug.items():
+        sections = [frame_section(slug, INSTANCE_FRAME[i], commentaries[i]) for i in (1, 2, 3, 4)]
+        html = (PAGE.replace("__SEAL__", seal).replace("__CITY__", city)
+                    .replace("__DATE__", fetch).replace("__VERDICT__", verdicts[city])
+                    .replace("__FRAMES__", "\n".join(sections)))
+        (site / (slug + ".html")).write_text(html, encoding="utf-8")
+
+    index_html = """<!DOCTYPE html>
+    <html lang="en">
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="atlas-synthesis-sha256" content="__SEAL__">
+    <title>The Breathing Atlas</title></head>
+    <body>
+    <header><h1>The Breathing Atlas</h1>
+    <p class="stamp">Data fetched __DATE__ · CAMS model reanalysis via Open-Meteo ·
+    <a href="dictionary.html">what these numbers are</a></p></header>
+    <main>
+    <ul>
+    <li><a href="amsterdam.html">Amsterdam</a></li>
+    <li><a href="rotterdam.html">Rotterdam</a></li>
+    <li><a href="eindhoven.html">Eindhoven</a></li>
+    </ul>
+    <p>Each city page answers the felt questions first — what this air means for a
+    run today, a child's asthma, a street vs the one three kilometers over — then
+    shows the four frames that argued about it, cross-references visible, dissent
+    recorded. The editorial position is itself a frame and says so.</p>
+    </main>
+    <footer><p>Recompute everything yourself: dataset, dictionary, and scripts are
+    published beside the pages.</p></footer>
+    </body>
+    </html>
+    """
+    (site / "index.html").write_text(
+        index_html.replace("__SEAL__", seal).replace("__DATE__", fetch), encoding="utf-8")
+
+    dict_html = """<!DOCTYPE html>
+    <html lang="en">
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="atlas-synthesis-sha256" content="__SEAL__">
+    <title>The Breathing Atlas — data dictionary</title></head>
+    <body>
+    <header><h1>What these numbers are</h1>
+    <p class="stamp"><a href="index.html">The Breathing Atlas</a> · Data fetched __DATE__</p></header>
+    <main>
+    __DICT__
+    </main>
+    </body>
+    </html>
+    """
+    (site / "dictionary.html").write_text(
+        dict_html.replace("__SEAL__", seal).replace("__DATE__", fetch)
+                 .replace("__DICT__", md_to_html(dictionary)), encoding="utf-8")
+
+    for p in (ws / "assets").glob("*.png"):
+        shutil.copy(p, site / "assets" / p.name)
+    print("site built:", sorted(x.name for x in site.glob("*.html")))
+    PY
+    python3 scripts/build_site.py
+
+    {% elif stage == 14 %}
+    {{ strict() }}
+    mkdir -p validation publish
+    cp -r site/. publish/
+    mkdir -p publish/data publish/scripts publish/frames
+    cp data/breathing-atlas.csv data/dictionary.md data/sites.json data/resolution-probe.json data/stack-freeze.txt publish/data/
+    cp scripts/*.py publish/scripts/
+    cp -r "{{ score_dir }}/frames" publish/frames
+    cat > publish/README.md <<'EOF'
+    # The Breathing Atlas
+
+    Layered air-quality briefings for Amsterdam, Rotterdam, and Eindhoven:
+    one shared evidence base, four independent frames (health, equity,
+    meteorology, trend), measured disagreement, and an argued editorial
+    synthesis with named dissent.
+
+    - data/ — the published dataset, site table, spatial probe, dictionary,
+      and the exact dependency freeze (stack-freeze.txt) the numbers were
+      computed under
+    - scripts/ — the exact scripts that produced every number and chart
+    - frames/ — the four lens definitions the analysts were given
+
+    Recompute every published number yourself:
+
+        python scripts/compute_frames.py --data data --out /tmp/frames.json
+
+    Data lineage: CAMS model reanalysis interpolated to coordinates, served by
+    the Open-Meteo air-quality and forecast APIs (keyless). This is MODEL
+    OUTPUT, not surface measurement-station data. WHO 2021 air quality
+    guidelines are guidelines, not local law.
+
+    PUBLICATION POLICY: every run of the score force-pushes `main` of this
+    repository. The push is refused unless origin/main is empty or already a
+    prior atlas. Point repo_name at a name you own outright.
+    EOF
+    printf "%s\n" "https://{{ github_owner }}.github.io/{{ repo_name }}/" > validation/site-url.txt
+    printf "%s\n" "{{ github_owner }}/{{ repo_name }}" > validation/repo-slug.txt
+    printf "%s\n" "https://raw.githubusercontent.com/{{ github_owner }}/{{ repo_name }}/main" > validation/repo-raw-base.txt
+    cd publish
+    git init -q -b main
+    git add -A
+    git -c user.name="The Breathing Atlas" -c user.email="atlas@localhost" commit -qm "The Breathing Atlas — data, scripts, frames, site"
+    if gh repo view "{{ github_owner }}/{{ repo_name }}" >/dev/null 2>&1; then
+      git remote remove origin 2>/dev/null || true
+      git remote add origin "https://github.com/{{ github_owner }}/{{ repo_name }}.git"
+      # Guard: force-push is reserved for overwriting a PRIOR atlas. An
+      # existing repo of the same name that is not ours gets a loud refusal,
+      # not a destruction.
+      if git fetch -q origin main 2>/dev/null; then
+        if git show FETCH_HEAD:README.md >/dev/null 2>&1; then
+          git show FETCH_HEAD:README.md | grep -q "The Breathing Atlas" || { echo "REFUSING: origin/main exists and is not a Breathing Atlas — force-push would destroy someone's work"; exit 1; }
+        fi
+      fi
+      git push -q --force origin main
+    else
+      gh repo create "{{ github_owner }}/{{ repo_name }}" --public --source=. --remote=origin --push
+    fi
+    if ! gh api "repos/{{ github_owner }}/{{ repo_name }}/pages" >/dev/null 2>&1; then
+      gh api -X POST "repos/{{ github_owner }}/{{ repo_name }}/pages" -F "source[branch]=main" -F "source[path]=/" >/dev/null
+    fi
+    url="$(cat ../validation/site-url.txt)"
+    code=""
+    for i in $(seq 1 45); do
+      code=$(curl -s -o /dev/null -w "%{http_code}" "$url" || true)
+      [ "$code" = "200" ] && break
+      sleep 20
+    done
+    [ "$code" = "200" ] || { echo "deploy did not go live: $code"; exit 1; }
+    echo "published: $url"
+
+    {% elif stage == 15 %}
+    {{ strict() }}
+    mkdir -p validation
+    url="$(cat validation/site-url.txt)"
+    raw="$(cat validation/repo-raw-base.txt)"
+    curl -sf "$url" -o validation/live-index.html
+    grep -q "The Breathing Atlas" validation/live-index.html
+    expected="$(sha256sum editorial-synthesis.md | cut -d" " -f1)"
+    for page in amsterdam rotterdam eindhoven; do
+      curl -sf "$url$page.html" -o "validation/live-$page.html"
+      grep -q "$expected" "validation/live-$page.html" || { echo "synthesis seal missing on $page"; exit 1; }
+    done
+    tmp="$(mktemp -d)"
+    curl -sf "$raw/data/breathing-atlas.csv" -o "$tmp/breathing-atlas.csv"
+    curl -sf "$raw/data/sites.json" -o "$tmp/sites.json"
+    curl -sf "$raw/data/resolution-probe.json" -o "$tmp/resolution-probe.json"
+    curl -sf "$raw/data/stack-freeze.txt" -o "$tmp/stack-freeze.txt"
+    curl -sf "$raw/scripts/compute_frames.py" -o "$tmp/compute_frames.py"
+    "{{ workspace }}/.venv/bin/python" "$tmp/compute_frames.py" --data "$tmp" --out "$tmp/frames.json" --md "$tmp/frames.md"
+    diff stats/frames.json "$tmp/frames.json" > validation/recompute.diff || true
+    if [ -s validation/recompute.diff ]; then
+      echo "recompute drift — published data no longer produces published numbers:"
+      cat validation/recompute.diff
+      exit 1
+    fi
+    echo "LIVE SEAM VERIFIED: $url answers, and the published data recomputes the published numbers exactly"
+
+    {% endif %}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VALIDATIONS — staged fail-fast (Commissioning Cascade): per movement, coarse
+# before fine, and every load-bearing claim is a deterministic command, never
+# LLM judgment. `condition: stage == N` selects the movement; the `stage:`
+# field orders rules WITHIN a sheet (fail-fast between stages).
+# ═══════════════════════════════════════════════════════════════════════════════
+
+validations:
+  # ── M1 · Bootstrap + the blindness gate (runs before any fan-out token) ──
+  - type: command_succeeds
+    command: '{workspace}/.venv/bin/python -c "import pandas, scipy, matplotlib, yaml; print(''stack importable'')"'
+    condition: "stage == 1"
+    stage: 1
+    description: "Data stack is importable, not merely installed"
+  - type: command_succeeds
+    command: |
+      for f in health equity meteorology trend; do
+        p="{score_dir}/frames/frame-$f.md"
+        test -s "$p" || { echo "missing $p"; exit 1; }
+        grep -q "^FRAME: $f$" "$p" || { echo "no marker in $f"; exit 1; }
+        for o in health equity meteorology trend; do
+          if [ "$o" != "$f" ] && grep -q "^FRAME: $o$" "$p"; then
+            echo "blindness violation: $f names $o"; exit 1
+          fi
+        done
+        grep -q "stat_ref" "$p" || { echo "no output contract in $f"; exit 1; }
+      done
+      echo "blindness gate ok"
+    condition: "stage == 1"
+    stage: 1
+    description: "Blindness gate: each frame cadenza carries only its own marker + its contract"
+  - type: command_succeeds
+    command: |
+      test "$(gh api user -q .login)" = {github_owner}
+      test -s {workspace}/data/stack-freeze.txt
+      grep -q "^pandas==" {workspace}/data/stack-freeze.txt
+      grep -q "^scipy==" {workspace}/data/stack-freeze.txt
+      grep -q "^matplotlib==" {workspace}/data/stack-freeze.txt
+      command -v claude >/dev/null 2>&1 || command -v codex >/dev/null 2>&1 || command -v opencode >/dev/null 2>&1
+    condition: "stage == 1"
+    stage: 3
+    description: "Self-canary: gh identity matches the publisher, stack freeze receipt exists, a judgment instrument is on PATH"
+
+  # ── M2 · Air canary: shape gate on the real payload ─────────────────────
+  - type: command_succeeds
+    command: |
+      jq -e '
+        (.hourly.time | length) >= 48
+        and (.hourly_units.pm2_5 == "μg/m³")
+        and (.hourly | has("nitrogen_dioxide"))
+        and (.hourly | has("ozone"))
+        and (. as $doc | (["pm2_5", "pm10", "nitrogen_dioxide", "ozone"] | all(. as $p | (($doc.hourly[$p] | map(select(. == null))) | length) / ($doc.hourly[$p] | length) < 0.25)))
+      ' {workspace}/canary/air.json > /dev/null
+    condition: "stage == 2"
+    stage: 1
+    working_directory: "{workspace}"
+    description: "Air payload has 48+ hours, μg/m³ units, NO₂/O₃ keys, every pollutant < 25% nulls"
+
+  # ── M3 · Met canary: hour-exact joinability ─────────────────────────────
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import json
+      air = json.load(open('{workspace}/canary/air.json'))
+      met = json.load(open('{workspace}/canary/met.json'))
+      assert air['hourly']['time'] == met['hourly']['time'], \
+          'joinability broken: time arrays differ (%d vs %d points)' % (
+              len(air['hourly']['time']), len(met['hourly']['time']))
+      probe = json.load(open('{workspace}/canary/met-probe.json'))
+      assert 'wind_speed_10m' in probe['fields'] and 'precipitation' in probe['fields']
+      print('joinable: hour-exact timestamp arrays,', len(met['hourly']['time']), 'points')
+      "
+    condition: "stage == 3"
+    stage: 1
+    description: "Weather covariates join hour-exact to the air payload — arrays equal, not merely same length"
+
+  # ── M4 · The Grid Oracle — KILL AUTHORITY over the equity frame ─────────
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import json
+      sites = json.load(open('{workspace}/data/sites.json'))
+      ams = sorted(k for k, v in sites.items() if v['city'] == 'amsterdam')
+      d = json.load(open('{workspace}/canary/resolution-probe.json'))
+      assert sorted(d['probe_sites']) == ams, 'probe must sample every Amsterdam site, exactly'
+      assert d['decision'] in ('gradient_supported', 'gradient_unsupported'), d['decision']
+      assert d['distinct_grid_cells'] >= 1, d
+      if d['decision'] == 'gradient_supported':
+          assert d['distinct_grid_cells'] >= 2, 'supported verdict with <2 cells'
+          assert d['max_intra_city_spread_pct'] > 5.0, 'supported verdict with <=5% spread'
+          assert d['max_intra_city_delta_ugm3'] > {min_spread_ugm3}, 'supported verdict at or below the absolute floor — noise must not fund a gradient'
+      print('probe verdict:', d['decision'], d['distinct_grid_cells'], 'cells')
+      "
+    condition: "stage == 4"
+    stage: 1
+    description: "Kill authority: verdict is consistent, sampled every AMS site, and cleared BOTH the relative and absolute bars"
+
+  # ── M5 · Full fetch: fail-closed per-file gates, no partial datasets ────
+  # User variables DO reach validation commands (template_variables carries
+  # them at lowest precedence, and the validation engine substitutes every
+  # {key} literally) — so the gate states {min_hours} directly: one point of
+  # change, no restated constants, no engine folklore.
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json
+      POLS = ('pm2_5', 'pm10', 'nitrogen_dioxide', 'ozone')
+      METS = ('wind_speed_10m', 'wind_direction_10m', 'precipitation', 'temperature_2m')
+      sites = json.load(open('{workspace}/data/sites.json'))
+      fails = []
+      for sid in sorted(sites):
+          air = json.load(open('{workspace}/raw/%s-air.json' % sid))
+          met = json.load(open('{workspace}/raw/%s-met.json' % sid))
+          if len(air['hourly']['time']) < {min_hours} or len(met['hourly']['time']) < {min_hours}:
+              fails.append(sid + ': under the hour floor')
+          if air['hourly']['time'] != met['hourly']['time']:
+              fails.append(sid + ': air/met time arrays differ')
+          for doc, keys, tag in ((air, POLS, 'air'), (met, METS, 'met')):
+              n = len(doc['hourly']['time'])
+              for k in keys:
+                  if sum(1 for v in doc['hourly'][k] if v is None) / n >= 0.25:
+                      fails.append('%s-%s %s: nulls' % (sid, tag, k))
+      assert not fails, fails
+      print('raw gates ok:', len(sites), 'sites')
+      "
+    condition: "stage == 5"
+    stage: 1
+    description: "Every raw file: full hour floor, hour-exact air/met timestamp equality, all 4 pollutants + 4 covariates < 25% nulls"
+  - type: command_succeeds
+    command: |
+      expected="$(python3 -c 'import json; print(len(json.load(open("{workspace}/data/sites.json"))) * 2)')"
+      actual="$(ls {workspace}/raw/*.json | wc -l)"
+      test "$actual" -eq "$expected"
+    condition: "stage == 5"
+    stage: 2
+    description: "Raw file count equals sites × APIs exactly"
+
+  # ── M6 · Clean + unify: the tidy contract ───────────────────────────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json
+      import pandas as pd
+      sites = json.load(open('{workspace}/data/sites.json'))
+      first = sorted(sites)[0]
+      n_hours = len(json.load(open('{workspace}/raw/%s-air.json' % first))['hourly']['time'])
+      df = pd.read_csv('{workspace}/data/breathing-atlas.csv')
+      expected = len(sites) * n_hours * 4
+      assert len(df) == expected, 'rows %d != expected %d' % (len(df), expected)
+      assert df.duplicated(subset=['site', 'pollutant', 'timestamp_utc']).sum() == 0, 'duplicate keys'
+      assert set(df.pollutant) == {'pm2_5', 'pm10', 'nitrogen_dioxide', 'ozone'}
+      assert df.local_date.notna().all(), 'missing local dates'
+      for col in ('wind_speed_10m', 'wind_direction_10m', 'precipitation', 'temperature_2m'):
+          frac = float(df[col].isna().mean())
+          assert frac < 0.25, '%s null fraction %.3f after the met join' % (col, frac)
+      print('tidy:', len(df), 'rows, covariates joined')
+      "
+    condition: "stage == 6"
+    stage: 1
+    description: "Tidy CSV: exact row count, no duplicate keys, local dates complete, met covariates < 25% null after join"
+  - type: command_succeeds
+    command: |
+      grep -q "MODEL OUTPUT" {workspace}/data/dictionary.md
+      grep -q "^Fetched:" {workspace}/data/dictionary.md
+      grep -q "Null fractions" {workspace}/data/dictionary.md
+    condition: "stage == 6"
+    stage: 2
+    description: "Dictionary states lineage, fetch date, and null report"
+
+  # ── M7 · Frame statistics: schema + the determinism gate ────────────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json
+      F = json.load(open('{workspace}/stats/frames.json'))
+      assert set(F) == {'health', 'equity', 'meteorology', 'trend'}, sorted(F)
+      keys = []
+      for fr, recs in F.items():
+          assert len(recs) >= 5, '%s has %d findings' % (fr, len(recs))
+          for r in recs:
+              for k in ('key', 'value', 'unit', 'n', 'note'):
+                  assert k in r, (fr, k)
+          keys.extend(r['key'] for r in recs)
+      assert len(keys) == len(set(keys)), 'duplicate stat keys'
+      print('frames schema ok:', len(keys), 'findings')
+      "
+    condition: "stage == 7"
+    stage: 1
+    description: "frames.json: four frames, ≥5 findings each, unique citable keys"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      .venv/bin/python scripts/compute_frames.py --out stats/frames-rerun.json --md stats/frames-rerun.md
+      cmp -s stats/frames.json stats/frames-rerun.json
+    condition: "stage == 7"
+    stage: 2
+    description: "Determinism: same input bytes → byte-identical frames.json"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/stats/frames.md") -lt 2500'
+    condition: "stage == 7"
+    stage: 2
+    description: "Distilled view stays small (LLM sheets read kilobytes)"
+
+  # ── M8 · Charts: real rendered PNGs, not empty files ────────────────────
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import glob, os, struct
+      paths = sorted(glob.glob('{workspace}/assets/*.png'))
+      assert len(paths) >= 12, 'expected >=12 charts, got %d' % len(paths)
+      for p in paths:
+          d = open(p, 'rb').read()
+          assert d[:8] == b'\x89PNG\r\n\x1a\n', p
+          w, h = struct.unpack('>II', d[16:24])
+          assert w >= 200 and h >= 150, (p, w, h)
+          assert os.path.getsize(p) > 10240, p
+      print('charts ok:', len(paths))
+      "
+    condition: "stage == 8"
+    stage: 1
+    description: "Rendering gate (not a visual-quality check): 12+ PNGs with magic bytes, real dimensions, >10KB each"
+
+  # ── M9 · Blind frames: the anti-fabrication join (per fan-out sheet) ────
+  - type: file_exists
+    path: "{workspace}/analysis-{instance}.md"
+    condition: "stage == 9"
+    stage: 1
+    description: "Blind analysis exists"
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json, re
+      F = json.load(open('{workspace}/stats/frames.json'))
+      keys = set(r['key'] for recs in F.values() for r in recs)
+      text = open('{workspace}/analysis-{instance}.md').read()
+      refs = re.findall(r'stat_ref:\s*([A-Za-z0-9_.\-]+)', text)
+      assert len(refs) >= 5, 'only %d stat_ref findings' % len(refs)
+      missing = sorted(set(r for r in refs if r not in keys))
+      assert not missing, 'fabricated stat refs: %s' % missing
+      block = text.split('## FINDINGS')[-1]
+      brefs = re.findall(r'stat_ref:\s*([A-Za-z0-9_.\-]+)', block)
+      assert len(brefs) >= 5, 'FINDINGS block has only %d entries' % len(brefs)
+      assert len(set(brefs)) >= 4, 'FINDINGS cite only %d distinct stats' % len(set(brefs))
+      assert len(re.findall(r'^## §\d+', text, re.M)) >= 4, 'needs >=4 numbered sections'
+      if {instance} == 2 and 'equity_gradient_unsupported' in keys:
+          assert 'equity_gradient_unsupported' in brefs, \
+              'the probe refused the intra-city gradient; the equity analysis must cite equity_gradient_unsupported'
+      print('blind analysis {instance} ok:', len(refs), 'cited findings')
+      "
+    condition: "stage == 9"
+    stage: 2
+    description: "Every stat_ref joins to frames.json; FINDINGS block is full and distinct; the kill gate is cited when it fired"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/analysis-{instance}.md") -ge 300'
+    condition: "stage == 9"
+    stage: 2
+    description: "Analysis is substantive (300+ words)"
+
+  # ── M10 · Triangulation: the anti-keyword-slap count gate ───────────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json, re
+      import yaml
+      t = yaml.safe_load(open('{workspace}/triangulation.yaml'))
+      F = json.load(open('{workspace}/stats/frames.json'))
+      keys = set(r['key'] for recs in F.values() for r in recs)
+      ALL = set(('health', 'equity', 'meteorology', 'trend'))
+      BIJ = {'UNANIMOUS': 4, 'MAJORITY': 3, 'SPLIT': 2, 'UNIQUE': 1}
+      findings = t['findings']
+      assert len(findings) > 0, 'no findings'
+      ids = [f['id'] for f in findings]
+      assert len(ids) == len(set(ids)), 'duplicate finding ids'
+      for f in findings:
+          assert f['category'] in BIJ, f
+          fa = set(f['frames_agreeing'])
+          assert fa, 'empty frames_agreeing: %s' % f['id']
+          assert fa <= ALL, f
+          assert len(fa) == BIJ[f['category']], 'category %s but %d frames agree: %s' % (f['category'], len(fa), f['id'])
+          if f['category'] == 'UNANIMOUS':
+              assert fa == ALL, 'UNANIMOUS must name all four frames: %s' % f['id']
+          for ref in f.get('stat_refs', []):
+              assert ref in keys, 'fabricated stat ref: %s' % ref
+      sc = t['summary_counts']
+      assert sum(sc.values()) == len(findings), 'counts %s != %d findings' % (sc, len(findings))
+      covered = set()
+      for f in findings:
+          covered.update(f.get('stat_refs', []))
+      cited = set()
+      for i in range(1, 5):
+          text = open('{workspace}/analysis-%d.md' % i).read()
+          block = text.split('## FINDINGS')[-1]
+          cited.update(re.findall(r'stat_ref:\s*([A-Za-z0-9_.\-]+)', block))
+      dropped = sorted(cited - covered)
+      assert not dropped, 'triangulation dropped cited findings: %s' % dropped
+      print('triangulation ok:', len(findings), 'findings,', len(cited), 'cited stats covered')
+      "
+    condition: "stage == 10"
+    stage: 1
+    description: "Counts sum; category↔frames_agreeing is a bijection (4/3/2/1); every stat cited by any analysis is covered — no dropped voices"
+
+  # ── M11 · Second hearing: cross-references must RESOLVE (per sheet) ─────
+  - type: file_exists
+    path: "{workspace}/commentary-{instance}.md"
+    condition: "stage == 11"
+    stage: 1
+    description: "Cross-referenced commentary exists"
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json, re
+      F = json.load(open('{workspace}/stats/frames.json'))
+      keys = set(r['key'] for recs in F.values() for r in recs)
+      OWN = {1: 'health', 2: 'equity', 3: 'meteorology', 4: 'trend'}
+      INSTANCE = {v: k for k, v in OWN.items()}
+      text = open('{workspace}/commentary-{instance}.md').read()
+      xrefs = re.findall(r'^XREF:\s*(rebutts|supports|extends)\s+(health|equity|meteorology|trend)\s+§(\d+)', text, re.M)
+      assert len(xrefs) >= 2, 'only %d cross-references' % len(xrefs)
+      for rel, frame, sec in xrefs:
+          assert frame != OWN[{instance}], 'self-reference'
+          target = open('{workspace}/analysis-%d.md' % INSTANCE[frame]).read()
+          assert re.search(r'^## §%s\b' % sec, target, re.M), 'dangling xref: %s %s §%s' % (rel, frame, sec)
+      assert len(re.findall(r'^## §\d+', text, re.M)) >= 4, 'commentary needs numbered sections'
+      assert '## FINDINGS' in text, 'missing findings block'
+      refs = re.findall(r'stat_ref:\s*([A-Za-z0-9_.\-]+)', text.split('## FINDINGS')[-1])
+      assert len(refs) >= 5, 'commentary FINDINGS block has only %d stat_refs' % len(refs)
+      missing = sorted(set(r for r in refs if r not in keys))
+      assert not missing, 'commentary fabricated stat refs: %s' % missing
+      print('commentary {instance} ok:', len(xrefs), 'resolvable cross-references,', len(refs), 'cited findings')
+      "
+    condition: "stage == 11"
+    stage: 2
+    description: "Every XREF target §anchor resolves; commentary FINDINGS stat_refs join to frames.json — revision cannot fabricate numbers either"
+
+  # ── M12 · Editorial synthesis: argued, joined, non-neutral ──────────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import re
+      import yaml
+      t = yaml.safe_load(open('{workspace}/triangulation.yaml'))
+      ids = set(f['id'] for f in t['findings'])
+      text = open('{workspace}/editorial-synthesis.md').read()
+      for marker in ('## POSITION', '## SUPPORTING EVIDENCE', '## COUNTERARGUMENTS', '## CONCLUSION', '## DISSENT'):
+          assert marker in text, 'missing ' + marker
+      for city in ('Amsterdam', 'Rotterdam', 'Eindhoven'):
+          assert '## Verdict — ' + city in text, 'missing verdict for ' + city
+      sup = text.split('## SUPPORTING EVIDENCE', 1)[1].split('## COUNTERARGUMENTS', 1)[0]
+      assert re.findall(r'\((T-\d+)\)', sup), 'no (T-xxx) citations under SUPPORTING EVIDENCE — the position must stand on the measured agreement'
+      dis = text.split('## DISSENT', 1)[1].split('## Verdict', 1)[0]
+      assert len(dis.split()) >= 15, 'DISSENT section is empty — named dissent is required, not optional'
+      cites = set(re.findall(r'\((T-\d+)\)', text))
+      assert cites, 'no (T-xxx) citations'
+      missing = sorted(c for c in cites if c not in ids)
+      assert not missing, 'citations with no finding: %s' % missing
+      print('editorial synthesis ok:', len(cites), 'joined citations')
+      "
+    condition: "stage == 12"
+    stage: 1
+    description: "All sections present; every (T-xxx) citation joins to a finding"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/editorial-synthesis.md") -ge 400'
+    condition: "stage == 12"
+    stage: 1
+    description: "Synthesis is substantive (400+ words)"
+
+  # ── M13 · Site build: structural gate on the RENDERED pages ─────────────
+  # (The old html.parser "parse" gate was near-vacuous — HTMLParser.error
+  # has been dead since Python 3.10. This gate checks structure: what the
+  # page must SHOW, including that the XREF rendering transform ran.)
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      from pathlib import Path
+      site = Path('{workspace}/site')
+      XREF_P = '<p class=' + chr(34) + 'xref' + chr(34) + '>'
+      for city in ('amsterdam', 'rotterdam', 'eindhoven'):
+          page = (site / (city + '.html')).read_text(encoding='utf-8')
+          assert '<h1>' in page, city
+          assert page.count('<img ') == 4, (city, 'expected 4 charts, got %d' % page.count('<img '))
+          assert page.count(XREF_P) >= 2, (city, 'rendered cross-references missing — the Talmudic layer is not visible')
+          assert '§' in page, (city, 'numbered section anchors missing')
+          assert 'atlas-synthesis-sha256' in page, city
+          assert 'dictionary.html' in page, city
+      idx = (site / 'index.html').read_text(encoding='utf-8')
+      for city in ('amsterdam', 'rotterdam', 'eindhoven'):
+          assert (city + '.html') in idx, city
+      assert 'dictionary.html' in idx
+      assert 'Data fetched' in idx
+      print('site structure ok: 3 city pages, 12 charts, cross-references rendered, sealed')
+      "
+    condition: "stage == 13"
+    stage: 1
+    description: "Per city page: h1, exactly 4 charts, ≥2 RENDERED cross-references, § anchors, seal, dictionary link; index links every city"
+
+  # ── M14 · Publish: Pages enabled and the URL answers ────────────────────
+  - type: command_succeeds
+    command: 'gh api "repos/$(cat {workspace}/validation/repo-slug.txt)/pages" > /dev/null'
+    condition: "stage == 14"
+    stage: 1
+    description: "GitHub Pages is enabled on the published repo"
+  - type: command_succeeds
+    command: 'curl -sf -o /dev/null "$(cat {workspace}/validation/site-url.txt)"'
+    condition: "stage == 14"
+    stage: 2
+    description: "The deployed URL answers HTTP 200 — workspace-green is not deployed"
+
+  # ── M15 · The live seam + the reproducibility seal ──────────────────────
+  - type: command_succeeds
+    command: |
+      grep -q "The Breathing Atlas" {workspace}/validation/live-index.html
+      python3 -c "
+      import hashlib
+      from glob import glob
+      expected = hashlib.sha256(open('{workspace}/editorial-synthesis.md', 'rb').read()).hexdigest()
+      pages = [p for p in glob('{workspace}/validation/live-*.html') if 'index' not in p]
+      assert len(pages) == 3, pages
+      for p in pages:
+          assert expected in open(p).read(), 'seal missing on ' + p
+      print('live seal verified on 3 city pages')
+      "
+    condition: "stage == 15"
+    stage: 1
+    description: "Deployed pages carry the exact editorial synthesis seal"
+  - type: command_succeeds
+    command: 'test -s {workspace}/validation/live-index.html && test ! -s {workspace}/validation/recompute.diff'
+    condition: "stage == 15"
+    stage: 2
+    description: "Live page captured and recompute.diff is empty"
+  - type: command_succeeds
+    command: |
+      raw="$(cat {workspace}/validation/repo-raw-base.txt)"
+      curl -sf "$raw/data/breathing-atlas.csv" -o /dev/null
+      curl -sf "$raw/data/stack-freeze.txt" -o /dev/null
+      curl -sf "$raw/scripts/compute_frames.py" -o /dev/null
+    condition: "stage == 15"
+    stage: 3
+    description: "Published repo serves the dataset, the dependency freeze, and the exact script — falsifiable by the reader"

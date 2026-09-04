@@ -1,0 +1,2546 @@
+# =============================================================================
+# FIVE HANDS, ONE VOICE — Live Relay proof score (rev 2)
+# Revised 2026-09-04 by rosetta-prove sheet 8 against three adversarial
+# reviews (05-review-1.md Practitioner, 05-review-2.md Skeptic,
+# 05-review-3.md Newcomer — all "needs revision"). Composed from
+# 01-selection.md / 02-decomposition.md / 03-architecture.md /
+# 04-composition-notes.md.
+#
+# PRIMARY PATTERN : Live Relay — a serial authored by rotating instruments
+#                   across THREE vendors (claude-code -> codex-cli -> opencode
+#                   -> codex-cli -> claude-code), where identity is
+#                   workspace-resident, not context-resident. Each voice sheet
+#                   receives ONLY the performance identity plus the incoming
+#                   relay packet (a playable cue; beat = incoming + 1).
+# COMPOSING       : Stigmergic Workspace (the filesystem is the one channel
+#                   three vendors share — packets, episodes, and the derived
+#                   ledger live on disk; successors read disk, never messages),
+#                   The Etiquette Law (every continuity / stylometric /
+#                   acoustic / feed / live check is a CLI command with an exit
+#                   code and an EMPTY fallback chain — a tool stage that
+#                   silently falls back to an LLM is a lie with a receipt),
+#                   Mission Command (gates validate outcomes, never method; the
+#                   tune sheet authors identity under an intent envelope and
+#                   may NOT plot the episodes — the identity size cap is the
+#                   anti-Identity-as-script gate),
+#                   Canary Probe (movement 2 probes gh identity-as-owner, the
+#                   THREE RELAY INSTRUMENTS via mzt, jq, both TTS paths, and a
+#                   full master->encode->measure landing pass — identity and
+#                   calibration, not command success — before any LLM token),
+#                   Closed-Loop Call (the beat rule PLUS a mechanical
+#                   consumption readback: every incoming motif must be carried
+#                   by the outgoing packet, and at least one incoming motif
+#                   must appear by name in the episode text — a guessable beat
+#                   number alone proves nothing),
+#                   Succession Pipeline, scoped to the audio chain only
+#                   (script -> TTS text -> voice audio -> mixed WAV -> mastered
+#                   m4a -> feed item -> deployed enclosure),
+#                   Proof-Carrying Artifact (evidence page, the recompute seal
+#                   from the LIVE FEED SURFACE, and movement 24's terminal
+#                   publish — every seal the header promises is public before
+#                   the run can pass).
+#
+# PROBLEM SOLVED  : Serialized audio drama loses its living identity when
+#                   authorship changes hands — unless the handoff itself
+#                   carries the performance. This score manufactures the hard
+#                   case honestly (three vendors, no shared context), then
+#                   measures whether the seam is survivable: cross-vendor
+#                   inter-episode drift must not exceed intra-episode baseline
+#                   drift, or the run FAILS. Continuity is carried by
+#                   artifacts (identity score, packet chain, ledger), never by
+#                   any author's latent context — the claim is only falsifiable
+#                   because the author changes.
+#
+# PRODUCES        : <auto-workspace>/five-hands-one-voice/ ->
+#                   performance-identity.md, relay-packet-0..5.yaml,
+#                   episode-1..5.md, identity/continuity verdicts,
+#                   relay-ledger.json, drift-table.json/.md, performance.md,
+#                   audio/*.{txt,chapters.json,pauses.json,voice.audio,
+#                   mixed.wav,bed.wav}, dist/episode-N.m4a + covers +
+#                   loudness.json + feed.rss, scripts/*.py (the exact gates),
+#                   canary-report.json, live-gate.json, link-check.json,
+#                   recompute-seal.json, receipts-report.json,
+#                   terminal-publish.json — and a PUBLIC repo + GitHub Pages
+#                   deployment with the audio, a subscribable RSS 2.0 podcast
+#                   feed with byte-exact enclosures, the full evidence ledger
+#                   (packet sha256 chain, per-episode attribution, drift table,
+#                   freeze receipt, ALL terminal seals), the gate scripts
+#                   published beside the art, and a scope-and-limits section
+#                   that states exactly what the proof does not establish.
+#
+# INSTRUMENTS     : 5 categories — agents (claude-code / codex-cli / opencode
+#                   as ROTATING primaries, never a fallback chain: a vendor
+#                   fallback would launder the relay claim), audio (edge-tts
+#                   primary / piper offline secondary at pinned rate, ffmpeg
+#                   mix + loudnorm two-target mastering, ffprobe for every
+#                   measurement), analysis (numpy/scipy stylometry, PyYAML
+#                   schema gates, stdlib XML + defusedxml), publishing (git,
+#                   gh, GitHub Pages, curl), visual (Pillow covers — flat
+#                   geometric garnish).
+#                   17 of 24 movements are CLI movements with EMPTY fallback
+#                   chains; the 7 LLM movements (tune, five voices, assemble)
+#                   also carry empty chains — the rotation IS the claim.
+#
+# EXECUTION MAP   : 24 serial movements, zero fan-out (the relay is serial by
+#                   hypothesis; parallel authorship would be the pattern's own
+#                   named failure, False Fan-out). Expanded sheets == 24.
+#
+#     M1  runtime-build        pinned venv + pinned-digest voice model [CLI]
+#     M2  self-canary          identity + instruments + jq + TTS + master [CLI]
+#     M3  tune                 performance identity + packet 0  [claude-code]
+#     M4  identity-gate        compactness + typing + staged gates    [CLI]
+#     M5  voice-one            episode 1 + packet 1             [claude-code]
+#     M6  voice-two            episode 2 + packet 2             [codex-cli]
+#     M7  voice-three          episode 3 + packet 3             [opencode]
+#     M8  voice-four           episode 4 + packet 4             [codex-cli]
+#     M9  voice-five           episode 5 + packet 5             [claude-code]
+#     M10 continuity-gate      chain, stepwise custody, attribution  [CLI]
+#     M11 stylometry           z-scored drift vs pre-registered band    [CLI]
+#     M12 assemble             mechanical joins, verbatim       [codex-cli]
+#     M13 tts-normalize        speech text (markers stripped) + chapters [CLI]
+#     M14 synthesize           edge/piper at pinned rates + pauses  [CLI]
+#     M15 bed-and-mix          ffmpeg sine bed + per-episode refs    [CLI]
+#     M16 master-and-package   loudnorm + non-overlapping chapters   [CLI]
+#     M17 site-and-repo        publish tree + guarded repo push      [CLI]
+#     M18 feed-build           RSS 2.0, byte-exact enclosures        [CLI]
+#     M19 deploy-and-wait      Pages deploy bound to commit sha      [CLI]
+#     M20 live-gate            the DEPLOYED feed answers             [CLI]
+#     M21 evidence-page        ledger + scope limits + build wait   [CLI]
+#     M22 recompute-seal       LIVE FEED bytes reproduce the numbers [CLI]
+#     M23 receipts-harness     every gate provably failable           [CLI]
+#     M24 terminal-publish     seals published + verified live        [CLI]
+#
+# PRE-REGISTERED BAND (committed before any episode is written):
+#     max cross-vendor adjacent-episode drift <= max intra-episode baseline
+#     drift, over z-scored function-word/rhythm signatures. Intra-episode
+#     halves are the baseline precisely so flattening one's own voice into
+#     generic prose does not game the gate. This is a RUPTURE DETECTOR, not
+#     proof that a listener experiences one living voice — stated on the
+#     published evidence page.
+#
+# CALIBRATION TABLE (every constant measured on this host, 2026-09-03/04,
+# by rev-2 commissioning; the Practitioner's independent measurements are
+# cross-checked in 06-proof-notes.md):
+#     edge-tts en-US-AriaNeural --rate=+0% : 142 wpm (dialogue) .. 192 wpm
+#       (narration) — style variance ratio 1.35 makes any band narrower than
+#       that ratio a deterministic run-killer (rev 1's 140-175 gate died
+#       here; reproduced by reviewer AND by rev-2 commissioning).
+#     piper lessac medium --length_scale 1.3 : 189 wpm (narration) — nested
+#       inside edge's band so both engines honor one word window.
+#     word window 790-960: 790 words @ 196 wpm = 242 s >= 240 s;
+#       960 @ 138 = 417 s <= 420 s — the window GUARANTEES the duration
+#       window for any style either engine speaks.
+#     wpm band 135-200 is a DIAGNOSTIC of the measured voice range, not a
+#       style gate; the listener-facing gates are duration and words.
+#     mastering encode: AAC 192k. AAC at 128k overshoots the pre-encode
+#       true peak by up to +2.4 dB on loudness-limited speech+bed content
+#       (encoded +0.4 dBTP from a -2.00 dBTP WAV — rev-2 commissioning);
+#       at 192k the overshoot is +0.1 dB (all five synthetic episodes
+#       encoded -16.7 LUFS / -1.90 dBTP at a -2.0 target). loudnorm two-pass
+#       lands the WAV at exactly the TP target; a bounded 0.5 dB TP ladder
+#       (-2.0 .. -4.0) remains as a per-episode backstop that accepts the
+#       first rung landing BOTH bands. Rev 1 single-passed at TP -1.5 into
+#       128k AAC with no encoded-file measurement — the Practitioner
+#       reproduced encoded -1.2..-1.3, a deterministic run-killer.
+#     integrated loudness -16 +- 2 LUFS: measured -16.4 LUFS (narration,
+#       single-pass) and -16.7 LUFS (all five mixed episodes, two-pass) on
+#       the encoded files; the ebur128 numbers come from the anchored
+#       summary parse (see the parsing bullet).
+#     ebur128 parsing: the FIRST 'I:' line in ffmpeg stderr is a momentary
+#       sample (~-70 LUFS at t~0), NOT the summary. Rev 1 regex-matched it —
+#       a third run-killer no reviewer caught; rev 2 anchors on
+#       'Integrated loudness:' (found by rev-2 commissioning, verified: naive
+#       parse returns -70.0, anchored parse returns -16.4).
+#     piper model pinned to sha256 digests below (source authenticity, not
+#       just in-run integrity — a replaced upstream file is refused).
+#     bed prominence: measured bed 21 dB under the mix; gate requires >= 8.
+#     chapter pauses: edge-tts inserts ~1 s pauses at headings (measured);
+#       chapter starts snap to the nearest detected pause center within 6 s,
+#       else keep the uniform-rate prediction; END[i] = START[i+1] by
+#       construction (rev 1 set every END to file duration — overlapping
+#       chapters).
+#
+# ANTI-FABRICATION SEAMS (all deterministic, never LLM judgment):
+#     - beat monotonicity 0..5; packet schema TYPED (lists of non-empty
+#       strings; substantial continuation) — truthiness alone admits junk
+#     - stepwise motif custody at EVERY handoff (packet i's unresolved must
+#       be carried by packet i+1 as unresolved or resolved; resolved must
+#       reference previously-open motifs) — a motif cannot vanish for three
+#       packets and reappear (rev 1's global-set check allowed exactly that)
+#     - closed-loop consumption readback: an incoming motif appears by name
+#       in the episode text — delivery plus a guessable beat is not a readback
+#     - attribution headers name the WRITING instrument (engine-injected via
+#       instrument_name, cross-checked against the declared rotation)
+#     - drift table recomputed from PUBLISHED episode bytes via the LIVE FEED
+#       surface (enclosure URLs from the deployed RSS, texts from the
+#       deployed site) must equal the run's table; loudness recomputed from
+#       the DOWNLOADED enclosures must match within 0.1 LU
+#     - enclosure bytes sha256-verified against local dist files —
+#       Content-Length equality is necessary, byte identity is sufficient
+#     - assembler containment: every episode paragraph appears verbatim in
+#       performance.md — voice laundering detectable by construction
+#     - receipts harness corrupts fixtures and requires each intended gate
+#       to fail WITH ITS INTENDED ERROR TEXT (bare exit codes proved the
+#       wrong thing in rev 1); zero unexpected passes
+#     - terminal publish: the recompute seal, receipts report, live gate,
+#       and canary report are pushed, the Pages build is bound to the pushed
+#       commit sha, and every published seal is re-fetched and hash-verified
+#       — a seal that stays in the workspace proves nothing
+#
+# GENERICITY      : no workspace field — auto-managed (#58). github_owner /
+#                   repo_name / TTS voices / loudness targets / drift and
+#                   window constants / the system python are variables. The
+#                   episode COUNT and the ROTATION are fixed by the relay
+#                   design (five hands, three vendors) and are defined ONCE
+#                   each — n_episodes in variables, the rotation list at the
+#                   top of the template — with movement 4 refusing a mismatch
+#                   between them. Change either and you are composing a
+#                   different relay, deliberately. Engine dialect honored:
+#                   total_items pre-expansion; dependencies movement-keyed;
+#                   cadenzas expanded-sheet-keyed; movement instrument_
+#                   fallbacks override by field presence; literal {key}
+#                   substitution in validation commands; no score_dir in
+#                   variables (it would shadow the baton's runtime anchor).
+#
+# PUBLICATION POLICY: each run pushes main of repo_name. The prior-run guard
+#                   (README marker, empty-repo tolerated, foreign repo
+#                   refused) runs at the canary AND AGAIN at movement 17
+#                   immediately before the only force-push in the score —
+#                   an hour of creative work must not stand between the
+#                   guard and the push it guards. Point repo_name at a name
+#                   you own outright.
+#
+# HONESTY CAVEATS (also published on the evidence page, movement 21):
+#     - Voice-sheet isolation is PROMPT-CONTRACTUAL, not sandboxed: the
+#       vendor CLIs can read the workspace if they choose; nothing mechanical
+#       prevents peeking, and the drift gate cannot distinguish identity
+#       carried by artifacts from identity gleaned by reading ahead.
+#     - The heard voice is ONE TTS speaker (Aria or piper) for all five
+#       episodes: audible one-voice is manufactured by synthesis; the relay
+#       carries PROSE STYLE, and the drift gate measures diction, not audio.
+#     - Stylometry is a rupture detector with n=5 episodes, not proof of
+#       listener experience. The cold-open gate measures onset of speech,
+#       not hook quality. Chapter markers are pause-snapped approximations.
+#
+# USAGE           : mzt run <this-file>.yaml ; mzt status five-hands-one-voice
+#                   Installed at: scores/rosetta-corpus/proof-scores/live-relay.yaml
+#                   (this score self-contains its scripts; nothing outside the
+#                   workspace and the published repo is required at run time)
+#
+# Time: ~60-120 min (TTS + Pages builds dominate) | Cost: ~$2-6 (7 LLM sheets)
+# =============================================================================
+
+name: five-hands-one-voice
+description: "Live Relay proof — a five-episode audio drama authored by rotating vendor instruments, measured for voice continuity, mastered to podcast loudness, published as a live subscribable feed with its full evidence ledger and terminal seals."
+
+# workspace: intentionally omitted — auto-managed at <workspace-root>/five-hands-one-voice (#58).
+
+instrument: claude-code
+instrument_config:
+  timeout_seconds: 1800
+
+# No score-level fallback chain: EVERY movement below declares its instrument
+# and an explicit empty replacement chain. For CLI movements this is the
+# Etiquette Law (tools never fall back to minds). For the relay voices it is
+# the pattern's own constraint — a vendor fallback would launder the claim
+# that identity crossed a vendor boundary. Transient failures are handled by
+# retry (same instrument), never by substitution.
+
+movements:
+  # ── Phase A · Substrate and readiness ────────────────────────────────────
+  1:
+    name: "runtime-build"        # Etiquette Law: package install is deterministic
+    instrument: cli
+    instrument_fallbacks: []
+  2:
+    name: "self-canary"          # Canary Probe: cheapest exposure to every death path
+    instrument: cli
+    instrument_fallbacks: []
+  # ── Phase B · Identity substrate (Stigmergic Workspace begins) ───────────
+  3:
+    name: "tune"                 # Live Relay / Mission Command: identity is intent,
+    instrument: claude-code      # judgment work — the pattern names this instrument
+    instrument_fallbacks: []
+  4:
+    name: "identity-gate"        # Etiquette Law: schema + compactness are mechanical
+    instrument: cli
+    instrument_fallbacks: []
+  # ── Phase C · The relay: five voices, zero shared context ────────────────
+  5:
+    name: "voice-one"            # Live Relay: opening performer
+    instrument: claude-code
+    instrument_fallbacks: []
+  6:
+    name: "voice-two"            # Live Relay: second vendor, continues not restarts
+    instrument: codex-cli
+    instrument_fallbacks: []
+  7:
+    name: "voice-three"          # Live Relay: third vendor — the proof's hard case
+    instrument: opencode
+    instrument_fallbacks: []
+  8:
+    name: "voice-four"           # Live Relay: return engagement, two hands colder
+    instrument: codex-cli
+    instrument_fallbacks: []
+  9:
+    name: "voice-five"           # Live Relay: closing under accumulated state
+    instrument: claude-code
+    instrument_fallbacks: []
+  # ── Phase D · Measurement ────────────────────────────────────────────────
+  10:
+    name: "continuity-gate"      # Live Relay / Closed-Loop Call: the pattern's gate
+    instrument: cli
+    instrument_fallbacks: []
+  11:
+    name: "stylometry"           # Etiquette Law (measurement): drift is arithmetic
+    instrument: cli
+    instrument_fallbacks: []
+  12:
+    name: "assemble"             # Live Relay: the pattern's named assembler,
+    instrument: codex-cli        # caged by a purely mechanical validation
+    instrument_fallbacks: []
+  # ── Phase E · Audio chain (Succession Pipeline, scoped) ──────────────────
+  13:
+    name: "tts-normalize"        # Succession Pipeline: md -> TTS-shaped text
+    instrument: cli
+    instrument_fallbacks: []
+  14:
+    name: "synthesize"           # Succession Pipeline: text -> voice audio
+    instrument: cli
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 3600      # five episodes through a network TTS endpoint
+  15:
+    name: "bed-and-mix"          # Succession Pipeline: ffmpeg generators, not sox
+    instrument: cli              # (ffmpeg installed, sox absent — fit, not taste)
+    instrument_fallbacks: []
+  16:
+    name: "master-and-package"   # Succession Pipeline: loudnorm + chapters + covers
+    instrument: cli
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 3600
+  # ── Phase F · Publication and live proof ─────────────────────────────────
+  17:
+    name: "site-and-repo"        # Etiquette Law: git + gh are API calls
+    instrument: cli
+    instrument_fallbacks: []
+  18:
+    name: "feed-build"           # Etiquette Law: deterministic RSS assembly
+    instrument: cli
+    instrument_fallbacks: []
+  19:
+    name: "deploy-and-wait"      # Dormancy-shaped poll: deployment bound to commit
+    instrument: cli
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 3600      # includes the bounded Pages build poll
+  20:
+    name: "live-gate"            # Proof-Carrying Artifact: the deployed feed answers
+    instrument: cli
+    instrument_fallbacks: []
+  21:
+    name: "evidence-page"        # Proof-Carrying Artifact: ledger + scope, beside art
+    instrument: cli
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 3600      # includes the post-push build wait
+  22:
+    name: "recompute-seal"       # Proof-Carrying Artifact: LIVE FEED bytes re-derive
+    instrument: cli
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 3600      # re-downloads all published audio, with retries
+  23:
+    name: "receipts-harness"     # Exploit Failure as Signal: gates must be failable
+    instrument: cli
+    instrument_fallbacks: []
+  24:
+    name: "terminal-publish"     # Proof-Carrying Artifact: seals public + verified
+    instrument: cli
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 3600      # includes the final build wait + live verification
+
+sheet:
+  size: 1
+  total_items: 24            # pre-expansion; no fan-out anywhere, so 24 sheets
+  dependencies:              # movement-keyed; a single serial chain by design
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+    7: [6]
+    8: [7]
+    9: [8]
+    10: [9]
+    11: [10]
+    12: [11]
+    13: [12]
+    14: [13]
+    15: [14]
+    16: [15]
+    17: [16]
+    18: [17]
+    19: [18]
+    20: [19]
+    21: [20]
+    22: [21]
+    23: [22]
+    24: [23]
+  # Required cadenzas, expanded-sheet-keyed (== movement numbers, no fan-out).
+  # Each voice receives EXACTLY two documents as context: the performance
+  # identity and the incoming packet. Not the other episodes — the relay's
+  # information asymmetry is the experiment's independent variable. (The
+  # isolation is prompt-contractual — see HONESTY CAVEATS — the cadenzas make
+  # the CONTRACT structural, not the impossibility of peeking.)
+  cadenzas:
+    5:
+      - file: "{{ workspace }}/performance-identity.md"
+        as: context
+        required: true
+      - file: "{{ workspace }}/relay-packet-0.yaml"
+        as: context
+        required: true
+    6:
+      - file: "{{ workspace }}/performance-identity.md"
+        as: context
+        required: true
+      - file: "{{ workspace }}/relay-packet-1.yaml"
+        as: context
+        required: true
+    7:
+      - file: "{{ workspace }}/performance-identity.md"
+        as: context
+        required: true
+      - file: "{{ workspace }}/relay-packet-2.yaml"
+        as: context
+        required: true
+    8:
+      - file: "{{ workspace }}/performance-identity.md"
+        as: context
+        required: true
+      - file: "{{ workspace }}/relay-packet-3.yaml"
+        as: context
+        required: true
+    9:
+      - file: "{{ workspace }}/performance-identity.md"
+        as: context
+        required: true
+      - file: "{{ workspace }}/relay-packet-4.yaml"
+        as: context
+        required: true
+  descriptions:
+    1: "Pinned venv (uv, system python base) + digest-pinned offline voice model + freeze receipt"
+    2: "Self-canary — gh identity-as-owner, three relay instruments, jq, both TTS paths, one measured master->encode->ebur128 pass"
+    3: "Tune — performance identity + relay packet 0 under intent envelope"
+    4: "Identity gate — compactness cap, typed packet schema, staged relay gates, rotation/count consistency"
+    5: "Voice one (claude-code) — episode 1 + packet 1"
+    6: "Voice two (codex-cli) — episode 2 + packet 2"
+    7: "Voice three (opencode) — episode 3 + packet 3"
+    8: "Voice four (codex-cli) — episode 4 + packet 4"
+    9: "Voice five (claude-code) — episode 5 + packet 5"
+    10: "Continuity gate — chain 0-5, beats, stepwise motif custody, attribution"
+    11: "Stylometry — z-scored drift table against the pre-registered band"
+    12: "Assemble (codex-cli) — mechanical joins, attribution preserved"
+    13: "TTS normalization — markers stripped from speech text, chapter offsets on spoken words"
+    14: "Synthesize — edge-tts/piper at pinned rates, choice + pauses recorded"
+    15: "Bed and mix — sine bed, per-episode prominence references"
+    16: "Master and package — loudnorm TP -2.0, pause-snapped non-overlapping chapters, covers, loudness receipt"
+    17: "Site and repo — public repo, prior-run guard re-checked at the push, performance.md published"
+    18: "Feed build — RSS 2.0 with byte-exact enclosures + attribution"
+    19: "Deploy and wait — Pages build bound to the pushed commit sha, then live checks"
+    20: "Live gate — the deployed feed answers as a podcatcher sees it"
+    21: "Evidence page — packet chain, drift table, freeze, scripts, scope-and-limits"
+    22: "Recompute seal — LIVE FEED enclosure bytes reproduce the run's numbers"
+    23: "Receipts harness — every gate provably failable on its intended error, zero unexpected passes"
+    24: "Terminal publish — seals pushed, build bound to sha, every seal hash-verified live"
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 30
+
+# CLI movements run silent subprocesses (ffmpeg, uv, git) — stale detection
+# must not kill a healthy mastering pass. Templates echo progress per episode.
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+# cross_sheet: deliberately ABSENT. No template branch references
+# previous_outputs; the relay's context economics are structural (each voice
+# receives exactly two files by required cadenza), and a voice sheet must
+# never see another sheet's stdout — that would puncture the isolation the
+# proof exists to test.
+
+prompt:
+  variables:
+    # Single point of change for the publishing identity.
+    github_owner: "Mzzkc"
+    repo_name: "five-hands-one-voice"
+    n_episodes: 5            # must equal the rotation list length (M4 refuses a mismatch)
+    # Base interpreter — pinned to the SYSTEM python because ambient python3
+    # on a conductor host resolves to Marianne's own venv. Linux FHS path;
+    # change it per host, the movement probes it loudly.
+    system_python: "/usr/bin/python3"
+    # TTS — two independent deterministic executables (dual path because a
+    # network TTS endpoint is this run's single point of death). Rates are
+    # PINNED to the calibration table above: edge at +0% speaks 142-192 wpm
+    # by style; piper at length_scale 1.3 speaks ~189 wpm — both inside the
+    # 135-200 diagnostic band and jointly compatible with the word window.
+    tts_voice: "en-US-AriaNeural"
+    tts_rate: "+0%"
+    piper_model_name: "en_US-lessac-medium"
+    piper_length_scale: "1.3"
+    # Canonical hosting verified 2026-09-03: HuggingFace serves the raw model
+    # pair. Digests measured 2026-09-04 — a replaced upstream file is REFUSED
+    # at movement 1 (source authenticity, not just in-run integrity).
+    piper_voice_base: "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium"
+    piper_onnx_sha256: "5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f"
+    piper_json_sha256: "efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0"
+    # EXP predicates — the listener's experience as numbers, one source.
+    # Window derivation (calibration table): 790 words @ 196 wpm = 242 s;
+    # 960 @ 138 = 417 s. The wpm band is a diagnostic of the measured voice,
+    # not a style gate — the audible contracts are duration and words.
+    dur_lo_s: 240              # 4 minutes
+    dur_hi_s: 420              # 7 minutes
+    wpm_lo: 135
+    wpm_hi: 200
+    words_lo: 790
+    words_hi: 960
+    cold_open_s: 15
+    dead_air_s: 3.0
+    # Acoustic mastering (AES streaming-loudness recommendation). tp_target
+    # feeds loudnorm PRE-encode; tp_ceiling is asserted on the ENCODED file.
+    # aac_bitrate is calibrated: 128k AAC overshoots limited peaks by up to
+    # +2.4 dB; 192k overshoots +0.1 (see the header's calibration table).
+    lufs_target: -16
+    lufs_tol: 2.0
+    tp_target: -2.0
+    tp_ceiling: -1.5
+    lra_target: 11
+    aac_bitrate: "192k"
+    # Identity compactness — the anti-Identity-as-script gate.
+    identity_cap_bytes: 4096
+    identity_min_chars: 400
+    # Music bed: deterministic garnish, pinned in the score (see notes).
+    bed_freqs: [110, 165, 220]
+    bed_gain: 0.055
+    # Covers: flat geometric art from pinned palette (Pillow, no sudo).
+    cover_bg: "#101418"
+    cover_fg: "#e8e4d8"
+    cover_accent: "#c89a4a"
+
+  # The rotation is declared exactly ONCE in this score (single-source rule;
+  # rev 1 hardcoded it in two gate scripts and the movement roster — three
+  # places to forget). Movements 5-9's instruments above must match this list;
+  # movement 4 renders it into every gate script and cross-checks attribution
+  # against it, so a mismatch fails loudly at the first voice gate at the
+  # latest. The episode count must equal its length — movement 4 refuses
+  # anything else before a single creative token is spent.
+  template: |
+    {%- set rotation = ['claude-code', 'codex-cli', 'opencode', 'codex-cli', 'claude-code'] -%}
+    {# ══ House macros — defined once, composed everywhere ═════════════════ #}
+    {% macro strict() %}
+    set -euo pipefail
+    cd "{{ workspace }}"
+    {% endmacro %}
+
+    {% macro packet_schema(beat) %}
+    ### Relay packet contract (machine-checked YAML — get the fields exactly right)
+    - `beat: {{ beat }}` — integer, exactly this value.
+    - `unresolved_motifs:` — list of short non-empty strings; the live threads
+      the next voice must be able to pick up. Non-empty.
+    - `resolved_motifs:` — optional list of non-empty strings; motifs this
+      section deliberately closed. Every motif you resolve must have been
+      open in an earlier packet — resolving a coining-of-your-own fails the
+      gate. (A motif leaves the unresolved set only by appearing here or by
+      surviving into the final packet — nothing vanishes silently.)
+    - `tonal_commitments:` — list of non-empty strings; register, pacing, and
+      sound promises in force for the next voice.
+    - `hazards:` — list of non-empty strings; what would break the
+      performance if ignored.
+    - `continuation_point:` — one substantial paragraph (well over 20
+      characters) naming where the story physically stands and the first
+      playable beat the next voice picks up. A packet that is a synopsis
+      instead of a playable cue is this pattern's first named failure mode.
+
+    Every field must be a LIST OF STRINGS where a list is asked for — a bare
+    string or a number fails the typed schema gate, even if non-empty.
+    {% endmacro %}
+
+    {% macro voice_rules() %}
+    ### Ground rules (Mission Command — outcomes, not methods)
+    - You are one performer in a relay. Two documents accompany this prompt
+      as context: the performance identity and the incoming relay packet.
+      They are your continuity. You cannot see the other episodes — continue
+      from the packet alone; reading ahead would falsify the experiment this
+      serial exists to prove.
+    - CONTINUE the performance; do not restart it. Do not restate the
+      premise beyond what a listener mid-serial needs.
+    - Own your section. You may make irreversible artistic choices inside
+      it. Preserve the identity without imitating any previous voice: the
+      audience should hear variation, not rupture.
+    - CARRY THE CUE (machine-checked): every motif in the incoming packet's
+      `unresolved_motifs` must appear in YOUR outgoing packet — still
+      unresolved, or moved to `resolved_motifs` if your episode genuinely
+      closes it. And at least one incoming unresolved motif must appear BY
+      NAME in your episode text — the gate proves the packet was consumed,
+      not merely re-numbered.
+    - Honor every hazard and tonal commitment in the incoming packet. (The
+      gate cannot read prose for tone; the motifs and the beat are what it
+      can and does verify.)
+    - The quality of the fiction is YOUR authority. Nothing downstream
+      grades taste; the gates measure rupture — continuity, structure,
+      drift — never brilliance.
+    {% endmacro %}
+
+    {% macro episode_output(ep) %}
+    ### Output — exactly two files, nothing else
+    1. `{{ workspace }}/episode-{{ ep }}.md`
+       - Line 1, exactly: `Written by: {{ instrument_name }}`
+       - The episode script in markdown, structured with at least two
+         `## ` chapter headings (scene breaks) — chapters are marked in the
+         audio from these.
+       - Open with a cold open: the first ~40 words must hook a listener
+         within the episode's first 15 seconds of speech.
+       - Final line, exactly: `OPEN QUESTION: <the question this episode
+         leaves ringing>` — it must sit inside the final fifth of the file.
+         (The attribution line and this marker are stripped from the spoken
+         audio — the listener never hears them.)
+       - Total length strictly between {{ words_lo }} and {{ words_hi }}
+         words — this window is calibrated so that spoken at either engine's
+         measured rate the episode lands inside {{ dur_lo_s }}-{{ dur_hi_s }}
+         seconds. It is a listener-experience contract, not a formality.
+    2. `{{ workspace }}/relay-packet-{{ ep }}.yaml` — your outgoing packet:
+    {{ packet_schema(ep) }}
+    {% endmacro %}
+
+    {% if stage == 1 %}
+    {{ strict() }}
+    mkdir -p data voices scripts audio dist
+    command -v uv >/dev/null 2>&1 || { echo "FAIL: uv not on PATH"; exit 1; }
+    test -x "{{ system_python }}" || { echo "FAIL: system_python {{ system_python }} not executable — set the variable for this host (ambient python3 is the conductor's venv, deliberately not used)"; exit 1; }
+    cat > requirements.lock <<'LOCK'
+    numpy>=1.26,<3
+    scipy>=1.11,<2
+    Pillow>=10,<12
+    PyYAML>=6,<7
+    jsonschema>=4,<5
+    edge-tts>=6,<8
+    piper-tts>=1.2,<2
+    defusedxml>=0.7,<1
+    LOCK
+    uv venv --python "{{ system_python }}" --quiet .venv
+    uv pip install --quiet -r requirements.lock --python .venv/bin/python
+    uv pip freeze --python .venv/bin/python > data/requirements.freeze
+    .venv/bin/python -c "import numpy, scipy, PIL, yaml, jsonschema, edge_tts, defusedxml; print('stack importable')"
+    for exe in edge-tts piper; do
+      test -x ".venv/bin/$exe" || { echo "FAIL: .venv/bin/$exe missing"; exit 1; }
+    done
+    # EVERY load-bearing package pinned in the freeze — a resolution that
+    # dropped one of these is not the environment this score was built for.
+    for pkg in numpy scipy Pillow PyYAML jsonschema edge-tts piper-tts defusedxml; do
+      grep -q "^${pkg}==" data/requirements.freeze || { echo "FAIL: freeze missing $pkg pin"; exit 1; }
+    done
+    # Offline voice model — pinned to the DIGESTS measured at composition
+    # time. This is source authenticity: a future upstream replacement at
+    # the same URL is refused here, not silently accepted and sealed (the
+    # in-run MANIFEST re-check at M14 covers transport integrity).
+    curl -sfL --retry 4 --retry-delay 5 "{{ piper_voice_base }}/{{ piper_model_name }}.onnx" -o "voices/{{ piper_model_name }}.onnx"
+    curl -sfL --retry 4 --retry-delay 5 "{{ piper_voice_base }}/{{ piper_model_name }}.onnx.json" -o "voices/{{ piper_model_name }}.onnx.json"
+    echo "{{ piper_onnx_sha256 }}  voices/{{ piper_model_name }}.onnx" | sha256sum -c - \
+      || { echo "FAIL: voice model digest mismatch — upstream changed; re-pin deliberately"; exit 1; }
+    echo "{{ piper_json_sha256 }}  voices/{{ piper_model_name }}.onnx.json" | sha256sum -c - \
+      || { echo "FAIL: voice config digest mismatch — upstream changed; re-pin deliberately"; exit 1; }
+    (cd voices && sha256sum *.onnx *.onnx.json > MANIFEST.sha256)
+    echo "runtime built — frozen resolution:" && cat data/requirements.freeze
+
+    {% elif stage == 2 %}
+    {{ strict() }}
+    mkdir -p canary
+    VENV="{{ workspace }}/.venv"
+    # Identity as owner, not command success: gh works against ANY account;
+    # the mismatch would otherwise surface at M17, after five episodes exist.
+    gh auth status >/dev/null 2>&1 || { echo "FAIL: gh not authenticated — the serial publishes at M17"; exit 1; }
+    gh_user="$(gh api user -q .login)" || { echo "FAIL: gh api user did not answer"; exit 1; }
+    [ "$gh_user" = "{{ github_owner }}" ] || { echo "FAIL: gh is '$gh_user' but the score publishes as {{ github_owner }}"; exit 1; }
+    # Repo collision guard. An EMPTY pre-created repo (someone clicked "new
+    # repository" first) is treated as fresh — a 404 readme is not a foreign
+    # readme. A repo WITH a readme that lacks this score's marker is foreign
+    # and refused; the refusal names the remedy.
+    if gh repo view "{{ github_owner }}/{{ repo_name }}" >/dev/null 2>&1; then
+      b64="$(gh api "repos/{{ github_owner }}/{{ repo_name }}/readme" -q .content 2>/dev/null || true)"
+      if [ -n "$b64" ]; then
+        if ! printf '%s' "$b64" | base64 -d 2>/dev/null | grep -q "Five Hands, One Voice"; then
+          echo "REFUSING: {{ repo_name }} exists, has content, and is not a prior run of this score."
+          echo "Remedy: delete/rename that repo, or point repo_name at a name you own outright."
+          exit 1
+        fi
+      else
+        echo "repo exists but is empty — treating as fresh"
+      fi
+    fi
+    # The three relay instruments — the movements' own claimed scope ("every
+    # death path"): a dead codex-cli credential must die HERE, not at M6
+    # after three LLM sheets.
+    command -v mzt >/dev/null 2>&1 || { echo "FAIL: mzt CLI not on PATH — cannot probe relay instruments"; exit 1; }
+    for inst in claude-code codex-cli opencode; do
+      mzt instruments check "$inst" >/dev/null 2>&1 \
+        || { echo "FAIL: relay instrument '$inst' not ready — seven movements author through it"; exit 1; }
+    done
+    # jq is load-bearing at M14; probe it now, not by host luck.
+    command -v jq >/dev/null 2>&1 || { echo "FAIL: jq not on PATH (load-bearing at M14)"; exit 1; }
+    # TTS path A — network endpoint, at the pinned rate
+    "$VENV/bin/edge-tts" --voice "{{ tts_voice }}" --rate="{{ tts_rate }}" --text "Relay canary. One voice, five hands." --write-media canary/edge.audio \
+      || { echo "FAIL: edge-tts path dead"; exit 1; }
+    # TTS path B — offline model, at the pinned length scale
+    printf '%s\n' "Relay canary. One voice, five hands." \
+      | "$VENV/bin/piper" --model "voices/{{ piper_model_name }}.onnx" --length_scale "{{ piper_length_scale }}" --output_file canary/piper.wav \
+      || { echo "FAIL: piper path dead"; exit 1; }
+    for f in canary/edge.audio canary/piper.wav; do
+      d="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")"
+      awk -v d="$d" 'BEGIN { exit !(d >= 1.0) }' || { echo "FAIL: $f too short (${d}s)"; exit 1; }
+    done
+    # One REAL landing pass: canary audio through the exact TWO-PASS
+    # master->encode->measure chain M16 uses (measure with print_format=json,
+    # re-apply with the measured values, encode, parse the ebur128 summary).
+    # This proves the chain LANDS in the band on real TTS bytes, not merely
+    # that the filter parses (rev 1's null-output pass proved nothing).
+    "$VENV/bin/python" - <<'PY'
+    import json, re, subprocess
+    from pathlib import Path
+    I_T, TP_C, LRA_T = {{ lufs_target }}, {{ tp_ceiling }}, {{ lra_target }}
+    def dur(p):
+        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                              "-of", "csv=p=0", p], capture_output=True, text=True)
+        return float(out.stdout.strip())
+    def cap(args):
+        r = subprocess.run(args, capture_output=True, text=True)
+        assert r.returncode == 0, (args[:3], r.stderr[-300:])
+        return r
+    r = cap(["ffmpeg", "-hide_banner", "-nostats", "-i", "canary/edge.audio",
+             "-af", "loudnorm=I=%d:TP=%.1f:LRA=%d:print_format=json" % (I_T, {{ tp_target }}, LRA_T),
+             "-f", "null", "-"])
+    m = re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", r.stderr, re.S)
+    assert m, "loudnorm measurement JSON missing"
+    d = json.loads(m.group(0))
+    af = ("loudnorm=I=%d:TP=%.1f:LRA=%d:measured_I=%s:measured_TP=%s:measured_LRA=%s:measured_thresh=%s"
+          % (I_T, {{ tp_target }}, LRA_T, d["input_i"], d["input_tp"], d["input_lra"], d["input_thresh"]))
+    cap(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", "canary/edge.audio",
+         "-af", af, "-ar", "44100", "-c:a", "aac", "-b:a", "{{ aac_bitrate }}", "canary/encoded.m4a"])
+    def ebur128_summary(p):
+        r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", p,
+                            "-filter_complex", "ebur128=peak=true", "-f", "null", "-"],
+                           capture_output=True, text=True)
+        log = r.stderr
+        i = re.search(r"Integrated loudness:\s*\n\s*I:\s+(-?\d+\.?\d*)\s*LUFS", log)
+        tp = re.search(r"True peak:\s*\n\s*Peak:\s+(-?\d+\.?\d*)\s*dBFS", log)
+        assert i and tp, "ebur128 summary missing for " + p
+        return float(i.group(1)), float(tp.group(1))
+    lufs, tp = ebur128_summary("canary/encoded.m4a")
+    report = {
+        "gh_user": "{{ github_owner }}",
+        "repo": "{{ github_owner }}/{{ repo_name }}",
+        "instruments": {"claude-code": "ready", "codex-cli": "ready", "opencode": "ready"},
+        "jq": "ready",
+        "edge_tts": {"ok": True, "duration_s": dur("canary/edge.audio")},
+        "piper": {"ok": True, "duration_s": dur("canary/piper.wav")},
+        "master_landing": {"ok": True, "method": "two-pass", "lufs": lufs, "true_peak_dbfs": tp},
+    }
+    assert abs(lufs - I_T) <= {{ lufs_tol }}, "canary master landed %.1f LUFS" % lufs
+    assert tp <= {{ tp_ceiling }}, "canary master landed %.2f dBTP" % tp
+    Path("canary-report.json").write_text(json.dumps(report, indent=2))
+    print("canary report:", json.dumps(report))
+    PY
+    echo "self-canary ok — identity, instruments, jq, both TTS paths, measured landing"
+
+    {% elif stage == 3 %}
+    ## Movement 3 — tune ({{ instrument_name }}). Live Relay / Mission Command.
+    You are the tuning performer. Your judgment work: author the performance
+    identity for a five-episode serialized audio drama, plus the first relay
+    packet. You are the only writer this run who sees the whole intent; every
+    later voice sees only what you leave on disk.
+
+    ### Commander's intent (this is intent, NOT a plot — do not script episodes)
+    - PURPOSE: prove that a serial's living identity can be carried by
+      workspace artifacts across three vendors with zero shared context, and
+      publish the result as a subscribable podcast with its evidence ledger.
+    - END STATE: a listener experiences one continuing work — one voice, one
+      story, accumulating motifs — across five episodes written by different
+      instruments; a skeptic can audit the claim from published bytes alone.
+    - CONSTRAINTS: the serial must be original work in a world of your
+      choosing; it must not imitate any real person, any living artist's
+      voice, or any existing series; every episode will be credited openly
+      to the instrument that wrote it, so the fiction must stand honestly
+      under machine attribution.
+
+    ### What the identity carries (and no more)
+    - The serial's title (`# ` heading) and a one-paragraph premise.
+    - The narrator's voice: diction, register, rhythm — described precisely
+      enough that a stranger can continue it, loosely enough to breathe.
+    - Tonal commitments in force for the whole serial.
+    - Forbidden breaks: what must never happen for continuity to hold.
+    - Open motifs at beat 0: the seeds later episodes grow and pay off.
+    The identity is COMPACT by contract — at most {{ identity_cap_bytes }}
+    bytes and at least {{ identity_min_chars }} characters. A script-length
+    identity is Identity-as-script, this pattern's named failure, and the
+    gate refuses it. Do not outline, summarize, or plan any episode.
+
+    ### Output — exactly two files, nothing else
+    1. `{{ workspace }}/performance-identity.md` — markdown, at least
+       {{ identity_min_chars }} characters, at most {{ identity_cap_bytes }}
+       bytes, opening with `# <title>`.
+    2. `{{ workspace }}/relay-packet-0.yaml`:
+    {{ packet_schema(0) }}
+
+    {% elif stage == 4 %}
+    {{ strict() }}
+    # Gate scripts land in the workspace, are executed here, reused by every
+    # relay sheet's validation, published to the repo at M17, and corrupted
+    # on purpose at M23 — one script corpus, four lives. The rotation is
+    # rendered from the template's single declaration, and the episode count
+    # must equal its length before any creative token is spent.
+    .venv/bin/python -c "R = {{ rotation }}; assert len(R) == {{ n_episodes }}, 'rotation has %d hands but n_episodes is {{ n_episodes }} — fix the pair together' % len(R); print('rotation/count consistent:', R)"
+    cat > scripts/check_identity.py <<'PY'
+    import json, sys
+    from pathlib import Path
+    import yaml
+    ws = Path(sys.argv[1])
+    CAP = int(sys.argv[2]); MINC = int(sys.argv[3])
+    report = {"checks": []}
+    def chk(name, ok, detail=""):
+        report["checks"].append({"check": name, "ok": bool(ok), "detail": str(detail)})
+    def typed(p):
+        if not isinstance(p, dict):
+            return False
+        for k in ("unresolved_motifs", "tonal_commitments", "hazards"):
+            v = p.get(k)
+            if not (isinstance(v, list) and v and all(isinstance(x, str) and x.strip() for x in v)):
+                return False
+        r = p.get("resolved_motifs")
+        if r is not None and not (isinstance(r, list) and all(isinstance(x, str) and x.strip() for x in r)):
+            return False
+        return (isinstance(p.get("continuation_point"), str)
+                and len(p["continuation_point"].strip()) >= 20)
+    ident = ws / "performance-identity.md"
+    pkt = ws / "relay-packet-0.yaml"
+    text = ident.read_text(encoding="utf-8") if ident.exists() else ""
+    chk("identity exists", ident.exists())
+    chk("identity min chars (%d)" % MINC, len(text.strip()) >= MINC, "%d chars" % len(text.strip()))
+    chk("identity compact (<= %d bytes)" % CAP, ident.exists() and ident.stat().st_size <= CAP,
+        "%d bytes" % (ident.stat().st_size if ident.exists() else -1))
+    chk("identity opens with title heading", text.lstrip().startswith("# "))
+    p = yaml.safe_load(pkt.read_text()) if pkt.exists() else None
+    chk("packet-0 parses as YAML mapping", isinstance(p, dict))
+    if isinstance(p, dict):
+        chk("beat == 0", p.get("beat") == 0, repr(p.get("beat")))
+        chk("packet fields typed (lists of non-empty strings; substantial continuation)", typed(p))
+    report["ok"] = all(c["ok"] for c in report["checks"])
+    (ws / "identity-verdict.json").write_text(json.dumps(report, indent=2))
+    print("identity gate:", "PASS" if report["ok"] else "FAIL")
+    for c in report["checks"]:
+        if not c["ok"]:
+            print("  FAIL:", c["check"], "-", c["detail"])
+    sys.exit(0 if report["ok"] else 1)
+    PY
+    cat > scripts/check_episode.py <<'PY'
+    import json, sys
+    from pathlib import Path
+    import yaml
+    ws = Path(sys.argv[1]); n = int(sys.argv[2])
+    LO = int(sys.argv[3]); HI = int(sys.argv[4])
+    ROTATION = {{ rotation }}
+    N = {{ n_episodes }}
+    EXPECTED = dict(zip(range(5, 5 + N), ROTATION))
+    ep = n - 4
+    report = {"episode": ep, "instrument": EXPECTED.get(n), "checks": []}
+    def chk(name, ok, detail=""):
+        report["checks"].append({"check": name, "ok": bool(ok), "detail": str(detail)})
+    def typed(p):
+        if not isinstance(p, dict):
+            return False
+        for k in ("unresolved_motifs", "tonal_commitments", "hazards"):
+            v = p.get(k)
+            if not (isinstance(v, list) and v and all(isinstance(x, str) and x.strip() for x in v)):
+                return False
+        r = p.get("resolved_motifs")
+        if r is not None and not (isinstance(r, list) and all(isinstance(x, str) and x.strip() for x in r)):
+            return False
+        return (isinstance(p.get("continuation_point"), str)
+                and len(p["continuation_point"].strip()) >= 20)
+    path = ws / ("episode-%d.md" % ep)
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    words = text.split()
+    first = text.strip().splitlines()[0].strip() if text.strip() else ""
+    chk("episode file exists", path.exists())
+    chk("line 1 attribution is Written by: " + str(EXPECTED.get(n)),
+        first == ("Written by: %s" % EXPECTED.get(n)), first[:80])
+    chk("word window [%d, %d] (calibrated: any engine/style lands %.0f-%.0f s)"
+        % (LO, HI, LO / 200.0 * 60, HI / 135.0 * 60),
+        LO <= len(words) <= HI, "%d words" % len(words))
+    chk("at least two chapter headings",
+        sum(1 for ln in text.splitlines() if ln.startswith("## ")) >= 2)
+    pos = text.find("OPEN QUESTION:")
+    chk("OPEN QUESTION marker present", pos >= 0)
+    if pos >= 0:
+        frac = pos / max(1, len(text))
+        chk("open question in final fifth", frac >= 0.80, "at %.3f of file" % frac)
+    pkt = ws / ("relay-packet-%d.yaml" % ep)
+    p = yaml.safe_load(pkt.read_text()) if pkt.exists() else None
+    chk("packet-%d parses as YAML mapping" % ep, isinstance(p, dict))
+    if isinstance(p, dict):
+        chk("beat == %d" % ep, p.get("beat") == ep, repr(p.get("beat")))
+        chk("packet fields typed", typed(p))
+    inc_path = ws / ("relay-packet-%d.yaml" % (ep - 1))
+    inc = yaml.safe_load(inc_path.read_text()) if inc_path.exists() else None
+    chk("incoming packet-%d present (stop, never infer)" % (ep - 1), isinstance(inc, dict))
+    if isinstance(inc, dict) and isinstance(p, dict):
+        inc_unres = [str(m) for m in (inc.get("unresolved_motifs") or [])]
+        out_unres = [str(m) for m in (p.get("unresolved_motifs") or [])]
+        out_res = [str(m) for m in (p.get("resolved_motifs") or [])]
+        carried = set(out_unres) | set(out_res)
+        dropped = [m for m in inc_unres if m not in carried]
+        chk("stepwise handoff: every incoming motif carried (unresolved or resolved)",
+            not dropped, "dropped: %s" % repr(dropped[:3]))
+        hits = [m for m in inc_unres if m.lower() in text.lower()]
+        chk("closed-loop pickup: an incoming motif appears by name in the episode",
+            len(hits) >= 1, "incoming motifs found in text: %s" % repr(hits[:2]))
+    report["ok"] = all(c["ok"] for c in report["checks"])
+    print("episode %d gate:" % ep, "PASS" if report["ok"] else "FAIL")
+    for c in report["checks"]:
+        if not c["ok"]:
+            print("  FAIL:", c["check"], "-", c["detail"])
+    sys.exit(0 if report["ok"] else 1)
+    PY
+    .venv/bin/python scripts/check_identity.py "{{ workspace }}" {{ identity_cap_bytes }} {{ identity_min_chars }}
+    .venv/bin/python -c "import ast; [ast.parse(open('scripts/' + f).read()) for f in ('check_identity.py', 'check_episode.py')]; print('gate scripts parse')"
+    echo "identity admitted; typed episode gate staged for the relay"
+
+    {% elif stage >= 5 and stage <= 9 %}
+    ## Movement {{ stage }} — voice {{ stage - 4 }} of 5 ({{ instrument_name }}).
+    ## Live Relay: one section, one voice, one outgoing cue.
+    {{ voice_rules() }}
+    {{ episode_output(stage - 4) }}
+
+    {% elif stage == 10 %}
+    {{ strict() }}
+    # The pattern's own named gate. Missing beat => stop, never infer. Motif
+    # custody is STEPWISE (rev 1's global-set check let a motif vanish for
+    # three packets and reappear): every motif unresolved in packet i must be
+    # carried by packet i+1, and a resolved motif must have been open before.
+    cat > scripts/check_relay.py <<'PY'
+    import hashlib, json, sys
+    from pathlib import Path
+    import yaml
+    ws = Path(sys.argv[1])
+    ROTATION = {{ rotation }}
+    N = {{ n_episodes }}
+    report = {"checks": []}
+    def chk(name, ok, detail=""):
+        report["checks"].append({"check": name, "ok": bool(ok), "detail": str(detail)})
+    def typed(p):
+        if not isinstance(p, dict):
+            return False
+        for k in ("unresolved_motifs", "tonal_commitments", "hazards"):
+            v = p.get(k)
+            if not (isinstance(v, list) and v and all(isinstance(x, str) and x.strip() for x in v)):
+                return False
+        r = p.get("resolved_motifs")
+        if r is not None and not (isinstance(r, list) and all(isinstance(x, str) and x.strip() for x in r)):
+            return False
+        return (isinstance(p.get("continuation_point"), str)
+                and len(p["continuation_point"].strip()) >= 20)
+    packets = []
+    for i in range(0, N + 1):
+        path = ws / ("relay-packet-%d.yaml" % i)
+        if not path.exists():
+            chk("packet-%d exists" % i, False)
+            packets.append(None)
+            continue
+        raw = path.read_bytes()
+        p = yaml.safe_load(raw.decode("utf-8"))
+        packets.append((i, p, hashlib.sha256(raw).hexdigest()))
+        chk("packet-%d parses" % i, isinstance(p, dict))
+        if isinstance(p, dict):
+            chk("packet-%d beat == %d" % (i, i), p.get("beat") == i, repr(p.get("beat")))
+            chk("packet-%d fields typed" % i, typed(p))
+    present = [t for t in packets if t is not None]
+    chk("packet chain complete 0..%d" % N, len(present) == N + 1, "%d packets" % len(present))
+    beats = [p.get("beat") for _, p, _ in present if isinstance(p, dict)]
+    chk("beats strictly monotonic 0..%d" % N, beats == list(range(0, N + 1)), repr(beats))
+    attrib = []
+    for i in range(1, N + 1):
+        path = ws / ("episode-%d.md" % i)
+        line = ""
+        if path.exists():
+            lines = path.read_text(encoding="utf-8").strip().splitlines()
+            line = lines[0].strip() if lines else ""
+        attrib.append(line)
+        chk("episode-%d attributed to %s" % (i, ROTATION[i - 1]),
+            line == ("Written by: %s" % ROTATION[i - 1]), line[:80])
+    if len(present) == N + 1:
+        stepwise_bad = []
+        for i in range(0, N):
+            inc = packets[i][1]
+            out = packets[i + 1][1]
+            if not (isinstance(inc, dict) and isinstance(out, dict)):
+                continue
+            out_carried = (set(str(m) for m in (out.get("unresolved_motifs") or []))
+                           | set(str(m) for m in (out.get("resolved_motifs") or [])))
+            for m in (str(x) for x in (inc.get("unresolved_motifs") or [])):
+                if m not in out_carried:
+                    stepwise_bad.append((i, i + 1, m))
+        chk("stepwise motif custody at every handoff 0->%d" % N, not stepwise_bad,
+            "violations: %s" % repr(stepwise_bad[:3]))
+        known = set()
+        resolved_unknown = []
+        resolved_all = set()
+        for i in range(0, N + 1):
+            p = packets[i][1]
+            if not isinstance(p, dict):
+                continue
+            for m in (str(x) for x in (p.get("resolved_motifs") or [])):
+                resolved_all.add(m)
+                if i > 0 and m not in known:
+                    resolved_unknown.append((i, m))
+            for m in (str(x) for x in (p.get("unresolved_motifs") or [])):
+                known.add(m)
+        chk("resolved motifs reference previously open motifs", not resolved_unknown,
+            "unknown resolutions: %s" % repr(resolved_unknown[:3]))
+    report["ok"] = all(c["ok"] for c in report["checks"])
+    ledger = {
+        "episodes": [{"episode": i + 1, "instrument": ROTATION[i], "attribution": attrib[i]}
+                     for i in range(N)],
+        "attribution_basis": ("engine instrument_name prompt line, cross-checked against the "
+                              "score-declared rotation; not independent provenance of authorship"),
+        "packets": [{"packet": i, "beat": (p.get("beat") if isinstance(p, dict) else None),
+                     "sha256": h} for i, p, h in [t for t in packets if t is not None]],
+        "resolved_motifs": sorted(resolved_all) if len(present) == N + 1 else [],
+        "final_unresolved_motifs": (sorted(str(m) for m in (packets[N][1].get("unresolved_motifs") or []))
+                                    if len(present) == N + 1 and isinstance(packets[N][1], dict) else []),
+    }
+    (ws / "continuity-verdict.json").write_text(json.dumps(report, indent=2))
+    (ws / "relay-ledger.json").write_text(json.dumps(ledger, indent=2))
+    print("continuity gate:", "PASS" if report["ok"] else "FAIL")
+    for c in report["checks"]:
+        if not c["ok"]:
+            print("  FAIL:", c["check"], "-", c["detail"])
+    sys.exit(0 if report["ok"] else 1)
+    PY
+    .venv/bin/python scripts/check_relay.py "{{ workspace }}"
+
+    {% elif stage == 11 %}
+    {{ strict() }}
+    # The pre-registered band: max cross-vendor adjacent drift <= max
+    # intra-episode baseline drift, over z-scored signatures (features
+    # standardized across the episode corpus — Burrows' own normalization;
+    # rev 1's raw absolute distances were uncalibrated). Intra halves are the
+    # baseline precisely so flattening one's own voice into generic prose
+    # does not pass. This is a rupture detector, and says so in its output.
+    cat > scripts/stylometry.py <<'PY'
+    import json, re, statistics, sys
+    from pathlib import Path
+    import numpy as np
+    ws = Path(sys.argv[1])
+    N = {{ n_episodes }}
+    FUNC = ["the", "and", "of", "to", "in", "a", "it", "that", "was", "is", "he",
+            "she", "for", "on", "with", "as", "her", "his", "at", "but", "not",
+            "this", "there", "from", "they", "which", "one", "all", "would",
+            "so", "even", "into", "than", "when", "what", "up", "out", "if",
+            "no", "then"]
+    def signature(text):
+        words = re.findall(r"[A-Za-z']+", text.lower())
+        n = max(1, len(words))
+        freqs = [words.count(w) / n for w in FUNC]
+        sents = [len(re.findall(r"[A-Za-z']+", s)) for s in re.split(r"[.!?\n]+", text) if s.strip()]
+        mean = statistics.mean(sents) if sents else 0.0
+        std = statistics.pstdev(sents) if len(sents) > 1 else 0.0
+        ttr = len(set(words)) / n
+        punct = (text.count(",") + text.count(";") + text.count(":")) / max(1, len(text)) * 100.0
+        return np.array(freqs + [mean / 30.0, std / 30.0, ttr, punct / 10.0], dtype=float)
+    eps = [(ws / ("episode-%d.md" % i)).read_text(encoding="utf-8") for i in range(1, N + 1)]
+    sigs = [signature(t) for t in eps]
+    A = np.array(sigs)
+    mu = A.mean(axis=0)
+    sd = np.maximum(A.std(axis=0), 1e-3)
+    def z(s):
+        return (s - mu) / sd
+    def dist(a, b):
+        return float(np.abs(a - b).sum())
+    zsigs = [z(s) for s in sigs]
+    intra = []
+    for t in eps:
+        w = t.split()
+        mid = len(w) // 2
+        intra.append(dist(z(signature(" ".join(w[:mid]))), z(signature(" ".join(w[mid:])))))
+    cross = [dist(zsigs[i], zsigs[i + 1]) for i in range(N - 1)]
+    ok = max(cross) <= max(intra)
+    table = {
+        "band": "max cross-vendor adjacent-episode drift <= max intra-episode baseline drift",
+        "method": "Manhattan distance over function-word/rhythm signatures, z-scored across the episode corpus (Burrows-delta-lite); rupture detector, not listener-experience proof; n=%d episodes" % N,
+        "features_zscored": True,
+        "intra_episode_baseline": [round(x, 6) for x in intra],
+        "cross_vendor_adjacent": [round(x, 6) for x in cross],
+        "max_intra": round(max(intra), 6),
+        "max_cross": round(max(cross), 6),
+        "verdict": "PASS" if ok else "FAIL",
+    }
+    (ws / "drift-table.json").write_text(json.dumps(table, indent=2))
+    lines = ["# Voice-drift table (Burrows-delta-lite, z-scored)", "",
+             "Band (pre-registered): " + table["band"], "",
+             "Method: " + table["method"], "",
+             "| measure | value |", "|---|---|"]
+    for i, x in enumerate(intra, 1):
+        lines.append("| intra-episode %d baseline | %.6f |" % (i, x))
+    for i, x in enumerate(cross, 1):
+        lines.append("| cross-vendor episodes %d-%d | %.6f |" % (i, i + 1, x))
+    lines += ["", "max intra %.6f / max cross %.6f -> %s"
+              % (table["max_intra"], table["max_cross"], table["verdict"])]
+    (ws / "drift-table.md").write_text("\n".join(lines) + "\n")
+    print("stylometry:", table["verdict"], "cross", table["max_cross"], "<= intra", table["max_intra"])
+    sys.exit(0 if ok else 1)
+    PY
+    .venv/bin/python scripts/stylometry.py "{{ workspace }}"
+
+    {% elif stage == 12 %}
+    ## Movement 12 — assemble ({{ instrument_name }}). Live Relay's assembler.
+    Join the five admitted episodes into the audience-facing reading whole.
+
+    ### What you may do (mechanical joins only)
+    - Read the five episode scripts at `{{ workspace }}/episode-1.md` through
+      `episode-5.md`, and the admission verdict at
+      `{{ workspace }}/continuity-verdict.json` (admitted means its
+      `"ok"` is true).
+    - Produce exactly one file, `{{ workspace }}/performance.md`:
+      - A title section: the serial's title, a two-sentence blurb, and a
+        credits table crediting each episode to the instrument that wrote
+        it (copy each `Written by:` line verbatim).
+      - Then each episode in order, each preceded by a `## Episode N —
+        <short chapter title you may compose>` heading followed by the
+        episode's attribution line, then the episode's text VERBATIM —
+        every paragraph unchanged, word for word.
+      - A closing credits section noting that five instruments across three
+        vendors authored the serial in relay, with the drift table summary.
+    - `performance.md` is PUBLISHED: it lands in the repo's evidence
+      directory at movement 17 and is linked from the deployed site. You are
+      assembling the reading artifact of record, not a scratch file.
+
+    ### What you may NOT do (voice laundering is detectable by construction)
+    - Do not reword, trim, extend, or "smooth" any episode paragraph.
+    - Do not merge paragraphs or normalize spelling and punctuation.
+    The validation checks that every episode paragraph appears verbatim in
+    your assembly; any reworded sentence fails the movement. You are a
+    bookbinder, not an editor — if broad editorial transformation were the
+    job, this would not be a relay.
+
+    {% elif stage == 13 %}
+    {{ strict() }}
+    # The spoken text must not speak the machinery: the attribution line and
+    # the OPEN QUESTION marker are TEXT contracts (checked at the episode
+    # gate), never speech. Rev 1's normalizer read the byline aloud at the
+    # top of every episode — the cold-open contract died on the first
+    # spoken word. Marker words are excluded from the round-trip count so
+    # the gate measures normalization, not amputation.
+    cat > scripts/normalize_tts.py <<'PY'
+    import json, re, sys
+    from pathlib import Path
+    ws = Path(sys.argv[1])
+    N = {{ n_episodes }}
+    for i in range(1, N + 1):
+        src = (ws / ("episode-%d.md" % i)).read_text(encoding="utf-8")
+        lines = src.splitlines()
+        if lines and lines[0].startswith("Written by:"):
+            lines = lines[1:]
+        oq_idx = [k for k, ln in enumerate(lines) if ln.startswith("OPEN QUESTION:")]
+        if oq_idx:
+            k = oq_idx[-1]
+            lines = lines[:k] + lines[k + 1:]
+        cleaned = "\n".join(lines)
+        expected_words = len(cleaned.split())
+        parts = re.split(r"^##\s+(.+)$", cleaned, flags=re.M)
+        chapters = []
+        body = parts[0]
+        offset = len(parts[0].split())
+        if parts[0].strip():
+            chapters.append({"chapter": "Cold open", "word_offset": 0})
+        for j in range(1, len(parts), 2):
+            title = parts[j].strip()
+            seg = parts[j + 1] if j + 1 < len(parts) else ""
+            chapters.append({"chapter": title, "word_offset": offset})
+            offset += 1 + len(seg.split())
+            body += "\n\n" + title + ".\n" + seg
+        text = re.sub(r"[*_`>#]", "", body)
+        text = re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
+        low = text.lower()
+        assert "written by:" not in low, "episode %d: attribution would be SPOKEN" % i
+        assert "open question:" not in low, "episode %d: marker would be SPOKEN" % i
+        out = ws / "audio"
+        out.mkdir(exist_ok=True)
+        (out / ("episode-%d.txt" % i)).write_text(text, encoding="utf-8")
+        (out / ("episode-%d.chapters.json" % i)).write_text(json.dumps(chapters, indent=2))
+        after = len(text.split())
+        if abs(after - expected_words) > 0.03 * max(1, expected_words):
+            print("FAIL: episode %d spoken-word drift %d -> %d" % (i, expected_words, after))
+            sys.exit(1)
+        print("episode %d: %d chapters, %d spoken words (markers stripped)" % (i, len(chapters), after))
+    PY
+    .venv/bin/python scripts/normalize_tts.py "{{ workspace }}"
+
+    {% elif stage == 14 %}
+    {{ strict() }}
+    # Voice-model integrity from M1's manifest, then synthesis at PINNED
+    # rates (calibration table): edge-tts at {{ tts_rate }}, piper at
+    # length_scale {{ piper_length_scale }} — both engines speak inside the
+    # 135-200 wpm diagnostic band and jointly honor the 790-960 word window.
+    # Output naming makes no container claim (edge emits MP3 bytes, piper
+    # WAV; ffprobe sniffs content — rev 1 named every file .wav and lied for
+    # one engine). The TTS fallback here is TOOL-to-TOOL (two deterministic
+    # executables), with the per-episode choice recorded — never an AI
+    # fallback. Speech pauses are recorded per episode for chapter snapping.
+    (cd voices && sha256sum -c MANIFEST.sha256 >/dev/null) || { echo "FAIL: voice model integrity"; exit 1; }
+    VENV="{{ workspace }}/.venv"
+    cat > scripts/check_audio.py <<'PY'
+    import re, subprocess, sys
+    wav, txt = sys.argv[1], sys.argv[2]
+    DEAD, COLD = float(sys.argv[3]), float(sys.argv[4])
+    DLO, DHI = float(sys.argv[5]), float(sys.argv[6])
+    WLO, WHI = float(sys.argv[7]), float(sys.argv[8])
+    def probe_duration(p):
+        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                              "-of", "csv=p=0", p], capture_output=True, text=True)
+        return float(out.stdout.strip())
+    def has_audio_stream(p):
+        out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a",
+                              "-show_entries", "stream=codec_type", "-of", "csv=p=0", p],
+                             capture_output=True, text=True)
+        return "audio" in out.stdout
+    dur = probe_duration(wav)
+    words = len(open(txt, encoding="utf-8").read().split())
+    wpm = words / dur * 60.0 if dur > 0 else 0.0
+    assert has_audio_stream(wav), "no audio stream in " + wav
+    assert DLO <= dur <= DHI, "duration %.1fs outside [%s, %s]" % (dur, DLO, DHI)
+    assert WLO <= wpm <= WHI, "speech rate %.0f wpm outside [%s, %s]" % (wpm, WLO, WHI)
+    out = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", wav,
+                          "-af", "silencedetect=noise=-50dB:d=%.2f" % DEAD, "-f", "null", "-"],
+                         capture_output=True, text=True)
+    log = out.stderr + out.stdout
+    starts = [float(m) for m in re.findall(r"silence_start: ([0-9.]+)", log)]
+    ends = [float(m) for m in re.findall(r"silence_end: ([0-9.]+)", log)]
+    first_speech = ends[0] if (starts and ends and starts[0] <= 0.5) else 0.0
+    assert first_speech <= COLD, "first speech at %.1fs (cold-open ceiling %ss)" % (first_speech, COLD)
+    for s, e in zip(starts, ends):
+        if s > first_speech + 1.0 and e < dur - 1.0 and (e - s) > DEAD:
+            raise AssertionError("mid-episode dead air %.1fs at t=%.1f" % (e - s, s))
+    print("audio ok: %.1fs, %.0f wpm, first speech %.1fs" % (dur, wpm, first_speech))
+    PY
+    cat > scripts/detect_pauses.py <<'PY'
+    import json, re, subprocess, sys
+    from pathlib import Path
+    wav, dest, min_d = sys.argv[1], sys.argv[2], float(sys.argv[3])
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", wav,
+                        "-af", "silencedetect=noise=-50dB:d=%.2f" % min_d, "-f", "null", "-"],
+                       capture_output=True, text=True)
+    log = r.stderr + r.stdout
+    starts = [float(m) for m in re.findall(r"silence_start: ([0-9.]+)", log)]
+    ends = [float(m) for m in re.findall(r"silence_end: ([0-9.]+)", log)]
+    spans = [[a, b] for a, b in zip(starts, ends)]
+    Path(dest).write_text(json.dumps(spans, indent=2))
+    print("pauses: %d spans >= %.1fs" % (len(spans), min_d))
+    PY
+    echo "[]" > audio/tts-choices.json
+    for n in $(seq 1 {{ n_episodes }}); do
+      if "$VENV/bin/edge-tts" --voice "{{ tts_voice }}" --rate="{{ tts_rate }}" --file "audio/episode-$n.txt" --write-media "audio/episode-$n.voice.audio" >/dev/null 2>&1; then
+        engine="edge-tts"
+      elif "$VENV/bin/piper" --model "voices/{{ piper_model_name }}.onnx" --length_scale "{{ piper_length_scale }}" --output_file "audio/episode-$n.voice.audio" < "audio/episode-$n.txt" >/dev/null 2>&1; then
+        engine="piper"
+      else
+        echo "FAIL: both TTS paths died on episode $n"; exit 1
+      fi
+      jq --argjson e "$n" --arg t "$engine" '. += [{episode: $e, engine: $t}]' audio/tts-choices.json > audio/tts-choices.tmp && mv audio/tts-choices.tmp audio/tts-choices.json
+      .venv/bin/python scripts/check_audio.py "audio/episode-$n.voice.audio" "audio/episode-$n.txt" {{ dead_air_s }} {{ cold_open_s }} {{ dur_lo_s }} {{ dur_hi_s }} {{ wpm_lo }} {{ wpm_hi }}
+      .venv/bin/python scripts/detect_pauses.py "audio/episode-$n.voice.audio" "audio/episode-$n.pauses.json" 0.6
+      d="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "audio/episode-$n.voice.audio")"
+      echo "episode $n synthesized via $engine (${d}s), pauses recorded"
+    done
+    test "$(jq length audio/tts-choices.json)" -eq {{ n_episodes }}
+    echo "synthesis complete — per-episode engine choices recorded"
+
+    {% elif stage == 15 %}
+    {{ strict() }}
+    # Bed synthesized with ffmpeg's own generators — fit, not taste: ffmpeg is
+    # installed, sox is not, and an apt dependency would buy nothing. A bed
+    # reference is rendered PER EPISODE (rev 1 measured episode 1 and
+    # extrapolated — but each episode's synthesized voice has its own level,
+    # so the prominence relation is checked for every episode, not inferred).
+    VENV="{{ workspace }}/.venv"
+    for n in $(seq 1 {{ n_episodes }}); do
+      d="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "audio/episode-$n.voice.audio")"
+      fade_out="$("$VENV/bin/python" -c "print(max(0.0, float('$d') - 3.0))")"
+      ffmpeg -hide_banner -loglevel error -y \
+        -i "audio/episode-$n.voice.audio" \
+        -f lavfi -i "sine=frequency={{ bed_freqs[0] }}:duration=$d" \
+        -f lavfi -i "sine=frequency={{ bed_freqs[1] }}:duration=$d" \
+        -f lavfi -i "sine=frequency={{ bed_freqs[2] }}:duration=$d" \
+        -filter_complex "[1:a][2:a][3:a]amix=inputs=3:normalize=0,volume={{ bed_gain }},afade=t=in:d=3,afade=t=out:st=$fade_out:d=3[bed];[0:a][bed]amix=inputs=2:duration=first:normalize=0[out]" \
+        -map "[out]" -ar 44100 "audio/episode-$n.mixed.wav"
+      ffmpeg -hide_banner -loglevel error -y \
+        -f lavfi -i "sine=frequency={{ bed_freqs[0] }}:duration=$d" \
+        -f lavfi -i "sine=frequency={{ bed_freqs[1] }}:duration=$d" \
+        -f lavfi -i "sine=frequency={{ bed_freqs[2] }}:duration=$d" \
+        -filter_complex "[0:a][1:a][2:a]amix=inputs=3:normalize=0,volume={{ bed_gain }},afade=t=in:d=3,afade=t=out:st=$fade_out:d=3[out]" \
+        -map "[out]" -ar 44100 "audio/episode-$n.bed.wav"
+      echo "episode $n mixed with its bed reference"
+    done
+
+    {% elif stage == 16 %}
+    {{ strict() }}
+    # Mastering, rev 2, from measured evidence: two-pass loudnorm lands the
+    # pre-encode WAV at exactly the TP target, but 128k AAC reconstruction
+    # overshoots limited speech+bed peaks by up to +2.4 dB — while 192k
+    # overshoots +0.1 (all five commissioning episodes encoded -16.7 LUFS /
+    # -1.90 dBTP at a -2.0 target). The score encodes at {{ aac_bitrate }},
+    # MEASURES every encoded file, and keeps a bounded 0.5 dB TP ladder
+    # ({{ tp_target }} .. -4.0) as a per-episode backstop that accepts the
+    # first rung landing BOTH the LUFS band and the {{ tp_ceiling }} ceiling,
+    # recording the chosen rung. The receipt parses the ebur128 SUMMARY
+    # (anchored on 'Integrated loudness:' — the first bare 'I:' in ffmpeg
+    # stderr is a momentary sample near -70 LUFS, and matching it was rev
+    # 1's silent loudness killer). Chapters: START snapped to the nearest
+    # detected speech pause (measured: the TTS pauses ~1s at headings),
+    # END[i] = START[i+1] by construction — rev 1 ended every chapter at
+    # file duration and the metadata overlapped.
+    VENV="{{ workspace }}/.venv"
+    mkdir -p dist
+    cat > scripts/chapters_to_ffmeta.py <<'PY'
+    import json, sys
+    from pathlib import Path
+    chapters = json.loads(Path(sys.argv[1]).read_text())
+    pauses = json.loads(Path(sys.argv[2]).read_text())
+    words = len(Path(sys.argv[3]).read_text(encoding="utf-8").split())
+    dur = float(sys.argv[4])
+    out = Path(sys.argv[5])
+    rate = dur / max(1, words)
+    centers = [(a + b) / 2.0 for a, b in pauses]
+    times = []
+    for i, c in enumerate(chapters):
+        pred = c.get("word_offset", 0) * rate
+        if i == 0:
+            t = 0.0
+        else:
+            cands = [x for x in centers if abs(x - pred) <= 6.0]
+            t = min(cands, key=lambda x: abs(x - pred)) if cands else pred
+        floor = (times[-1] + 1.0) if times else 0.0
+        if t <= floor:
+            t = floor
+        times.append(min(t, max(0.0, dur - 1.0)))
+    assert all(times[i] < times[i + 1] for i in range(len(times) - 1)), \
+        "chapter starts not strictly increasing: %s" % times
+    lines = [";FFMETADATA1"]
+    for i, c in enumerate(chapters):
+        start = times[i]
+        end = times[i + 1] if i + 1 < len(chapters) else dur
+        lines.append("[CHAPTER]")
+        lines.append("TIMEBASE=1/1000")
+        lines.append("START=%d" % int(start * 1000))
+        lines.append("END=%d" % int(end * 1000))
+        lines.append("title=" + str(c.get("chapter", "")))
+    out.write_text("\n".join(lines) + "\n")
+    print("ffmetadata: %d chapters over %.1fs, END[i]=START[i+1], pause-snapped" % (len(chapters), dur))
+    PY
+    cat > scripts/make_covers.py <<'PY'
+    import sys
+    from pathlib import Path
+    from PIL import Image, ImageDraw
+    dist = Path(sys.argv[1])
+    BG, FG, AC = sys.argv[2], sys.argv[3], sys.argv[4]
+    N = int(sys.argv[5])
+    def cover(path, size, square):
+        img = Image.new("RGB", (size, size), BG)
+        dr = ImageDraw.Draw(img)
+        w = max(4, size // 140)
+        if square:
+            dr.rectangle([size * 3 // 8, size * 3 // 8, size * 5 // 8, size * 5 // 8], outline=AC, width=w)
+        else:
+            dr.ellipse([size * 2 // 5, size * 2 // 5, size * 3 // 5, size * 3 // 5], outline=AC, width=w)
+        img.save(path, "PNG")
+    for n in range(1, N + 1):
+        cover(dist / ("cover-%d.png" % n), 600, n % 2 == 0)
+    cover(dist / "cover-feed.png", 1400, True)
+    print("covers rendered")
+    PY
+    for n in $(seq 1 {{ n_episodes }}); do
+      d="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "audio/episode-$n.mixed.wav")"
+      "$VENV/bin/python" scripts/chapters_to_ffmeta.py "audio/episode-$n.chapters.json" "audio/episode-$n.pauses.json" "audio/episode-$n.txt" "$d" "audio/episode-$n.ffmeta"
+    done
+    # Two-pass loudnorm per episode with the measured TP ladder; loudness
+    # receipt written from the ENCODED files — the recompute seal compares
+    # against these measured values, not against anybody's narration.
+    "$VENV/bin/python" - <<'PY'
+    import json, re, subprocess
+    from pathlib import Path
+    N = {{ n_episodes }}
+    I_T, TP_C, LRA_T = {{ lufs_target }}, {{ tp_ceiling }}, {{ lra_target }}
+    LO, HI = I_T - {{ lufs_tol }}, I_T + {{ lufs_tol }}
+    def cap(args):
+        r = subprocess.run(args, capture_output=True, text=True)
+        assert r.returncode == 0, (args[:3], r.stderr[-300:])
+        return r
+    def measure(wav):
+        r = cap(["ffmpeg", "-hide_banner", "-nostats", "-i", wav,
+                 "-af", "loudnorm=I=%d:TP=%.1f:LRA=%d:print_format=json" % (I_T, TP_C, LRA_T),
+                 "-f", "null", "-"])
+        m = re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", r.stderr, re.S)
+        assert m, "loudnorm measurement JSON missing for " + wav
+        d = json.loads(m.group(0))
+        return d["input_i"], d["input_tp"], d["input_lra"], d["input_thresh"]
+    def ebur128(p):
+        r = cap(["ffmpeg", "-hide_banner", "-nostats", "-i", p,
+                 "-filter_complex", "ebur128=peak=true", "-f", "null", "-"])
+        i = re.search(r"Integrated loudness:\s*\n\s*I:\s+(-?\d+\.?\d*)\s*LUFS", r.stderr)
+        tp = re.search(r"True peak:\s*\n\s*Peak:\s+(-?\d+\.?\d*)\s*dBFS", r.stderr)
+        assert i and tp, "ebur128 summary missing for " + p
+        return float(i.group(1)), float(tp.group(1))
+    receipt = {}
+    for n in range(1, N + 1):
+        wav = "audio/episode-%d.mixed.wav" % n
+        mi, mtp, mlra, mth = measure(wav)
+        accepted = None
+        for rung in (x * 0.5 for x in range(-4, -9, -1)):
+            af = ("loudnorm=I=%d:TP=%.1f:LRA=%d:measured_I=%s:measured_TP=%s:"
+                  "measured_LRA=%s:measured_thresh=%s"
+                  % (I_T, rung, LRA_T, mi, mtp, mlra, mth))
+            pre = "dist/episode-%d.pre.m4a" % n
+            cap(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", wav,
+                 "-af", af, "-ar", "44100", "-c:a", "aac", "-b:a", "{{ aac_bitrate }}", pre])
+            lufs, tp = ebur128(pre)
+            if LO <= lufs <= HI and tp <= TP_C:
+                accepted = (pre, rung, lufs, tp)
+                break
+            Path(pre).unlink()
+        assert accepted, "episode %d: no TP rung in [-2.0,-4.0] landed both bands" % n
+        pre, rung, lufs, tp = accepted
+        cap(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", pre,
+             "-f", "ffmetadata", "-i", "audio/episode-%d.ffmeta" % n,
+             "-map", "0", "-map_metadata", "0", "-map_chapters", "1", "-c", "copy",
+             "dist/episode-%d.m4a" % n])
+        Path(pre).unlink()
+        receipt["dist/episode-%d.m4a" % n] = {"lufs": lufs, "true_peak_dbfs": tp, "tp_rung": rung}
+        print("episode %d mastered: %.1f LUFS, %.2f dBTP (TP rung %.1f)" % (n, lufs, tp, rung))
+    Path("dist/loudness.json").write_text(json.dumps(receipt, indent=2))
+    print("loudness receipt:", json.dumps(receipt))
+    PY
+    "$VENV/bin/python" scripts/make_covers.py dist "{{ cover_bg }}" "{{ cover_fg }}" "{{ cover_accent }}" {{ n_episodes }}
+
+    {% elif stage == 17 %}
+    {{ strict() }}
+    # Publish tree: episodes as raw text (the recompute seal reads these),
+    # the assembled performance.md, audio, covers, gate scripts, freeze
+    # receipt, and a series page a human opens and USES — audio players
+    # right on the index. The prior-run guard RE-RUNS HERE, immediately
+    # before the only force-push in the score: an hour of creative work
+    # must not stand between the guard and the push it guards.
+    .venv/bin/python - <<'PY'
+    import html
+    from pathlib import Path
+    N = {{ n_episodes }}
+    ws = Path(".")
+    pub = ws / "publish"
+    for sub in ("audio", "evidence", "scripts"):
+        (pub / sub).mkdir(parents=True, exist_ok=True)
+    identity = (ws / "performance-identity.md").read_text(encoding="utf-8")
+    title = identity.lstrip().splitlines()[0].lstrip("# ").strip() or "Five Hands, One Voice"
+    parts = ["<!doctype html><html><head><meta charset='utf-8'>",
+             "<title>" + html.escape(title) + "</title></head><body>",
+             "<h1>" + html.escape(title) + "</h1>",
+             "<p>A five-episode serialized audio drama written in relay by five AI "
+             "instruments across three vendors. Each episode credits the instrument "
+             "that wrote it, in the open.</p>"]
+    for n in range(1, N + 1):
+        first = (ws / ("episode-%d.md" % n)).read_text(encoding="utf-8").strip().splitlines()
+        attrib = first[0].replace("Written by: ", "").strip() if first else "unknown"
+        parts.append("<h2>Episode " + str(n) + " &mdash; written by " + html.escape(attrib) + "</h2>")
+        parts.append("<audio controls preload='none' src='audio/episode-%d.m4a'></audio>" % n)
+    parts.append("<p><a href='evidence/'>Evidence ledger</a> &middot; "
+                 "<a href='evidence/performance.md'>The serial as one text</a> &middot; "
+                 "<a href='feed.rss'>Subscribe (RSS feed)</a></p>")
+    parts.append("<p id='relay-marker'>Five Hands, One Voice</p>")
+    parts.append("</body></html>")
+    (pub / "index.html").write_text("\n".join(parts), encoding="utf-8")
+    print("site index built")
+    PY
+    cp dist/episode-*.m4a dist/cover-*.png publish/audio/
+    cp scripts/*.py publish/scripts/
+    cp data/requirements.freeze publish/evidence/
+    cp performance.md publish/evidence/performance.md
+    for n in $(seq 1 {{ n_episodes }}); do cp "episode-$n.md" publish/evidence/; done
+    cp performance-identity.md drift-table.md drift-table.json relay-ledger.json publish/evidence/
+    cp relay-packet-*.yaml publish/evidence/
+    cat > publish/README.md <<'EOF'
+    Five Hands, One Voice
+    =====================
+
+    A five-episode serialized audio drama authored in relay by rotating AI
+    instruments across three vendors, with per-episode attribution published
+    beside the audio. Produced by a Marianne score; each run pushes main.
+
+    Evidence: evidence/ — packet sha256 chain, attribution, voice-drift
+    table, the assembled serial, dependency freeze, episode texts, and the
+    terminal seals under evidence/terminal/. Gate scripts: scripts/.
+    EOF
+    cd publish
+    git init -q -b main
+    git add -A
+    git -c user.name="Five Hands, One Voice" -c user.email="relay@localhost" commit -qm "Five Hands, One Voice - episodes, site, evidence"
+    # Re-guard: what is about to be force-pushed must be ours or empty.
+    if gh repo view "{{ github_owner }}/{{ repo_name }}" >/dev/null 2>&1; then
+      b64="$(gh api "repos/{{ github_owner }}/{{ repo_name }}/readme" -q .content 2>/dev/null || true)"
+      if [ -n "$b64" ] && ! printf '%s' "$b64" | base64 -d 2>/dev/null | grep -q "Five Hands, One Voice"; then
+        echo "REFUSING to force-push: {{ repo_name }} exists and is not a prior run of this score."
+        echo "Remedy: delete/rename that repo, or point repo_name at a name you own outright."
+        exit 1
+      fi
+      git remote remove origin 2>/dev/null || true
+      git remote add origin "https://github.com/{{ github_owner }}/{{ repo_name }}.git"
+      git push -q --force origin main
+    else
+      gh repo create "{{ github_owner }}/{{ repo_name }}" --public --source=. --remote=origin --push
+    fi
+    cd ..
+    mkdir -p validation
+    printf "%s\n" "https://{{ github_owner }}.github.io/{{ repo_name }}/" > validation/site-url.txt
+    printf "%s\n" "{{ github_owner }}/{{ repo_name }}" > validation/repo-slug.txt
+    echo "repo published (Pages deploy waits for movement 19)"
+
+    {% elif stage == 18 %}
+    {{ strict() }}
+    cat > scripts/build_feed.py <<'PY'
+    import os, subprocess, sys, time
+    import xml.etree.ElementTree as ET
+    import defusedxml.ElementTree as SafeET
+    from pathlib import Path
+    ws = Path(sys.argv[1])
+    mode = sys.argv[2]
+    origin = sys.argv[3]
+    N = int(sys.argv[4])
+    NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
+    def it(tag):
+        return "{" + NS + "}" + tag
+    def duration_s(p):
+        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                              "-of", "csv=p=0", str(p)], capture_output=True, text=True)
+        return float(out.stdout.strip())
+    if mode == "build":
+        ET.register_namespace("itunes", NS)
+        rss = ET.Element("rss", {"version": "2.0"})
+        channel = ET.SubElement(rss, "channel")
+        ET.SubElement(channel, "title").text = "Five Hands, One Voice"
+        ET.SubElement(channel, "link").text = origin
+        ET.SubElement(channel, "description").text = (
+            "A five-episode audio drama written in relay by rotating AI instruments "
+            "across three vendors, with open per-episode machine attribution.")
+        ET.SubElement(channel, "language").text = "en"
+        ET.SubElement(channel, it("author")).text = "Five Hands relay (machine-authored)"
+        ET.SubElement(channel, it("image"), {"href": origin + "audio/cover-feed.png"})
+        for n in range(1, N + 1):
+            audio = ws / "dist" / ("episode-%d.m4a" % n)
+            first = (ws / ("episode-%d.md" % n)).read_text(encoding="utf-8").strip().splitlines()
+            attrib = first[0].replace("Written by: ", "").strip() if first else "unknown"
+            item = ET.SubElement(channel, "item")
+            ET.SubElement(item, "title").text = "Episode %d" % n
+            ET.SubElement(item, it("author")).text = "written by " + attrib
+            ET.SubElement(item, "description").text = (
+                "Episode %d of the relay serial, written by %s." % (n, attrib))
+            s = duration_s(audio)
+            ET.SubElement(item, it("duration")).text = "%d:%02d" % (int(s // 60), int(s - 60 * int(s // 60)))
+            ET.SubElement(item, "enclosure", {
+                "url": origin + "audio/episode-%d.m4a" % n,
+                "length": str(os.path.getsize(audio)),
+                "type": "audio/x-m4a"})
+            ET.SubElement(item, "guid").text = origin + "audio/episode-%d.m4a" % n
+            ET.SubElement(item, "pubDate").text = time.strftime(
+                "%a, %d %b %Y %H:%M:%S +0000", time.gmtime(audio.stat().st_mtime))
+        ET.indent(rss)
+        ET.ElementTree(rss).write(ws / "dist" / "feed.rss", encoding="utf-8", xml_declaration=True)
+        print("feed built")
+    elif mode == "check":
+        tree = SafeET.parse(ws / "dist" / "feed.rss")
+        items = tree.getroot().findall("./channel/item")
+        assert len(items) == N, "expected %d items, got %d" % (N, len(items))
+        for n, item in enumerate(items, 1):
+            audio = ws / "dist" / ("episode-%d.m4a" % n)
+            enc = item.find("enclosure")
+            assert enc is not None, "item %d missing enclosure" % n
+            assert enc.get("url", "").startswith(origin), "enclosure %d off-origin: %s" % (n, enc.get("url"))
+            assert enc.get("type") == "audio/x-m4a", "enclosure %d wrong mime" % n
+            size = os.path.getsize(audio)
+            assert int(enc.get("length")) == size, (
+                "enclosure %d length %s != on-disk %d bytes — podcatchers reject silently"
+                % (n, enc.get("length"), size))
+            assert (item.findtext(it("author")) or "").strip(), "item %d unattributed" % n
+        print("feed check: %d items, byte-exact enclosures, all attributed" % N)
+    else:
+        raise SystemExit("mode must be build or check")
+    PY
+    origin="https://{{ github_owner }}.github.io/{{ repo_name }}/"
+    .venv/bin/python scripts/build_feed.py "{{ workspace }}" build "$origin" {{ n_episodes }}
+    .venv/bin/python scripts/build_feed.py "{{ workspace }}" check "$origin" {{ n_episodes }}
+
+    {% elif stage == 19 %}
+    {{ strict() }}
+    cp dist/feed.rss publish/feed.rss
+    cd publish
+    git add -A
+    git -c user.name="Five Hands, One Voice" -c user.email="relay@localhost" commit -qm "podcast feed" || true
+    git push -q origin main
+    local_sha="$(git rev-parse HEAD)"
+    cd ..
+    if ! gh api "repos/{{ github_owner }}/{{ repo_name }}/pages" >/dev/null 2>&1; then
+      gh api -X POST "repos/{{ github_owner }}/{{ repo_name }}/pages" -F "source[branch]=main" -F "source[path]=/" >/dev/null
+    fi
+    # Deploy is LIVE only when the Pages build for OUR commit has finished —
+    # Pages happily serves stale content mid-propagation, and a 200 from the
+    # old build proves nothing about the new bytes. Bounded wait: 45 x 20s.
+    url="$(cat validation/site-url.txt)"
+    ok=""; status=""; built_sha=""
+    for i in $(seq 1 45); do
+      built="$(gh api "repos/{{ github_owner }}/{{ repo_name }}/pages/builds/latest" --jq '"\(.status) \(.commit)"' 2>/dev/null || true)"
+      status="${built%% *}"
+      built_sha="${built#* }"
+      code="$(curl -s -o /dev/null -w "%{http_code}" "$url" || true)"
+      if [ "$code" = "200" ] && [ "$status" = "built" ] && [ -n "$built_sha" ]; then
+        case "$local_sha" in "$built_sha"*) ok=1; break;; esac
+      fi
+      sleep 20
+    done
+    [ -n "$ok" ] || { echo "Pages did not serve the pushed commit (status=$status sha=$built_sha local=$local_sha)"; exit 1; }
+    feed_code="$(curl -sf --retry 4 --retry-delay 5 -o /dev/null -w "%{http_code}" "$url/feed.rss" || true)"
+    [ "$feed_code" = "200" ] || { echo "deployed site does not serve the feed: $feed_code"; exit 1; }
+    printf "%s\n" "$local_sha" > validation/deployed-sha.txt
+    echo "deployed: $url (Pages build bound to $local_sha)"
+
+    {% elif stage == 20 %}
+    {{ strict() }}
+    url="$(cat validation/site-url.txt)"
+    curl -sf --retry 4 --retry-delay 5 "$url/feed.rss" -o live-feed.rss
+    .venv/bin/python - <<'PY'
+    import json, os, subprocess
+    import defusedxml.ElementTree as ET
+    from pathlib import Path
+    N = {{ n_episodes }}
+    origin = Path("validation/site-url.txt").read_text().strip()
+    items = ET.parse("live-feed.rss").getroot().findall("./channel/item")
+    assert len(items) == N, "deployed feed has %d items" % len(items)
+    results = []
+    for n, item in enumerate(items, 1):
+        enc = item.find("enclosure")
+        local = os.path.getsize("dist/episode-%d.m4a" % n)
+        head = subprocess.run(["curl", "-sI", "--retry", "3", enc.get("url")],
+                              capture_output=True, text=True).stdout
+        status = head.splitlines()[0].strip() if head else ""
+        clen = ""
+        for line in head.splitlines():
+            if line.lower().startswith("content-length:"):
+                clen = line.split(":", 1)[1].strip()
+        ok = status.endswith(" 200") and clen == str(local)
+        results.append({"episode": n, "url": enc.get("url"), "status": status,
+                        "content_length": clen, "local_bytes": local, "ok": ok})
+    report = {"feed_url": origin + "feed.rss", "items": len(items),
+              "enclosures": results, "ok": all(r["ok"] for r in results)}
+    Path("live-gate.json").write_text(json.dumps(report, indent=2))
+    print("live gate:", "PASS" if report["ok"] else "FAIL")
+    raise SystemExit(0 if report["ok"] else 1)
+    PY
+    echo "the deployed feed answers as a podcatcher sees it"
+
+    {% elif stage == 21 %}
+    {{ strict() }}
+    .venv/bin/python - <<'PY'
+    import html, json
+    from pathlib import Path
+    N = {{ n_episodes }}
+    ws = Path(".")
+    ev = ws / "publish" / "evidence"
+    ev.mkdir(parents=True, exist_ok=True)
+    identity = (ws / "performance-identity.md").read_text(encoding="utf-8")
+    ledger = json.loads((ws / "relay-ledger.json").read_text())
+    drift = (ws / "drift-table.md").read_text(encoding="utf-8")
+    choices = json.loads((ws / "audio" / "tts-choices.json").read_text())
+    freeze = (ws / "data" / "requirements.freeze").read_text()
+    parts = ["<!doctype html><html><head><meta charset='utf-8'>",
+             "<title>Evidence - Five Hands, One Voice</title></head><body>",
+             "<h1>Evidence ledger</h1>",
+             "<p>Every continuity claim on the main page can be re-derived from the "
+             "bytes published here. The gates prove continuity, not quality.</p>",
+             "<h2>Performance identity</h2><pre>" + html.escape(identity) + "</pre>",
+             "<h2>Relay chain (packet sha256)</h2><ul>"]
+    for p in ledger["packets"]:
+        parts.append("<li>packet %s (beat %s): <code>%s</code></li>"
+                     % (p["packet"], p["beat"], p["sha256"]))
+    parts.append("</ul><h2>Attribution</h2><ul>")
+    for e in ledger["episodes"]:
+        parts.append("<li>episode %d: %s</li>" % (e["episode"], html.escape(e["instrument"])))
+    parts.append("</ul><h2>TTS engines per episode</h2><pre>"
+                 + html.escape(json.dumps(choices, indent=2)) + "</pre>")
+    parts.append("<h2>Voice-drift table</h2><pre>" + html.escape(drift) + "</pre>")
+    parts.append("<h2>Dependency freeze</h2><pre>" + html.escape(freeze) + "</pre>")
+    parts.append("<h2>Scope and limits — what this proof does NOT establish</h2>"
+                 "<ul>"
+                 "<li>Voice-sheet isolation is prompt-contractual, not sandboxed: the "
+                 "authoring CLIs could read the workspace, and nothing mechanical "
+                 "prevents reading ahead. The drift gate cannot distinguish identity "
+                 "carried by artifacts from identity gleaned by peeking.</li>"
+                 "<li>The heard voice is one TTS speaker for all five episodes. Audible "
+                 "one-voice is manufactured by synthesis; the relay carries prose style, "
+                 "and the drift gate measures diction, not audio identity.</li>"
+                 "<li>The drift band is a pre-registered RUPTURE DETECTOR over five "
+                 "episodes (n=5, z-scored function-word signatures) — not proof of "
+                 "listener experience, and not a calibrated authorship test.</li>"
+                 "<li>The cold-open gate measures onset of speech (&le;15s), not hook "
+                 "quality. Chapter markers are pause-snapped approximations of scene "
+                 "breaks. Attribution records the engine-assigned instrument, "
+                 "cross-checked against the declared rotation — it is not independent "
+                 "provenance of authorship.</li>"
+                 "</ul>")
+    parts.append("<h2>Recompute it yourself</h2>"
+                 "<p>Gate scripts: <a href='../scripts/stylometry.py'>stylometry.py</a>, "
+                 "<a href='../scripts/check_relay.py'>check_relay.py</a>. "
+                 "The serial as one text: <a href='performance.md'>performance.md</a>. "
+                 "Episode texts: "
+                 + ", ".join("<a href='episode-%d.md'>%d</a>" % (n, n) for n in range(1, N + 1))
+                 + ". Terminal seals: <a href='terminal/'>terminal/</a> (published by the "
+                 "run's final movement).</p></body></html>")
+    (ev / "index.html").write_text("\n".join(parts), encoding="utf-8")
+    print("evidence page built")
+    PY
+    cd publish
+    git add -A
+    git -c user.name="Five Hands, One Voice" -c user.email="relay@localhost" commit -qm "evidence ledger" || true
+    git push -q origin main
+    local_sha="$(git rev-parse HEAD)"
+    cd ..
+    # The deployed page must be the PUSHED page: wait for the Pages build of
+    # this commit before link-checking (a mid-propagation 200 can be the old
+    # page; rev 1 link-checked immediately after push and would flake).
+    ok=""
+    for i in $(seq 1 45); do
+      built="$(gh api "repos/{{ github_owner }}/{{ repo_name }}/pages/builds/latest" --jq '"\(.status) \(.commit)"' 2>/dev/null || true)"
+      status="${built%% *}"; built_sha="${built#* }"
+      if [ "$status" = "built" ] && [ -n "$built_sha" ]; then
+        case "$local_sha" in "$built_sha"*) ok=1; break;; esac
+      fi
+      sleep 20
+    done
+    [ -n "$ok" ] || { echo "evidence page build did not bind to $local_sha"; exit 1; }
+    printf "%s\n" "$local_sha" > validation/deployed-sha.txt
+    .venv/bin/python - <<'PY'
+    import json, time, urllib.request
+    from pathlib import Path
+    N = {{ n_episodes }}
+    origin = Path("validation/site-url.txt").read_text().strip()
+    links = [origin, origin + "feed.rss", origin + "evidence/", origin + "evidence/performance.md"] \
+        + [origin + ("audio/episode-%d.m4a" % n) for n in range(1, N + 1)] \
+        + [origin + ("evidence/episode-%d.md" % n) for n in range(1, N + 1)]
+    broken = []
+    for link in links:
+        ok = False
+        for attempt in range(6):
+            try:
+                req = urllib.request.Request(link, method="HEAD")
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    ok = r.status == 200
+                if ok:
+                    break
+            except Exception:
+                time.sleep(10)
+        if not ok:
+            broken.append(link)
+    Path("link-check.json").write_text(json.dumps({"checked": len(links), "broken": broken}, indent=2))
+    if broken:
+        raise SystemExit("broken links on the deployed site: %s" % broken)
+    print("link check: %d deployed links, zero broken" % len(links))
+    PY
+    echo "evidence published beside the art"
+
+    {% elif stage == 22 %}
+    {{ strict() }}
+    # The seal reads the PODCATCHER-FACING surface: enclosure URLs parsed from
+    # the deployed RSS feed, texts and the exact published stylometry script
+    # from the deployed site — not raw.githubusercontent (rev 1 proved the
+    # repo bytes while the feed could have pointed anywhere). Every fetch is
+    # retried; the terminal gate must not be the flakiest movement in the
+    # score. Enclosure bytes are sha256-verified against the local dist
+    # files; loudness is re-measured with the anchored summary parse.
+    cat > scripts/recompute.py <<'PY'
+    import hashlib, json, re, subprocess, sys, time, urllib.request
+    from pathlib import Path
+    import defusedxml.ElementTree as SafeET
+    N = {{ n_episodes }}
+    tmp = Path(sys.argv[1])
+    ws = Path(sys.argv[2])
+    origin = (ws / "validation" / "site-url.txt").read_text().strip()
+    seal = {"surface": "live feed + deployed site", "published": {}, "recomputed": {}, "checks": []}
+    def chk(name, ok, detail=""):
+        seal["checks"].append({"check": name, "ok": bool(ok), "detail": str(detail)})
+    def fetch(url, dest, tries=5, delay=8):
+        last = ""
+        for _ in range(tries):
+            try:
+                urllib.request.urlretrieve(url, str(dest))
+                return
+            except Exception as e:
+                last = str(e)
+                time.sleep(delay)
+        raise SystemExit("fetch failed after %d tries: %s (%s)" % (tries, url, last))
+    fetch(origin + "feed.rss", tmp / "feed.rss")
+    items = SafeET.parse(tmp / "feed.rss").getroot().findall("./channel/item")
+    chk("deployed feed carries %d items" % N, len(items) == N, str(len(items)))
+    if len(items) != N:
+        seal["ok"] = False
+        (ws / "recompute-seal.json").write_text(json.dumps(seal, indent=2))
+        sys.exit(1)
+    enclosures = [it.find("enclosure").get("url") for it in items]
+    for n in range(1, N + 1):
+        fetch(origin + ("evidence/episode-%d.md" % n), tmp / ("episode-%d.md" % n))
+    fetch(origin + "scripts/stylometry.py", tmp / "stylometry.py")
+    r = subprocess.run([sys.executable, str(tmp / "stylometry.py"), str(tmp)],
+                       capture_output=True, text=True)
+    chk("published stylometry script passes on published texts", r.returncode == 0,
+        (r.stdout + r.stderr)[-200:])
+    run_drift = json.loads((tmp / "drift-table.json").read_text())
+    own_drift = json.loads((ws / "drift-table.json").read_text())
+    same = (run_drift["intra_episode_baseline"] == own_drift["intra_episode_baseline"]
+            and run_drift["cross_vendor_adjacent"] == own_drift["cross_vendor_adjacent"]
+            and run_drift["verdict"] == own_drift["verdict"] == "PASS")
+    chk("published episode bytes reproduce the drift table exactly", same,
+        "cross %s vs %s" % (run_drift.get("max_cross"), own_drift.get("max_cross")))
+    own_loud = json.loads((ws / "dist" / "loudness.json").read_text())
+    worst = 0.0
+    for n in range(1, N + 1):
+        p = tmp / ("episode-%d.m4a" % n)
+        fetch(enclosures[n - 1], p)
+        digest = hashlib.sha256(p.read_bytes()).hexdigest()
+        local = hashlib.sha256((ws / "dist" / ("episode-%d.m4a" % n)).read_bytes()).hexdigest()
+        seal["published"]["episode-%d.m4a" % n] = digest
+        chk("enclosure %d bytes identical to local dist (sha256)" % n, digest == local,
+            "%s vs %s" % (digest[:16], local[:16]))
+        r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(p),
+                            "-filter_complex", "ebur128=peak=true", "-f", "null", "-"],
+                           capture_output=True, text=True)
+        i = re.search(r"Integrated loudness:\s*\n\s*I:\s+(-?\d+\.?\d*)\s*LUFS", r.stderr)
+        assert i, "ebur128 summary missing for published episode %d" % n
+        worst = max(worst, abs(float(i.group(1)) - own_loud["dist/episode-%d.m4a" % n]["lufs"]))
+    chk("published audio loudness matches the run within 0.1 LU", worst <= 0.1,
+        "worst delta %.3f LU" % worst)
+    seal["recomputed"]["max_lufs_delta"] = worst
+    seal["ok"] = all(c["ok"] for c in seal["checks"])
+    (ws / "recompute-seal.json").write_text(json.dumps(seal, indent=2))
+    print("recompute seal:", "PASS" if seal["ok"] else "FAIL")
+    sys.exit(0 if seal["ok"] else 1)
+    PY
+    tmp="$(mktemp -d)"
+    .venv/bin/python scripts/recompute.py "$tmp" "{{ workspace }}"
+    rm -rf "$tmp"
+    echo "live feed bytes reproduce the run's numbers"
+
+    {% elif stage == 23 %}
+    {{ strict() }}
+    # Corrupt a fixture, expect the intended gate to die ON ITS INTENDED
+    # ERROR — a bare exit code proves the wrong thing (rev 1's silence
+    # fixture died on the wpm assert before any silence logic ran, and its
+    # over-cap identity fixture was doubly corrupted). Every negative
+    # control below carries the error text it must produce.
+    cat > scripts/receipts.py <<'PY'
+    import json, os, shutil, subprocess, sys, tempfile
+    from pathlib import Path
+    import yaml
+    ws = Path(sys.argv[1])
+    VENV = sys.argv[2]
+    N = {{ n_episodes }}
+    ROTATION = {{ rotation }}
+    controls = []
+    def run(args):
+        return subprocess.run(args, capture_output=True, text=True)
+    def record(kind, name, r, expect_text=None):
+        observed = "pass" if r.returncode == 0 else "fail"
+        matched = True
+        if kind == "negative":
+            ok = r.returncode != 0
+            if expect_text:
+                matched = expect_text in (r.stdout + r.stderr)
+                ok = ok and matched
+        else:
+            ok = r.returncode == 0
+        controls.append({"control": name, "kind": kind, "expected": "pass" if kind == "positive" else "fail",
+                         "observed": observed, "expect_text": expect_text,
+                         "matched": matched, "ok": ok})
+    def pkt(beat, motif="the signal"):
+        return yaml.safe_dump({"beat": beat, "unresolved_motifs": [motif],
+                               "tonal_commitments": ["low register"], "hazards": ["no summary"],
+                               "continuation_point": "She is at the door, hand on the latch, and it is snowing."})
+    def ep_text(instr, body_words, motif=None):
+        body = ("word " * body_words).strip()
+        if motif:
+            body = motif + ". " + body
+        return ("Written by: %s\n## One\n%s\n## Two\n%s\nOPEN QUESTION: q\n" % (instr, body, body))
+    with tempfile.TemporaryDirectory() as td:
+        t = Path(td)
+        (t / "performance-identity.md").write_text("# x\n" + ("a" * 5000))
+        (t / "relay-packet-0.yaml").write_text(pkt(0))
+        record("negative", "identity gate refuses an over-cap identity (beat correct, typing valid)",
+               run([VENV, str(ws / "scripts" / "check_identity.py"), str(t), "4096", "400"]),
+               "compact")
+    with tempfile.TemporaryDirectory() as td:
+        t = Path(td)
+        (t / "performance-identity.md").write_text("# x\n" + ("a" * 800))
+        (t / "relay-packet-0.yaml").write_text(pkt(1))
+        record("negative", "identity gate refuses a wrong beat (size and typing valid)",
+               run([VENV, str(ws / "scripts" / "check_identity.py"), str(t), "4096", "400"]),
+               "beat == 0")
+    with tempfile.TemporaryDirectory() as td:
+        t = Path(td)
+        (t / "performance-identity.md").write_text("# x\n" + ("a" * 800))
+        p = yaml.safe_load(pkt(0))
+        p["tonal_commitments"] = "low register"
+        (t / "relay-packet-0.yaml").write_text(yaml.safe_dump(p))
+        record("negative", "identity gate refuses an untyped packet (scalar for a list)",
+               run([VENV, str(ws / "scripts" / "check_identity.py"), str(t), "4096", "400"]),
+               "typed")
+    with tempfile.TemporaryDirectory() as td:
+        t = Path(td)
+        for i in range(0, N + 1):
+            beat = (i + 1) if i == 2 else i
+            (t / ("relay-packet-%d.yaml" % i)).write_text(pkt(beat))
+        for i in range(1, N + 1):
+            (t / ("episode-%d.md" % i)).write_text(ep_text(ROTATION[i - 1], 800))
+        record("negative", "relay gate refuses a beat skip",
+               run([VENV, str(ws / "scripts" / "check_relay.py"), str(t)]), "monotonic")
+    with tempfile.TemporaryDirectory() as td:
+        t = Path(td)
+        for i in range(0, N):
+            (t / ("relay-packet-%d.yaml" % i)).write_text(pkt(i))
+        record("negative", "relay gate refuses a missing packet (stop, never infer)",
+               run([VENV, str(ws / "scripts" / "check_relay.py"), str(t)]), "chain complete")
+    with tempfile.TemporaryDirectory() as td:
+        t = Path(td)
+        for i in range(0, N + 1):
+            motif = "the signal" if i != 2 else "something else entirely"
+            (t / ("relay-packet-%d.yaml" % i)).write_text(pkt(i, motif))
+        for i in range(1, N + 1):
+            (t / ("episode-%d.md" % i)).write_text(ep_text(ROTATION[i - 1], 800, motif="the signal"))
+        record("negative", "relay gate refuses stepwise custody break (motif skips one handoff)",
+               run([VENV, str(ws / "scripts" / "check_relay.py"), str(t)]), "stepwise")
+    with tempfile.TemporaryDirectory() as td:
+        t = Path(td)
+        (t / "episode-2.md").write_text(ep_text("codex-cli", 30))
+        (t / "relay-packet-2.yaml").write_text(pkt(2))
+        (t / "relay-packet-1.yaml").write_text(pkt(1))
+        record("negative", "episode gate refuses a truncated episode",
+               run([VENV, str(ws / "scripts" / "check_episode.py"), str(t), "6", "790", "960"]),
+               "word window")
+    with tempfile.TemporaryDirectory() as td:
+        t = Path(td)
+        (t / "relay-packet-1.yaml").write_text(pkt(1, "the signal"))
+        p = yaml.safe_load(pkt(2, "an unrelated thread"))
+        (t / "relay-packet-2.yaml").write_text(yaml.safe_dump(p))
+        (t / "episode-2.md").write_text(ep_text("codex-cli", 800, motif="the signal"))
+        record("negative", "episode gate refuses a dropped incoming motif (handoff)",
+               run([VENV, str(ws / "scripts" / "check_episode.py"), str(t), "6", "790", "960"]),
+               "handoff")
+    with tempfile.TemporaryDirectory() as td:
+        t = Path(td)
+        (t / "relay-packet-1.yaml").write_text(pkt(1, "the signal"))
+        (t / "relay-packet-2.yaml").write_text(pkt(2, "the signal"))
+        (t / "episode-2.md").write_text(ep_text("codex-cli", 800))
+        record("negative", "episode gate refuses a consumed-but-never-played motif (pickup)",
+               run([VENV, str(ws / "scripts" / "check_episode.py"), str(t), "6", "790", "960"]),
+               "pickup")
+    with tempfile.TemporaryDirectory() as td:
+        t = Path(td)
+        wav = t / "deadair.wav"
+        subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                        "-f", "lavfi", "-i", "sine=frequency=200:duration=100",
+                        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono:duration=5",
+                        "-f", "lavfi", "-i", "sine=frequency=200:duration=195",
+                        "-filter_complex", "[0:a][1:a][2:a]concat=n=3:v=0:a=1[out]",
+                        "-map", "[out]", str(wav)], check=True)
+        txt = t / "ep.txt"
+        txt.write_text(" ".join(["word"] * 800))
+        record("negative", "audio gate refuses mid-episode dead air (rate in band)",
+               run([VENV, str(ws / "scripts" / "check_audio.py"), str(wav), str(txt),
+                    "3.0", "15", "240", "420", "135", "200"]),
+               "dead air")
+    with tempfile.TemporaryDirectory() as td:
+        t = Path(td)
+        a = "The quick brown fox jumps over the lazy dog near the river bank at dawn. " * 30
+        b = "Consequently; moreover: the committee's deliberations, ostensibly procedural, continued. " * 30
+        for i, body in enumerate([a, b, a, b, a], 1):
+            (t / ("episode-%d.md" % i)).write_text("Written by: x\n## C\n" + body + "\nOPEN QUESTION: q\n")
+        record("negative", "stylometry gate refuses cross-vendor drift over baseline",
+               run([VENV, str(ws / "scripts" / "stylometry.py"), str(t)]), "FAIL")
+    with tempfile.TemporaryDirectory() as td:
+        t = Path(td)
+        (t / "dist").mkdir()
+        parts = ['<?xml version="1.0"?>',
+                 '<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"><channel>']
+        for n in range(1, N + 1):
+            shutil.copy(ws / "dist" / ("episode-%d.m4a" % n), t / "dist" / ("episode-%d.m4a" % n))
+            size = os.path.getsize(t / "dist" / ("episode-%d.m4a" % n)) + (777 if n == 3 else 0)
+            parts.append('<item><itunes:author>x</itunes:author><enclosure url="https://example.invalid/a.m4a" length="%d" type="audio/x-m4a"/></item>' % size)
+        parts.append('</channel></rss>')
+        (t / "dist" / "feed.rss").write_text("".join(parts))
+        record("negative", "feed gate refuses an inflated enclosure length",
+               run([VENV, str(ws / "scripts" / "build_feed.py"), str(t), "check",
+                    "https://example.invalid/", str(N)]),
+               "enclosure")
+    origin = (ws / "validation" / "site-url.txt").read_text().strip()
+    record("positive", "identity gate admits the real artifacts",
+           run([VENV, str(ws / "scripts" / "check_identity.py"), str(ws), "4096", "400"]))
+    record("positive", "relay gate admits the real chain",
+           run([VENV, str(ws / "scripts" / "check_relay.py"), str(ws)]))
+    record("positive", "episode gate admits episode 1",
+           run([VENV, str(ws / "scripts" / "check_episode.py"), str(ws), "5", "790", "960"]))
+    record("positive", "audio gate admits episode 1",
+           run([VENV, str(ws / "scripts" / "check_audio.py"),
+                str(ws / "audio" / "episode-1.voice.audio"), str(ws / "audio" / "episode-1.txt"),
+                "3.0", "15", "240", "420", "135", "200"]))
+    record("positive", "feed gate admits the real feed",
+           run([VENV, str(ws / "scripts" / "build_feed.py"), str(ws), "check", origin, str(N)]))
+    report = {
+        "controls": controls,
+        "unexpected_passes": [c["control"] for c in controls if c["kind"] == "negative" and c["observed"] == "pass"],
+        "unexpected_failures": [c["control"] for c in controls if c["kind"] == "positive" and c["observed"] == "fail"],
+        "unattributed_failures": [c["control"] for c in controls if c["kind"] == "negative" and not c["matched"]],
+    }
+    report["ok"] = (len(controls) >= 14
+                    and not report["unexpected_passes"]
+                    and not report["unexpected_failures"]
+                    and not report["unattributed_failures"]
+                    and all(c["ok"] for c in controls))
+    (ws / "receipts-report.json").write_text(json.dumps(report, indent=2))
+    print("receipts:", "PASS" if report["ok"] else "FAIL", "(%d controls)" % len(controls))
+    if not report["ok"]:
+        for c in controls:
+            if not c["ok"]:
+                print("  BAD:", c["control"], "observed:", c["observed"], "matched:", c["matched"])
+    sys.exit(0 if report["ok"] else 1)
+    PY
+    .venv/bin/python scripts/receipts.py "{{ workspace }}" "{{ workspace }}/.venv/bin/python"
+    echo "every gate proven failable on its intended error; zero unexpected passes"
+
+    {% elif stage == 24 %}
+    {{ strict() }}
+    # Proof-Carrying Artifact closes: a seal that stays in the workspace
+    # proves nothing. The recompute seal, receipts, live gate, link check,
+    # canary, and both verdicts are pushed to evidence/terminal/, the Pages
+    # build is bound to the pushed commit, and every seal is re-fetched and
+    # hash-verified LIVE. This movement exists because rev 1 created its two
+    # most important artifacts AFTER the last publication movement.
+    mkdir -p publish/evidence/terminal
+    for f in recompute-seal.json receipts-report.json live-gate.json link-check.json canary-report.json identity-verdict.json continuity-verdict.json; do
+      test -s "$f" || { echo "FAIL: terminal artifact $f missing"; exit 1; }
+      cp "$f" publish/evidence/terminal/
+    done
+    cd publish
+    git add -A
+    git -c user.name="Five Hands, One Voice" -c user.email="relay@localhost" commit -qm "terminal evidence: recompute seal + receipts + live gates"
+    git push -q origin main
+    local_sha="$(git rev-parse HEAD)"
+    cd ..
+    ok=""
+    for i in $(seq 1 45); do
+      built="$(gh api "repos/{{ github_owner }}/{{ repo_name }}/pages/builds/latest" --jq '"\(.status) \(.commit)"' 2>/dev/null || true)"
+      status="${built%% *}"; built_sha="${built#* }"
+      if [ "$status" = "built" ] && [ -n "$built_sha" ]; then
+        case "$local_sha" in "$built_sha"*) ok=1; break;; esac
+      fi
+      sleep 20
+    done
+    [ -n "$ok" ] || { echo "terminal publish build did not bind to $local_sha"; exit 1; }
+    printf "%s\n" "$local_sha" > validation/deployed-sha.txt
+    .venv/bin/python - <<'PY'
+    import hashlib, json, time, urllib.request
+    from pathlib import Path
+    origin = Path("validation/site-url.txt").read_text().strip()
+    names = ["recompute-seal.json", "receipts-report.json", "live-gate.json",
+             "link-check.json", "canary-report.json", "identity-verdict.json",
+             "continuity-verdict.json"]
+    def fetch(url, tries=6, delay=10):
+        for _ in range(tries):
+            try:
+                with urllib.request.urlopen(url, timeout=30) as r:
+                    return r.read()
+            except Exception:
+                time.sleep(delay)
+        raise SystemExit("live fetch failed: " + url)
+    receipt = {"deployed_commit": Path("validation/deployed-sha.txt").read_text().strip(),
+               "artifacts": []}
+    for name in names:
+        local = (Path("publish/evidence/terminal") / name).read_bytes()
+        remote = fetch(origin + "evidence/terminal/" + name)
+        digest = hashlib.sha256(local).hexdigest()
+        live_ok = hashlib.sha256(remote).hexdigest() == digest
+        receipt["artifacts"].append({"artifact": name, "sha256": digest, "live_ok": live_ok})
+        assert live_ok, name + " differs live"
+    receipt["ok"] = all(a["live_ok"] for a in receipt["artifacts"])
+    Path("terminal-publish.json").write_text(json.dumps(receipt, indent=2))
+    print("terminal publish: %d seals live and hash-exact at commit %s"
+          % (len(names), receipt["deployed_commit"][:12]))
+    PY
+    echo "every seal the header promises is public"
+
+    {% endif %}
+
+# =============================================================================
+# VALIDATIONS — staged fail-fast (Commissioning Cascade): coarse before fine
+# per movement, and every load-bearing claim is a deterministic command with
+# an exit code, never LLM judgment. `condition: sheet_num == N` selects the
+# movement (no fan-out, so sheet_num == movement); the `stage:` field orders
+# rules within a sheet. Values, not shapes: LUFS, wpm, byte counts, sha256s,
+# commit shas — never bare file existence.
+# =============================================================================
+validations:
+  # ── M1 · runtime-build ────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: '{workspace}/.venv/bin/python -c "import numpy, scipy, PIL, yaml, jsonschema, edge_tts, defusedxml; print(''stack importable'')"'
+    condition: "sheet_num == 1"
+    stage: 1
+    description: "Pinned stack importable in the dedicated venv (never the ambient interpreter)"
+  - type: command_succeeds
+    command: |
+      for pkg in numpy scipy Pillow PyYAML jsonschema edge-tts piper-tts defusedxml; do
+        grep -q "^${pkg}==" {workspace}/data/requirements.freeze
+      done
+      test -s {workspace}/voices/MANIFEST.sha256
+      test -s "{workspace}/voices/{piper_model_name}.onnx"
+      echo "{piper_onnx_sha256}  {workspace}/voices/{piper_model_name}.onnx" | sha256sum -c -
+      echo "{piper_json_sha256}  {workspace}/voices/{piper_model_name}.onnx.json" | sha256sum -c -
+    condition: "sheet_num == 1"
+    stage: 1
+    description: "Every load-bearing package pinned in the freeze; voice model bytes match the composition-time digests (source authenticity)"
+
+  # ── M2 · self-canary: identity and calibration, not command success ──────
+  - type: command_succeeds
+    command: |
+      test "$(gh api user -q .login)" = {github_owner}
+      command -v jq >/dev/null
+      {workspace}/.venv/bin/python -c "
+      import json
+      r = json.load(open('{workspace}/canary-report.json'))
+      assert r['gh_user'] == '{github_owner}', r['gh_user']
+      assert r['jq'] == 'ready', r['jq']
+      for k in ('claude-code', 'codex-cli', 'opencode'):
+          assert r['instruments'][k] == 'ready', (k, r['instruments'])
+      assert r['edge_tts']['duration_s'] >= 1.0, r['edge_tts']
+      assert r['piper']['duration_s'] >= 1.0, r['piper']
+      m = r['master_landing']
+      assert abs(m['lufs'] - ({lufs_target})) <= {lufs_tol}, m
+      assert m['true_peak_dbfs'] <= {tp_ceiling}, m
+      print('canary evidence ok: owner, instruments, jq, both TTS paths, measured master landing')
+      "
+    condition: "sheet_num == 2"
+    stage: 1
+    description: "Self-canary: gh identity matches the publisher, relay instruments ready, jq present, both TTS paths real, master chain landed in band on real TTS bytes"
+
+  # ── M3 · tune: structure only — the story is the performer's authority ────
+  - type: file_exists
+    path: "{workspace}/performance-identity.md"
+    condition: "sheet_num == 3"
+    stage: 1
+    description: "Performance identity exists"
+  - type: file_exists
+    path: "{workspace}/relay-packet-0.yaml"
+    condition: "sheet_num == 3"
+    stage: 1
+    description: "Seed relay packet exists"
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      from pathlib import Path
+      import yaml
+      ident = Path('{workspace}/performance-identity.md')
+      size = ident.stat().st_size
+      text = ident.read_text(encoding='utf-8')
+      assert size <= {identity_cap_bytes}, '%d bytes over the Identity-as-script cap' % size
+      assert len(text.strip()) >= {identity_min_chars}, 'identity too thin'
+      assert text.lstrip().startswith('# '), 'identity must open with the title heading'
+      p = yaml.safe_load(Path('{workspace}/relay-packet-0.yaml').read_text())
+      assert isinstance(p, dict) and p.get('beat') == 0, repr(p.get('beat'))
+      for k in ('unresolved_motifs', 'tonal_commitments', 'hazards'):
+          v = p.get(k)
+          assert isinstance(v, list) and v and all(isinstance(x, str) and x.strip() for x in v), k
+      assert isinstance(p.get('continuation_point'), str) and len(p['continuation_point'].strip()) >= 20
+      print('tune output structurally admitted')
+      "
+    condition: "sheet_num == 3"
+    stage: 2
+    description: "Identity inside the compactness cap with title heading; packet-0 beat 0, all contract fields TYPED (lists of non-empty strings)"
+
+  # ── M4 · identity gate: verdict + re-run + staged relay gates ─────────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json
+      v = json.load(open('{workspace}/identity-verdict.json'))
+      assert v['ok'] is True, [c for c in v['checks'] if not c['ok']]
+      print('identity verdict admitted')
+      "
+    condition: "sheet_num == 4"
+    stage: 1
+    description: "Identity verdict admitted by the deterministic gate"
+  - type: command_succeeds
+    command: '{workspace}/.venv/bin/python {workspace}/scripts/check_identity.py {workspace} {identity_cap_bytes} {identity_min_chars} && {workspace}/.venv/bin/python -c "import ast; [ast.parse(open(''{workspace}/scripts/'' + f).read()) for f in (''check_identity.py'', ''check_episode.py'')]; print(''gate re-run reproduces the verdict; episode gate staged and parseable'')"'
+    condition: "sheet_num == 4"
+    stage: 2
+    description: "Gate re-run reproduces the verdict; the typed episode gate is staged and parseable; rotation/count consistency asserted in the movement"
+
+  # ── M5-M9 · voices: the relay's per-sheet contract ────────────────────────
+  # (attribution joins the declared rotation; stepwise handoff + closed-loop
+  # pickup prove consumption; method is never graded — Mission Command)
+  - type: command_succeeds
+    command: '{workspace}/.venv/bin/python {workspace}/scripts/check_episode.py {workspace} {sheet_num} {words_lo} {words_hi}'
+    condition: "sheet_num >= 5 and sheet_num <= 9"
+    stage: 1
+    description: "Episode gate: attribution matches the rotation, calibrated word window, >=2 chapters, open question in the final fifth, outgoing beat == incoming + 1, every incoming motif carried, an incoming motif played by name"
+
+  # ── M10 · continuity gate: the pattern's named seam ───────────────────────
+  - type: command_succeeds
+    command: '{workspace}/.venv/bin/python {workspace}/scripts/check_relay.py {workspace}'
+    condition: "sheet_num == 10"
+    stage: 1
+    description: "Continuity gate: chain 0-5 unbroken, beats monotonic, typed packets, STEPWISE motif custody at every handoff, resolutions reference open motifs, attribution on all five"
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json
+      ledger = json.load(open('{workspace}/relay-ledger.json'))
+      assert len(ledger['packets']) == 6
+      assert [p['beat'] for p in ledger['packets']] == [0, 1, 2, 3, 4, 5]
+      assert all(p['sha256'] and len(p['sha256']) == 64 for p in ledger['packets'])
+      assert len(ledger['episodes']) == 5
+      assert 'attribution_basis' in ledger, 'ledger must state what attribution does and does not prove'
+      print('derived ledger consistent')
+      "
+    condition: "sheet_num == 10"
+    stage: 2
+    description: "Derived relay ledger: six sealed packets in beat order, five attributed episodes, attribution basis disclosed"
+
+  # ── M11 · stylometry: the pre-registered band ─────────────────────────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json
+      t = json.load(open('{workspace}/drift-table.json'))
+      assert t['verdict'] == 'PASS', t
+      assert t['features_zscored'] is True, t.get('method')
+      assert len(t['intra_episode_baseline']) == 5 and len(t['cross_vendor_adjacent']) == 4
+      assert t['max_cross'] <= t['max_intra'], t
+      assert 'rupture detector' in t['method'], 'method must state its own scope'
+      "
+      test -s {workspace}/drift-table.md
+    condition: "sheet_num == 11"
+    stage: 1
+    description: "Drift verdict PASS against the pre-registered band over z-scored signatures; method self-describes as a rupture detector"
+
+  # ── M12 · assembler: mechanical joins, verbatim containment ───────────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      from pathlib import Path
+      ws = Path('{workspace}')
+      whole = (ws / 'performance.md').read_text(encoding='utf-8')
+      assert whole.count('## Episode ') >= 5, 'not five episode sections'
+      missing = []
+      for n in range(1, 6):
+          text = (ws / ('episode-%d.md' % n)).read_text(encoding='utf-8')
+          paras = [p.strip() for p in text.split('\n\n') if len(p.strip()) >= 25]
+          assert len(paras) >= 3, 'episode %d has only %d substantive paragraphs' % (n, len(paras))
+          for p in paras:
+              if p not in whole:
+                  missing.append((n, p[:60]))
+      assert not missing, missing[:3]
+      print('assembly contains every episode paragraph verbatim')
+      "
+    condition: "sheet_num == 12"
+    stage: 1
+    description: "Anti-laundering gate: every substantive episode paragraph appears verbatim in the assembly — rewording fails"
+
+  # ── M13 · TTS normalization: markers never spoken, offsets on spoken words ─
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json
+      from pathlib import Path
+      ws = Path('{workspace}')
+      for n in range(1, 6):
+          src = (ws / ('episode-%d.md' % n)).read_text(encoding='utf-8')
+          lines = src.splitlines()
+          if lines and lines[0].startswith('Written by:'):
+              lines = lines[1:]
+          oq = [k for k, ln in enumerate(lines) if ln.startswith('OPEN QUESTION:')]
+          if oq:
+              k = oq[-1]
+              lines = lines[:k] + lines[k + 1:]
+          expected = len('\n'.join(lines).split())
+          txt = (ws / 'audio' / ('episode-%d.txt' % n)).read_text(encoding='utf-8')
+          low = txt.lower()
+          assert 'written by:' not in low, (n, 'byline would be spoken')
+          assert 'open question:' not in low, (n, 'marker would be spoken')
+          assert abs(len(txt.split()) - expected) <= 0.03 * max(1, expected), (n, expected, len(txt.split()))
+          ch = json.loads((ws / 'audio' / ('episode-%d.chapters.json' % n)).read_text())
+          assert len(ch) >= 2, (n, ch)
+          assert all(0 <= c['word_offset'] <= len(txt.split()) for c in ch), n
+      print('normalization: markers stripped from speech, chapters on spoken words, all five round-trip')
+      "
+    condition: "sheet_num == 13"
+    stage: 1
+    description: "Speech text contains neither machine marker; spoken-word count round-trips within 3% against the marker-stripped source; chapter offsets map into the spoken text"
+
+  # ── M14 · synthesis: measured experience predicates at pinned rates ───────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      for n in 1 2 3 4 5; do
+        .venv/bin/python scripts/check_audio.py "audio/episode-$n.voice.audio" "audio/episode-$n.txt" {dead_air_s} {cold_open_s} {dur_lo_s} {dur_hi_s} {wpm_lo} {wpm_hi}
+        test -s "audio/episode-$n.pauses.json"
+      done
+      test "$(jq length audio/tts-choices.json)" -eq 5
+    condition: "sheet_num == 14"
+    stage: 1
+    description: "Every episode: audio stream, 4-7 min, rate in the calibrated diagnostic band, first speech <=15s, no mid-episode dead air >3s; engine choice and pause map recorded"
+
+  # ── M15 · bed and mix: level relationships measured per episode ───────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import re, subprocess
+      from pathlib import Path
+      ws = Path('{workspace}')
+      def mean_volume(p):
+          r = subprocess.run(['ffmpeg', '-hide_banner', '-nostats', '-i', str(p),
+                              '-af', 'volumedetect', '-f', 'null', '-'],
+                             capture_output=True, text=True)
+          m = re.search(r'mean_volume:\s*(-?[\d.]+) dB', r.stderr + r.stdout)
+          return float(m.group(1))
+      def dur(p):
+          out = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                                '-of', 'csv=p=0', str(p)], capture_output=True, text=True)
+          return float(out.stdout.strip())
+      for n in range(1, 6):
+          v = ws / ('audio/episode-%d.voice.audio' % n)
+          m = ws / ('audio/episode-%d.mixed.wav' % n)
+          b = ws / ('audio/episode-%d.bed.wav' % n)
+          assert abs(dur(v) - dur(m)) <= 0.5, n
+          assert abs(mean_volume(v) - mean_volume(m)) <= 3.0, n
+          assert mean_volume(b) <= mean_volume(m) - 8.0, (n, mean_volume(b), mean_volume(m))
+      print('mix gates: durations preserved, voice level preserved, bed >=8dB under the mix for EVERY episode')
+      "
+    condition: "sheet_num == 15"
+    stage: 1
+    description: "Per-episode mix duration within 0.5s of voice; level preserved; bed at least 8 dB under the mix — measured for all five, not extrapolated from one"
+
+  # ── M16 · mastering: calibrated AES window on the ENCODED files ───────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json, subprocess
+      from pathlib import Path
+      ws = Path('{workspace}')
+      loud = json.loads((ws / 'dist' / 'loudness.json').read_text())
+      LO = {lufs_target} - {lufs_tol}
+      HI = {lufs_target} + {lufs_tol}
+      for n in range(1, 6):
+          key = 'dist/episode-%d.m4a' % n
+          assert key in loud, key
+          assert LO <= loud[key]['lufs'] <= HI, (key, loud[key]['lufs'])
+          assert loud[key]['true_peak_dbfs'] <= {tp_ceiling}, (key, loud[key]['true_peak_dbfs'])
+          r = subprocess.run(['ffprobe', '-v', 'error', '-show_chapters', '-of', 'json',
+                              str(ws / key)], capture_output=True, text=True)
+          chapters = json.loads(r.stdout)['chapters']
+          assert len(chapters) >= 2, (key, len(chapters))
+          starts = [float(c['start_time']) for c in chapters]
+          ends = [float(c['end_time']) for c in chapters]
+          assert starts[0] <= 1.0, (key, starts[0])
+          for i in range(len(chapters) - 1):
+              assert starts[i + 1] >= ends[i], (key, i, 'overlapping chapters')
+          d = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                              '-of', 'csv=p=0', str(ws / key)], capture_output=True, text=True)
+          assert ends[-1] <= float(d.stdout.strip()) + 0.1, (key, ends[-1])
+      print('mastering gates: LUFS band, encoded true peak <= ceiling, chapters ordered and non-overlapping')
+      "
+    condition: "sheet_num == 16"
+    stage: 1
+    description: "Encoded files: integrated loudness in the AES window (anchored summary parse), true peak <= -1.5 dBFS with the -2.0 loudnorm target, chapters ordered, non-overlapping, inside the file"
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      from PIL import Image
+      feed = Image.open('{workspace}/dist/cover-feed.png')
+      assert feed.size == (1400, 1400), feed.size
+      for n in range(1, 6):
+          c = Image.open('{workspace}/dist/cover-%d.png' % n)
+          assert c.size == (600, 600), (n, c.size)
+      print('covers exact')
+      "
+    condition: "sheet_num == 16"
+    stage: 2
+    description: "Covers render at exact podcast dimensions"
+
+  # ── M17 · repo: ours, guarded at the push, assembly published ─────────────
+  - type: command_succeeds
+    command: |
+      test "$(gh api repos/{github_owner}/{repo_name} --jq .owner.login)" = {github_owner}
+      test -s {workspace}/publish/evidence/performance.md
+      cd {workspace}/publish && test -z "$(git status --porcelain)"
+    condition: "sheet_num == 17"
+    stage: 1
+    description: "Repo exists under the canary-confirmed owner; performance.md published in the evidence tree; publish tree clean after the guarded push"
+
+  # ── M18 · feed: byte-exact enclosures ─────────────────────────────────────
+  - type: command_succeeds
+    command: '{workspace}/.venv/bin/python {workspace}/scripts/build_feed.py {workspace} check https://{github_owner}.github.io/{repo_name}/ {n_episodes}'
+    condition: "sheet_num == 18"
+    stage: 1
+    description: "Feed re-check: 5 items, enclosure lengths byte-exact vs on-disk files, on-origin URLs, per-item attribution"
+
+  # ── M19 · deploy: Pages build bound to the pushed commit ──────────────────
+  - type: command_succeeds
+    command: 'gh api "repos/{github_owner}/{repo_name}/pages" > /dev/null'
+    condition: "sheet_num == 19"
+    stage: 1
+    description: "GitHub Pages is enabled on the published repo"
+  - type: command_succeeds
+    command: |
+      curl -fsI --retry 4 --retry-delay 5 "$(cat {workspace}/validation/site-url.txt)feed.rss" | grep -qi "^content-type:.*xml"
+      cd {workspace}/publish
+      case "$(git rev-parse HEAD)" in "$(cat {workspace}/validation/deployed-sha.txt)"*) exit 0;; *) echo "deployed sha drifted from publish HEAD"; exit 1;; esac
+    condition: "sheet_num == 19"
+    stage: 2
+    description: "Deployed feed answers 200 with an XML content type AND the Pages build is bound to the exact pushed commit — workspace-green is not deployed, and a stale 200 is not live"
+
+  # ── M20 · live gate: the RUNNING artifact ─────────────────────────────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json
+      r = json.load(open('{workspace}/live-gate.json'))
+      assert r['ok'] is True and r['items'] == 5, r
+      assert all(e['content_length'] == str(e['local_bytes']) for e in r['enclosures'])
+      print('live-gate evidence consistent')
+      "
+    condition: "sheet_num == 20"
+    stage: 1
+    description: "Live gate verdict: all five deployed enclosures answered with exact Content-Length"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      curl -sf --retry 4 --retry-delay 5 "$(cat validation/site-url.txt)feed.rss" -o validation/live-refeed.rss
+      .venv/bin/python -c "
+      import os, subprocess
+      import defusedxml.ElementTree as ET
+      items = ET.parse('validation/live-refeed.rss').getroot().findall('./channel/item')
+      enc = items[0].find('enclosure')
+      head = subprocess.run(['curl', '-sI', '--retry', '3', enc.get('url')], capture_output=True, text=True).stdout
+      status = head.splitlines()[0].strip() if head else ''
+      clen = [l.split(':', 1)[1].strip() for l in head.splitlines()
+              if l.lower().startswith('content-length:')][0]
+      assert status.endswith(' 200'), status
+      assert clen == str(os.path.getsize('dist/episode-1.m4a')), (clen, os.path.getsize('dist/episode-1.m4a'))
+      print('fresh live probe: the RUNNING deployment serves exact bytes')
+      "
+    condition: "sheet_num == 20"
+    stage: 2
+    description: "Fresh probe of the RUNNING deployed feed: first enclosure answers 200 with Content-Length equal to local bytes"
+
+  # ── M21 · evidence page: seals + scope visible on the deployed site ───────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      .venv/bin/python -c "
+      import json, urllib.request
+      ledger = json.load(open('relay-ledger.json'))
+      origin = open('validation/site-url.txt').read().strip()
+      page = urllib.request.urlopen(origin + 'evidence/', timeout=60).read().decode('utf-8')
+      for p in ledger['packets']:
+          assert p['sha256'] in page, ('missing packet seal on the deployed page', p['packet'])
+      assert 'Voice-drift table' in page
+      assert 'Scope and limits' in page, 'the page must publish what the proof does NOT establish'
+      assert 'performance.md' in page, 'the assembled serial must be linked'
+      print('deployed evidence page carries every packet seal, the drift table, and the scope disclosure')
+      "
+    condition: "sheet_num == 21"
+    stage: 1
+    description: "Deployed evidence page contains every packet sha256, the drift table, the scope-and-limits disclosure, and the performance.md link"
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json
+      r = json.load(open('{workspace}/link-check.json'))
+      assert r['broken'] == [] and r['checked'] >= 14, r
+      "
+    condition: "sheet_num == 21"
+    stage: 2
+    description: "Zero broken links on the deployed site (checked after the Pages build bound to the pushed commit)"
+
+  # ── M22 · recompute seal: LIVE FEED bytes reproduce the numbers ───────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json
+      s = json.load(open('{workspace}/recompute-seal.json'))
+      assert s['ok'] is True, [c for c in s['checks'] if not c['ok']]
+      assert s['surface'] == 'live feed + deployed site', s.get('surface')
+      assert len(s['published']) == 5
+      assert s['recomputed']['max_lufs_delta'] <= 0.1
+      print('recompute seal ok over the podcatcher-facing surface')
+      "
+    condition: "sheet_num == 22"
+    stage: 1
+    description: "The deployed feed's enclosure bytes (sha256-verified against local dist) and the deployed site's texts reproduce the drift table exactly and the loudness within 0.1 LU"
+
+  # ── M23 · receipts: gates proven failable on their intended error ─────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json
+      r = json.load(open('{workspace}/receipts-report.json'))
+      assert r['ok'] is True, (r['unexpected_passes'], r['unexpected_failures'], r['unattributed_failures'])
+      assert len(r['controls']) >= 14
+      assert r['unattributed_failures'] == []
+      print('receipts: every control behaved and died as designed')
+      "
+    condition: "sheet_num == 23"
+    stage: 1
+    description: "Every negative control failed WITH its intended error text, every positive passed — zero unexpected passes, zero unattributed failures"
+
+  # ── M24 · terminal publish: every seal public and hash-verified live ──────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json
+      r = json.load(open('{workspace}/terminal-publish.json'))
+      assert r['ok'] is True, r
+      assert len(r['artifacts']) == 7
+      assert all(a['live_ok'] for a in r['artifacts'])
+      print('terminal publish receipt consistent')
+      "
+    condition: "sheet_num == 24"
+    stage: 1
+    description: "Terminal receipt: all seven terminal artifacts published and live-verified"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      remote="$(curl -sf --retry 4 --retry-delay 5 "$(cat validation/site-url.txt)evidence/terminal/receipts-report.json" | sha256sum | cut -d' ' -f1)"
+      local="$(sha256sum publish/evidence/terminal/receipts-report.json | cut -d' ' -f1)"
+      test -n "$remote" && test "$remote" = "$local"
+    condition: "sheet_num == 24"
+    stage: 2
+    description: "Fresh independent fetch: the deployed receipts report is byte-identical to the local seal — the proof's own gates are public, live, right now"
+
+# =============================================================================
+# Composed 2026-09-03 (rev 1, sheet 4); revised 2026-09-04 (rev 2, sheet 8)
+# against three adversarial reviews. The score's scripts are authored
+# in-workspace by the movements that run them, published to the repo at M17,
+# re-fetched from the LIVE feed at M22, and corrupted on purpose at M23.
+# Calibration provenance and per-review dispositions: 06-proof-notes.md.
+# =============================================================================

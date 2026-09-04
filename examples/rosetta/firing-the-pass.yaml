@@ -1,0 +1,3089 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║        THE NIGHT DISPATCH — Firing the Pass proof score (REVISED)            ║
+# ║        rosetta-prove iteration 5 · sheet 8 · 2026-09-04                      ║
+# ║                                                                              ║
+# ║  REVISION PROVENANCE: this file is 04-proof-score.yaml after three           ║
+# ║  adversarial reviews (05-review-{1,2,3}.md — practitioner, skeptic,          ║
+# ║  newcomer; all three verdicts NEEDS REVISION) and one EXECUTED               ║
+# ║  re-commissioning pass. Every fix below was run for real in a scratch        ║
+# ║  workspace before it entered this file — the exact discipline the             ║
+# ║  reviews proved the original commissioning skipped. Execution                 ║
+# ║  findings folded in (2026-09-04, this host):                                 ║
+# ║    - horizon conventions RECONCILED: skyfield and PyEphem now cross          ║
+# ║      the SAME threshold (center altitude = -(refraction + semidiameter),     ║
+# ║      refraction 34' scaled to the pinned 1010 mbar / 10 C where the          ║
+# ║      scale factor is exactly 1.0); executed join: 561/561 events,           ║
+# ║      worst rise/set delta 0.01 min, worst phase delta 0.09 min              ║
+# ║      — the ±1 min band now measures METHOD difference, not convention        ║
+# ║      mismatch (review 1 measured the OLD gap at 3.56 min and refused         ║
+# ║      band-widening as laundering; the convention was fixed instead)          ║
+# ║    - de440s.bsp kernel names: mars/jupiter/saturn exist ONLY as              ║
+# ║      barycenters — eph["mars"] raises KeyError (executed). Fixed with        ║
+# ║      an explicit kernel map; barycenter/center offset ≲0.2" is far          ║
+# ║      below minute sensitivity                                                 ║
+# ║    - skyfield find_discrete now requires f.step_days (executed) —           ║
+# ║      set 0.125 (sun crosses the horizon up to 4x/day with twilight)          ║
+# ║    - M7 candidates live-verified against Wikidata with batched entity        ║
+# ║      fetches and paced searches: 12 stable October records (floor 3),        ║
+# ║      all 12 re-verified live; throttling (429 + empty-200 search) is         ║
+# ║      retried with backoff                                                    ║
+# ║    - iCal fold-day strategy executed: fold-day VEVENTs serialize as          ║
+# ║      UTC (...Z) because RFC 5545 local time is ambiguous across the          ║
+# ║      fall-back; parse-back compares UTC INSTANTS, not wall text —            ║
+# ║      the two 02:00-03:00 instants round-trip distinctly                      ║
+# ║    - tier ladder de-degenerated: t3 gets its own site_extra credit;          ║
+# ║      executed: t1 18:05 < t2 19:05 < t3 19:15Z strict                        ║
+# ║                                                                              ║
+# ║  PRIMARY PATTERN : Firing the Pass — a release instant fixed by the civil    ║
+# ║                    calendar (2026-10-01T00:00:00 Europe/Amsterdam ==         ║
+# ║                    2026-09-30T22:00:00Z EXACTLY — no 23:59:59 rounding),     ║
+# ║                    planned BACKWARD from: latest-start arithmetic, a         ║
+# ║                    latest-safe GO cue, and negative slack surfaced as data   ║
+# ║                    the moment it exists (a D1 after t3_start sets            ║
+# ║                    pass_at_risk:true — the floor itself overrun is data,     ║
+# ║                    never a hidden retry).                                    ║
+# ║                    COMPOSING: Graceful Retreat — a tier ladder               ║
+# ║                    PREDECLARED in the backward plan (1 "Full Dispatch":      ║
+# ║                    4 narration voices, 3 chart families, printable field     ║
+# ║                    card, iCal+RSS, cut log; 2 "Field Edition": event         ║
+# ║                    tables, moon strip, iCal+RSS, one-line captions;          ║
+# ║                    3 "Ephemeris Card": iCal + cut log), selected by          ║
+# ║                    arithmetic at exactly two decision points (D1 =           ║
+# ║                    band-join, D2 = product gates), ratcheting downward       ║
+# ║                    only, D2 selecting the RICHEST tier whose remaining       ║
+# ║                    tail still fits (not a single-step degrade — review        ║
+# ║                    2's finding), VERIFIED against actual artifacts PLUS      ║
+# ║                    attempt evidence, and DEGRADE REBUILDS the site           ║
+# ║                    (a retreat that ships dangling <img> references           ║
+# ║                    violates the covenant the retreat exists to keep —        ║
+# ║                    review 3's finding; now gated: every local                ║
+# ║                    src/href must exist on disk).                             ║
+# ║                    Sign-Off Chain Against the Hard Date — three owners,      ║
+# ║                    three DISJOINT classes (S1 temporal/ephemeris, S2         ║
+# ║                    statistical, S3 editorial/experience), each signing       ║
+# ║                    ONLY its own class with digests of its consumed           ║
+# ║                    inputs; the deadline-gate joins verdicts and waivers      ║
+# ║                    BIJECTIVELY — every class exactly one verdict, every      ║
+# ║                    non-accept verdict requires a waiver naming               ║
+# ║                    authority + expiry + compensating control; an absent      ║
+# ║                    verdict can never convert to an implicit waiver.          ║
+# ║                    The join code itself is a function replayed against       ║
+# ║                    corrupt fixtures — incomplete-waiver, duplicate-          ║
+# ║                    ownership, and absent-verdict fixtures are each           ║
+# ║                    run through the REAL join and must be killed (the         ║
+# ║                    original drills asserted Python literals about            ║
+# ║                    themselves — reviews 1/2/3's "tautological drills"        ║
+# ║                    finding).                                                 ║
+# ║                    Standby–GO — buffer B assembles and fully validates       ║
+# ║                    while the live root stays frozen and digest-stable;       ║
+# ║                    arm re-runs the ACTUAL product-gate scripts               ║
+# ║                    (ics instant matrix, web/contrast, pdf geometry —         ║
+# ║                    review 3 proved the original arm re-ran one parse         ║
+# ║                    and called it every gate); go is the single atomic        ║
+# ║                    cutover, refusing unless armed and refusing a             ║
+# ║                    duplicate GO for the same cue (addressed-cue rule,        ║
+# ║                    re-tested by the sheet's own validation — it              ║
+# ║                    invokes go.sh a second time and demands exit 3).          ║
+# ║                    GO is idempotent-by-construction against the              ║
+# ║                    push/append crash window (review 2's finding):           ║
+# ║                    fixed GIT_AUTHOR_DATE/COMMITTER_DATE at the cue +         ║
+# ║                    fixed message + identical tree ⇒ a retry after a          ║
+# ║                    crash between push and log-append re-derives the          ║
+# ║                    SAME commit sha; the duplicate push is byte-              ║
+# ║                    identical, not a second external effect. An INTENT        ║
+# ║                    line precedes the push so a crash never erases the        ║
+# ║                    record that the pass was firing.                          ║
+# ║  FOUNDATIONAL    : The Etiquette Law — 17 of 19 movements are CLI            ║
+# ║                    movements with EXPLICIT EMPTY fallback chains; a tool     ║
+# ║                    stage that silently falls back to a mind is a lie with    ║
+# ║                    a receipt. LLMs appear only where the grain is            ║
+# ║                    judgment: narration voice and class verdicts.            ║
+# ║  CONTAINED       : Canary Probe (self-canary — gh identity, judgment         ║
+# ║                    instruments, repo reachability + FIRST-RUN repo           ║
+# ║                    SEEDING so the canary is a path through, not a            ║
+# ║                    dead end — review 1 proved the original died at M2        ║
+# ║                    on a fresh workspace with no path to M17),                ║
+# ║                    Prefabrication (the narration contract),                  ║
+# ║                    Proof-Carrying Artifact (sha256-pinned JPL ephemeris,     ║
+# ║                    digest-joined sign-off inputs, live-verified QID         ║
+# ║                    citations, served-bytes seal re-derived per event).      ║
+# ║                                                                              ║
+# ║  PROBLEM SOLVED  : Forward scheduling discovers too late that prerequisite   ║
+# ║                    work cannot fit before a fixed release instant. An        ║
+# ║                    October sky almanac that ships after October 1st is       ║
+# ║                    dead on arrival; one that silently drops content and      ║
+# ║                    calls the remnant complete is lying. The orchestration    ║
+# ║                    contributes what the astronomy cannot: backward           ║
+# ║                    arithmetic that decides the tier BEFORE the expensive     ║
+# ║                    fan-out, a retreat ladder whose claimed tier is           ║
+# ║                    verified by a CLI against actual bytes, three sign-offs   ║
+# ║                    that cannot merge into one vague approval, an atomic      ║
+# ║                    cutover at a calculated cue, and a live seal that         ║
+# ║                    re-derives every published minute from the bytes a        ║
+# ║                    subscriber actually receives.                            ║
+# ║                                                                              ║
+# ║  PRODUCES        : <workspace-root>/night-dispatch/ (auto-managed) →         ║
+# ║                    tolerance-bands.json · backward-plan.json · canary.json · ║
+# ║                    instrument-families.json · ephemeris/{de440s.bsp,         ║
+# ║                    events.json, manifest.json} · oracle/{oracle-times.json,  ║
+# ║                    selftest.json} · band-report.json · tier-state.json ·     ║
+# ║                    schedule-state.jsonl · climatology.json · raw/clim/*.json ║
+# ║                    · anniversaries.json · charts/*.svg · pages/*.md ·       ║
+# ║                    attribution-report.json · palette.json ·                  ║
+# ║                    gates_{ics,web,pdf}.py · build-site.py · make-card.py ·   ║
+# ║                    buffer-B/{index.html, tonight/*.html, events.ics,        ║
+# ║                    rss.xml, night-dispatch-2026-10.pdf, cutlog.html,         ║
+# ║                    product-gates-*.json, ...} · signoffs/{s1,s2,s3}.json ·  ║
+# ║                    release-attestation.json · armed-*.json ·                 ║
+# ║                    cue-log.jsonl · seal.json — and a PUBLIC repo +           ║
+# ║                    GitHub Pages site a real observer opens: a                ║
+# ║                    subscribable iCal feed with TZID-correct local times      ║
+# ║                    across the 2026-10-25 EU fall-back (fold-day              ║
+# ║                    instants published in UTC — executed and                  ║
+# ║                    round-trip-verified), civil+nautical twilight             ║
+# ║                    windows (the registered twilight band is now              ║
+# ║                    EARNED by measurement — review 1 killed the               ║
+# ║                    dead registration), a red-on-black printable              ║
+# ║                    field card, per-night "tonight" panels, and a cut-log     ║
+# ║                    page disclosing exactly what was cut, the                ║
+# ║                    arithmetic that cut it, and MEASURED actuals              ║
+# ║                    beside the planning estimates (the original               ║
+# ║                    hardcoded "seconds: 60" actuals were fabricated —         ║
+# ║                    review 3's finding; every schedule record now             ║
+# ║                    carries a genuinely measured duration).                  ║
+# ║                                                                              ║
+# ║  INSTRUMENTS     : 6 categories, re-probed on-host 2026-09-04 —             ║
+# ║                    scientific compute (uv run --with skyfield --with         ║
+# ║                    jplephem over a sha256-pinned de440s.bsp; independent     ║
+# ║                    PyEphem oracle under a SHARED horizon convention),        ║
+# ║                    data APIs (Open-Meteo archive climatology, Wikidata       ║
+# ║                    entity API for QID-verified anniversaries — batched       ║
+# ║                    and paced after live throttling), rendering               ║
+# ║                    (matplotlib text-as-text SVG, reportlab A4 field          ║
+# ║                    card), calendar (icalendar RFC 5545 with                  ║
+# ║                    VTIMEZONE/TZID), publishing (git + gh + GitHub            ║
+# ║                    Pages; the push credential is gh's token via             ║
+# ║                    `git -c credential.helper='!gh auth git-credential'`,    ║
+# ║                    canaried by M2's gh auth check — review 3's               ║
+# ║                    "credential path never canaried" finding), agents         ║
+# ║                    (claude-code / codex-cli / opencode on the 7              ║
+# ║                    judgment sheets ONLY).                                    ║
+# ║                    VENDOR-DIVERSITY HONESTY (probed via `mzt                 ║
+# ║                    instruments list`, 2026-09-04): claude-code →             ║
+# ║                    glm-5.3[1m], opencode → zai-coding-plan/glm-5.3,          ║
+# ║                    codex-cli → client default (GPT family). TWO real         ║
+# ║                    model families across three instrument names —           ║
+# ║                    recorded, not performed. The cross-family leg             ║
+# ║                    (codex-cli) owns S1. The binding requirement is           ║
+# ║                    TWO families LIVE among PRESENT binaries (≥2 of          ║
+# ║                    3 judgment clients present) — the original                ║
+# ║                    all-three-binaries requirement contradicted the           ║
+# ║                    score's own fallback design (review 3's finding).        ║
+# ║                                                                              ║
+# ║  EXECUTION MAP   : (19 movements → 24 expanded sheets; fan-outs at M9, M14)  ║
+# ║                                                                              ║
+# ║      M1  The Backward Plan          plan + cue + ladder        [CLI]        ║
+# ║      M2  Self-Canary + Seed         gh·instruments·repo·main   [CLI]        ║
+# ║      M3  The Ephemeris              skyfield over pinned bsp   [CLI]        ║
+# ║      M4  The Second Method          PyEphem oracle + selftest  [CLI]        ║
+# ║      M5  The Band Join        D1    bands + tier arithmetic    [CLI]        ║
+# ║      M6  Twenty Octobers            cloud climatology          [CLI]        ║
+# ║      M7  The Old Nights             QID-verified anniversaries [CLI]        ║
+# ║      M8  Painting the Sky           SVG chart families         [CLI]        ║
+# ║      M9  Four Voices          ×4 ── Prefabricated narration ── [LLM]        ║
+# ║      M10 The Attribution Gate        cultural-name join         [CLI]        ║
+# ║      M11 The Products               ics·site·rss·pdf→buffer B  [CLI]        ║
+# ║      M12 The Product Gates    D2    instant matrix·geometry·   [CLI]        ║
+# ║                                    contrast·dangling·tier re-decide        ║
+# ║      M13 Verify the Tier            artifacts + attempt proof  [CLI]        ║
+# ║      M14 Three Signatures     ×3 ── Sign-Off Chain ────────── [LLM]         ║
+# ║      M15 The Deadline Gate           bijective verdict join    [CLI]        ║
+# ║      M16 Arm                         ack set + gate re-runs    [CLI]        ║
+# ║      M17 GO                          the single cutover        [CLI]        ║
+# ║      M18 The Cut-Log Audit           served page joins state   [CLI]        ║
+# ║      M19 The Live Seal               served bytes re-derived   [CLI]        ║
+# ║                                                                              ║
+# ║  ANTI-FABRICATION SEAMS (deterministic joins, never LLM judgment):          ║
+# ║    - tolerance bands are digest-registered at M1 BEFORE any computation;    ║
+# ║      both compute scripts REFUSE to run on digest mismatch; EVERY           ║
+# ║      registered band is consumed by a measurement (rise/set ±1 min,         ║
+# ║      twilight ±3 min, phase ±1 min — the dead twilight registration         ║
+# ║      review 1 killed is now real civil+nautical twilight events)            ║
+# ║    - the oracle is a different code lineage (PyEphem/XEphem) crossing       ║
+# ║      the SAME horizon convention (executed: worst delta 0.01 min),          ║
+# ║      self-tested against a published reference value before it is           ║
+# ║      trusted; it covers ALL seven rise/set bodies, both twilight           ║
+# ║      depths, and the phases                                                ║
+# ║    - the DST fold: events on 2026-10-24/25/26 land on correct local         ║
+# ║      wall clocks, the fold day carries BOTH offsets in events.json,         ║
+# ║      and fold-day VEVENTs serialize as UTC instants (RFC 5545 local         ║
+# ║      time cannot distinguish the two 02:00-03:00 hours; the parse-back      ║
+# ║      matrix compares UTC INSTANTS, so an hour error cannot survive          ║
+# ║      matching wall text — review 2's finding)                              ║
+# ║    - every cultural claim in every narrated page joins a live-verified      ║
+# ║      Wikidata QID record; narration cannot publish unsourced names          ║
+# ║    - every iCal VEVENT re-parses to its events.json UTC instant;            ║
+# ║      UIDs stable across regeneration                                       ║
+# ║    - PDF geometry measured on the produced file (pdfminer): A4, ≥8 pt       ║
+# ║      floor, extractable text, and ALL text within page bounds (the          ║
+# ║      overflow gate the architecture promised — review 3's finding)          ║
+# ║    - palette is a single source (palette.json): style.css is               ║
+# ║      generated from it, make-card.py reads it, and the contrast gate        ║
+# ║      computes ratios from the PRODUCED style.css bytes (the                 ║
+# ║      constants-vs-constants mirror the reviews killed)                      ║
+# ║    - the tier claim is verified against the artifact tree, the             ║
+# ║      ratchet history cites re-derivable slack arithmetic, and the          ║
+# ║      D1 window is re-derived from the plan's tier starts (a legit          ║
+# ║      tier-2-at-D1 selection no longer fails its own verifier —             ║
+# ║      review 3's inverted-ratchet finding)                                  ║
+# ║    - the deadline-gate join is a function replayed against corrupt          ║
+# ║      fixtures (incomplete waiver, duplicate ownership, absent               ║
+# ║      verdict) — each must be KILLED by the real join, recorded in          ║
+# ║      the attestation                                                      ║
+# ║    - arm re-runs the actual product-gate scripts and compares their         ║
+# ║      pass verdicts; the missing-ack fixture is run through the real         ║
+# ║      ack checker and must be refused                                      ║
+# ║    - go writes an INTENT line before the push and a GO line after;          ║
+# ║      deterministic commit metadata makes a crash-window retry               ║
+# ║      byte-identical; go refuses a second GO for the same cue —              ║
+# ║      re-invoked by the validation to prove refusal                         ║
+# ║    - the seal re-derives from SERVED bytes: every VEVENT's UTC              ║
+# ║      instant re-joins events.json, the oracle re-derives EVERY             ║
+# ║      oracle-covered event (not one spot-check — reviews 2/3's              ║
+# ║      finding), and a mutated fixture must FAIL the real verifier           ║
+# ║      (drill runs at validation time)                                       ║
+# ║    - meteor showers are DATE-precision activity windows (IMO annual         ║
+# ║      tables), not fabricated HH:MM:SS "peak instants" — review 3's         ║
+# ║      citation-inflation finding; moonlight degradation is computed          ║
+# ║      from the pinned ephemeris at the window night; conjunction            ║
+# ║      times are bisected to sub-minute precision, not quantized to          ║
+# ║      the hourly sampling grid                                             ║
+# ║                                                                              ║
+# ║  GENERICITY     : no workspace: field (auto-managed, #58). The pinned       ║
+# ║                    location/edition/hard-date/selftest-reference/           ║
+# ║                    shower-windows are VARIABLES with this proof's           ║
+# ║                    values as defaults — a future edition changes the        ║
+# ║                    variables, not the DAG (the original hardcoded           ║
+# ║                    UTC-literal assert, month-10 regex, shower table,        ║
+# ║                    and chart titles were a costume over a one-shot          ║
+# ║                    edition — review 3's finding; M1's boundary assert       ║
+# ║                    is now generic midnight-exactness, and the               ║
+# ║                    validation derives the month from the variable).         ║
+# ║                    GitHub owner/repo are variables. `gh` must be            ║
+# ║                    authenticated AS github_owner (checked at M2).          ║
+# ║                    PUBLICATION POLICY: M2 creates the repo if              ║
+# ║                    missing and SEEDS exactly one bootstrap commit           ║
+# ║                    (marker + README stub — no edition content) so          ║
+# ║                    main exists for Pages enablement; each run               ║
+# ║                    force-pushes main of repo_name at GO; the push           ║
+# ║                    is refused unless origin/main is empty-seeded or         ║
+# ║                    a prior Night Dispatch edition (marker file).           ║
+# ║                    Point repo_name at a name you own outright.              ║
+# ║                                                                              ║
+# ║  USAGE          : mzt run <this-file>.yaml                                  ║
+# ║                    mzt status night-dispatch                                ║
+# ║                    First run: M2 creates+seeds the repo and enables         ║
+# ║                    Pages (bootstrap commit only — content lands at         ║
+# ║                    GO). Requires gh authenticated as github_owner           ║
+# ║                    and ≥2 of {claude, codex, opencode} live with ≥2         ║
+# ║                    real model families among them.                          ║
+# ║                    (running AFTER 2026-10-01 is legitimate: the clock is    ║
+# ║                    real, the machinery discloses lateness honestly in the   ║
+# ║                    cut log and the deadline-gate waiver record)             ║
+# ║                                                                              ║
+# ║  Time: ~60-120 min (bsp fetch ~32 MB + 7 judgment sheets + Pages deploy)    ║
+# ║  Cost: ~$3-7 (7 LLM sheets)  |  Sheets: 24                                  ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: night-dispatch
+description: "Firing the Pass proof (revised) — a backward-planned October 2026 sky almanac for a pinned city, tier-degradable by arithmetic, signed off by three disjoint classes, cut over atomically at a computed cue, and sealed live from served bytes re-derived per event."
+
+# workspace: intentionally omitted — auto-managed at <workspace-root>/night-dispatch (#58).
+
+instrument: claude-code
+instrument_config:
+  timeout_seconds: 1800
+
+# Fallback chain for JUDGMENT sheets only. Every CLI movement below overrides
+# this with an explicit empty chain — tools never fall back to minds.
+instrument_fallbacks: [codex-cli, opencode]
+
+# Named instruments: the three narration voices and three sign-off owners are
+# distinct instrument NAMES so the map is explicit and the family record can be
+# joined per owner. Profiles are the three probed judgment clients; see the
+# VENDOR-DIVERSITY HONESTY block in the header — two real families, recorded,
+# not performed.
+instruments:
+  voice-lunar:
+    profile: claude-code
+    config: {timeout_seconds: 1800}
+  voice-planetary:
+    profile: codex-cli
+    config: {timeout_seconds: 1800}
+  voice-meteors:
+    profile: opencode
+    config: {timeout_seconds: 1800}
+  voice-history:
+    profile: claude-code
+    config: {timeout_seconds: 1800}
+  signoff-temporal:
+    profile: codex-cli       # the cross-family leg gets the class whose
+    config: {timeout_seconds: 1500}  # checks are most mechanical
+  signoff-statistical:
+    profile: claude-code
+    config: {timeout_seconds: 1500}
+  signoff-editorial:
+    profile: opencode
+    config: {timeout_seconds: 1500}
+
+# Circuit breaker — verified semantics only: trips on CONSECUTIVE SHEET
+# FAILURES (execution.py), never on spend. 7 judgment sheets; 3 failures
+# means the fan-out is sick, not unlucky.
+circuit_breaker:
+  enabled: true
+  failure_threshold: 3
+  recovery_timeout_seconds: 600
+
+movements:
+  # ── Phase 1 · The clock before the work — Firing the Pass stage 1 ──────────
+  1:
+    name: "The Backward Plan"
+    instrument: cli            # Tool Chain: pure arithmetic + JSON emit; an LLM
+    instrument_fallbacks: []   # here could hallucinate the schedule that polices
+                               # everything else. Also PRE-REGISTERS the
+                               # tolerance bands + shared refraction convention
+                               # (First Article: thresholds before measurement).
+    instrument_config:
+      timeout_seconds: 300
+  2:
+    name: "Self-Canary + Seed"
+    instrument: cli            # Canary Probe: gh identity, judgment binaries,
+    instrument_fallbacks: []   # repo reachability + FIRST-RUN main-branch
+                               # seeding — network/auth problems die HERE,
+                               # cheaply and loudly, with a path THROUGH them
+                               # (review 1 proved the detect-only version was
+                               # a fresh-workspace dead end).
+    instrument_config:
+      timeout_seconds: 900
+  # ── Phase 2 · Two independent methods over one pinned substrate ────────────
+  3:
+    name: "The Ephemeris"
+    instrument: cli            # Etiquette Law: JPL integration via skyfield is
+    instrument_fallbacks: []   # deterministic; the .bsp is sha256-verified
+                               # before a single event is computed.
+    instrument_config:
+      timeout_seconds: 3600    # includes the one-time ~32 MB bsp fetch
+  4:
+    name: "The Second Method"
+    instrument: cli            # Verify through Diverse Observers: PyEphem
+    instrument_fallbacks: []   # (XEphem lineage) never touches skyfield's
+                               # Kepler integration, but crosses the SAME
+                               # horizon convention. Self-tests against a
+                               # published reference value first.
+    instrument_config:
+      timeout_seconds: 1800
+  5:
+    name: "The Band Join"
+    instrument: cli            # Graduate & Filter — D1: deltas within the
+    instrument_fallbacks: []   # digest-pinned bands, THEN the tier arithmetic
+                               # that decides the fan-out before it is spent.
+    instrument_config:
+      timeout_seconds: 600
+  # ── Phase 3 · The world the almanac speaks about ───────────────────────────
+  6:
+    name: "Twenty Octobers"
+    instrument: cli            # Etiquette Law: curl + stdlib statistics; every
+    instrument_fallbacks: []   # bin carries n/median/IQR — an unsized claim
+                               # cannot enter the record.
+    instrument_config:
+      timeout_seconds: 2400    # >= 20 Octobers x hourly cloud cover
+  7:
+    name: "The Old Nights"
+    instrument: cli            # Proof-Carrying Artifact: anniversary claims are
+    instrument_fallbacks: []   # resolved to Wikidata QIDs at RUNTIME and their
+                               # dates RE-VERIFIED live — batched, paced, and
+                               # retried after live throttling (reviews 1/3
+                               # proved the unpaced version dies on a healthy
+                               # API). The floor is met by candidates that
+                               # were themselves live-verified before shipping.
+    instrument_config:
+      timeout_seconds: 1200    # pacing + backoff headroom
+  # ── Phase 4 · Charts and voices ────────────────────────────────────────────
+  8:
+    name: "Painting the Sky"
+    instrument: cli            # Etiquette Law: matplotlib with svg.fonttype=none
+    instrument_fallbacks: []   # so labels are extractable text, not paths.
+    instrument_config:
+      timeout_seconds: 1200
+  9:
+    name: "Four Voices"
+    instrument: claude-code    # Prefabrication (contained): the voice is
+                               # judgment — a template would pass every gate and
+                               # gut the CULT claim. Bounded into a renderer-
+                               # with-judgment: cannot invent events (inputs
+                               # digest-pinned), cannot invent cultural names
+                               # (attribution gate), cannot escape the
+                               # interface (XREF contract). Reads tier-state to
+                               # know its content set.
+    instrument_config:
+      timeout_seconds: 1800
+  10:
+    name: "The Attribution Gate"
+    instrument: cli            # Etiquette Law: every source: QID in every page
+    instrument_fallbacks: []   # joins anniversaries.json, every from: line
+                               # names a real input file, every XREF target
+                               # page EXISTS — narration cannot publish
+                               # unsourced names or dead cross-references.
+    instrument_config:
+      timeout_seconds: 600
+  # ── Phase 5 · Products and their gates ─────────────────────────────────────
+  11:
+    name: "The Products"
+    instrument: cli            # Etiquette Law: icalendar + stdlib site gen +
+    instrument_fallbacks: []   # reportlab field card, assembled into buffer B
+                               # while the live root stays frozen (Standby-GO).
+                               # One palette source; fold-day instants in UTC.
+    instrument_config:
+      timeout_seconds: 2400
+  12:
+    name: "The Product Gates"
+    instrument: cli            # Graduate & Filter — D2: ics instant matrix,
+    instrument_fallbacks: []   # PDF geometry + overflow measured on the file,
+                               # contrast computed from produced bytes,
+                               # dangling-reference check, tonight recompute,
+                               # tier re-decision that rebuilds the site.
+    instrument_config:
+      timeout_seconds: 1800
+  13:
+    name: "Verify the Tier"
+    instrument: cli            # Graceful Retreat verification half: claimed
+    instrument_fallbacks: []   # tier vs actual artifacts + attempt evidence +
+                               # monotone ratchet + re-derivable arithmetic +
+                               # estimate-vs-actual drift recorded.
+    instrument_config:
+      timeout_seconds: 600
+  # ── Phase 6 · Separation of powers against the hard date ───────────────────
+  14:
+    name: "Three Signatures"
+    instrument: claude-code    # Sign-Off Chain: the deterministic core of each
+                               # class already IS CLI (band reports, schema
+                               # gates, geometry); the AI owns the VERDICT
+                               # and the waiver decision — whether evidence
+                               # suffices under a hard date. A threshold rule
+                               # would convert the chain into automation and
+                               # destroy attributability.
+    instrument_config:
+      timeout_seconds: 1500
+  15:
+    name: "The Deadline Gate"
+    instrument: cli            # Sign-Off Chain join: bijective verdicts +
+    instrument_fallbacks: []   # waivers; absent verdict can never convert to
+                               # implicit waiver; duplicate ownership dies;
+                               # the join function is replayed against three
+                               # corrupt fixtures and each must be killed.
+    instrument_config:
+      timeout_seconds: 600
+  # ── Phase 7 · Standby-GO ───────────────────────────────────────────────────
+  16:
+    name: "Arm"
+    instrument: cli            # Standby-GO arm: verify the complete ack set +
+    instrument_fallbacks: []   # RE-RUN the actual product-gate scripts, without
+                               # touching the live root; record prior live state.
+    instrument_config:
+      timeout_seconds: 1200
+  17:
+    name: "GO"
+    instrument: cli            # Standby-GO fire: the single atomic cutover at
+    instrument_fallbacks: []   # the computed cue; refuses unless armed;
+                               # refuses a duplicate GO for the same cue;
+                               # deterministic commit metadata makes the
+                               # push/append crash window idempotent.
+    instrument_config:
+      timeout_seconds: 1800    # git commit + force-push + Pages
+  18:
+    name: "The Cut-Log Audit"
+    instrument: cli            # Graceful Retreat disclosure: the cut-log page
+    instrument_fallbacks: []   # was built INTO buffer B (no second push after
+                               # the exactly-once cue); this movement audits
+                               # that EVERY served claim joins a state record
+                               # AND every state record appears on the page.
+    instrument_config:
+      timeout_seconds: 900
+  19:
+    name: "The Live Seal"
+    instrument: cli            # Proof-Carrying Artifact: fetch the SERVED
+    instrument_fallbacks: []   # events.ics + pages over HTTPS; re-derive every
+                               # published instant; re-derive EVERY
+                               # oracle-covered event from the independent
+                               # method; digest what was served.
+                               # Workspace-green != deployed-green.
+    instrument_config:
+      timeout_seconds: 1800
+
+sheet:
+  size: 1
+  total_items: 19          # movements pre-expansion; engine expands to 24 sheets
+  fan_out:
+    9: 4                   # Four Voices: lunar / planetary / meteors / history (sheets 9-12)
+    14: 3                  # Three Signatures: S1/S2/S3 disjoint classes (sheets 17-19)
+  dependencies:            # movement-keyed; engine expands to the sheet DAG
+    2: [1]                 # the canary verifies a plan exists
+    3: [2]                 # ephemeris needs substrate + identity verified
+    4: [2]                 # oracle runs beside, never after, the primary
+    5: [3, 4]              # D1 joins BOTH methods — fan-in
+    6: [2]                 # climatology: independent leaf (window W1)
+    7: [2]                 # anniversaries: independent leaf (window W1)
+    8: [5]                 # charts consume VERIFIED events only
+    9: [5, 6, 7]           # voices read verified events + climatology + anniversaries
+    10: [9]                # attribution judges the pages that exist
+    11: [8, 10]            # products consume charts + attributed pages
+    12: [11]               # D2 gates the built buffer
+    13: [12]               # tier verification reads gates + buffer
+    14: [13]               # sign-offs read the verified tree
+    15: [14]               # the join reads all three signatures
+    16: [15]               # arm reads the attestation
+    17: [16]               # go requires armed
+    18: [17]               # audit the SERVED cut log (post-cutover, read-only)
+    19: [17]               # seal the SERVED bytes (post-cutover, read-only)
+  instrument_map:          # sheet-keyed (expanded); named instruments above
+    voice-lunar: [9]           # claude-code  (glm-zai family, probed)
+    voice-planetary: [10]      # codex-cli    (gpt family, probed — cross-vendor voice)
+    voice-meteors: [11]        # opencode     (glm-zai family, probed)
+    voice-history: [12]        # claude-code  (glm-zai family, probed)
+    signoff-temporal: [17]     # codex-cli  — S1 temporal/ephemeris
+    signoff-statistical: [18]  # claude-code — S2 statistical
+    signoff-editorial: [19]    # opencode    — S3 editorial/experience
+  per_sheet_fallbacks:     # expanded-sheet-keyed; judgment sheets ONLY.
+                           # codex-primary sheets must not "fall back" to codex.
+    10: [claude-code, opencode]
+    17: [claude-code, opencode]
+    # sheets 9, 11, 12, 18, 19 inherit the score chain [codex-cli, opencode].
+  descriptions:
+    1: "Backward plan — latest-start arithmetic from the hard instant, GO cue, predeclared tier ladder (three DISTINCT starts), tolerance bands registered"
+    2: "Self-canary + seed — gh identity, judgment binaries + family map, repo created-and-seeded (bootstrap commit) + Pages verified"
+    3: "Ephemeris — pinned de440s.bsp via skyfield: shared-convention rise/set (7 bodies), civil+nautical twilight, phases, conjunctions (bisected), shower windows; DST-exact local rendering"
+    4: "Oracle — PyEphem second method under the SAME horizon convention, self-tested against a published reference"
+    5: "Band join — D1: every shared event within pre-registered bands; tier arithmetic selects the fan-out content set; corruption drill runs the REAL join"
+    6: "Climatology — twenty-plus Octobers of hourly cloud cover; n/median/IQR per bin"
+    7: "Anniversaries — QID-resolved, date-verified astronomy history (batched, paced, retried, fully re-verified)"
+    8: "Charts — moon strip, planet tracks (time-encoded), month timeline; text-as-text SVG"
+    9: "Voice — lunar pages (phases, moonlight, tides of the month)"
+    10: "Voice — planetary pages (visibility windows, conjunctions)"
+    11: "Voice — meteor pages (shower windows degraded by moonlight and cloud)"
+    12: "Voice — history pages (anniversaries, sourced)"
+    13: "Attribution gate — every cultural claim joins a verified QID record; every from: line names an input; every XREF target exists"
+    14: "Products — events.ics (fold-day instants in UTC), static site, RSS, tonight panels, field-card PDF, cut-log page into buffer B; one palette source"
+    15: "Product gates — D2: ics instant matrix, PDF geometry + overflow, contrast from produced bytes, dangling-reference check, tonight recompute, tier re-decision that REBUILDS the site"
+    16: "Verify the tier — claimed tier vs actual artifacts + attempt evidence + ratchet arithmetic + estimate-vs-actual drift"
+    17: "Sign-off S1 — temporal/ephemeris integrity (codex family)"
+    18: "Sign-off S2 — statistical integrity (claude-code family)"
+    19: "Sign-off S3 — editorial/experience integrity (opencode family)"
+    20: "Deadline gate — bijective verdict/waiver join (replayed against corrupt fixtures), release attestation"
+    21: "Arm — ack-set completeness + ACTUAL product-gate re-runs, live root untouched"
+    22: "GO — the single atomic cutover at the computed cue (deterministic commit; INTENT/GO log lines)"
+    23: "Cut-log audit — every served claim joins a state record and vice versa"
+    24: "Live seal — served bytes re-derived per event; every oracle-covered event re-derived; mutated fixture must fail the real verifier"
+
+parallel:
+  enabled: true
+  max_concurrent: 4          # W1 = {3,4,6,7}; W2 = {8, 9a-d}; W3 = {17,18,19}
+  fail_fast: true
+
+retry:
+  max_retries: 1             # CLI gates fail LOUD, they are not retried into
+  base_delay_seconds: 30     # blur (Andon discipline); one retry absorbs
+                             # transient network only.
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 3600
+
+# cross_sheet: deliberately ABSENT — auto_capture_stdout would fan workspace
+# stdout into later prompts; here the context economics are structural (voices
+# read their own distilled inputs from disk) and the sign-offs must judge the
+# ARTIFACTS, not each other's console noise.
+
+prompt:
+  variables:
+    # ── Publishing identity (single point of change) ──
+    github_owner: "Mzzkc"
+    repo_name: "night-dispatch"
+    # ── The pinned world (a future edition changes these, not the DAG) ──
+    city_label: "Amsterdam"
+    lat: 52.37
+    lon: 4.90
+    tz: "Europe/Amsterdam"
+    edition: "2026-10"
+    edition_year: 2026
+    edition_month: 10
+    edition_month_padded: "10"
+    hard_date_local: "2026-10-01T00:00:00"   # Europe/Amsterdam; midnight-exact
+    dst_fold_local: "2026-10-25"             # EU fall-back 03:00 CEST -> 02:00 CET
+    # ── The pinned ephemeris (probed + digested 2026-09-04) ──
+    bsp_url: "https://ssd.jpl.nasa.gov/ftp/eph/planets/bsp/de440s.bsp"
+    bsp_sha256: "c1c7feeab882263fc493a9d5a5b2ddd71b54826cdf65d8d17a76126b260a49f2"
+    # ── The published oracle selftest reference (NASA/AstroPixels new-moon
+    #    table class; live-verified 2026-09-04: PyEphem delta 0.02 min) ──
+    selftest_new_moon_utc: "2026-10-10T15:50:00Z"
+    selftest_tolerance_min: 2
+    # ── Pre-registered tolerance bands (registered BEFORE measurement; the
+    #    digest of tolerance-bands.json is baked into backward-plan.json and
+    #    BOTH compute scripts refuse to run on mismatch) ──
+    rise_set_band_min: 1
+    twilight_band_min: 3
+    phase_band_min: 1
+    refraction_mbar: 1010                    # shared physical assumptions, both methods
+    refraction_c: 10
+    # ── Meteor-shower activity windows (IMO annual tables; DATE precision —
+    #    no minute-precision peak instants are claimed or computed) ──
+    showers_json: '[{"id":"draconids","name":"Draconids","window_center":"2026-10-08","radiant":"Draco"},{"id":"south-taurids","name":"Southern Taurids","window_center":"2026-10-10","radiant":"Taurus"},{"id":"orionids","name":"Orionids","window_center":"2026-10-21","radiant":"Orion"},{"id":"leonis-minorids","name":"Leonis Minorids","window_center":"2026-10-24","radiant":"Leo Minor"}]'
+    # ── Climatology + content floors ──
+    climatology_min_years: 20
+    min_font_pt: 8                           # the CV-law precedent for print floors
+    contrast_floor: 4.5                      # WCAG AA normal text
+    min_page_words: 250
+    min_anniversaries: 3
+    min_from_lines: 5                        # every page cites its numbers
+    # ── Probed vendor families (family_source: `mzt instruments list`,
+    #    2026-09-04; re-probe before relying on the diversity claim) ──
+    probed_at: "2026-09-04"
+    family_claude_code: "glm-zai"
+    family_opencode: "glm-zai"
+    family_codex_cli: "gpt-openai"
+    # ── Fan-out maps (instance -> meaning) ──
+    voice_class: {1: "lunar", 2: "planetary", 3: "meteors", 4: "history"}
+    voice_brief:
+      lunar: "moon phases, moonrise/moonset, moonlight weight on the month's nights"
+      planetary: "planet visibility windows, conjunctions, elongations"
+      meteors: "meteor-shower windows degraded by moonlight and cloud climatology"
+      history: "this-month-in-astronomy-history anniversaries, every claim sourced"
+    signoff_class: {1: "temporal-ephemeris", 2: "statistical", 3: "editorial-experience"}
+    signoff_title:
+      temporal-ephemeris: "S1 — temporal & ephemeris integrity"
+      statistical: "S2 — statistical integrity"
+      editorial-experience: "S3 — editorial & experience integrity"
+
+  template: |
+    {# ══ Macros: the house style, defined once ══════════════════════════════ #}
+    {% macro strict() %}
+    set -euo pipefail
+    cd "{{ workspace }}"
+    SECONDS=0
+    {% endmacro %}
+
+    {% macro sched_append(movement) %}
+    python3 -c "import json,datetime; open('schedule-state.jsonl','a').write(json.dumps({'movement': {{ movement }}, 'event': 'actual', 'seconds': int('$SECONDS' or 0), 'wall_clock_utc': datetime.datetime.now(datetime.timezone.utc).isoformat()})+'\n')"
+    {% endmacro %}
+
+    {% macro no_fabrication() %}
+    ## Ground Rules (non-negotiable)
+    - Every number you state MUST carry a `from:` line naming the file and key
+      it came from (events.json, climatology.json, anniversaries.json,
+      band-report.json). A number you cannot cite is not yours to state —
+      write instead that the record does not answer it.
+    - Every cultural or historical claim MUST carry a `source: Qxxxx` line
+      matching a qid in anniversaries.json. If the record does not support
+      the claim, the claim does not appear. No folk names from memory.
+    {% endmacro %}
+
+    {% macro page_shape() %}
+    ## Required Output Shape
+    - Write exactly one file: `{{ workspace }}/pages/{{ voice_class[instance] }}.md`.
+    - Headed sections; at least {{ min_page_words }} words.
+    - Cross-reference at least one other voice's page with a line of the exact
+      form `XREF {{ voice_class[instance] }} -> <other-class>: <why>`
+      (other-class is one of: lunar, planetary, meteors, history).
+    - If `tier-state.json` says tier > 1, do NOT write the page: write
+      `{{ workspace }}/pages/voice-{{ instance }}-tier-ack.json` containing
+      {"voice": "{{ voice_class[instance] }}", "tier": <the tier you read>,
+      "reason": "narration is Tier 1 content; the ladder cut it"} and nothing
+      else. An honest absence beats an invented page.
+    {% endmacro %}
+
+    {% if stage == 1 %}
+    {{ strict() }}
+    mkdir -p ephemeris oracle pages charts signoffs raw/clim buffer-B drill
+    # ══ M1 · The Backward Plan — Firing the Pass stage 1 ══════════════════════
+    # Pre-register the tolerance bands FIRST (First Article: thresholds before
+    # measurement), then compute the plan from the hard instant by subtraction.
+    # GENERICITY (review 3): the boundary assert checks midnight-exactness in
+    # the PINNED LOCAL ZONE, not a hardcoded UTC literal; edition_year/month
+    # are written INTO the plan (review 2's KeyError fix); tier starts are
+    # three DISTINCT instants (site_extra credit for the Ephemeris Card tier).
+    python3 - <<'PY'
+    import json, hashlib, datetime, zoneinfo
+    tz = zoneinfo.ZoneInfo("{{ tz }}")
+    hard_local = datetime.datetime.fromisoformat("{{ hard_date_local }}").replace(tzinfo=tz)
+    assert hard_local.time() == datetime.time(0, 0), (
+        "hard date must be midnight-exact local ({{ hard_date_local }}), not a rounded boundary")
+    hard_utc = hard_local.astimezone(datetime.timezone.utc)
+
+    bands = {
+      "registered_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+      "rise_set_band_min": {{ rise_set_band_min }},
+      "twilight_band_min": {{ twilight_band_min }},
+      "phase_band_min": {{ phase_band_min }},
+      "shared_refraction": {"pressure_mbar": {{ refraction_mbar }}, "temp_c": {{ refraction_c }}},
+      "horizon_convention": "center altitude crosses -(refraction + semidiameter); "
+                            "refraction 34 arcmin scaled by (P/1010)*(283.15/(273.15+T)); "
+                            "at the pinned 1010 mbar / 10 C the scale factor is exactly 1.0; "
+                            "twilight = sun center at -6/-12 deg geometric; applied IDENTICALLY "
+                            "by both methods (executed 2026-09-04: worst rise/set delta 0.01 min)",
+      "dst_exactness": "events on {{ dst_fold_local }} must render through {{ tz }} "
+                       "with the 02:00 fold appearing exactly once in the month",
+      "selftest_reference": {
+        "what": "new moon {{ edition_year }}-{{ edition_month }}",
+        "published_utc": "{{ selftest_new_moon_utc }}",
+        "tolerance_min": {{ selftest_tolerance_min }},
+        "source": "NASA/AstroPixels new-moon table class; the oracle selftest "
+                  "cites it before the oracle is trusted"},
+    }
+    bands_bytes = json.dumps(bands, indent=2, sort_keys=True).encode()
+    open("tolerance-bands.json", "wb").write(bands_bytes)
+    bands_sha = hashlib.sha256(bands_bytes).hexdigest()
+
+    # Worst-case durations (seconds) per tail segment. These are PLANNING
+    # ESTIMATES recorded BEFORE the stages run; each CLI movement appends a
+    # MEASURED actual to schedule-state.jsonl as it completes, D2 compares
+    # against the remaining estimate, and M13 records estimate-vs-actual
+    # drift. site_extra: the Ephemeris Card tier skips full site generation.
+    dur = {
+      "narration_wave": 1800, "attribution": 600, "products": 2400,
+      "product_gates": 1800, "verify_tier": 600, "signoff_wave": 1500,
+      "deadline_gate": 600, "arm": 1200, "go": 1800, "margin": 1800,
+      "pdf_extra": 600, "chart_extra": 600, "site_extra": 600,
+    }
+    tail3 = dur["deadline_gate"] + dur["arm"] + dur["go"] + dur["margin"]
+    tail2 = dur["verify_tier"] + dur["signoff_wave"] + tail3
+    tail1 = dur["product_gates"] + tail2
+    t1_start = hard_utc - datetime.timedelta(seconds=dur["narration_wave"]+dur["attribution"]+dur["products"]+tail1)
+    t2_start = hard_utc - datetime.timedelta(seconds=dur["products"]+tail1-dur["pdf_extra"]-dur["chart_extra"])
+    t3_start = hard_utc - datetime.timedelta(seconds=dur["products"]+tail1-dur["pdf_extra"]-dur["chart_extra"]-dur["site_extra"])
+    assert t1_start < t2_start < t3_start, "tier ladder must have three DISTINCT starts"
+    cue = hard_utc - datetime.timedelta(seconds=dur["arm"]+dur["go"]+dur["margin"]//2)
+
+    plan = {
+      "score": "night-dispatch", "edition": "{{ edition }}",
+      "edition_year": {{ edition_year }}, "edition_month": {{ edition_month }},
+      "city": "{{ city_label }}", "lat": {{ lat }}, "lon": {{ lon }}, "tz": "{{ tz }}",
+      "hard_date_local": "{{ hard_date_local }}",
+      "hard_instant_utc": hard_utc.isoformat(),
+      "tolerance_bands_sha256": bands_sha,
+      "durations_s": dur,
+      "tier_starts_utc": {"1": t1_start.isoformat(), "2": t2_start.isoformat(), "3": t3_start.isoformat()},
+      "latest_safe_cue_utc": cue.isoformat(),
+      "tier_ladder": {
+        "1": {"name": "Full Dispatch", "requires": [
+            "pages/lunar.md", "pages/planetary.md", "pages/meteors.md", "pages/history.md",
+            "charts/moon-strip.svg", "charts/planet-tracks.svg", "charts/month-timeline.svg",
+            "buffer-B/events.ics", "buffer-B/rss.xml", "buffer-B/night-dispatch-{{ edition }}.pdf",
+            "buffer-B/cutlog.html"]},
+        "2": {"name": "Field Edition", "requires": [
+            "charts/moon-strip.svg",
+            "buffer-B/events.ics", "buffer-B/rss.xml", "buffer-B/cutlog.html"]},
+        "3": {"name": "Ephemeris Card", "requires": [
+            "buffer-B/events.ics", "buffer-B/cutlog.html"]},
+      },
+      "decision_points": {
+        "D1": {"at_movement": 5, "rule": "tier = 1 if now<=s1 elif now<=s2 else 3; if now>s3 also set pass_at_risk (negative slack on the floor itself — data, not a retry)"},
+        "D2": {"at_movement": 12, "rule": "richest tier whose remaining tail fits (1->2->3 cascade, never one step); ratchet downward only; degrade REBUILDS the site"},
+      },
+    }
+    open("backward-plan.json", "w").write(json.dumps(plan, indent=2))
+    open("schedule-state.jsonl", "a").write(json.dumps({
+        "movement": 1, "event": "estimate", "seconds": 300,
+        "basis": "planning estimate — replaced by the measured actual when this movement completes",
+        "wall_clock_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()}) + "\n")
+    print("plan written; cue =", cue.isoformat(), "; bands sha =", bands_sha[:16])
+    PY
+    {{ sched_append(1) }}
+
+    {% elif stage == 2 %}
+    {{ strict() }}
+    # ══ M2 · Self-Canary + Seed — minute one, not movement seventeen ══════════
+    # Probes the score's newcomer-fragile dependencies: publish identity,
+    # judgment instruments (+ honest family map), and the repo the cutover
+    # will force-push. FRESH-WORKSPACE PATH (review 1's executed kill): a
+    # repo created empty has no main branch, so Pages enablement against
+    # source[branch]=main answers 422 and the original died here. This canary
+    # SEEDS exactly one bootstrap commit (marker + README stub, zero edition
+    # content) when main is absent, THEN enables Pages, THEN verifies. The
+    # go-time credential path is gh's own token helper, so `gh auth status`
+    # at this movement IS the push-credential canary (review 3's finding).
+    command -v gh >/dev/null 2>&1 || { echo "FAIL: gh not on PATH"; exit 1; }
+    command -v jq >/dev/null 2>&1 || { echo "FAIL: jq not on PATH"; exit 1; }
+    command -v uv >/dev/null 2>&1 || { echo "FAIL: uv not on PATH (ephemeris/oracle/PDF routes need it)"; exit 1; }
+    command -v curl >/dev/null 2>&1 || { echo "FAIL: curl not on PATH"; exit 1; }
+    gh auth status >/dev/null 2>&1 || { echo "FAIL: gh not authenticated — the dispatch publishes at M17"; exit 1; }
+    gh_owner="$(gh api user -q .login 2>/dev/null)" || { echo "FAIL: gh api user did not answer"; exit 1; }
+    [ "$gh_owner" = "{{ github_owner }}" ] || { echo "FAIL: gh is $gh_owner but the score publishes as {{ github_owner }}"; exit 1; }
+    n_bins=0
+    for b in claude codex opencode; do
+      command -v "$b" >/dev/null 2>&1 && n_bins=$((n_bins+1))
+    done
+    [ "$n_bins" -ge 1 ] || { echo "FAIL: no judgment instrument (claude/codex/opencode) on PATH — M9/M14 would die after six tool movements"; exit 1; }
+    # Honest family map: shipped probe results + live binary evidence joined.
+    python3 - <<'PY'
+    import json, shutil, subprocess, datetime
+    shipped = {
+      "claude-code": {"family": "{{ family_claude_code }}", "probed_at": "{{ probed_at }}",
+                      "evidence": "mzt instruments list 2026-09-04: default glm-5.3[1m]"},
+      "codex-cli": {"family": "{{ family_codex_cli }}", "probed_at": "{{ probed_at }}",
+                    "evidence": "mzt instruments list 2026-09-04: client default (GPT family)"},
+      "opencode": {"family": "{{ family_opencode }}", "probed_at": "{{ probed_at }}",
+                   "evidence": "mzt instruments list 2026-09-04: zai-coding-plan/glm-5.3"},
+    }
+    binaries = {"claude-code": "claude", "codex-cli": "codex", "opencode": "opencode"}
+    fams = {}
+    for name, exe in binaries.items():
+        rec = dict(shipped[name])
+        rec["binary_present"] = shutil.which(exe) is not None
+        try:
+            rec["version_line"] = subprocess.run([exe, "--version"], capture_output=True,
+                                                 text=True, timeout=60).stdout.strip().splitlines()[0]
+        except Exception as e:
+            rec["version_line"] = "unavailable: %s" % e
+        fams[name] = rec
+    live_fams = sorted({r["family"] for r in fams.values() if r["binary_present"]})
+    assert len(live_fams) >= 2, (
+        "family-diversity floor violated: %d live model families (%s) — the cross-family "
+        "sign-off claim needs TWO real families among PRESENT binaries" % (len(live_fams), live_fams))
+    out = {"probed_at": "{{ probed_at }}", "instruments": fams,
+           "real_families": live_fams,
+           "requirement": ">=2 real model families among present binaries "
+                          "(>=2 of 3 judgment clients); fallback chains absorb any single absence",
+           "honesty_note": ("%d live model families across %d present judgment instruments; "
+                            "claude-code and opencode BOTH route to the GLM/Z.AI family "
+                            "as probed — recorded, not performed" % (len(live_fams),
+                            sum(1 for r in fams.values() if r["binary_present"])))}
+    open("instrument-families.json", "w").write(json.dumps(out, indent=2))
+    print("live families:", live_fams)
+    PY
+    # Repo: create if missing, record the PRE-SEED state, then seed main if empty.
+    gh repo view {{ github_owner }}/{{ repo_name }} >/dev/null 2>&1 || \
+      gh repo create {{ github_owner }}/{{ repo_name }} --public --description "The Night Dispatch — a backward-planned monthly sky almanac (Firing the Pass proof)" >/dev/null
+    prior_state="prior-edition-or-foreign"
+    if gh api repos/{{ github_owner }}/{{ repo_name }}/branches/main >/dev/null 2>&1; then
+      prior_sha="$(gh api repos/{{ github_owner }}/{{ repo_name }}/branches/main -q .commit.sha)"
+      gh api "repos/{{ github_owner }}/{{ repo_name }}/contents/.night-dispatch" >/dev/null 2>&1 \
+        || prior_state="foreign-no-marker"
+    else
+      prior_state="empty"
+      prior_sha=""
+    fi
+    if [ "$prior_state" = "empty" ]; then
+      # Bootstrap seed: ONE commit, marker + README stub, zero edition content.
+      # This is the documented content touch that makes first-run Pages work;
+      # edition content still lands ONLY at GO.
+      seed_body="$(python3 -c "import base64; print(base64.b64encode(b'night-dispatch bootstrap marker — this repo belongs to The Night Dispatch; edition content is published only at the GO cutover\n').decode())")"
+      gh api -X PUT repos/{{ github_owner }}/{{ repo_name }}/contents/.night-dispatch \
+        -f message="bootstrap: night-dispatch marker (no edition content)" \
+        -f content="$seed_body" -f branch=main >/dev/null
+      readme_body="$(python3 -c "import base64; print(base64.b64encode(b'# night-dispatch\n\nThe Night Dispatch — a backward-planned monthly sky almanac. Content is published by the Firing-the-Pass proof score at its GO cutover.\n').decode())")"
+      gh api -X PUT repos/{{ github_owner }}/{{ repo_name }}/contents/README.md \
+        -f message="bootstrap: readme stub" \
+        -f content="$readme_body" -f branch=main >/dev/null
+      gh api repos/{{ github_owner }}/{{ repo_name }}/branches/main -q .commit.sha >/dev/null \
+        || { echo "FAIL: bootstrap seed did not create main"; exit 1; }
+    fi
+    # Pages enablement is ATTEMPTED then VERIFIED (the || true no-op lesson
+    # from the Babel review) — now on a repo where main EXISTS, so the
+    # enable-on-empty-repo 421/422 class cannot occur.
+    gh api repos/{{ github_owner }}/{{ repo_name }}/pages >/dev/null 2>&1 || \
+      gh api -X POST repos/{{ github_owner }}/{{ repo_name }}/pages -f "source[branch]=main" -f "source[path]=/" >/dev/null 2>&1 || true
+    pages_state="$(gh api repos/{{ github_owner }}/{{ repo_name }}/pages -q .status 2>/dev/null || echo unavailable)"
+    [ "$pages_state" != "unavailable" ] || { echo "FAIL: GitHub Pages not enabled and not enableable for {{ github_owner }}/{{ repo_name }} — the dispatch goes live at M17/M19"; exit 1; }
+    python3 - "$prior_state" "$prior_sha" <<'PY'
+    import json, subprocess, datetime, sys
+    prior_state, prior_sha = sys.argv[1], sys.argv[2]
+    def gh(*args):
+        return subprocess.run(["gh", *args], capture_output=True, text=True, timeout=120)
+    pr = gh("api", "repos/{{ github_owner }}/{{ repo_name }}/pages")
+    pages = {"status": json.loads(pr.stdout).get("status"),
+             "html_url": json.loads(pr.stdout).get("html_url")} if pr.returncode == 0 else None
+    r = gh("api", "repos/{{ github_owner }}/{{ repo_name }}/branches/main")
+    seeded_sha = json.loads(r.stdout)["commit"]["sha"] if r.returncode == 0 else None
+    open("canary.json", "w").write(json.dumps({
+        "gh_identity": "{{ github_owner }}",
+        "repo": "{{ github_owner }}/{{ repo_name }}",
+        "prior_live": {"sha": prior_sha or None, "state": prior_state},
+        "seeded": prior_state == "empty",
+        "seeded_sha": seeded_sha,
+        "push_credential": "gh token via git -c credential-helper='!gh auth git-credential' at GO",
+        "pages": pages,
+        "probed_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}, indent=2))
+    print("prior live state:", prior_state, "| seeded:", prior_state == "empty", "| pages:", pages)
+    PY
+    {{ sched_append(2) }}
+
+    {% elif stage == 3 %}
+    {{ strict() }}
+    # ══ M3 · The Ephemeris — the primary method over a pinned substrate ═══════
+    # Fetches de440s.bsp ONCE, verifies the sha256 BEFORE computing anything,
+    # verifies the tolerance-bands digest (the gate lives in the code), then
+    # computes October's events in UTC and renders local wall clocks through
+    # zoneinfo — never the reverse.
+    #
+    # EXECUTION-PROVEN DETAILS (2026-09-04 scratch re-commissioning):
+    #  - de440s.bsp carries body centers ONLY for sun/moon/mercury/venus/earth;
+    #    eph["mars"] RAISES KeyError — mars/jupiter/saturn must come from their
+    #    barycenters (offset from center ≲0.2", invisible at minute precision).
+    #  - skyfield find_discrete requires f.step_days; 0.125 < the shortest
+    #    crossing spacing (sun crosses rise/set/twilight up to 4x/day).
+    #  - rise/set/twilight cross ONE shared horizon convention (registered in
+    #    tolerance-bands.json): center altitude = -(refraction + semidiameter),
+    #    refraction 34' scaled by pinned P/T where the factor is exactly 1.0.
+    #  - conjunction times are BISECTED off the hourly grid to sub-minute
+    #    precision (review 3's quantization finding).
+    #  - meteor showers are DATE-precision activity windows; moonlight
+    #    degradation is computed from the pinned ephemeris at the window
+    #    night (review 3's citation-inflation finding — no HH:MM:SS peaks).
+    curl -sL --retry 2 -o ephemeris/de440s.bsp "{{ bsp_url }}"
+    echo "{{ bsp_sha256 }}  ephemeris/de440s.bsp" | sha256sum -c - || { echo "FAIL: bsp digest mismatch — the pin is the citation"; exit 1; }
+    uv run --quiet --with skyfield --with jplephem python - <<'PY'
+    import json, hashlib, datetime, zoneinfo, math, calendar
+    import numpy as np
+    from skyfield.api import Loader, load, Topos
+    from skyfield.almanac import find_discrete, moon_phases
+    plan = json.load(open("backward-plan.json"))
+    bands_sha = hashlib.sha256(open("tolerance-bands.json","rb").read()).hexdigest()
+    assert bands_sha == plan["tolerance_bands_sha256"], "REFUSING: tolerance-bands digest mismatch"
+    bands = json.load(open("tolerance-bands.json"))
+    sr = bands["shared_refraction"]
+    # Shared convention, derived from the PINNED assumptions (factor is 1.0 here,
+    # but the formula travels with the pins so a future edition stays honest).
+    REFR_DEG = 0.5667 * (sr["pressure_mbar"] / 1010.0) * (283.15 / (273.15 + sr["temp_c"]))
+    ts = load.timescale()
+    eph = Loader("ephemeris", verbose=False)("de440s.bsp")
+    tz = zoneinfo.ZoneInfo(plan["tz"])
+    y, m = plan["edition_year"], plan["edition_month"]
+    ndays = calendar.monthrange(y, m)[1]
+    t0 = ts.utc(y, m, 1); t1 = ts.utc(y, m + 1, 1)
+    topos = Topos(latitude_degrees=plan["lat"], longitude_degrees=plan["lon"])
+    obs = eph["earth"] + topos
+    KERNEL_NAME = {"sun": "sun", "moon": "moon", "mercury": "mercury", "venus": "venus",
+                   "mars": "mars barycenter", "jupiter": "jupiter barycenter",
+                   "saturn": "saturn barycenter"}
+    RADIUS_KM = {"sun": 695700.0, "moon": 1737.4}
+    def sd_deg(body_name, t):
+        if body_name not in RADIUS_KM:
+            return 0.0
+        dist_km = obs.at(t).observe(eph[KERNEL_NAME[body_name]]).apparent().distance().km
+        return np.degrees(np.arcsin(RADIUS_KM[body_name] / dist_km))
+    def crossings(body_name, threshold):
+        body = eph[KERNEL_NAME[body_name]]
+        def f(t):
+            alt = obs.at(t).observe(body).apparent().altaz()[0].degrees
+            th = threshold(t) if callable(threshold) else threshold
+            return alt >= th
+        f.step_days = 0.125
+        times, vals = find_discrete(t0, t1, f)
+        return [(v == 1, ti.utc_datetime().replace(tzinfo=datetime.timezone.utc))
+                for ti, v in zip(times, vals)]
+    events = []
+    def add(eid, kind, eclass, utc_dt, detail=None):
+        events.append({"id": eid, "kind": kind, "class": eclass,
+                       "utc": utc_dt.replace(tzinfo=datetime.timezone.utc).isoformat(),
+                       "local_wall": utc_dt.replace(tzinfo=datetime.timezone.utc).astimezone(tz).isoformat(),
+                       "tz": plan["tz"], **({"detail": detail} if detail else {})})
+    # Rise/set: all seven bodies under the shared upper-limb convention.
+    for b in ("sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn"):
+        th = (lambda t, b=b: -(REFR_DEG + sd_deg(b, t))) if b in RADIUS_KM else -(REFR_DEG)
+        for rising, dt in crossings(b, th):
+            add("%s-%s-%s" % (b, "rise" if rising else "set", dt.strftime("%d%H%M")),
+                "rise-set", "rise-set", dt,
+                {"body": b, "event": "rise" if rising else "set"})
+    # Twilight: sun CENTER at -6/-12 deg geometric (the registered band's subject).
+    for tname, deg in (("civil", -6.0), ("nautical", -12.0)):
+        for rising, dt in crossings("sun", deg):
+            add("tw-%s-%s-%s" % (tname, "dawn" if rising else "dusk", dt.strftime("%d%H%M")),
+                "twilight", "twilight", dt,
+                {"type": tname, "event": "dawn" if rising else "dusk",
+                 "note": "sun center at %d deg geometric, both methods identical" % deg})
+    # Moon phases.
+    times, phases = find_discrete(t0, t1, moon_phases(eph))
+    NAMES = {0: "new", 1: "first quarter", 2: "full", 3: "last quarter"}
+    for ti, ph in zip(times, phases):
+        add("phase-%s-%s" % (NAMES[int(ph)], ti.utc_strftime("%d%H%M")), "moon-phase", "phase",
+            ti.utc_datetime(), {"phase": NAMES[int(ph)]})
+    # Meteor-shower WINDOWS (date precision) + computed moonlight degradation.
+    SHOWERS = json.loads(r'''{{ showers_json }}''')
+    for s in SHOWERS:
+        d = datetime.date.fromisoformat(s["window_center"])
+        local_midnight = datetime.datetime.combine(d + datetime.timedelta(days=1), datetime.time(0, 0), tzinfo=tz)
+        pt = ts.from_datetime(local_midnight.astimezone(datetime.timezone.utc))
+        elong = obs.at(pt).observe(eph["moon"]).apparent().separation_from(
+                 obs.at(pt).observe(eph["sun"]).apparent()).degrees
+        illum = 0.5 * (1 - math.cos(math.radians(elong))) * 100
+        add("shower-%s" % s["id"], "meteor-shower", "shower", local_midnight.astimezone(datetime.timezone.utc),
+            {"shower": s["name"], "radiant": s["radiant"], "window_center": s["window_center"],
+             "moon_elongation_deg": round(float(elong), 1), "moon_illumination_pct": round(illum, 1),
+             "note": "DATE-precision activity window (IMO annual table); no minute-precision "
+                     "peak claimed; moonlight degradation computed from the pinned ephemeris "
+                     "at local midnight of the window night"})
+    # Conjunctions: hourly grid -> local minima -> BISECT to sub-minute.
+    def sep(a, b, t):
+        ba = eph["moon"] if a == "moon" else eph[KERNEL_NAME[a]]
+        bb = eph["moon"] if b == "moon" else eph[KERNEL_NAME[b]]
+        return obs.at(t).observe(ba).apparent().separation_from(obs.at(t).observe(bb).apparent()).degrees
+    grid = [ts.utc(y, m, d, h) for d in range(1, ndays + 1) for h in range(0, 24)]
+    pairs = [("venus", "mars"), ("venus", "jupiter"), ("venus", "saturn"), ("mars", "jupiter"),
+             ("moon", "venus"), ("moon", "mars"), ("moon", "jupiter"), ("moon", "saturn"),
+             ("moon", "mercury"), ("jupiter", "saturn"), ("mercury", "venus")]
+    nconj = 0
+    for a, b in pairs:
+        seps = [sep(a, b, t) for t in grid]
+        for i in range(1, len(seps) - 1):
+            if seps[i] < seps[i-1] and seps[i] <= seps[i+1] and seps[i] < 3.0:
+                lo, hi = grid[i - 1], grid[i + 1]
+                for _ in range(20):
+                    mid = ts.tt(jd=(lo.tt + hi.tt) / 2)
+                    if sep(a, b, lo) < sep(a, b, hi):
+                        hi = mid
+                    else:
+                        lo = mid
+                add("conj-%s-%s-%s" % (a, b, lo.utc_strftime("%d%H%M")),
+                    "conjunction", "conjunction", lo.utc_datetime(),
+                    {"bodies": [a, b], "separation_deg": round(float(sep(a, b, lo)), 2),
+                     "note": "refined by 20-step bisection off the hourly sampling grid"})
+                nconj += 1
+    events.sort(key=lambda e: e["utc"])
+    for n, e in enumerate(events):
+        e["seq"] = n
+    json.dump(events, open("ephemeris/events.json", "w"), indent=1)
+    all_offs = sorted({datetime.datetime.fromisoformat(e["local_wall"]).utcoffset()
+                       for e in events})
+    json.dump({"bsp_sha256": "{{ bsp_sha256 }}",
+               "skyfield_version": __import__("skyfield").__version__,
+               "event_count": len(events),
+               "conjunctions": nconj,
+               "kernel_map": KERNEL_NAME,
+               "offsets_seen": [str(o) for o in all_offs],
+               "refraction": "34 arcmin scaled by pinned P/T (factor 1.0); shared horizon "
+                             "convention: center altitude crosses -(refraction + semidiameter)",
+               "city": plan["city"], "edition": plan["edition"]},
+              open("ephemeris/manifest.json", "w"), indent=2)
+    assert len(all_offs) == 2, "expected exactly two UTC offsets across the month, got %s" % all_offs
+    print("events:", len(events), "| conjunctions:", nconj,
+          "| offsets:", [str(o) for o in all_offs])
+    PY
+    {{ sched_append(3) }}
+
+    {% elif stage == 4 %}
+    {{ strict() }}
+    # ══ M4 · The Second Method — observer independence is code lineage ════════
+    # PyEphem (XEphem lineage) re-derives rise/set/twilight for ALL SEVEN bodies
+    # plus phases under the SAME shared horizon convention (pressure=0 so
+    # PyEphem's internal refraction is OFF; our registered threshold applies
+    # 34' + semidiameter identically to both methods), and self-tests against
+    # a published reference value BEFORE its output matters as an oracle.
+    # Executed 2026-09-04: worst rise/set delta vs skyfield 0.01 min.
+    uv run --quiet --with ephem python - <<'PY'
+    import json, hashlib, datetime, zoneinfo, math, ephem
+    plan = json.load(open("backward-plan.json"))
+    bands = json.load(open("tolerance-bands.json"))
+    assert hashlib.sha256(open("tolerance-bands.json","rb").read()).hexdigest() \
+        == plan["tolerance_bands_sha256"], "REFUSING: tolerance-bands digest mismatch"
+    sr = bands["shared_refraction"]
+    REFR_DEG = 0.5667 * (sr["pressure_mbar"] / 1010.0) * (283.15 / (273.15 + sr["temp_c"]))
+    ref = bands["selftest_reference"]
+    o = ephem.Observer()
+    o.lat, o.lon, o.elevation = str(plan["lat"]), str(plan["lon"]), 0.0
+    o.pressure = 0.0  # geometric altitudes; refraction lives in the shared threshold
+    y, m = plan["edition_year"], plan["edition_month"]
+    # Selftest vs the published table value.
+    nm = ephem.next_new_moon(ephem.Date(datetime.datetime(y, m, 1)))
+    published = datetime.datetime.fromisoformat(ref["published_utc"].replace("Z", "+00:00"))
+    delta_min = abs((nm.datetime().replace(tzinfo=datetime.timezone.utc) - published).total_seconds()) / 60.0
+    assert delta_min <= ref["tolerance_min"], (
+        "ORACLE SELFTEST FAILED: new moon %s vs published %s (%.1f min > %d min)" %
+        (nm.datetime().isoformat(), published.isoformat(), delta_min, ref["tolerance_min"]))
+    json.dump({"checked": ref["what"], "oracle_utc": nm.datetime().isoformat() + "Z",
+               "published_utc": ref["published_utc"], "delta_min": round(delta_min, 2),
+               "tolerance_min": ref["tolerance_min"], "source": ref["source"]},
+              open("oracle/selftest.json", "w"), indent=2)
+    tz = zoneinfo.ZoneInfo(plan["tz"])
+    BODIES = {"sun": ephem.Sun, "moon": ephem.Moon, "mercury": ephem.Mercury,
+              "venus": ephem.Venus, "mars": ephem.Mars, "jupiter": ephem.Jupiter,
+              "saturn": ephem.Saturn}
+    def alt_deg(bname, utc_dt):
+        o.date = ephem.Date(utc_dt)
+        b = BODIES[bname]()
+        b.compute(o)
+        return math.degrees(b.alt)
+    def sd_deg(bname, utc_dt):
+        if bname not in ("sun", "moon"):
+            return 0.0
+        o.date = ephem.Date(utc_dt)
+        b = BODIES[bname]()
+        b.compute(o)
+        return (b.size / 2.0) / 3600.0  # .size = angular diameter arcsec
+    def threshold(bname):
+        if bname in ("sun", "moon"):
+            return lambda t, b=bname: -(REFR_DEG + sd_deg(b, t))
+        return lambda t: -(REFR_DEG)
+    def bisect_cross(bname, th, t_lo, t_hi):
+        f_lo = alt_deg(bname, t_lo) - th(t_lo)
+        f_hi = alt_deg(bname, t_hi) - th(t_hi)
+        if f_lo * f_hi > 0:
+            return None
+        for _ in range(40):
+            mid = t_lo + (t_hi - t_lo) / 2
+            f_mid = alt_deg(bname, mid) - th(mid)
+            if f_lo * f_mid <= 0:
+                t_hi = mid
+            else:
+                t_lo, f_lo = mid, f_mid
+        return t_lo + (t_hi - t_lo) / 2
+    t_start = datetime.datetime(y, m, 1, tzinfo=datetime.timezone.utc)
+    t_end = datetime.datetime(y, m + 1, 1, tzinfo=datetime.timezone.utc)
+    STEP = datetime.timedelta(minutes=30)
+    out = []
+    def sweep(bname, th, kind):
+        t_prev = t_start
+        f_prev = alt_deg(bname, t_start) - th(t_start)
+        while t_prev < t_end:
+            t_cur = min(t_prev + STEP, t_end)
+            f_cur = alt_deg(bname, t_cur) - th(t_cur)
+            if f_prev < 0 <= f_cur:
+                c = bisect_cross(bname, th, t_prev, t_cur)
+                if c: out.append({"class": kind[0], **kind[1], "event": "dawn" if kind[0]=="tw" else "rise", "utc": c.isoformat()})
+            elif f_prev >= 0 > f_cur:
+                c = bisect_cross(bname, th, t_prev, t_cur)
+                if c: out.append({"class": kind[0], **kind[1], "event": "dusk" if kind[0]=="tw" else "set", "utc": c.isoformat()})
+            t_prev, f_prev = t_cur, f_cur
+            if t_cur >= t_end: break
+    for b in BODIES:
+        sweep(b, threshold(b), ("rise-set", {"body": b}))
+    for tname, deg in (("civil", -6.0), ("nautical", -12.0)):
+        sweep("sun", (lambda t, d=deg: d), ("tw", {"type": tname}))
+    for fn, label in ((ephem.next_new_moon, "new"), (ephem.next_first_quarter_moon, "first quarter"),
+                      (ephem.next_full_moon, "full"), (ephem.next_last_quarter_moon, "last quarter")):
+        cur = ephem.Date(t_start)
+        while True:
+            nxt = fn(cur)
+            d = nxt.datetime().replace(tzinfo=datetime.timezone.utc)
+            if d >= t_end: break
+            out.append({"class": "phase", "phase": label, "utc": d.isoformat()})
+            cur = nxt
+    for r in out:
+        r["local_wall"] = datetime.datetime.fromisoformat(r["utc"]).astimezone(tz).isoformat()
+    json.dump(out, open("oracle/oracle-times.json", "w"), indent=1)
+    print("oracle events:", len(out))
+    PY
+    {{ sched_append(4) }}
+
+    {% elif stage == 5 %}
+    {{ strict() }}
+    # ══ M5 · The Band Join — decision point D1 ════════════════════════════════
+    # Joins the two methods by (class, body/type/phase, event) with nearest-match,
+    # asserts every delta within the DIGEST-REGISTERED bands — the join is a
+    # FUNCTION, and the corruption drill runs THAT FUNCTION on a corrupted
+    # fixture and demands the kill (review 2's "fixture exists" finding).
+    # Checks the DST matrix, then runs the tier arithmetic that decides the
+    # fan-out BEFORE the fan-out is spent, surfacing negative slack on the
+    # floor itself as pass_at_risk data.
+    python3 - <<'PY'
+    import json, datetime, zoneinfo, hashlib, copy, os
+    from collections import defaultdict
+    class BandViolation(Exception):
+        pass
+    plan = json.load(open("backward-plan.json"))
+    bands = json.load(open("tolerance-bands.json"))
+    assert hashlib.sha256(open("tolerance-bands.json","rb").read()).hexdigest() \
+        == plan["tolerance_bands_sha256"]
+    def k_primary(e):
+        if e["class"] == "rise-set":
+            return ("rs", e["detail"]["body"], e["detail"]["event"])
+        if e["class"] == "twilight":
+            return ("tw", e["detail"]["type"], e["detail"]["event"])
+        if e["class"] == "phase":
+            return ("ph", e["detail"]["phase"], None)
+        return None
+    def k_oracle(r):
+        if r["class"] == "rise-set":
+            return ("rs", r["body"], r["event"])
+        if r["class"] == "tw":
+            return ("tw", r["type"], r["event"])
+        if r["class"] == "phase":
+            return ("ph", r["phase"], None)
+        return None
+    def band_for(k):
+        return {"rs": bands["rise_set_band_min"], "tw": bands["twilight_band_min"],
+                "ph": bands["phase_band_min"]}[k[0]]
+    def band_join(events, oracle):
+        """The REAL gate. Raises BandViolation on any out-of-band delta."""
+        by = defaultdict(list)
+        for r in oracle:
+            k = k_oracle(r)
+            if k: by[k].append(datetime.datetime.fromisoformat(r["utc"]))
+        matched, worst = 0, {}
+        for e in events:
+            k = k_primary(e)
+            if not k or not by.get(k): continue
+            t = datetime.datetime.fromisoformat(e["utc"])
+            best = min(by[k], key=lambda c: abs((c - t).total_seconds()))
+            dmin = abs((best - t).total_seconds()) / 60.0
+            band = band_for(k)
+            if dmin > band:
+                raise BandViolation("BAND VIOLATION: %s primary=%s oracle=%s delta=%.1f min > %d" %
+                                    (k, t.isoformat(), best.isoformat(), dmin, band))
+            matched += 1
+            key = "/".join(str(x) for x in k)
+            worst[key] = max(worst.get(key, 0.0), dmin)
+        return matched, worst
+    events = json.load(open("ephemeris/events.json"))
+    oracle = json.load(open("oracle/oracle-times.json"))
+    matched, worst = band_join(events, oracle)
+    assert matched >= 400, "join coverage implausibly low: %d matched" % matched
+    # DST matrix: exactly two offsets across the month; the fold day carries both.
+    tz = zoneinfo.ZoneInfo(plan["tz"])
+    fold_day = datetime.date.fromisoformat("{{ dst_fold_local }}")
+    hours = sorted(datetime.datetime.fromisoformat(e["local_wall"]) for e in events)
+    all_offs = {h.utcoffset() for h in hours}
+    assert len(all_offs) == 2, "expected exactly two UTC offsets, got %s" % all_offs
+    pre = [h for h in hours if h.date() < fold_day]
+    post = [h for h in hours if h.date() > fold_day]
+    onday = [h for h in hours if h.date() == fold_day]
+    assert pre and post and onday, "need events before, on, and after the fold day"
+    assert all(h.utcoffset() == pre[0].utcoffset() for h in pre)
+    assert all(h.utcoffset() == post[0].utcoffset() for h in post)
+    assert pre[0].utcoffset() != post[0].utcoffset(), "no offset transition across the fold"
+    assert any(h.utcoffset() == pre[0].utcoffset() for h in onday), "fold day missing pre-transition wall clock"
+    assert any(h.utcoffset() == post[0].utcoffset() for h in onday), "fold day missing post-transition wall clock"
+    # D1: the tier arithmetic — the Firing-the-Pass moment, by subtraction.
+    now = datetime.datetime.now(datetime.timezone.utc)
+    starts = {k: datetime.datetime.fromisoformat(v) for k, v in plan["tier_starts_utc"].items()}
+    tier = 1 if now <= starts["1"] else (2 if now <= starts["2"] else 3)
+    pass_at_risk = now > starts["3"]  # even the floor's latest start is gone: data, not a retry
+    slack = int((starts[str(tier)] - now).total_seconds())
+    arith = "now=%s vs tier_starts=%s -> tier %d (slack %ds against the tier's latest start)" % (
+        now.isoformat(), {k: v.isoformat() for k, v in starts.items()}, tier, slack)
+    # Teeth drill: a +4-minute corruption of a fixture copy MUST be killed by
+    # the REAL join function (not merely recorded as a file — review 2).
+    drill = copy.deepcopy(events)
+    for e in drill:
+        if e["class"] == "rise-set" and e.get("detail", {}).get("body") == "moon":
+            t = datetime.datetime.fromisoformat(e["utc"]) + datetime.timedelta(minutes=4)
+            e["utc"] = t.isoformat()
+            break
+    os.makedirs("drill", exist_ok=True)
+    json.dump(drill, open("drill/events-corrupted.json", "w"))
+    drill_killed = False
+    try:
+        band_join(drill, oracle)
+    except BandViolation:
+        drill_killed = True
+    assert drill_killed, "DRILL BROKEN: the corrupted fixture survived the REAL band join"
+    json.dump({"matched_events": matched, "worst_delta_min": {k: round(v, 2) for k, v in worst.items()},
+               "bands_sha256": plan["tolerance_bands_sha256"],
+               "dst_offsets": sorted(str(o) for o in all_offs),
+               "fold_day": "{{ dst_fold_local }}", "fold_day_both_sides": True,
+               "drill_killed": True,
+               "convention": "shared horizon: center altitude -(refraction+semidiameter), both methods"},
+              open("band-report.json", "w"), indent=2)
+    open("tier-state.json", "w").write(json.dumps({
+        "tier": tier,
+        "pass_at_risk": pass_at_risk,
+        "history": [{"at": "D1", "wall_clock_utc": now.isoformat(),
+                     "from": 1, "to": tier, "slack_s": slack, "arithmetic": arith}]}, indent=2))
+    print("D1 verdict: tier", tier, "| pass_at_risk", pass_at_risk, "| matched", matched,
+          "| worst", {k: round(v, 2) for k, v in worst.items()},
+          "| drill: REAL join killed the corrupted fixture")
+    PY
+    {{ sched_append(5) }}
+
+    {% elif stage == 6 %}
+    {{ strict() }}
+    # ══ M6 · Twenty Octobers — climatology with its spread attached ═══════════
+    # No point estimates without sample size. Every bin carries n, median, IQR;
+    # one bin is recomputed from the RAW API bytes retained on disk. The night
+    # window is computed in LOCAL hours (UTC offset changes across the October
+    # fold — review 1's one-week-offset finding), and the under-floor assert
+    # lives AFTER the fetch loop, not inside it (review 2's fresh-workspace
+    # mid-fetch kill).
+    python3 - <<'PY'
+    import json, subprocess, statistics, datetime, os, zoneinfo
+    plan = json.load(open("backward-plan.json"))
+    tz = zoneinfo.ZoneInfo(plan["tz"])
+    y = plan["edition_year"]
+    years = [yy for yy in range(y - 1, y - 1 - 30, -1) if yy >= 1995][:{{ climatology_min_years }} + 5]
+    fetched = 0
+    for yy in years:
+        dst = "raw/clim/oct-%d.json" % yy
+        if os.path.exists(dst) and os.path.getsize(dst) > 1000:
+            fetched += 1; continue
+        url = ("https://archive-api.open-meteo.com/v1/archive?latitude=%s&longitude=%s"
+               "&start_date=%d-%02d-01&end_date=%d-%02d-31&hourly=cloud_cover&timezone=UTC"
+               % (plan["lat"], plan["lon"], yy, plan["edition_month"], yy, plan["edition_month"]))
+        r = subprocess.run(["curl", "-s", "--max-time", "120", url], capture_output=True, text=True)
+        doc = json.loads(r.stdout)
+        assert doc.get("hourly", {}).get("cloud_cover"), "no cloud_cover data for %d: %s" % (yy, r.stdout[:200])
+        open(dst, "w").write(r.stdout)
+        fetched += 1
+    # Bins: third-of-month x observing night (18:00-05:59 LOCAL, fold-exact)
+    def night_bins(values_by_utc_hour):
+        bins = {"early": [], "mid": [], "late": []}
+        for iso, v in values_by_utc_hour:
+            if v is None: continue
+            utc = datetime.datetime.fromisoformat(iso.replace("Z", "+00:00"))
+            hL = utc.astimezone(tz).hour  # local hour — correct on both sides of the fold
+            if 18 <= hL or hL < 6:
+                dL = utc.astimezone(tz).day
+                bins["early" if dL <= 10 else "mid" if dL <= 20 else "late"].append(v)
+        return bins
+    out_bins = {}
+    years_loaded = []
+    for yy in years:
+        doc = json.load(open("raw/clim/oct-%d.json" % yy))
+        hours = doc["hourly"]["time"]; vals = doc["hourly"]["cloud_cover"]
+        if len(hours) < 700: continue
+        years_loaded.append(yy)
+        b = night_bins(zip(hours, vals))
+        for seg, vs in b.items():
+            out_bins.setdefault(seg, []).extend(vs)
+    assert len(years_loaded) >= {{ climatology_min_years }}, "only %d Octobers loaded" % len(years_loaded)
+    report = {"city": plan["city"], "years": years_loaded, "n_years": len(years_loaded),
+              "bins": {}, "recomputed_bin": None,
+              "night_window": "18:00-05:59 local (zone-exact across the fold)",
+              "note": "cloud-cover climatology is a probability statement about the past, never a forecast"}
+    for seg, vs in out_bins.items():
+        vs = sorted(vs)
+        q1 = vs[int(0.25 * len(vs))]; q3 = vs[int(0.75 * len(vs))]
+        report["bins"][seg] = {"n": len(vs), "median_pct": statistics.median(vs),
+                               "iqr_pct": [q1, q3]}
+    # Independent recomputation of one bin straight from raw bytes.
+    doc = json.load(open("raw/clim/oct-%d.json" % years_loaded[0]))
+    b = night_bins(zip(doc["hourly"]["time"], doc["hourly"]["cloud_cover"]))
+    report["recomputed_bin"] = {"year": years_loaded[0], "segment": "early",
+                                "n": len(b["early"]), "median_pct": statistics.median(b["early"])}
+    json.dump(report, open("climatology.json", "w"), indent=2)
+    print("octobers:", len(years_loaded), "| bins:", {k: v["n"] for k, v in report["bins"].items()})
+    PY
+    {{ sched_append(6) }}
+
+    {% elif stage == 7 %}
+    {{ strict() }}
+    # ══ M7 · The Old Nights — citations that carry their own proof ════════════
+    # Candidate anniversaries are resolved to Wikidata QIDs at RUNTIME (never
+    # hardcoded from memory) and their October dates are RE-VERIFIED from the
+    # live entity claims — DETERMINISTICALLY, every record, not one random
+    # probe (review 2's nondeterminism finding).
+    #
+    # LIVE-PROBED 2026-09-04 (reviews 1/3 executed the ORIGINAL logic against
+    # the live API and it died: 1 record vs a floor of 3, no retry, burst
+    # throttling). The fixes, all executed: (a) CANDIDATES that each
+    # live-verified to October dates BEFORE shipping — 12 stable hits; (b)
+    # searches are PACED and retried on failure AND on empty results (a 200
+    # with an empty search list is what throttling looks like); (c) entity
+    # fetches are BATCHED (one call for all QIDs) which the limiter tolerates;
+    # (d) ALL of P619/P585/P580 are iterated — no break on the first prop.
+    python3 - <<'PY'
+    import json, subprocess, urllib.parse, datetime, time
+    UA = "night-dispatch/0.2 (Marianne proof)"
+    DATE_PROPS = ["P619", "P585", "P580"]  # launch date, point in time, start time
+    def api(params, tries=6, retry_empty=False):
+        url = "https://www.wikidata.org/w/api.php?" + urllib.parse.urlencode(params)
+        last = ""
+        for attempt in range(tries):
+            r = subprocess.run(["curl", "-s", "-w", "\n%{http_code}", "--max-time", "30",
+                                "-H", "User-Agent: " + UA, url], capture_output=True, text=True)
+            body, _, code = r.stdout.rpartition("\n")
+            if r.returncode == 0 and code.strip() == "200":
+                try:
+                    doc = json.loads(body)
+                    if retry_empty and not doc.get("search"):
+                        last = "200 but empty search (throttle shape)"
+                    else:
+                        return doc
+                except json.JSONDecodeError as e:
+                    last = "bad json (%s)" % e
+            else:
+                last = "curl rc=%s http=%s" % (r.returncode, code.strip() or "?")
+            time.sleep(min(2 ** attempt, 45))
+        raise RuntimeError("wikidata api failed after %d tries: %s (%s)" % (tries, last, url[:120]))
+    CANDIDATES = [
+      "Sputnik 1", "Luna 3", "Voskhod 1", "Apollo 7", "Venera 9",
+      "Mercury-Atlas 8", "Shenzhou 5", "Galileo spacecraft", "Ulysses probe",
+      "Cassini–Huygens", "Deep Space 1", "BepiColombo", "Lucy spacecraft",
+      "Psyche spacecraft", "Europa Clipper", "Hera spacecraft",
+    ]
+    def search_qid(term):
+        """Entity search over TWO routes (live-verified 2026-09-04): the fast
+        wbsearchentities (retried on the empty-200 throttle shape), then the
+        action=query full-text route — a different path with its own limits
+        that answered when the first was throttled. A miss is a MISS, not a
+        failure: the floor governs the record count, and per-term silence
+        must not kill the movement."""
+        for attempt in range(4):
+            try:
+                s = api({"action": "wbsearchentities", "search": term, "language": "en",
+                         "format": "json", "limit": 1}, retry_empty=True, tries=3)
+                if s.get("search"):
+                    return s["search"][0]["id"], "wbsearchentities"
+            except RuntimeError:
+                pass
+            time.sleep(min(2 ** attempt, 20))
+        r = subprocess.run(["curl", "-s", "-w", "\n%{http_code}", "--max-time", "30",
+                            "-H", "User-Agent: " + UA,
+                            "https://www.wikidata.org/w/api.php?" + urllib.parse.urlencode({
+                                "action": "query", "list": "search", "srsearch": term,
+                                "srnamespace": 0, "srlimit": 1, "format": "json"})],
+                           capture_output=True, text=True)
+        body, _, code = r.stdout.rpartition("\n")
+        if r.returncode == 0 and code.strip() == "200":
+            try:
+                hits = json.loads(body).get("query", {}).get("search", [])
+                if hits:
+                    return hits[0]["title"], "query-search"
+            except json.JSONDecodeError:
+                pass
+        return None, "miss"
+    qids = {}
+    search_routes = {}
+    for term in CANDIDATES:
+        qid, route = search_qid(term)
+        search_routes[term] = route
+        if qid:
+            qids[term] = qid
+        time.sleep(2.5)  # pace: bursty search calls are what trip the limiter
+    all_ids = sorted(set(qids.values()))
+    assert all_ids, "no candidates resolved — network shape changed, expand CANDIDATES"
+    doc = api({"action": "wbgetentities", "ids": "|".join(all_ids),
+               "props": "labels|claims", "languages": "en", "format": "json"})
+    plan = json.load(open("backward-plan.json"))
+    month = plan["edition_month"]
+    term_by_qid = {v: k for k, v in qids.items()}
+    records = []
+    for qid in all_ids:
+        ent = doc["entities"][qid]
+        label = ent.get("labels", {}).get("en", {}).get("value", qid)
+        rec = None
+        for p in DATE_PROPS:  # iterate ALL props — no break on the first
+            for claim in ent.get("claims", {}).get(p, []):
+                t = claim["mainsnak"].get("datavalue", {}).get("value", {}).get("time", "")
+                if not t:
+                    continue
+                dt = datetime.datetime.fromisoformat(t[1:].replace("Z", "+00:00"))
+                if dt.month == month and dt.year >= 1900:
+                    rec = {"qid": qid, "label": label,
+                           "date": "%04d-%02d-%02d" % (dt.year, dt.month, dt.day),
+                           "date_property": p,
+                           "source_url": "https://www.wikidata.org/wiki/" + qid,
+                           "claim_line": "%04d-%02d-%02d: %s (%s), verified live from %s claim" % (
+                               dt.year, dt.month, dt.day, label, p, qid)}
+                    break
+            if rec:
+                break
+        if rec:
+            records.append(rec)
+    assert len(records) >= {{ min_anniversaries }}, (
+        "only %d verified October anniversaries — expand CANDIDATES (live-verified "
+        "2026-09-04: this list yields 12)" % len(records))
+    # Deterministic re-verification of EVERY record (one batched call).
+    doc2 = api({"action": "wbgetentities", "ids": "|".join(r["qid"] for r in records),
+                "props": "claims", "format": "json"})
+    for rec in records:
+        t = doc2["entities"][rec["qid"]]["claims"][rec["date_property"]][0] \
+            ["mainsnak"]["datavalue"]["value"]["time"]
+        assert t[1:11] == rec["date"], "re-verification mismatch for %s: %s vs %s" % (
+            rec["qid"], t, rec["date"])
+    json.dump(records, open("anniversaries.json", "w"), indent=2)
+    print("anniversaries:", len(records), "| all", len(records), "re-verified live")
+    PY
+    {{ sched_append(7) }}
+
+    {% elif stage == 8 %}
+    {{ strict() }}
+    # ══ M8 · Painting the Sky — charts as extractable text ════════════════════
+    # svg.fonttype=none keeps labels as <text> (probed): a chart whose labels
+    # are paths is a picture, not data. Titles derive from the plan variables
+    # (review 3's hardcoded-title finding). Planet tracks are TIME-ENCODED
+    # (the original computed frac and never used it — review 3).
+    uv run --quiet --with matplotlib python - <<'PY'
+    import json, datetime, zoneinfo, math
+    import matplotlib
+    matplotlib.use("Agg")
+    matplotlib.rcParams["svg.fonttype"] = "none"
+    import matplotlib.pyplot as plt
+    plan = json.load(open("backward-plan.json"))
+    tier = json.load(open("tier-state.json"))["tier"]
+    events = json.load(open("ephemeris/events.json"))
+    tz = zoneinfo.ZoneInfo(plan["tz"])
+    EDITION = "%s %d" % (datetime.date(1900, plan["edition_month"], 1).strftime("%B"), plan["edition_year"])
+    made = []
+    def night(e):
+        d = datetime.datetime.fromisoformat(e["local_wall"])
+        return d.date() - datetime.timedelta(days=1) if d.hour < 12 else d.date()
+    # 1. moon strip (all tiers): illumination-by-night discs
+    phase_by_day = {}
+    for e in events:
+        if e["class"] == "phase":
+            phase_by_day[night(e)] = e["detail"]["phase"]
+    ndays = max(d.day for d in phase_by_day if d.month == plan["edition_month"]) if any(
+        d.month == plan["edition_month"] for d in phase_by_day) else 31
+    fig, ax = plt.subplots(figsize=(14, 2.2))
+    for x in range(1, 32):
+        ax.add_patch(plt.Circle((x, 0.5), 0.38, fill=False, color="#333"))
+    for d, ph in phase_by_day.items():
+        if d.month == plan["edition_month"]:
+            ax.text(d.day, 1.15, {"new": "N", "full": "F",
+                    "first quarter": "Q1", "last quarter": "Q3"}[ph], ha="center", fontsize=9)
+    ax.set_xlim(0, 32); ax.set_ylim(-0.1, 1.5)
+    ax.set_xticks(range(1, 32)); ax.tick_params(labelsize=7)
+    ax.set_title("Moon phases — %s — %s (N=new F=full Q1/Q3=quarters)" % (EDITION, plan["city"]))
+    fig.savefig("charts/moon-strip.svg", format="svg", bbox_inches="tight"); plt.close(fig)
+    made.append("charts/moon-strip.svg")
+    if tier == 1:
+        # 2. planet tracks: rise/set points at their TIME-OF-DAY position
+        bodies = ["mercury", "venus", "mars", "jupiter", "saturn"]
+        fig, ax = plt.subplots(figsize=(12, 4))
+        for bi, b in enumerate(bodies):
+            for e in events:
+                if e["class"] == "rise-set" and e["detail"]["body"] == b:
+                    loc = datetime.datetime.fromisoformat(e["local_wall"])
+                    frac = (loc.hour * 60 + loc.minute) / 1440
+                    ax.plot(bi + 0.15 + 0.7 * frac, loc.day, "o", markersize=3,
+                            color="#d8d8d8" if e["detail"]["event"] == "rise" else "#ff4a4a")
+        ax.set_yticks(range(1, 32)); ax.set_xticks(range(len(bodies)))
+        ax.set_xticklabels(bodies, fontsize=9); ax.tick_params(labelsize=7)
+        ax.invert_yaxis()
+        ax.set_title("Planet rise (grey) / set (red) by local time-of-day — %s (x-position within each lane is the clock time)" % EDITION)
+        fig.savefig("charts/planet-tracks.svg", format="svg", bbox_inches="tight"); plt.close(fig)
+        made.append("charts/planet-tracks.svg")
+        # 3. month timeline: every event class on a day grid
+        fig, ax = plt.subplots(figsize=(12, 6))
+        kinds = ["moon-phase", "rise-set", "twilight", "meteor-shower", "conjunction"]
+        for ki, knd in enumerate(kinds):
+            ys = [datetime.datetime.fromisoformat(e["utc"]).astimezone(tz).day
+                  for e in events if e["kind"] == knd]
+            ax.plot([ki] * len(ys), ys, ".", markersize=3)
+        ax.set_xticks(range(len(kinds))); ax.set_xticklabels(kinds, fontsize=8)
+        ax.set_yticks(range(1, 32)); ax.tick_params(labelsize=7); ax.invert_yaxis()
+        ax.set_title("%s event timeline — %s" % (EDITION, plan["city"]))
+        fig.savefig("charts/month-timeline.svg", format="svg", bbox_inches="tight"); plt.close(fig)
+        made.append("charts/month-timeline.svg")
+    json.dump({"made": made, "tier": tier,
+               "svg_fonttype": matplotlib.rcParams["svg.fonttype"]},
+              open("charts/ready-charts.json", "w"), indent=2)
+    print("charts:", made, "| tier", tier)
+    PY
+    {{ sched_append(8) }}
+
+    {% elif stage == 9 %}
+    # ══ M9 · Four Voices — Prefabrication (contained) + the tier as data ══════
+    # Instrument: {{ instrument_name }} (probed family on record). A template
+    # would pass every structural gates and gut the CULT claim — the almanac's
+    # credibility IS the voice. The LLM is bounded into a renderer-with-
+    # judgment: events, climatology, and anniversaries arrive as digest-pinned
+    # files; it cannot invent numbers or cultural claims and survive M10.
+    {{ no_fabrication() }}
+    {{ page_shape() }}
+
+    ## Your Voice
+    You are the **{{ voice_class[instance] }}** voice of The Night Dispatch — a
+    monthly sky almanac for {{ city_label }} ({{ lat }}N {{ lon }}E, {{ tz }}),
+    {{ edition }}. The genre is centuries old (hemerologica, farmer's almanac);
+    the voice is confident, local, practical, literate but never precious. The
+    reader is a real amateur observer in a light-polluted European city who
+    plans observing nights around moonrise, twilight, and cloud.
+
+    Your beat: {{ voice_brief[voice_class[instance]] }}.
+
+    ## Inputs (read them from disk; cite them or do not speak)
+    - `{{ workspace }}/ephemeris/events.json` — verified events (band-joined
+      against an independent method under a shared horizon convention; every
+      local wall clock DST-exact; twilight windows included)
+    - `{{ workspace }}/climatology.json` — cloud-cover bins with n/median/IQR
+    - `{{ workspace }}/anniversaries.json` — QID-verified anniversaries
+    - `{{ workspace }}/tier-state.json` — the CURRENT tier (see Output Shape)
+    - `{{ workspace }}/band-report.json` — how tightly two methods agreed
+
+    ## Honesty rules specific to your beat
+    - Cloud numbers are climatology (a probability statement about the past),
+      never a forecast. Say "Octobers here have been clear about N% of nights"
+      with the `from:` line, never "it will be clear".
+    - Meteor showers arrive as DATE-precision activity windows; never state a
+      minute-precision peak time. Use the computed moon_illumination_pct at
+      the window night and say plainly when the Moon will wash a radiant out.
+    - Twilight is computed (civil = -6 deg, nautical = -12 deg): frame
+      observing windows in terms of it, with the `from:` line.
+    - The city is light-polluted: an Amsterdam observer's magnitude ceiling is
+      not a dark-sky site's. Speak to the real sky, not the brochure sky.
+    - History claims ride anniversaries.json records ONLY. If a famous
+      "October astronomy event" is not in the file, it does not appear. Folk
+      full-moon names are deliberately NOT claimed — the citation universe
+      cannot verify them, and an unsourceable name is exactly what this
+      almanac refuses to print.
+
+    {% elif stage == 10 %}
+    {{ strict() }}
+    # ══ M10 · The Attribution Gate — narration cannot publish unsourced names ═
+    # Beyond QID joins (original): every page must carry >= N from: lines each
+    # naming a REAL input file (the no-fabrication contract made checkable —
+    # review 2's finding), and every XREF target page must EXIST (the dead-XREF
+    # lesson, actually applied — review 3's finding).
+    python3 - <<'PY'
+    import json, os, re, glob
+    tier = json.load(open("tier-state.json"))["tier"]
+    annv = {r["qid"]: r for r in json.load(open("anniversaries.json"))}
+    pages = sorted(glob.glob("pages/*.md"))
+    acks = sorted(glob.glob("pages/voice-*-tier-ack.json"))
+    INPUT_FILES = ("events.json", "climatology.json", "anniversaries.json", "band-report.json")
+    findings = []
+    if tier == 1:
+        expected = {"lunar", "planetary", "meteors", "history"}
+        got = {os.path.basename(p)[:-3] for p in pages}
+        missing = expected - got
+        assert not missing, "tier 1 but pages missing: %s (acks: %s)" % (missing, acks)
+        assert len(acks) == 0, "tier 1 but a voice wrote a tier-ack instead of a page: %s" % acks
+    else:
+        assert pages == [], "tier %d but pages exist: %s" % (tier, pages)
+        assert len(acks) == 4, "tier %d expects 4 tier-acks, got %s" % (tier, acks)
+        for a in acks:
+            doc = json.load(open(a))
+            assert doc.get("tier") == tier, "tier-ack disagrees with tier-state: %s" % a
+    for p in pages:
+        text = open(p).read()
+        words = len(text.split())
+        assert words >= {{ min_page_words }}, "%s too thin: %d words" % (p, words)
+        froms = re.findall(r"from:\s*(\S+\.json)", text)
+        assert len(froms) >= {{ min_from_lines }}, (
+            "%s carries %d from: lines, floor is %d — uncited numbers are not publishable" %
+            (p, len(froms), {{ min_from_lines }}))
+        for f in froms:
+            assert f in INPUT_FILES, "%s cites unknown input %s" % (p, f)
+        cited = set(re.findall(r"source:\s*(Q\d+)", text))
+        for q in cited:
+            assert q in annv, "%s cites %s which is NOT in anniversaries.json — unsourced name" % (p, q)
+        xrefs = re.findall(r"XREF\s+\S+\s+->\s+(\S+?):", text)
+        assert xrefs, "%s carries no XREF line" % p
+        self_class = os.path.basename(p)[:-3]
+        for t in xrefs:
+            t = t.strip()
+            assert t in {"lunar", "planetary", "meteors", "history"}, \
+                "%s XREFs unknown class %r" % (p, t)
+            assert t != self_class, "%s XREFs itself" % p
+            assert os.path.exists("pages/%s.md" % t), (
+                "%s XREFs %s whose page does not exist — a dead cross-reference" % (p, t))
+        findings.append({"page": p, "words": words, "from_lines": len(froms),
+                         "qids": sorted(cited), "xrefs": xrefs})
+    json.dump({"tier": tier, "pages": findings,
+               "from_line_floor": {{ min_from_lines }},
+               "qid_universe": sorted(annv)},
+              open("attribution-report.json", "w"), indent=2)
+    print("attribution: tier", tier, "|", len(pages), "pages |", len(findings),
+          "joins checked | from-line + dead-XREF gates green")
+    PY
+    {{ sched_append(10) }}
+
+    {% elif stage == 11 %}
+    {{ strict() }}
+    # ══ M11 · The Products — buffer B assembles while the root stays frozen ═══
+    # iCal first (the tier-3 floor), then ONE palette source driving the site,
+    # the card, and the contrast gate (three unsynchronized copies was a lie
+    # waiting to happen — reviews 1/3). Fold-day VEVENTs serialize as UTC
+    # instants: RFC 5545 local time cannot distinguish the two 02:00-03:00
+    # hours of the fall-back, and a printed wall clock that matches while the
+    # instant is wrong by an hour is the exact failure review 2 described.
+    # Executed 2026-09-04: both fold instants round-trip distinctly.
+    python3 - <<'PY'
+    import json
+    json.dump({"red": "#ff4a4a", "dim": "#8a1f1f", "black": "#000000",
+               "grey": "#d8d8d8", "head": "#ffffff", "muted": "#999999",
+               "border": "#333333", "panel": "#111111",
+               "note": "single palette source: style.css is generated ONLY from "
+               "these tokens, make-card.py reads it, and the contrast gate "
+               "asserts every hex in the PRODUCED style.css is one of these"},
+              open("palette.json", "w"), indent=2)
+    print("palette.json written (single source)")
+    PY
+    uv run --quiet --with icalendar python - <<'PY'
+    import json, datetime, zoneinfo, hashlib
+    from icalendar import Calendar, Event
+    plan = json.load(open("backward-plan.json"))
+    tier = json.load(open("tier-state.json"))["tier"]
+    events = json.load(open("ephemeris/events.json"))
+    tz = zoneinfo.ZoneInfo(plan["tz"])
+    fold_day = datetime.date.fromisoformat("{{ dst_fold_local }}")
+    cal = Calendar()
+    cal.add("prodid", "-//The Night Dispatch//en//")
+    cal.add("version", "2.0")
+    cal.add("X-WR-CALNAME", "The Night Dispatch — %s — %s" % (plan["city"], plan["edition"]))
+    cal.add("X-WR-TIMEZONE", plan["tz"])
+    # A REAL VTIMEZONE with the EU fall-back rule (last Sunday of October,
+    # 03:00 CEST -> 02:00 CET).
+    from icalendar import Timezone, TimezoneStandard, TimezoneDaylight
+    vtz = Timezone(tzid=plan["tz"])
+    st = TimezoneStandard()
+    st.add("dtstart", datetime.datetime(1981, 10, 25, 3, 0, 0))
+    st.add("tzoffsetfrom", datetime.timedelta(hours=2))
+    st.add("tzoffsetto", datetime.timedelta(hours=1))
+    st.add("tzname", "CET")
+    st.add("rrule", {"freq": "yearly", "bymonth": 10, "byday": "-1su"})
+    vtz.add_component(st)
+    dl = TimezoneDaylight()
+    dl.add("dtstart", datetime.datetime(1981, 3, 29, 2, 0, 0))
+    dl.add("tzoffsetfrom", datetime.timedelta(hours=1))
+    dl.add("tzoffsetto", datetime.timedelta(hours=2))
+    dl.add("tzname", "CEST")
+    dl.add("rrule", {"freq": "yearly", "bymonth": 3, "byday": "-1su"})
+    vtz.add_component(dl)
+    cal.add_component(vtz)
+    n_fold_utc_form = 0
+    for e in events:
+        ev = Event()
+        local = datetime.datetime.fromisoformat(e["local_wall"])
+        if local.date() == fold_day:
+            # FOLD DAY: publish the UTC instant — the only unambiguous RFC 5545
+            # form across the fall-back (executed: both 02:00-03:00 hours
+            # round-trip distinctly; the TZID form would collapse them).
+            ev.add("dtstart", datetime.datetime.fromisoformat(e["utc"]))
+            n_fold_utc_form += 1
+        else:
+            ev.add("dtstart", local.astimezone(tz))  # ZoneInfo -> DTSTART;TZID=<iana>
+        ev.add("uid", "night-dispatch-%s-%s@{{ github_owner }}" % (plan["edition"], e["id"]))
+        if e["class"] in ("phase", "shower", "conjunction"):
+            ev.add("duration", datetime.timedelta(hours=1))
+        else:
+            ev.add("duration", datetime.timedelta(minutes=30))
+        d = e["detail"]
+        if e["class"] == "phase":
+            label = "Moon: %s" % d["phase"]
+        elif e["class"] == "rise-set":
+            label = "%s %s" % (d["body"].title(), d["event"])
+        elif e["class"] == "twilight":
+            label = "%s %s" % (d["type"].title(), d["event"])
+        elif e["class"] == "shower":
+            label = "%s window (Moon %d%%)" % (d["shower"], d["moon_illumination_pct"])
+        else:
+            label = "Conjunction %s–%s (%.1f°)" % (d["bodies"][0], d["bodies"][1], d["separation_deg"])
+        ev.add("summary", label)
+        ev.add("description", "Computed by The Night Dispatch (skyfield/de440s, band-verified). %s%s" % (
+            e["utc"], " [fold day: published as UTC instant]" if local.date() == fold_day else ""))
+        cal.add_component(ev)
+    ics = cal.to_ical()
+    open("buffer-B/events.ics", "wb").write(ics)
+    json.dump({"vevents": len(events), "fold_day_utc_form": n_fold_utc_form,
+               "ics_sha256": hashlib.sha256(ics).hexdigest(), "tier_at_build": tier},
+              open("buffer-B/ics-manifest.json", "w"), indent=2)
+    print("ics:", len(events), "vevents |", n_fold_utc_form, "fold-day events in UTC form")
+    PY
+    # ── build-site.py: the ONE site builder (reused verbatim by M12's degrade,
+    #    so a retreat REBUILDS instead of corrupting — review 3's dangling-
+    #    images finding). Written FIRST, then executed — ordering is the
+    #    safety property.
+    cat > build-site.py <<'PY'
+    import json, datetime, zoneinfo, html, hashlib, os, re
+    from email.utils import format_datetime
+    plan = json.load(open("backward-plan.json"))
+    tier = json.load(open("tier-state.json"))["tier"]
+    events = json.load(open("ephemeris/events.json"))
+    clim = json.load(open("climatology.json"))
+    annv = json.load(open("anniversaries.json"))
+    band = json.load(open("band-report.json"))
+    sched = open("schedule-state.jsonl").read().strip().splitlines()
+    pal = json.load(open("palette.json"))
+    tz = zoneinfo.ZoneInfo(plan["tz"])
+    def esc(s): return html.escape(str(s))
+    def fmt_event(e):
+        lw = datetime.datetime.fromisoformat(e["local_wall"])
+        d = e["detail"]
+        if e["class"] == "phase":
+            label = "Moon %s" % d["phase"]
+        elif e["class"] == "rise-set":
+            label = "%s %s" % (d["body"].title(), d["event"])
+        elif e["class"] == "twilight":
+            label = "%s %s" % (d["type"].title(), d["event"])
+        elif e["class"] == "shower":
+            label = "%s window" % d["shower"]
+        else:
+            label = "%s–%s %.1f°" % (d["bodies"][0], d["bodies"][1], d["separation_deg"])
+        return lw.strftime("%a %d %H:%M"), label
+    pages = []
+    if tier == 1:
+        for cls in ("lunar", "planetary", "meteors", "history"):
+            pages.append((cls, open("pages/%s.md" % cls).read()))
+    # tonight panels: one static page per night (tiers 1-2)
+    tonight_meta = []
+    if tier <= 2:
+        os.makedirs("buffer-B/tonight", exist_ok=True)
+        by_day = {}
+        for e in events:
+            d = datetime.datetime.fromisoformat(e["local_wall"]).date()
+            by_day.setdefault(d, []).append(e)
+        for d in sorted(by_day):
+            rows = [fmt_event(e) for e in sorted(by_day[d], key=lambda x: x["utc"])]
+            items = "\n".join("<li><time>%s</time> — %s</li>" % (esc(t), esc(l)) for t, l in rows)
+            open("buffer-B/tonight/%s.html" % d.isoformat(), "w").write(
+              "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+              "<title>Tonight %s — The Night Dispatch</title>"
+              "<link rel=\"stylesheet\" href=\"../style.css\"></head><body>"
+              "<h1>The night of %s</h1><p class=\"sub\">%s · all times %s local</p>"
+              "<ul class=\"events\">%s</ul>"
+              "<p class=\"foot\">Static page — computed before publication, no client-side computation. "
+              "<a href=\"../index.html\">The month</a> · <a href=\"../events.ics\">Subscribe (iCal)</a></p>"
+              "</body></html>" % (d.isoformat(), d.strftime("%A %d %B %Y"), esc(plan["city"]),
+                                  esc(plan["tz"]), items))
+            tonight_meta.append({"date": d.isoformat(), "n_events": len(rows)})
+        json.dump(tonight_meta, open("buffer-B/tonight-index.json", "w"), indent=1)
+    # month table (tiers 1-2)
+    rows = []
+    if tier <= 2:
+        for e in sorted(events, key=lambda x: x["utc"]):
+            t, l = fmt_event(e)
+            rows.append("<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (esc(t), esc(l), esc(e["class"])))
+    clim_rows = "".join("<tr><td>%s</td><td>%d</td><td>%.0f%%</td><td>%.0f–%.0f%%</td></tr>" % (
+        seg, b["n"], b["median_pct"], b["iqr_pct"][0], b["iqr_pct"][1])
+        for seg, b in clim["bins"].items())
+    annv_rows = "".join("<li><time>%s</time> %s <a href=\"%s\">%s</a></li>" % (
+        esc(a["date"]), esc(a["claim_line"].split(": ", 1)[1]), esc(a["source_url"]), esc(a["qid"]))
+        for a in annv)
+    import shutil
+    nav_pages = ""
+    charts = ""
+    if tier == 1:
+        nav_pages = "".join("<section><h2>The %s pages</h2><pre class=\"page\">%s</pre></section>"
+                            % (esc(c), esc(t)) for c, t in pages)
+        for f in ("moon-strip", "planet-tracks", "month-timeline"):
+            shutil.copy("charts/%s.svg" % f, "buffer-B/%s.svg" % f)
+            charts += "<figure><img src=\"%s.svg\" alt=\"%s\"></figure>" % (f, f)
+    elif tier == 2:
+        shutil.copy("charts/moon-strip.svg", "buffer-B/moon-strip.svg")
+        charts = "<figure><img src=\"moon-strip.svg\" alt=\"moon strip\"></figure>"
+    # style.css generated from the ONE palette source — every color below is a
+    # palette token; the web gate asserts the inverse (no hex outside palette)
+    style = ("body{background:%(black)s;color:%(grey)s;font-family:Georgia,serif;max-width:46rem;"
+             "margin:2rem auto;padding:0 1rem} a{color:%(red)s} h1,h2{color:%(head)s}"
+             ".sub{color:%(muted)s} table{border-collapse:collapse;width:100%%} "
+             "td,th{border:1px solid %(border)s;padding:.3rem .5rem;font-size:.9rem} "
+             ".events li{margin:.3rem 0} .page{white-space:pre-wrap;background:%(panel)s;"
+             "padding:1rem;border:1px solid %(border)s} time{color:%(red)s;font-family:monospace}"
+             % pal)
+    open("buffer-B/style.css", "w").write(style)
+    if tier <= 2:
+        open("buffer-B/index.html", "w").write(
+          "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+          "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+          "<title>The Night Dispatch — %s</title><link rel=\"stylesheet\" href=\"style.css\"></head>"
+          "<body><h1>The Night Dispatch</h1>"
+          "<p class=\"sub\">A monthly sky almanac for %s · %s · all times %s local · "
+          "edition %s, tier %d (&ldquo;%s&rdquo;)</p>"
+          "<p><a href=\"webcal://{{ github_owner }}.github.io/{{ repo_name }}/events.ics\">"
+          "Subscribe — add the month to your phone calendar (iCal/webcal)</a></p>"
+          "<h2>The month at a glance</h2>%s%s"
+          "<h2>Every event</h2><table><tr><th>Local</th><th>Event</th><th>Class</th></tr>%s</table>"
+          "<h2>Cloud climatology (%d Octobers)</h2>"
+          "<table><tr><th>Segment</th><th>n</th><th>median</th><th>IQR</th></tr>%s</table>"
+          "<h2>This month in astronomy history</h2><ul>%s</ul>"
+          "<p class=\"foot\">Band-verified against an independent method (worst deltas %s min). "
+          "<a href=\"cutlog.html\">What was cut, and the arithmetic that cut it</a></p>"
+          "</body></html>" % (esc(plan["edition"]), esc(plan["city"]), esc(plan["city"]),
+                              esc(plan["tz"]), esc(plan["edition"]), tier,
+                              esc({1: "Full Dispatch", 2: "Field Edition", 3: "Ephemeris Card"}[tier]),
+                              charts, nav_pages, "".join(rows), clim["n_years"], clim_rows,
+                              annv_rows, esc(json.dumps(band["worst_delta_min"]))))
+    # RSS (tiers 1-2): RFC-822 dates via email.utils — locale-independent
+    if tier <= 2:
+        items = "".join("<item><title>%s</title><guid>nd-%s-%s</guid>"
+                        "<pubDate>%s</pubDate></item>" % (
+            esc(fmt_event(e)[1]), plan["edition"], e["id"],
+            format_datetime(datetime.datetime.fromisoformat(e["utc"]), usegmt=True))
+            for e in sorted(events, key=lambda x: x["utc"])[:120])
+        open("buffer-B/rss.xml", "w").write(
+          "<?xml version=\"1.0\"?><rss version=\"2.0\"><channel>"
+          "<title>The Night Dispatch — %s</title><link>https://{{ github_owner }}.github.io/{{ repo_name }}/</link>"
+          "<description>Monthly sky almanac for %s</description>%s</channel></rss>" % (
+            esc(plan["edition"]), esc(plan["city"]), items))
+    # cut-log page (ALL tiers): the retreat ladder's public disclosure, built
+    # INTO the buffer. Every <li> carries a data-claim attribute the audit
+    # movement joins on — ALL schedule lines render, so the served/state join
+    # is bidirectional (review 2's one-way-equality finding).
+    ts_state = json.load(open("tier-state.json"))
+    hist = "".join("<li data-claim=\"tier:%s:%s-%s\"><code>%s</code> %s&rarr;%s — <code>%s</code></li>" % (
+        h["at"], h["from"], h["to"], esc(h["at"]), h["from"], h["to"], esc(h["arithmetic"]))
+        for h in ts_state["history"])
+    est = "".join("<li data-claim=\"sched:%s\">%s</li>" % (json.loads(l)["movement"], esc(l))
+                  for l in sched)
+    open("buffer-B/cutlog.html", "w").write(
+      "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+      "<title>Cut log — The Night Dispatch %s</title><link rel=\"stylesheet\" href=\"style.css\"></head>"
+      "<body><h1>The cut log</h1><p class=\"sub\">What this edition contains, what it cut, "
+      "and the arithmetic that cut it. An almanac's covenant with its readers, executable.</p>"
+      "<h2>Tier decisions</h2><ul id=\"tier-history\">%s</ul>"
+      "<h2>Schedule record (estimates and MEASURED actuals)</h2><ul id=\"schedule-state\">%s</ul>"
+      "<p><a href=\"events.ics\">Subscribe (iCal)</a> — fold-day instants are published in UTC "
+      "because local time is ambiguous across the fall-back.</p>"
+      "<p>This page was generated from tier-state.json and schedule-state.jsonl before the "
+      "cutover; the audit movement re-checks every served claim against them — both ways.</p></body></html>"
+      % (esc(plan["edition"]), hist, est))
+    # edition marker: lets a future run's GO verify origin/main is a prior
+    # Night Dispatch rather than a foreign repo it must refuse to overwrite
+    open("buffer-B/.night-dispatch", "w").write(
+        "night-dispatch edition %s tier %d sealed-by firing-the-pass proof\n" % (plan["edition"], tier))
+    # ready acks: one per department, written on validated completion
+    json.dump({"tier": tier, "site": tier <= 2, "tonight_pages": len(tonight_meta), "rows": len(rows)},
+              open("buffer-B/ready-site.json", "w"), indent=2)
+    json.dump({"tier": tier, "vevents": len(events)}, open("buffer-B/ready-ics.json", "w"), indent=2)
+    pdf_exists = os.path.exists("buffer-B/night-dispatch-%s.pdf" % plan["edition"])
+    json.dump({"tier": tier, "pdf": pdf_exists}, open("buffer-B/ready-card.json", "w"), indent=2)
+    print("site built: tier", tier, "| tonight pages", len(tonight_meta))
+    PY
+    python3 build-site.py
+    # Field card (tier 1 only): red-on-black A4, fonts 8pt+ floor, palette from
+    # the single source, y-bounds guards on EVERY section (review 3's overflow
+    # finding — the gate that measures it lives in M12).
+    cat > make-card.py <<'PY'
+    import json, datetime
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    plan = json.load(open("backward-plan.json"))
+    pal = json.load(open("palette.json"))
+    events = json.load(open("ephemeris/events.json"))
+    W, H = A4
+    RED, DIM, BLACK = pal["red"], pal["dim"], pal["black"]
+    c = canvas.Canvas("buffer-B/night-dispatch-%s.pdf" % plan["edition"], pagesize=A4)
+    c.setTitle("The Night Dispatch %s — %s" % (plan["edition"], plan["city"]))
+    c.setFillColor(BLACK); c.rect(0, 0, W, H, fill=1, stroke=0)
+    c.setFillColor(RED); c.setFont("Courier-Bold", 20)
+    c.drawString(36, H - 40, "THE NIGHT DISPATCH — %s" % plan["edition"].upper())
+    c.setFont("Courier", 10); c.setFillColor(RED)
+    c.drawString(36, H - 56, "%s  %sN %sE  times %s  red-light field card" %
+                 (plan["city"], plan["lat"], plan["lon"], plan["tz"]))
+    def section(title, match, fmt):
+        global y
+        y -= 8; c.setFont("Courier-Bold", 11); c.setFillColor(RED)
+        if y < 60: return
+        c.drawString(36, y, title); y -= 16; c.setFont("Courier", 8)
+        for e in events:
+            if y < 40:  # EVERY section is bounds-guarded
+                break
+            if match(e):
+                lw = datetime.datetime.fromisoformat(e["local_wall"])
+                c.drawString(44, y, fmt(lw, e)); y -= 11
+    y = H - 84
+    c.setFont("Courier-Bold", 11); c.drawString(36, y, "MOON"); y -= 16; c.setFont("Courier", 8)
+    for e in events:
+        if y < 40: break
+        if e["class"] == "phase":
+            lw = datetime.datetime.fromisoformat(e["local_wall"])
+            c.drawString(44, y, "%s  Moon %s" % (lw.strftime("%a %d %H:%M"), e["detail"]["phase"])); y -= 11
+    section("PLANETS + TWILIGHT (rise/set/dawn/dusk)",
+            lambda e: (e["class"] == "rise-set" and e["detail"]["body"] not in ("sun", "moon"))
+                      or e["class"] == "twilight",
+            lambda lw, e: "%s  %s %s%s" % (lw.strftime("%a %d %H:%M"),
+                         (e["detail"].get("body") or e["detail"]["type"]).title(), e["detail"]["event"],
+                         " (tw)" if e["class"] == "twilight" else ""))
+    section("SHOWERS (date-precision windows)",
+            lambda e: e["class"] == "shower",
+            lambda lw, e: "%s  %s window (Moon %d%%)" % (lw.strftime("%a %d %H:%M"),
+                         e["detail"]["shower"], e["detail"]["moon_illumination_pct"]))
+    c.setFont("Courier", 8); c.setFillColor(DIM)
+    c.drawString(36, 24, "night-dispatch — computed, band-verified, tier 1 field card — print and keep at the eyepiece")
+    c.showPage(); c.save()
+    print("field card written")
+    PY
+    python3 - <<'PY'
+    import json, subprocess
+    tier = json.load(open("tier-state.json"))["tier"]
+    if tier == 1:
+        r = subprocess.run(["uv", "run", "--quiet", "--with", "reportlab", "python", "make-card.py"],
+                           capture_output=True, text=True)
+        print(r.stdout.strip() or r.stderr.strip())
+        raise SystemExit(r.returncode)
+    else:
+        print("tier", tier, "— printable card is Tier 1 content; ladder cut it (recorded in cutlog)")
+    PY
+    python3 - <<'PY'
+    import json, os
+    tier = json.load(open("tier-state.json"))["tier"]
+    if tier == 1:
+        # structural floor only — the REAL card gates (extractable text, font
+        # floor, A4, overflow) are measured by M12's pdfminer gate on the file
+        assert os.path.getsize("buffer-B/night-dispatch-{{ edition }}.pdf") > 1000, "field card missing"
+    print("products ack set complete at tier", tier)
+    PY
+    {{ sched_append(11) }}
+
+    {% elif stage == 12 %}
+    {{ strict() }}
+    # ══ M12 · The Product Gates — decision point D2 ═══════════════════════════
+    # The gates are WRITTEN AS SCRIPTS and invoked — because M16's arm phase
+    # re-runs THESE EXACT SCRIPTS (review 3 proved the original arm re-ran one
+    # parse and called it every gate). The iCal matrix compares UTC INSTANTS
+    # (not wall text — review 2's finding) and REQUIRES fold-day events in UTC
+    # form; the web gate computes contrast from the PRODUCED style.css bytes
+    # (review 1's constants-vs-constants finding); the PDF gate measures font
+    # floor, A4, AND text-within-bounds on the produced file (review 3's
+    # overflow finding); a dangling-reference gate kills degrade-time broken
+    # images (review 3's finding); D2 selects the RICHEST tier whose tail fits
+    # (review 2's single-step finding) and REBUILDS the site on degrade.
+    cat > gates_ics.py <<'PY'
+    import json, sys, datetime, zoneinfo
+    from icalendar import Calendar
+    out_path = sys.argv[1]
+    plan = json.load(open("backward-plan.json"))
+    events = {e["id"]: e for e in json.load(open("ephemeris/events.json"))}
+    ics = open("buffer-B/events.ics", "rb").read()
+    cal = Calendar.from_ical(ics)
+    tz = zoneinfo.ZoneInfo(plan["tz"])
+    fold = datetime.date.fromisoformat("{{ dst_fold_local }}")
+    classes = {"before": 0, "fold": 0, "after": 0}
+    uids = set()
+    instants_checked = 0
+    for comp in cal.walk("VEVENT"):
+        prop = comp.get("dtstart")
+        tzid = prop.params.get("tzid", "")
+        dt = prop.dt
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        uid = str(comp.get("uid"))
+        assert uid not in uids, "duplicate UID %s" % uid
+        uids.add(uid)
+        eid = uid.split("night-dispatch-%s-" % plan["edition"])[1].split("@")[0]
+        assert eid in events, "UID %s does not join events.json" % uid
+        want_utc = datetime.datetime.fromisoformat(events[eid]["utc"])
+        # INSTANT equality at the published precision: RFC 5545 carries whole
+        # seconds, events.json microseconds — so second-exactness is |delta|<1s.
+        # An hour error still cannot hide behind matching wall text.
+        delta_s = abs((dt.astimezone(datetime.timezone.utc) - want_utc).total_seconds())
+        assert delta_s < 1.0, (
+            "INSTANT MISMATCH %s: ics %s vs events %s (%.3fs)" % (
+                eid, dt.astimezone(datetime.timezone.utc).isoformat(), want_utc.isoformat(), delta_s))
+        instants_checked += 1
+        # fold-form is decided by the event's LOCAL date (the producer's rule):
+        # early fold-day hours are late 10-24 UTC, so the parsed dt's date lies.
+        local_date = datetime.datetime.fromisoformat(events[eid]["local_wall"]).date()
+        if local_date == fold:
+            assert not tzid, "fold-day VEVENT %s must be UTC-form (no TZID), got TZID=%s" % (eid, tzid)
+            classes["fold"] += 1
+        else:
+            assert tzid == plan["tz"], "DTSTART TZID %r != %r" % (tzid, plan["tz"])
+            k = "before" if local_date < fold else "after"
+            classes[k] += 1
+    assert classes["before"] > 10 and classes["after"] > 10, "DST classes thin: %s" % classes
+    assert classes["fold"] > 0, "no fold-day VEVENTs — the fold matrix has no subject"
+    json.dump({"vevents": len(uids), "dst_classes": classes,
+               "instants_checked": instants_checked, "tzid": plan["tz"],
+               "fold_policy": "fold-day VEVENTs in UTC form; others TZID"},
+              open(out_path, "w"), indent=2)
+    print("parse-back matrix:", classes, "| instants checked:", instants_checked)
+    PY
+    cat > gates_web.py <<'PY'
+    import json, sys, datetime, zoneinfo, xml.etree.ElementTree as ET, os, re
+    out_path = sys.argv[1]
+    plan = json.load(open("backward-plan.json"))
+    tier_state = json.load(open("tier-state.json"))
+    events = json.load(open("ephemeris/events.json"))
+    tz = zoneinfo.ZoneInfo(plan["tz"])
+    pal = json.load(open("palette.json"))
+    gates = {}
+    # RSS well-formed
+    if os.path.exists("buffer-B/rss.xml"):
+        ET.parse("buffer-B/rss.xml"); gates["rss"] = "well-formed"
+    # tonight panels recompute for 3 sample dates incl. the fold day
+    if os.path.exists("buffer-B/tonight-index.json"):
+        by_day = {}
+        for e in events:
+            d = datetime.datetime.fromisoformat(e["local_wall"]).date()
+            by_day.setdefault(d, []).append(e)
+        fold = datetime.date.fromisoformat("{{ dst_fold_local }}")
+        samples = sorted({datetime.date(plan["edition_year"], plan["edition_month"], 2), fold,
+                          datetime.date(plan["edition_year"], plan["edition_month"], 28)})
+        for d in samples:
+            page = open("buffer-B/tonight/%s.html" % d.isoformat()).read()
+            want_n = len(by_day.get(d, []))
+            got_n = page.count("<time>")
+            assert got_n == want_n, "tonight %s: %d rendered vs %d computed" % (d, got_n, want_n)
+        gates["tonight_recompute"] = ["%s:%d" % (d.isoformat(), len(by_day.get(d, []))) for d in samples]
+    # SVG text-as-text
+    if os.path.exists("buffer-B/moon-strip.svg"):
+        svg = open("buffer-B/moon-strip.svg").read()
+        assert svg.count("<text") >= 5, "moon-strip carries too few text elements (%d)" % svg.count("<text")
+        assert "<image" not in svg, "moon-strip embeds a raster image"
+        gates["svg_text"] = True
+    # contrast floor, COMPUTED FROM THE PRODUCED style.css BYTES (not a mirror
+    # dict): parse the shipped stylesheet, verify its tokens are the palette,
+    # compute WCAG ratios from what a reader actually downloads.
+    css = open("buffer-B/style.css").read()
+    css_hexes = set(re.findall(r"#[0-9a-fA-F]{6}\b", css))
+    pal_hexes = {v for v in pal.values()
+                 if isinstance(v, str) and re.match(r"^#[0-9a-fA-F]{6}$", v)}
+    assert css_hexes and css_hexes <= pal_hexes, (
+        "style.css carries colors outside the palette: %s" % sorted(css_hexes - pal_hexes))
+    hexes = {k: v for k, v in pal.items() if isinstance(v, str) and v.startswith("#")}
+    assert {"red", "grey", "black"} <= set(hexes), "palette missing floor tokens"
+    def lum(hexc):
+        def ch(v):
+            v = v / 255.0
+            return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+        r, g, b = (int(hexc[i:i+2], 16) for i in (1, 3, 5))
+        return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
+    ratios = {}
+    for fg in ("red", "grey", "dim"):
+        l1, l2 = lum(hexes[fg]), lum(hexes["black"])
+        ratios["%s-on-black" % fg] = round((max(l1, l2) + 0.05) / (min(l1, l2) + 0.05), 2)
+    assert ratios["red-on-black"] >= {{ contrast_floor }}, "red-on-black below floor: %s" % ratios
+    assert ratios["grey-on-black"] >= {{ contrast_floor }}
+    gates["contrast"] = ratios
+    gates["contrast_source"] = "produced buffer-B/style.css bytes"
+    # dangling-reference gate: every local src/href in the built pages must
+    # exist on disk — a degraded tier must not ship broken images.
+    dangling = []
+    for page in ("buffer-B/index.html", "buffer-B/cutlog.html"):
+        if not os.path.exists(page):
+            continue
+        text = open(page).read()
+        for ref in re.findall(r'(?:src|href)="([^"#]+)"', text):
+            if ref.startswith(("http://", "https://", "webcal://", "mailto:")):
+                continue
+            base = os.path.dirname(page)
+            if not os.path.exists(os.path.join(base, ref.split("#")[0])):
+                dangling.append("%s -> %s" % (page, ref))
+    assert not dangling, "DANGLING REFERENCES in built pages: %s" % dangling
+    gates["dangling_refs"] = 0
+    json.dump(gates, open(out_path, "w"), indent=2)
+    print("web gates:", gates)
+    PY
+    cat > gates_pdf.py <<'PY'
+    import json, sys, os
+    out_path = sys.argv[1]
+    tier = json.load(open("tier-state.json"))["tier"]
+    out = {"tier": tier, "pdf": None}
+    if tier == 1 and os.path.exists("buffer-B/night-dispatch-{{ edition }}.pdf"):
+        from pdfminer.high_level import extract_pages
+        from pdfminer.layout import LTTextContainer, LTChar, LAParams
+        sizes, bounds = set(), []
+        for page in extract_pages("buffer-B/night-dispatch-{{ edition }}.pdf"):
+            W, H = page.bbox[2] - page.bbox[0], page.bbox[3] - page.bbox[1]
+            bounds.append([round(v, 1) for v in page.bbox])
+            for el in page:
+                if isinstance(el, LTTextContainer):
+                    for obj in el:
+                        for ch0 in getattr(obj, "_objs", []):
+                            if isinstance(ch0, LTChar):
+                                sizes.add(round(ch0.size, 1))
+                                # OVERFLOW gate: every glyph inside the page box
+                                assert ch0.x0 >= -0.5 and ch0.x1 <= W + 0.5 and \
+                                       ch0.y0 >= -0.5 and ch0.y1 <= H + 0.5, (
+                                    "text overflows the page: %s vs %sx%s" % (
+                                        [round(v,1) for v in (ch0.x0, ch0.y0, ch0.x1, ch0.y1)], W, H))
+        assert sizes, "no extractable text — the card rasterized or is empty"
+        floor = min(sizes)
+        assert floor >= {{ min_font_pt }}, "font floor violated: %.1f pt < %d pt" % (floor, {{ min_font_pt }})
+        w = bounds[0][2] - bounds[0][0]; h = bounds[0][3] - bounds[0][1]
+        assert abs(w - 595.3) < 2 and abs(h - 841.9) < 2, "not A4: %sx%s" % (w, h)
+        out["pdf"] = {"min_font_pt": floor, "sizes": sorted(sizes), "a4": True, "overflow_ok": True}
+    json.dump(out, open(out_path, "w"), indent=2)
+    print("pdf gate:", out["pdf"])
+    PY
+    uv run --quiet --with icalendar python gates_ics.py product-gates-ics.json
+    python3 gates_web.py product-gates-web.json
+    uv run --quiet --with pdfminer.six python gates_pdf.py product-gates-pdf.json
+    python3 - <<'PY'
+    import json, datetime, os, subprocess
+    # D2: re-decide the tier with the remaining tail — the RICHEST tier that
+    # still fits, never a single forced step (review 2); ratchet downward only.
+    plan = json.load(open("backward-plan.json"))
+    st = json.load(open("tier-state.json"))
+    now = datetime.datetime.now(datetime.timezone.utc)
+    hard = datetime.datetime.fromisoformat(plan["hard_instant_utc"])
+    dur = plan["durations_s"]
+    def tail_for(t):
+        t_tail = dur["product_gates"] + dur["verify_tier"] + dur["signoff_wave"] + \
+                 dur["deadline_gate"] + dur["arm"] + dur["go"] + dur["margin"]
+        if t >= 2: t_tail -= dur["pdf_extra"] + dur["chart_extra"]
+        if t >= 3: t_tail -= dur["site_extra"]
+        return t_tail
+    fits = {t: (now + datetime.timedelta(seconds=tail_for(t))) <= hard for t in (1, 2, 3)}
+    new = next((t for t in range(st["tier"], 4) if fits[t]), 3)
+    if new != st["tier"]:
+        reason = "D2: now=%s fits=%s tails=%s -> richest viable tier %d (from %d)" % (
+            now.isoformat(), fits, {t: tail_for(t) for t in (1, 2, 3)}, new, st["tier"])
+        st["history"].append({"at": "D2", "wall_clock_utc": now.isoformat(),
+                              "from": st["tier"], "to": new,
+                              "slack_s": int((hard - now).total_seconds()) - tail_for(new),
+                              "arithmetic": reason})
+        st["tier"] = new
+        open("tier-state.json", "w").write(json.dumps(st, indent=2))
+        # the explicit degrade: cut the card and the tier-1 charts from the
+        # buffer (an explicit rename into drill/, never a silent delete), then
+        # REBUILD the site so nothing served references what was cut.
+        for f in ("buffer-B/night-dispatch-{{ edition }}.pdf", "buffer-B/planet-tracks.svg",
+                  "buffer-B/month-timeline.svg", "buffer-B/index.html", "buffer-B/rss.xml"):
+            if os.path.exists(f):
+                os.rename(f, "drill/cut-" + os.path.basename(f))
+        subprocess.run(["python3", "build-site.py"], check=True)
+        # re-run the REAL gates against the rebuilt buffer (not a lighter proxy)
+        os.makedirs("drill", exist_ok=True)
+        for cmd in (["uv", "run", "--quiet", "--with", "icalendar", "python",
+                     "gates_ics.py", "product-gates-d2-rerun-ics.json"],
+                    ["python3", "gates_web.py", "product-gates-d2-rerun-web.json"]):
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            print(r.stdout.strip() or r.stderr.strip())
+            assert r.returncode == 0, "gate re-run after degrade failed: %s" % cmd
+        if new == 1:
+            r = subprocess.run(["uv", "run", "--quiet", "--with", "pdfminer.six", "python",
+                                "gates_pdf.py", "product-gates-d2-rerun-pdf.json"],
+                               capture_output=True, text=True)
+            print(r.stdout.strip() or r.stderr.strip())
+            assert r.returncode == 0, "pdf gate re-run after degrade failed"
+        print("DEGRADED to tier", new, "and REBUILT —", reason)
+    else:
+        print("D2: tier", st["tier"], "holds (fits:", fits, ")")
+    PY
+    {{ sched_append(12) }}
+
+    {% elif stage == 13 %}
+    {{ strict() }}
+    # ══ M13 · Verify the Tier — claimed vs actual, with attempt evidence ══════
+    # The verifier is a FUNCTION; the drill runs THAT FUNCTION on a false-claim
+    # fixture and demands the kill (reviews 1/2/3's tautological-drill
+    # finding). The ratchet direction is CORRECT for a degrade-upward ladder:
+    # tier numbers may only INCREASE over time (to >= from), and a transition
+    # that lowers a tier number is a silent upgrade — the original's inverted
+    # assert rejected every legitimate retreat (review 2/3's finding). A
+    # tier-2-at-D1 selection inside (s1, s2] now re-derives CLEANLY.
+    python3 - <<'PY'
+    import json, os, datetime, copy, tempfile
+    class TierClaimError(Exception):
+        pass
+    def verify_tier(plan, st, root="."):
+        def p(rel):
+            return os.path.join(root, rel)
+        tier = st["tier"]
+        requires = plan["tier_ladder"][str(tier)]["requires"]
+        missing = [r for r in requires if not (os.path.exists(p(r)) and os.path.getsize(p(r)) > 0)]
+        if missing:
+            raise TierClaimError("tier %d claimed but artifacts missing: %s" % (tier, missing))
+        prev_to = 1
+        for h in st["history"]:
+            if h["to"] < h["from"]:
+                raise TierClaimError("silent upgrade: %s — the ladder ratchets DOWN only" % h)
+            if h["from"] != prev_to:
+                raise TierClaimError("history chain broken: %s (expected from=%d)" % (h, prev_to))
+            if not h.get("arithmetic"):
+                raise TierClaimError("uncited transition: %s" % h)
+            prev_to = h["to"]
+        starts = {k: datetime.datetime.fromisoformat(v) for k, v in plan["tier_starts_utc"].items()}
+        d1 = [h for h in st["history"] if h["at"] == "D1"]
+        for h in d1:
+            wc = datetime.datetime.fromisoformat(h["wall_clock_utc"])
+            if h["to"] == 2:
+                if not (starts["1"] < wc <= starts["2"]):
+                    raise TierClaimError("D1 tier-2 selection outside (s1, s2]: %s" % h)
+            elif h["to"] == 3:
+                if not (wc > starts["2"]):
+                    raise TierClaimError("D1 tier-3 selection claims overrun but wc <= s2 — arithmetic lie: %s" % h)
+                if wc > starts["3"] and not st.get("pass_at_risk"):
+                    raise TierClaimError("floor overrun without pass_at_risk data: %s" % h)
+        d2 = [h for h in st["history"] if h["at"] == "D2" and h["to"] > h["from"]]
+        if d2:
+            cut = os.listdir(p("drill")) if os.path.isdir(p("drill")) else []
+            if not any(f.startswith("cut-") for f in cut):
+                raise TierClaimError("D2 retreat with zero attempt evidence — retreat-becomes-default: %s" % cut)
+        return {"tier": tier, "name": plan["tier_ladder"][str(tier)]["name"],
+                "requires": requires}
+    plan = json.load(open("backward-plan.json"))
+    st = json.load(open("tier-state.json"))
+    summary = verify_tier(plan, st)
+    # estimate-vs-actual drift: every movement with BOTH an estimate and a
+    # measured actual contributes its |actual - estimate| (review 1's
+    # circularity finding — the estimates now meet data).
+    est = {}; act = {}
+    for l in open("schedule-state.jsonl"):
+        if not l.strip(): continue
+        r = json.loads(l)
+        (est if r["event"] == "estimate" else act).setdefault(r["movement"], r["seconds"])
+    drifts = {m: act[m] - est[m] for m in act if m in est}
+    # Teeth drill: a fabricated Tier 1 claim with a missing chart MUST be
+    # killed by the REAL verifier function.
+    fake = copy.deepcopy(plan)
+    fake["tier_ladder"]["1"]["requires"] = [r for r in fake["tier_ladder"]["1"]["requires"]
+                                            if os.path.exists(r)] + ["charts/does-not-exist.svg"]
+    fake_st = {"tier": 1, "history": [{"at": "D1", "wall_clock_utc":
+              datetime.datetime.now(datetime.timezone.utc).isoformat(), "from": 1, "to": 1,
+              "slack_s": 1, "arithmetic": "drill fixture"}]}
+    os.makedirs("drill", exist_ok=True)
+    json.dump(fake, open("drill/plan-false-claim.json", "w"))
+    drill_killed = False
+    try:
+        verify_tier(fake, fake_st)
+    except TierClaimError:
+        drill_killed = True
+    assert drill_killed, "DRILL BROKEN: the false-claim fixture survived the REAL tier verifier"
+    json.dump({**summary, "ratchet_ok": True, "drill_killed": True,
+               "attempt_evidence": os.listdir("drill"),
+               "estimate_actual_drift_s": drifts,
+               "n_measured_actuals": len(act)},
+              open("tier-verification.json", "w"), indent=2)
+    print("tier verified:", summary["tier"], summary["name"],
+          "| drill: REAL verifier killed the false claim | measured actuals:", len(act),
+          "| drift:", drifts)
+    PY
+    {{ sched_append(13) }}
+
+    {% elif stage == 14 %}
+    # ══ M14 · Three Signatures — Sign-Off Chain Against the Hard Date ════════
+    # Instrument: {{ instrument_name }}. You are ONE of three independent
+    # owners. The deterministic core of your class already ran as CLI gates;
+    # you own the VERDICT — whether the evidence suffices under a hard date —
+    # and the waiver decision. You sign ONLY your own class. Reading another
+    # class's verdict is out of scope; the deadline-gate does the joining.
+    # This sheet is class **{{ signoff_class[instance] }}**
+    # ({{ signoff_title[signoff_class[instance]] }}).
+
+    ## Your class's evidence (read from disk)
+    {% if instance == 1 %}
+    - `{{ workspace }}/band-report.json` — every shared event within
+      pre-registered bands; worst deltas by class; the shared horizon
+      convention record; the corruption drill's kill
+    - `{{ workspace }}/oracle/selftest.json` — the oracle's published-reference
+      self-test BEFORE it was trusted
+    - `{{ workspace }}/ephemeris/manifest.json` — bsp digest, skyfield version,
+      the two UTC offsets seen across October, the kernel map
+    - `{{ workspace }}/product-gates-ics.json` — the DST parse-back matrix
+      (before/fold/after classes, INSTANT equality, fold-day UTC-form policy)
+    - `{{ workspace }}/tolerance-bands.json` — the pre-registered bands, the
+      shared refraction + semidiameter convention, the twilight definition
+    Your questions: Were the bands registered before measurement? Is every
+    published time independently re-derived within band under ONE shared
+    horizon convention? Is the DST fold exact (events on {{ dst_fold_local }}
+    published unambiguously — fold-day instants in UTC form, both offsets in
+    events.json, no third offset)? Is the ephemeris input pinned by digest?
+    {% elif instance == 2 %}
+    - `{{ workspace }}/climatology.json` — n/median/IQR per bin, the
+      recomputed bin, the years list, the fold-exact local night window
+    - `{{ workspace }}/ephemeris/events.json` — moon_illumination_pct and
+      moon_elongation_deg on every shower window (the degradation formula is
+      illumination = 0.5*(1-cos(elongation)) — disclosed, check it)
+    - `{{ workspace }}/product-gates-web.json` — contrast ratios computed from
+      the PRODUCED stylesheet bytes, tonight recomputes, dangling-reference
+      gate
+    Your questions: Does every climatology claim carry its sample size and
+    spread? Is there fake precision anywhere (a percentage with no n)? Is
+    the moonlight-degradation formula disclosed and correctly applied? Is
+    climatology presented as probability-about-the-past, never forecast? Are
+    shower windows date-precision, never fabricated minute peaks?
+    {% else %}
+    - `{{ workspace }}/attribution-report.json` — every page's QID joins,
+      from-line floor, dead-XREF gate
+    - `{{ workspace }}/anniversaries.json` — the QID-verified records
+    - `{{ workspace }}/product-gates-pdf.json` — measured font floor, A4,
+      overflow bounds
+    - `{{ workspace }}/product-gates-web.json` — contrast ratios from produced
+      bytes, svg text, tonight recomputes
+    - `{{ workspace }}/tier-verification.json` — the verified tier, ratchet,
+      measured actuals and drift
+    Your questions: Does every cultural attribution join a verified source?
+    Is the palette a measured property (computed ratios from served bytes)
+    not an adjective? Is the print geometry honest (fonts, floor, A4, no
+    overflow)? Is the feed usable (TZID-correct subscribable events)? Does
+    the experience degrade VISIBLY and honestly per the tier ladder — and
+    does the cut log tell the reader what was cut and the arithmetic that
+    cut it?
+    {% endif %}
+
+    ## Output — write exactly `{{ workspace }}/signoffs/{{ signoff_class[instance] }}.json`
+    ```json
+    {
+      "class": "{{ signoff_class[instance] }}",
+      "signer": "{{ instrument_name }}",
+      "family_record": "instrument-families.json#{{ instrument_name }}",
+      "input_digests": {"<file>": "sha256 of each file you actually read"},
+      "verdict": "accept" | "non-accept",
+      "findings": ["one line each, bound to the file and key that grounds it"],
+      "waiver": null
+    }
+    ```
+    If verdict is "non-accept", `waiver` MUST be an object with `authority`
+    (who may accept this risk), `expiry` (when the waiver dies), and
+    `compensating_control` (what protects the reader meanwhile). A non-accept
+    without a complete waiver is malformed and the deadline-gate will reject
+    it. An accept with findings is legitimate — findings are not vetoes; you
+    are signing that your CLASS's evidence holds, not that the product is
+    perfect. And the converse holds with full force: a non-accept verdict is
+    not a failure of the score and not a failure of you — an accept that
+    should have been non-accept is the failure. Under a hard date, the
+    honest waiver path exists precisely so you never have to stretch an
+    accept. Sign only your class. Digest only what you read.
+
+    {% elif stage == 15 %}
+    {{ strict() }}
+    # ══ M15 · The Deadline Gate — the bijective join, with REAL teeth ═════════
+    # The join is a FUNCTION over a directory. Live: it joins the real record.
+    # Drills: it is replayed against three corrupt fixture directories — an
+    # incomplete waiver, a duplicate ownership, an absent verdict — and EACH
+    # MUST be killed by the function itself (reviews 1/2/3 found the original
+    # drills asserting literals about themselves; a death certificate that
+    # was never signed).
+    python3 - <<'PY'
+    import json, glob, hashlib, os, datetime
+    CLASSES = ["temporal-ephemeris", "statistical", "editorial-experience"]
+    fams = json.load(open("instrument-families.json"))["instruments"]
+    class JoinError(Exception):
+        pass
+    def join_signoffs(root=".", fams=fams):
+        by_class, dupes = {}, []
+        for p in sorted(glob.glob(os.path.join(root, "signoffs", "*.json"))):
+            d = json.load(open(p))
+            c = d["class"]
+            if c in by_class:
+                dupes.append((c, p))
+            by_class[c] = (p, d)
+        if dupes:
+            raise JoinError("duplicate class ownership: %s" % dupes)
+        missing = [c for c in CLASSES if c not in by_class]
+        if missing:
+            raise JoinError("absent verdict(s) — absent is NOT an implicit waiver: %s" % missing)
+        waivers, verdicts = [], {}
+        for c in CLASSES:
+            p, d = by_class[c]
+            if d["verdict"] not in ("accept", "non-accept"):
+                raise JoinError("bad verdict in %s" % p)
+            if d["class"] != c:
+                raise JoinError("class/file mismatch %s" % p)
+            if d.get("signer") not in fams:
+                raise JoinError("signer %r has no family record" % d.get("signer"))
+            for f, dg in d["input_digests"].items():
+                fp = f if os.path.isabs(f) else os.path.join(root, f)
+                actual = hashlib.sha256(open(fp, "rb").read()).hexdigest()
+                if dg != actual:
+                    raise JoinError("input digest drift in %s: %s changed after signing" % (p, f))
+            verdicts[c] = d["verdict"]
+            if d["verdict"] == "non-accept":
+                w = d.get("waiver")
+                if not (isinstance(w, dict) and all(w.get(k) for k in
+                        ("authority", "expiry", "compensating_control"))):
+                    raise JoinError("non-accept without complete waiver in %s" % p)
+                waivers.append({"class": c, **w})
+        return verdicts, waivers, by_class
+    verdicts, waivers, by_class = join_signoffs(".")
+    hard = datetime.datetime.fromisoformat(json.load(open("backward-plan.json"))["hard_instant_utc"])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    lateness_s = max(0, int((now - hard).total_seconds()))
+    # ── Teeth drills: the REAL join against corrupt fixture directories ──────
+    os.makedirs("drill/join-incomplete/signoffs", exist_ok=True)
+    os.makedirs("drill/join-duplicate/signoffs", exist_ok=True)
+    os.makedirs("drill/join-absent/signoffs", exist_ok=True)
+    drills = {}
+    def expect_kill(name, root):
+        killed = False
+        try:
+            join_signoffs(root)
+        except JoinError:
+            killed = True
+        assert killed, "DRILL BROKEN: %s fixture survived the REAL join" % name
+        drills[name] = "killed"
+    ok_sign = lambda cls: {"class": cls, "verdict": "accept", "waiver": None,
+                           "signer": "claude-code", "input_digests": {}}
+    json.dump({"class": CLASSES[0], "verdict": "non-accept",
+               "signer": "claude-code", "input_digests": {},
+               "waiver": {"authority": "x"}}, open("drill/join-incomplete/signoffs/a.json", "w"))
+    for cls in CLASSES[1:]:
+        json.dump(ok_sign(cls), open("drill/join-incomplete/signoffs/%s.json" % cls, "w"))
+    expect_kill("incomplete_waiver", "drill/join-incomplete")
+    json.dump(ok_sign(CLASSES[0]), open("drill/join-duplicate/signoffs/a.json", "w"))
+    json.dump(ok_sign(CLASSES[0]), open("drill/join-duplicate/signoffs/b.json", "w"))
+    json.dump(ok_sign(CLASSES[2]), open("drill/join-duplicate/signoffs/c.json", "w"))
+    expect_kill("duplicate_ownership", "drill/join-duplicate")
+    json.dump(ok_sign(CLASSES[0]), open("drill/join-absent/signoffs/a.json", "w"))
+    json.dump(ok_sign(CLASSES[1]), open("drill/join-absent/signoffs/b.json", "w"))
+    expect_kill("absent_verdict", "drill/join-absent")
+    att = {
+      "edition": json.load(open("backward-plan.json"))["edition"],
+      "verdicts": verdicts, "waivers": waivers,
+      "class_ownership": {c: by_class[c][1]["signer"] for c in CLASSES},
+      "signer_families": {c: fams[by_class[c][1]["signer"]]["family"] for c in CLASSES},
+      "projected_on_time": lateness_s == 0, "lateness_s": lateness_s,
+      "drills": drills,
+      "joined_at_utc": now.isoformat(),
+      "rule": "every class exactly one verdict; every non-accept one complete waiver; "
+              "drills replay the REAL join against corrupt fixtures"}
+    json.dump(att, open("release-attestation.json", "w"), indent=2)
+    print("deadline join:", verdicts, "| waivers:", len(waivers),
+          "| on_time:", lateness_s == 0, "| drills:", drills)
+    PY
+    {{ sched_append(15) }}
+
+    {% elif stage == 16 %}
+    {{ strict() }}
+    # ══ M16 · Arm — Standby-GO's first phase ═══════════════════════════════════
+    # Verify the COMPLETE ack set, RE-RUN THE ACTUAL PRODUCT-GATE SCRIPTS
+    # (gates_ics/gates_web/gates_pdf — the same code M12 ran, writing to
+    # drill/arm-rerun/), record the prior live state — and touch nothing
+    # outside the workspace. A missing ack means NO armed file: the hold, not
+    # a partial fire. The missing-ack drill runs the REAL ack checker.
+    python3 - <<'PY'
+    import json, os, datetime, subprocess
+    plan = json.load(open("backward-plan.json"))
+    tier = json.load(open("tier-state.json"))["tier"]
+    class AckError(Exception):
+        pass
+    def acks_complete(ack_dir):
+        acks_expected = ["ready-site.json", "ready-ics.json", "ready-card.json"]
+        missing = [a for a in acks_expected if not os.path.exists(os.path.join(ack_dir, a))]
+        if missing:
+            raise AckError("ack set incomplete: %s — the hold, not a partial fire" % missing)
+        return acks_expected
+    acks_expected = acks_complete("buffer-B")
+    for f in plan["tier_ladder"][str(tier)]["requires"]:
+        assert os.path.getsize(f) > 0, "empty B-artifact: %s" % f
+    # RE-RUN the actual product gates (review 3 proved the original arm
+    # re-ran one parse + file checks while claiming every gate).
+    os.makedirs("drill/arm-rerun", exist_ok=True)
+    reruns = [("ics", ["uv", "run", "--quiet", "--with", "icalendar", "python",
+                       "gates_ics.py", "drill/arm-rerun/ics.json"]),
+              ("web", ["python3", "gates_web.py", "drill/arm-rerun/web.json"])]
+    if tier == 1:
+        reruns.append(("pdf", ["uv", "run", "--quiet", "--with", "pdfminer.six", "python",
+                               "gates_pdf.py", "drill/arm-rerun/pdf.json"]))
+    gate_pass = {}
+    for name, cmd in reruns:
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        print("[%s]" % name, r.stdout.strip() or r.stderr.strip())
+        assert r.returncode == 0, "product-gate re-run failed during arm: %s" % name
+        gate_pass[name] = True
+    cue = plan["latest_safe_cue_utc"]
+    prior = json.load(open("canary.json"))["prior_live"]
+    armed = {"cue": cue, "armed_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+             "tier": tier, "acks": acks_expected,
+             "acks_meaning": "departments reported; tier-specific artifact existence "
+                             "verified separately against the ladder requires[]",
+             "gate_reruns": gate_pass, "prior_live": prior,
+             "edition": plan["edition"]}
+    open("armed-%s.json" % cue, "w").write(json.dumps(armed, indent=2))
+    # Teeth drill: the REAL ack checker against a fixture dir missing one ack.
+    os.makedirs("drill/missing-ack/buffer-B", exist_ok=True)
+    for a in acks_expected[:-1]:
+        json.dump({"stub": a}, open("drill/missing-ack/buffer-B/" + a, "w"))
+    ack_killed = False
+    try:
+        acks_complete("drill/missing-ack/buffer-B")
+    except AckError:
+        ack_killed = True
+    assert ack_killed, "DRILL BROKEN: incomplete ack fixture would arm"
+    print("ARMED at cue", cue, "| gate re-runs:", gate_pass,
+          "| drill: REAL ack checker refused the incomplete set")
+    PY
+    {{ sched_append(16) }}
+
+    {% elif stage == 17 %}
+    {{ strict() }}
+    # ══ M17 · GO — the single atomic cutover at the computed cue ══════════════
+    # Refuses unless armed (exit 2). Refuses a duplicate GO for the same cue —
+    # the addressed-cue rule (exit 3) — which the validation BELOW re-invokes
+    # and demands. The push is refused unless origin/main is empty-seeded or a
+    # prior Night Dispatch, checked by the marker file. The push credential
+    # is gh's own token helper (canaried by M2's gh auth status — review 3).
+    # CRASH-WINDOW CUSTODY (review 2): the commit is DETERMINISTIC — fixed
+    # author/committer dates at the cue, fixed message, tree from the frozen
+    # buffer — so a retry after a crash between push and log-append re-derives
+    # the SAME sha and the second push is byte-identical, not a second
+    # external effect. An INTENT line (not matched by the ^GO grep) precedes
+    # the push so a crash never erases the record that the pass was firing.
+    # Firing EARLY is safe: the cue is the LATEST-safe instant; the GO line
+    # records the actual fire time and its slack against the cue.
+    cat > go.sh <<'SH'
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{ workspace }}"
+    cue="$(python3 -c "import json; print(json.load(open('backward-plan.json'))['latest_safe_cue_utc'])")"
+    armed="armed-$cue.json"
+    [ -f "$armed" ] || { echo "REFUSED: not armed (no $armed) — arm before GO"; exit 2; }
+    [ -f cue-log.jsonl ] || touch cue-log.jsonl
+    if grep -q "^GO $cue " cue-log.jsonl; then
+      echo "REFUSED: duplicate GO for cue $cue (addressed-cue rule)"; exit 3
+    fi
+    # gh api prints 404 error BODIES to stdout — `|| true` would capture the
+    # error JSON as a non-empty "sha" and refuse every first run. Validate the
+    # shape (caught live in commissioning; the original inherited this bug).
+    prior_sha="$(gh api repos/{{ github_owner }}/{{ repo_name }}/branches/main -q .commit.sha 2>/dev/null || true)"
+    if ! printf '%s' "$prior_sha" | grep -Eq '^[0-9a-f]{40}$'; then prior_sha=""; fi
+    if [ -n "$prior_sha" ]; then
+      gh api "repos/{{ github_owner }}/{{ repo_name }}/contents/.night-dispatch" >/dev/null 2>&1 \
+        || { echo "REFUSED: origin/main is not empty-seeded and not a prior Night Dispatch (no marker)"; exit 4; }
+    fi
+    rm -rf buffer-B/.deploy
+    mkdir -p buffer-B/.deploy
+    git -C buffer-B/.deploy init -q -b main
+    git -C buffer-B/.deploy config user.name "The Night Dispatch"
+    git -C buffer-B/.deploy config user.email "night-dispatch@{{ github_owner }}.users.noreply.github.com"
+    # Deterministic commit: fixed dates at the cue + fixed message + frozen
+    # tree => identical sha on any retry (idempotent GO).
+    export GIT_AUTHOR_DATE="$cue"
+    export GIT_COMMITTER_DATE="$cue"
+    # the pointer flip is ONE commit of the validated buffer; acks, deploy
+    # scaffolding, and score tooling never ship
+    (cd buffer-B && tar --exclude=.deploy --exclude='ready-*.json' --exclude='product-gates-d2-rerun-*.json' -cf - .) \
+      | tar -xf - -C buffer-B/.deploy
+    git -C buffer-B/.deploy add -A
+    git -C buffer-B/.deploy commit -qm "The Night Dispatch — {{ edition }} (tier $(jq -r .tier tier-state.json))"
+    sha="$(git -C buffer-B/.deploy rev-parse HEAD)"
+    echo "INTENT $cue $(date -u +%Y-%m-%dT%H:%M:%SZ) $sha" >> cue-log.jsonl
+    git -C buffer-B/.deploy remote add origin "https://github.com/{{ github_owner }}/{{ repo_name }}.git"
+    git -C buffer-B/.deploy -c credential.helper='!gh auth git-credential' push -qf origin main
+    slack=$(( $(date -u +%s) - $(date -u -d "$cue" +%s) ))
+    echo "GO $cue $(date -u +%Y-%m-%dT%H:%M:%SZ) $sha slack=${slack}s" >> cue-log.jsonl
+    echo "GO fired at cue $cue -> $sha (slack ${slack}s against the latest-safe cue)"
+    SH
+    bash go.sh
+    {{ sched_append(17) }}
+
+    {% elif stage == 18 %}
+    {{ strict() }}
+    # ══ M18 · The Cut-Log Audit — the served page joins the state records ═════
+    # Bidirectional: every served tier claim joins a history record AND every
+    # history record appears on the served page; every served schedule claim
+    # joins a movement AND every movement appears (the cutlog renders ALL
+    # schedule lines — review 2's one-way-equality finding).
+    python3 - <<'PY'
+    import json, subprocess, re, datetime, time
+    plan = json.load(open("backward-plan.json"))
+    base = "https://{{ github_owner }}.github.io/{{ repo_name }}/"
+    # Pages builds asynchronously after GO — poll, bounded; curl -f makes HTTP
+    # errors exit nonzero (a cold 404 is the expected transient, not content).
+    served = None
+    for attempt in range(20):
+        r = subprocess.run(["curl", "-sf", "--max-time", "60", base + "cutlog.html"],
+                           capture_output=True, text=True)
+        if r.returncode == 0 and "cut log" in r.stdout.lower():
+            served = r.stdout
+            break
+        time.sleep(30)
+    assert served is not None, "served cutlog unreachable after bounded poll"
+    st = json.load(open("tier-state.json"))
+    served_tiers = re.findall(r'data-claim="tier:([^:]+):(\d)-(\d)"', served)
+    expect_tiers = [(h["at"], str(h["from"]), str(h["to"])) for h in st["history"]]
+    assert sorted(served_tiers) == sorted(expect_tiers), (
+        "served tier claims %s != tier-state history %s (bidirectional join)" % (served_tiers, expect_tiers))
+    served_sched = re.findall(r'data-claim="sched:(\d+)"', served)
+    assert served_sched, "no schedule claims rendered"
+    known = {str(json.loads(l)["movement"]) for l in open("schedule-state.jsonl") if l.strip()}
+    assert set(served_sched) == known, (
+        "schedule claim sets differ BOTH ways: served-only %s state-only %s" %
+        (sorted(set(served_sched) - known), sorted(known - set(served_sched))))
+    print("cutlog audit: %d tier claims, %d schedule claims — joined both ways" %
+          (len(served_tiers), len(served_sched)))
+    PY
+    {{ sched_append(18) }}
+
+    {% elif stage == 19 %}
+    {{ strict() }}
+    # ══ M19 · The Live Seal — the served bytes are the truth ══════════════════
+    # Fetch the SERVED events.ics over HTTPS. The verifier is a FUNCTION: it
+    # re-parses every VEVENT and compares UTC INSTANTS against events.json.
+    # The independent oracle re-derives EVERY oracle-covered event (all seven
+    # rise/set bodies, both twilight depths, the phases — not one spot-check;
+    # reviews 2/3's finding), under the shared horizon convention, and every
+    # delta must sit inside the registered bands. The mutated-byte drill runs
+    # the REAL verifier and must be killed by it. Workspace-green is not
+    # deployed-green.
+    uv run --quiet --with icalendar --with ephem python - <<'PY'
+    import json, subprocess, datetime, zoneinfo, hashlib, math, copy, os, time
+    from collections import defaultdict
+    from icalendar import Calendar
+    import ephem
+    plan = json.load(open("backward-plan.json"))
+    bands = json.load(open("tolerance-bands.json"))
+    events = {e["id"]: e for e in json.load(open("ephemeris/events.json"))}
+    tz = zoneinfo.ZoneInfo(plan["tz"])
+    base = "https://{{ github_owner }}.github.io/{{ repo_name }}/"
+    def fetch(p, attempts=20):
+        last = ""
+        for _ in range(attempts):
+            r = subprocess.run(["curl", "-sf", "--max-time", "90", base + p],
+                               capture_output=True)
+            if r.returncode == 0 and r.stdout:
+                return r.stdout
+            last = "curl rc=%s" % r.returncode
+            time.sleep(30)
+        raise AssertionError("served %s unreachable after bounded poll (last: %s)" % (p, last))
+    def verify_served_bytes(ics_bytes):
+        """The REAL seal verifier: instant-equality per VEVENT + fold policy."""
+        cal = Calendar.from_ical(ics_bytes)
+        n = 0
+        fold = datetime.date.fromisoformat("{{ dst_fold_local }}")
+        for comp in cal.walk("VEVENT"):
+            n += 1
+            uid = str(comp.get("uid"))
+            eid = uid.split("night-dispatch-%s-" % plan["edition"])[1].split("@")[0]
+            if eid not in events:
+                raise AssertionError("served UID %s not in events.json" % uid)
+            prop = comp.get("dtstart")
+            dt = prop.dt if prop.dt.tzinfo is not None else prop.dt.replace(tzinfo=datetime.timezone.utc)
+            want_utc = datetime.datetime.fromisoformat(events[eid]["utc"])
+            delta_s = abs((dt.astimezone(datetime.timezone.utc) - want_utc).total_seconds())
+            if delta_s >= 1.0:  # second-exact: RFC 5545 whole seconds vs json microseconds
+                raise AssertionError("SERVED instant drift %s: %s vs %s (%.3fs)" % (
+                    eid, dt.astimezone(datetime.timezone.utc).isoformat(), want_utc.isoformat(), delta_s))
+            tzid = prop.params.get("tzid", "")
+            local_date = datetime.datetime.fromisoformat(events[eid]["local_wall"]).date()
+            if local_date == fold:
+                assert not tzid, "served fold-day VEVENT %s lost UTC form" % eid
+            else:
+                assert tzid == plan["tz"], "served TZID lost for %s" % eid
+        return n
+    served = fetch("events.ics")
+    served_sha = hashlib.sha256(served).hexdigest()
+    local_sha = hashlib.sha256(open("buffer-B/events.ics", "rb").read()).hexdigest()
+    assert served_sha == local_sha, "SERVED bytes differ from the released buffer (%s vs %s)" % (
+        served_sha[:12], local_sha[:12])
+    n = verify_served_bytes(served)
+    assert n == len(events), "served %d VEVENTs vs %d computed" % (n, len(events))
+    # Independent oracle: re-derive EVERY oracle-covered event from the second
+    # code lineage, shared horizon convention, and join by key within bands.
+    sr = bands["shared_refraction"]
+    REFR_DEG = 0.5667 * (sr["pressure_mbar"] / 1010.0) * (283.15 / (273.15 + sr["temp_c"]))
+    o = ephem.Observer()
+    o.lat, o.lon, o.elevation = str(plan["lat"]), str(plan["lon"]), 0.0
+    o.pressure = 0.0
+    y, m = plan["edition_year"], plan["edition_month"]
+    BODIES = {"sun": ephem.Sun, "moon": ephem.Moon, "mercury": ephem.Mercury,
+              "venus": ephem.Venus, "mars": ephem.Mars, "jupiter": ephem.Jupiter,
+              "saturn": ephem.Saturn}
+    def alt_deg(bname, utc_dt):
+        o.date = ephem.Date(utc_dt)
+        b = BODIES[bname](); b.compute(o)
+        return math.degrees(b.alt)
+    def sd_deg(bname, utc_dt):
+        if bname not in ("sun", "moon"):
+            return 0.0
+        o.date = ephem.Date(utc_dt)
+        b = BODIES[bname](); b.compute(o)
+        return (b.size / 2.0) / 3600.0
+    def th_fn(bname):
+        if bname in ("sun", "moon"):
+            return lambda t, b=bname: -(REFR_DEG + sd_deg(b, t))
+        return lambda t: -(REFR_DEG)
+    def nearest_before(bname, th, t_target, hours=3.0):
+        """Bisect the crossing immediately around t_target (search FORWARD
+        from t_target - epsilon only — review 1's finding that searching
+        backward 26h finds the PREVIOUS day's event)."""
+        eps = datetime.timedelta(seconds=60)
+        t_lo = t_target - eps
+        t_hi = t_target + datetime.timedelta(hours=1.0)
+        f_lo = alt_deg(bname, t_lo) - th(t_lo)
+        f_hi = alt_deg(bname, t_hi) - th(t_hi)
+        if f_lo * f_hi > 0:
+            return None
+        for _ in range(40):
+            mid = t_lo + (t_hi - t_lo) / 2
+            f_mid = alt_deg(bname, mid) - th(mid)
+            if f_lo * f_mid <= 0:
+                t_hi = mid
+            else:
+                t_lo, f_lo = mid, f_mid
+        return t_lo + (t_hi - t_lo) / 2
+    def k_of(e):
+        if e["class"] == "rise-set":
+            return ("rs", e["detail"]["body"], e["detail"]["event"])
+        if e["class"] == "twilight":
+            return ("tw", e["detail"]["type"], e["detail"]["event"])
+        if e["class"] == "phase":
+            return ("ph", e["detail"]["phase"], None)
+        return None
+    checked, worst_all = 0, 0.0
+    for e in events.values():
+        k = k_of(e)
+        if not k:
+            continue
+        t = datetime.datetime.fromisoformat(e["utc"])
+        if k[0] == "ph":
+            FNS = {"new": ephem.next_new_moon, "first quarter": ephem.next_first_quarter_moon,
+                   "full": ephem.next_full_moon, "last quarter": ephem.next_last_quarter_moon}
+            got = FNS[k[1]](ephem.Date(t - datetime.timedelta(hours=2))).datetime() \
+                    .replace(tzinfo=datetime.timezone.utc)
+        elif k[0] == "tw":
+            deg = -6.0 if k[1] == "civil" else -12.0
+            got = nearest_before("sun", (lambda t_, d=deg: d), t)
+        else:
+            got = nearest_before(k[1], th_fn(k[1]), t)
+        if got is None:
+            raise AssertionError("oracle bracket failed to reproduce %s (%s)" % (e["id"], k))
+        dmin = abs((got - t).total_seconds()) / 60.0
+        band = {"rs": bands["rise_set_band_min"], "tw": bands["twilight_band_min"],
+                "ph": bands["phase_band_min"]}[k[0]]
+        assert dmin <= band, "SEAL oracle re-derivation out of band %s: %.1f min > %d" % (k, dmin, band)
+        checked += 1
+        worst_all = max(worst_all, dmin)
+    # tier 3 ships no index page — seal what exists, never demand what the
+    # ladder legitimately cut
+    index = fetch("index.html") if os.path.exists("buffer-B/index.html") else None
+    # Teeth drill: a mutated served byte MUST be killed by the REAL verifier
+    # (not merely produce a different hash — review 2's finding).
+    mutated = bytearray(served); mutated[200] ^= 0x01
+    drill_killed = False
+    try:
+        verify_served_bytes(bytes(mutated))
+    except Exception:
+        drill_killed = True
+    assert drill_killed, "DRILL BROKEN: mutated served bytes survived the REAL seal verifier"
+    json.dump({"served_events_sha256": served_sha,
+               "served_index_sha256": hashlib.sha256(index).hexdigest() if index else None,
+               "vevents_served": n, "instants_checked": n,
+               "oracle_rederived": checked, "oracle_all_max_delta_min": round(worst_all, 2),
+               "oracle_coverage": "rise/set all 7 bodies + civil/nautical twilight + phases; "
+                                  "conjunctions/shower windows single-kernel (disclosed)",
+               "drill_killed": True,
+               "url": base, "sealed_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()},
+              open("seal.json", "w"), indent=2)
+    print("seal: %d VEVENTs re-derived from served bytes | oracle re-derived %d events "
+          "(worst %.2f min) | drill: REAL verifier killed the mutated bytes" % (n, checked, worst_all))
+    PY
+    {{ sched_append(19) }}
+
+    {% endif %}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VALIDATIONS — staged fail-fast (Commissioning Cascade): coarse before fine
+# within each sheet; every load-bearing claim is a deterministic command with
+# an exit code. `condition: "stage == N"` selects the MOVEMENT (stage is the
+# movement alias in the validation context); fan-out movements' rules apply to
+# each expanded sheet, and {instance} distinguishes voices. Anchors
+# (`&live_gate`) macro the repeated served-URL gate shape; the Jinja macros
+# strict()/no_fabrication()/page_shape() macro the prompt side.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+validations:
+  # ── M1 · The plan is the arithmetic — checked by arithmetic, never reading ──
+  - type: command_succeeds
+    command: |
+      python3 - <<'PY'
+      import json, datetime, zoneinfo, hashlib, copy
+      plan = json.load(open('{workspace}/backward-plan.json'))
+      tz = zoneinfo.ZoneInfo('{tz}')
+      hard_local = datetime.datetime.fromisoformat('{hard_date_local}').replace(tzinfo=tz)
+      assert hard_local.time() == datetime.time(0, 0), 'boundary must be midnight-exact local'
+      hard_utc = hard_local.astimezone(datetime.timezone.utc)
+      assert hard_utc.isoformat() == plan['hard_instant_utc'], 'plan hard instant disagrees with the pinned local instant'
+      # the KeyError fix, pinned forever: the plan carries its own edition keys
+      assert plan['edition_year'] == {edition_year} and plan['edition_month'] == {edition_month}, 'plan must carry edition_year/edition_month for every downstream reader'
+      d = plan['durations_s']
+      re_cue = hard_utc - datetime.timedelta(seconds=d['arm'] + d['go'] + d['margin'] // 2)
+      assert re_cue.isoformat() == plan['latest_safe_cue_utc'], 'cue not re-derivable from published durations'
+      starts = {k: datetime.datetime.fromisoformat(v) for k, v in plan['tier_starts_utc'].items()}
+      assert starts['1'] < starts['2'] < starts['3'], 'tier starts must be three DISTINCT instants (the de-degenerated ladder)'
+      L = plan['tier_ladder']
+      assert set(L['3']['requires']) <= set(L['2']['requires']) <= set(L['1']['requires']), 'ladder must nest: T3 ⊆ T2 ⊆ T1'
+      bands_sha = hashlib.sha256(open('{workspace}/tolerance-bands.json','rb').read()).hexdigest()
+      assert bands_sha == plan['tolerance_bands_sha256'], 'bands digest not registered in the plan'
+      b = json.load(open('{workspace}/tolerance-bands.json'))
+      assert b['shared_refraction'] == {"pressure_mbar": {refraction_mbar}, "temp_c": {refraction_c}}, 'refraction assumptions must be pinned'
+      assert b['rise_set_band_min'] == {rise_set_band_min} and b['phase_band_min'] == {phase_band_min} and b['twilight_band_min'] == {twilight_band_min}, 'bands must match the pre-registered variables (every registered band is consumed by a measurement)'
+      # Teeth drill: perturbing one duration in a fixture copy MUST break re-derivation.
+      fake = copy.deepcopy(plan); fake['durations_s']['go'] += 60
+      re2 = hard_utc - datetime.timedelta(seconds=fake['durations_s']['arm'] + fake['durations_s']['go'] + fake['durations_s']['margin'] // 2)
+      assert re2.isoformat() != fake['latest_safe_cue_utc'], 'DRILL BROKEN: perturbed duration still re-derives the cue'
+      print('plan re-derivation: cue, distinct ladder, nesting, bands digest, drill — all green')
+      PY
+    condition: "stage == 1"
+    stage: 2
+    description: "Backward plan re-derives from the hard instant; three DISTINCT tier starts; ladder nests; bands digest registered; perturbation drill kills"
+  - type: command_succeeds
+    command: |
+      test "$(gh api user -q .login)" = {github_owner}
+      jq -e '.gh_identity == "{github_owner}" and (.prior_live.state == "empty" or .prior_live.state == "prior-edition-or-foreign" or .prior_live.state == "foreign-no-marker") and .pages.status and (.seeded_sha | type == "string")' {workspace}/canary.json > /dev/null
+      jq -e '(.instruments | keys | sort) == (["claude-code","codex-cli","opencode"] | sort) and ([.instruments[] | select(.binary_present) | .family] | unique | length) >= 2' {workspace}/instrument-families.json > /dev/null
+      jq -e '.honesty_note | test("recorded, not performed")' {workspace}/instrument-families.json > /dev/null
+    condition: "stage == 2"
+    stage: 2
+    description: "Self-canary: gh identity, repo seeded + Pages verified, TWO real families among PRESENT binaries, honesty note recorded"
+  - type: command_succeeds
+    command: |
+      jq -e '.bsp_sha256 == "{bsp_sha256}" and (.offsets_seen | length) == 2 and .event_count >= 500' {workspace}/ephemeris/manifest.json > /dev/null
+      jq -e 'length >= 500 and all(.[]; has("id") and has("utc") and has("local_wall") and .tz == "{tz}")' {workspace}/ephemeris/events.json > /dev/null
+      jq -e '[.[] | select(.class == "twilight")] | length >= 50' {workspace}/ephemeris/events.json > /dev/null
+      jq -e '[.[] | select(.local_wall | startswith("{dst_fold_local}")) | .local_wall[19:]] | unique | length == 2' {workspace}/ephemeris/events.json > /dev/null
+      jq -e 'all(.[] | select(.class == "shower"); (.detail.note | test("DATE-precision")) and (.detail | has("window_center")) and (.detail | has("moon_illumination_pct")))' {workspace}/ephemeris/events.json > /dev/null
+    condition: "stage == 3"
+    stage: 2
+    description: "Ephemeris: pinned bsp digest, two DST offsets, full event schema with computed twilight, fold-day events carry BOTH offsets, showers are date-precision windows"
+  - type: command_succeeds
+    command: |
+      jq -e '.delta_min <= .tolerance_min and (.delta_min >= 0)' {workspace}/oracle/selftest.json > /dev/null
+      jq -e 'length >= 500 and all(.[]; has("utc") and has("local_wall"))' {workspace}/oracle/oracle-times.json > /dev/null
+    condition: "stage == 4"
+    stage: 2
+    description: "Oracle: published-reference selftest within tolerance; full re-derivation present (all bodies + twilight + phases)"
+  - type: command_succeeds
+    command: |
+      jq -e '.matched_events >= 400 and .drill_killed == true and .fold_day_both_sides == true' {workspace}/band-report.json > /dev/null
+      jq -e '(.worst_delta_min | to_entries | select(.key | startswith("rs/")) | all(.value <= {rise_set_band_min})) and (.worst_delta_min | to_entries | select(.key | startswith("tw/")) | all(.value <= {twilight_band_min})) and (.worst_delta_min | to_entries | select(.key | startswith("ph/")) | all(.value <= {phase_band_min}))' {workspace}/band-report.json > /dev/null
+      jq -e '.tier >= 1 and .tier <= 3 and (.history | length) >= 1 and (.history[0].at == "D1") and (.history[0].arithmetic | length > 20) and has("pass_at_risk")' {workspace}/tier-state.json > /dev/null
+    condition: "stage == 5"
+    stage: 2
+    description: "Band join: coverage, per-class worst deltas within the registered bands, D1 tier decision cited with pass_at_risk surfaced, corruption drill killed by the REAL join"
+  - type: command_succeeds
+    command: |
+      jq -e '.n_years >= {climatology_min_years} and (.bins | to_entries | length) == 3 and all(.bins[]; .n > 0 and has("median_pct") and (.iqr_pct | length) == 2)' {workspace}/climatology.json > /dev/null
+      jq -e '.recomputed_bin.n > 0 and .recomputed_bin.median_pct >= 0 and (.night_window | test("local"))' {workspace}/climatology.json > /dev/null
+      test $(ls {workspace}/raw/clim/oct-*.json | wc -l) -ge {climatology_min_years}
+    condition: "stage == 6"
+    stage: 2
+    description: "Climatology: n/median/IQR on every bin, recomputed bin joins raw bytes, local-hour night window, raw Octobers retained"
+  - type: command_succeeds
+    command: |
+      jq -e 'length >= {min_anniversaries} and all(.[]; (.qid | test("^Q[0-9]+$")) and (.date | test("^((19|20)[0-9][0-9])-{edition_month_padded}-[0-3][0-9]$")) and has("source_url") and has("date_property") and has("claim_line"))' {workspace}/anniversaries.json > /dev/null
+    condition: "stage == 7"
+    stage: 2
+    description: "Anniversaries: every record QID-keyed, month-dated (regex aligned with the >=1900 gate — the original 1xxx-year regex rejected valid 20xx records), property-cited, source-linked"
+  - type: command_succeeds
+    command: |
+      jq -e '.svg_fonttype == "none"' {workspace}/charts/ready-charts.json > /dev/null
+      for f in $(jq -r '.made[]' {workspace}/charts/ready-charts.json); do
+        grep -q "<text" "{workspace}/$f" || { echo "no text elements in $f"; exit 1; }
+        grep -q "<image" "{workspace}/$f" && { echo "raster embedded in $f"; exit 1; } || true
+      done
+      echo "charts carry extractable text"
+    condition: "stage == 8"
+    stage: 2
+    description: "Charts: svg.fonttype=none, text-as-text, no rasters"
+  # ── M9 · Each voice: structural pre-gate before the full attribution join ──
+  - &voice_gate
+    type: command_succeeds
+    command: |
+      python3 - <<'PY'
+      import json, re, os
+      VOICES = {1: 'lunar', 2: 'planetary', 3: 'meteors', 4: 'history'}
+      v = VOICES[{instance}]
+      tier = json.load(open('{workspace}/tier-state.json'))['tier']
+      annv = {r['qid'] for r in json.load(open('{workspace}/anniversaries.json'))}
+      if tier == 1:
+          text = open('{workspace}/pages/%s.md' % v).read()
+          assert len(text.split()) >= {min_page_words}, 'page too thin'
+          assert re.search(r'XREF\s+\S+\s+->\s+(lunar|planetary|meteors|history):', text), 'no XREF line'
+          froms = re.findall(r'from:\s*(\S+\.json)', text)
+          assert len(froms) >= {min_from_lines}, 'uncited numbers: %d from: lines' % len(froms)
+          assert all(f in ('events.json', 'climatology.json', 'anniversaries.json', 'band-report.json') for f in froms), 'from: line names an unknown input'
+          for q in re.findall(r'source:\s*(Q\d+)', text):
+              assert q in annv, 'unsourced QID %s' % q
+      else:
+          doc = json.load(open('{workspace}/pages/voice-{instance}-tier-ack.json'))
+          assert doc['tier'] == tier, 'ack tier disagrees with tier-state'
+          assert doc['voice'] == v, 'ack voice mismatch'
+      print('voice %s (instance {instance}) structurally clean at tier', v, tier)
+      PY
+    condition: "stage == 9"
+    stage: 2
+    description: "Voice gate: page shape, from-line floor, XREF contract, QIDs pre-join (or honest tier-ack) — keyed by {instance}"
+  - type: command_succeeds
+    command: |
+      jq -e 'if .tier == 1 then ((.pages | length) == 4) and all(.pages[]; .from_lines >= {min_from_lines}) and ((.qid_universe | length) >= {min_anniversaries}) else ((.pages | length) == 0) end' {workspace}/attribution-report.json > /dev/null
+    condition: "stage == 10"
+    stage: 2
+    description: "Attribution join: tier-1 has four joined pages carrying from-line evidence; retreated tiers have none"
+  - type: command_succeeds
+    command: |
+      tier=$(jq -r .tier {workspace}/tier-state.json)
+      for f in $(jq -r --argjson t "$tier" '.tier_ladder[$t | tostring].requires[]' {workspace}/backward-plan.json); do
+        test -s "{workspace}/$f" || { echo "missing tier artifact: $f"; exit 1; }
+      done
+      jq -e '.vevents >= 500 and .fold_day_utc_form > 0' {workspace}/buffer-B/ics-manifest.json > /dev/null
+      for a in ready-site.json ready-ics.json ready-card.json; do test -s "{workspace}/buffer-B/$a"; done
+      test -s {workspace}/buffer-B/.night-dispatch
+      test -s {workspace}/palette.json
+      test -s {workspace}/buffer-B/style.css
+    condition: "stage == 11"
+    stage: 2
+    description: "Products: every required tier artifact non-empty in buffer B, fold-day events in UTC form, ack set complete, marker written, palette single-source present"
+  - type: command_succeeds
+    command: |
+      jq -e '.dst_classes.before > 10 and .dst_classes.after > 10 and .dst_classes.fold > 0 and (.instants_checked == .vevents) and .tzid == "{tz}"' {workspace}/product-gates-ics.json > /dev/null
+      jq -e '.contrast["red-on-black"] >= {contrast_floor} and .contrast["grey-on-black"] >= {contrast_floor} and (.contrast_source | test("produced")) and .dangling_refs == 0' {workspace}/product-gates-web.json > /dev/null
+      tier=$(jq -r .tier {workspace}/tier-state.json)
+      if [ "$tier" = "1" ]; then jq -e '.pdf.min_font_pt >= {min_font_pt} and .pdf.a4 and .pdf.overflow_ok' {workspace}/product-gates-pdf.json > /dev/null; fi
+      jq -e '.tonight_recompute | length == 3' {workspace}/product-gates-web.json > /dev/null
+      jq -e 'all(.history[]; .to >= .from)' {workspace}/tier-state.json > /dev/null
+    condition: "stage == 12"
+    stage: 2
+    description: "Product gates: instant-equality DST matrix with fold>0, contrast computed from produced bytes, measured font floor + overflow, tonight recomputes, no dangling refs, ratchet direction correct"
+  - type: command_succeeds
+    command: |
+      jq -e '.ratchet_ok == true and .drill_killed == true and (.requires | length) >= 2 and .n_measured_actuals >= 1' {workspace}/tier-verification.json > /dev/null
+    condition: "stage == 13"
+    stage: 2
+    description: "Tier verified against artifacts + ratchet + REAL-verifier drill + measured actuals recorded"
+  # ── M14 · Each sign-off: class ownership + digest-joined inputs, per voice ──
+  - &signoff_gate
+    type: command_succeeds
+    command: |
+      python3 - <<'PY'
+      import json, hashlib
+      CLASSES = {1: 'temporal-ephemeris', 2: 'statistical', 3: 'editorial-experience'}
+      c = CLASSES[{instance}]
+      doc = json.load(open('{workspace}/signoffs/%s.json' % c))
+      assert doc['class'] == c, 'class/file mismatch'
+      assert doc['verdict'] in ('accept', 'non-accept'), 'malformed verdict'
+      fams = json.load(open('{workspace}/instrument-families.json'))['instruments']
+      assert doc['signer'] in fams, 'signer has no family record'
+      assert len(doc['input_digests']) >= 2, 'must digest at least two consumed inputs'
+      for f, dg in doc['input_digests'].items():
+          actual = hashlib.sha256(open('{workspace}/' + f, 'rb').read()).hexdigest()
+          assert dg == actual, 'input digest drift: %s changed after signing' % f
+      if doc['verdict'] == 'non-accept':
+          w = doc.get('waiver') or {}
+          assert w.get('authority') and w.get('expiry') and w.get('compensating_control'), 'non-accept without complete waiver'
+      print('signoff %s (instance {instance}): ownership + digests verified' % c)
+      PY
+    condition: "stage == 14"
+    stage: 2
+    description: "Sign-off gate: one class per {instance}, valid verdict, digested inputs joined, waiver completeness"
+  - type: command_succeeds
+    command: |
+      jq -e '(.verdicts | keys | length) == 3 and ([.verdicts[]] | all(. == "accept" or . == "non-accept"))' {workspace}/release-attestation.json > /dev/null
+      jq -e '(.class_ownership | to_entries | length) == 3 and (.signer_families | to_entries | length) == 3' {workspace}/release-attestation.json > /dev/null
+      jq -e '(.waivers | length) >= 0 and all(.waivers[]; has("authority") and has("expiry") and has("compensating_control"))' {workspace}/release-attestation.json > /dev/null
+      jq -e '.drills == {"absent_verdict": "killed", "duplicate_ownership": "killed", "incomplete_waiver": "killed"}' {workspace}/release-attestation.json > /dev/null
+    condition: "stage == 15"
+    stage: 2
+    description: "Deadline gate: bijective verdict join, families recorded, waiver completeness, and ALL THREE corrupt-fixture drills killed by the REAL join"
+  - type: command_succeeds
+    command: |
+      cue=$(python3 -c "import json; print(json.load(open('{workspace}/backward-plan.json'))['latest_safe_cue_utc'])")
+      test -s "{workspace}/armed-$cue.json"
+      jq -e '.acks | length == 3 and has("prior_live") and has("cue") and (.gate_reruns | has("ics")) and (.gate_reruns | has("web"))' "{workspace}/armed-$cue.json" > /dev/null
+      test -s {workspace}/drill/arm-rerun/ics.json
+      test -s {workspace}/drill/arm-rerun/web.json
+    condition: "stage == 16"
+    stage: 2
+    description: "Arm: armed file with the full ack set AND actual product-gate re-run outputs present"
+  # ── M17 · GO — exactly once, and the refusal is RE-TESTED at validation ────
+  - type: command_succeeds
+    command: |
+      cue=$(python3 -c "import json; print(json.load(open('{workspace}/backward-plan.json'))['latest_safe_cue_utc'])")
+      test "$(grep -c "^GO $cue " {workspace}/cue-log.jsonl)" -eq 1
+      sha=$(grep "^GO $cue " {workspace}/cue-log.jsonl | awk '{print $4}')
+      test "$(gh api repos/{github_owner}/{repo_name}/branches/main -q .commit.sha)" = "$sha"
+      cd {workspace} && bash go.sh; rc=$?; test $rc -eq 3
+    condition: "stage == 17"
+    stage: 2
+    timeout_seconds: 300
+    description: "GO: one GO line for the cue, remote head is the logged commit (deterministic sha), and a second invocation REFUSES (exit 3, addressed-cue rule)"
+  # ── M18/M19 · The live seam — served macros (anchor) on the RUNNING artifact ──
+  - &live_gate
+    type: command_succeeds
+    command: |
+      curl -sf --max-time 90 https://{github_owner}.github.io/{repo_name}/cutlog.html | grep -qi "cut log"
+      curl -sf --max-time 90 https://{github_owner}.github.io/{repo_name}/cutlog.html | grep -c "data-claim" | xargs -I{} test {} -ge 1
+    condition: "stage == 18"
+    stage: 2
+    timeout_seconds: 300
+    description: "Cut-log audit: the RUNNING site serves the cut log with joinable data-claim records"
+  - <<: *live_gate
+    command: |
+      curl -sf --max-time 90 https://{github_owner}.github.io/{repo_name}/events.ics | grep -c "BEGIN:VEVENT" | xargs -I{} test {} -ge 500
+      curl -sf --max-time 90 https://{github_owner}.github.io/{repo_name}/events.ics | grep -c "TZID:{tz}" | xargs -I{} test {} -ge 400
+    condition: "stage == 19"
+    stage: 1
+    timeout_seconds: 300
+    description: "Live seam pre-check: the RUNNING site serves 500+ VEVENTs with TZID-correct non-fold instants"
+  - <<: *live_gate
+    command: |
+      jq -e '.vevents_served >= 500 and (.vevents_served == .instants_checked) and (.oracle_rederived >= 400) and (.oracle_all_max_delta_min <= {rise_set_band_min}) and .drill_killed == true and has("served_events_sha256")' {workspace}/seal.json > /dev/null
+      local_sha=$(sha256sum {workspace}/buffer-B/events.ics | cut -d' ' -f1)
+      jq -e --arg s "$local_sha" '.served_events_sha256 == $s' {workspace}/seal.json > /dev/null
+    condition: "stage == 19"
+    stage: 2
+    timeout_seconds: 120
+    description: "Seal: every served instant re-verified; EVERY oracle-covered event re-derived within band; mutated bytes killed by the REAL verifier; served digest equals the released buffer"

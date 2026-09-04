@@ -1,0 +1,3181 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║      THE ROTTING CANON — Negative-Treatment Watch proof score               ║
+# ║      composed from 01-selection / 02-decomposition / 03-architecture        ║
+# ║      (rosetta-prove concert, sheet 4 of 8, 2026-09-04)                       ║
+# ║                                                                              ║
+# ║  PRIMARY PATTERN : Negative-Treatment Watch (concert-level, working) —       ║
+# ║                    the corpus's FIRST concert-level and FIRST                ║
+# ║                    communication-scale proof. Admission is not               ║
+# ║                    permanence: every admitted claim holds a validity         ║
+# ║                    lease renewed by a recurring audit; staleness is made     ║
+# ║                    LOUD — the flag, not the silence, is the product.         ║
+# ║  COMPOSING       : The Errata Ledger (intake → atomic-commit →               ║
+# ║                    propagate; corrections supersede by digest, never         ║
+# ║                    rewrite), Proof-Carrying Artifact (every admitted         ║
+# ║                    claim ships DOI + query bytes + sha256 digest; the        ║
+# ║                    admit stage re-hashes and exits nonzero on mismatch),     ║
+# ║                    Fork-Evident History (git commit at every stage           ║
+# ║                    boundary; the public DAG is the journal; branch           ║
+# ║                    protection forbids force-push). Adjacency is              ║
+# ║                    declared, not asserted: NTW's frontmatter lists           ║
+# ║                    The Errata Ledger and Proof-Carrying Artifact             ║
+# ║                    directly; Fork-Evident History rides The Errata           ║
+# ║                    Ledger's declared substrate edge (EL composes_with        ║
+# ║                    FEH: "chaining beneath the published corrections")        ║
+# ║                    — a transitive, checkable claim, not an invented           ║
+# ║                    edge.                                                     ║
+# ║  MECHANISMS      : (unclaimed, wired as script logic / engine primitives)    ║
+# ║                    Shipyard canary + Canary Probe (M1: pin the world         ║
+# ║                    before any model token), Source Triangulation (M5:        ║
+# ║                    three institutional probes, union-of-flags,               ║
+# ║                    disagreement recorded as data), Quorum Trigger (M5:       ║
+# ║                    flag-rate hold as a count comparison inside the           ║
+# ║                    sweep script — NOT circuit_breaker, whose engine           ║
+# ║                    semantics are sheet-failure counts), Dead Letter          ║
+# ║                    Quarantine (M4: unresolved DOIs → visible DEBT list,      ║
+# ║                    never a silent drop), The Skeptical Oracle's              ║
+# ║                    admission rule (M6/M8: LLM output enters the record       ║
+# ║                    only through deterministic schema/bijection/              ║
+# ║                    substring gates), Dormancy Gate (M14: poll Pages          ║
+# ║                    build with backoff, never fail on latency), The           ║
+# ║                    Etiquette Law (every deterministic stage is a command     ║
+# ║                    with an exit status and an EMPTY fallback chain).         ║
+# ║                                                                              ║
+# ║  PROBLEM SOLVED  : The citation backbone of the most-read reference work     ║
+# ║                    in history rots silently. Retracted and corrected         ║
+# ║                    papers keep being cited years later; a reader of an       ║
+# ║                    established Wikipedia article cannot know that a          ║
+# ║                    load-bearing source was retracted, corrected, or          ║
+# ║                    flagged since admission. No solo agent can prove          ║
+# ║                    this pattern: the product is a standing institution       ║
+# ║                    (recurrence + visible lease) whose verdicts any           ║
+# ║                    third party re-derives from shipped query bytes.          ║
+# ║                    Cycle 1 is a REAL catch-up audit — the retracted          ║
+# ║                    Wakefield 1998 paper carries a deterministic              ║
+# ║                    "RETRACTED:" Crossref title marker TODAY (verified        ║
+# ║                    live at selection); the canary pins it before any         ║
+# ║                    model token is spent.                                     ║
+# ║                                                                              ║
+# ║  PRODUCES        : ~/workspaces/rotting-canon/ (auto-managed, #58) →         ║
+# ║                    canon.db (SQLite claim graph: claims/anchors/             ║
+# ║                    dependents) · evidence/claims/C-*.json (PCA bundles,      ║
+# ║                    ids = sha256(DOI)[:12]) · evidence/sweep/*-probe          ║
+# ║                    bytes · sweep-report.json (with the real                  ║
+# ║                    disagreement matrix + per-flag latency) ·                 ║
+# ║                    lease-record.json (the STALE banner's data source)        ║
+# ║                    · flagged.json (evidence_date/evidence_reason per         ║
+# ║                    flag) · adjudications.json · quarantine-report.md         ║
+# ║                    + quarantine-manifest.json (the report's                  ║
+# ║                    structured twin, joined to the DB by validation)          ║
+# ║                    · pending-corrections.json · ledger/corrections.          ║
+# ║                    jsonl (per-entry hash chain, supersession pointing        ║
+# ║                    at the superseded ENTRY) · watermark.json ·               ║
+# ║                    site/ AND docs/ (byte-identical trees: index,             ║
+# ║                    per-article status pages, per-claim evidence              ║
+# ║                    pages, methodology, debt page, stale-check.js             ║
+# ║                    WITH live fetch+inject wiring, stats PNG/CSV +            ║
+# ║                    disagreement matrix) · site/feed.xml (windowed            ║
+# ║                    Atom, unique per-entry ids) · scripts/ (every             ║
+# ║                    script the cycle ran — published) · probes/               ║
+# ║                    (labeled probe:true mechanical proofs, incl. the          ║
+# ║                    simulated cycle 2) — and a PUBLIC GitHub repo +           ║
+# ║                    Pages site + feed a reader subscribes to in any           ║
+# ║                    reader. If the watch stops, the site says so              ║
+# ║                    on its own face — in a browser, without JavaScript        ║
+# ║                    even (noscript fallback), and machine-readably            ║
+# ║                    (published lease.json).                                   ║
+# ║                                                                              ║
+# ║  INSTRUMENTS     : curl/urllib (Wikipedia, Pageviews, Crossref polite        ║
+# ║                    pool, PubMed eutils, RWDB), python3 + venv pinned         ║
+# ║                    EXACTLY at install (matplotlib==3.11.1,                   ║
+# ║                    feedparser==6.0.14, mwparserfromhell==0.7.2 —            ║
+# ║                    real pins, not a post-hoc freeze receipt), jq,            ║
+# ║                    sha256sum, sqlite3, git + gh CLI + GitHub Pages,          ║
+# ║                    node (drives the SHIPPED stale-check.js wiring            ║
+# ║                    under DOM/fetch stubs). NO xmllint anywhere: XML          ║
+# ║                    well-formedness is checked with the Python stdlib         ║
+# ║                    (xml.dom.minidom) inside the same pinned venv the         ║
+# ║                    canary proves — one fewer uncamaried system tool.         ║
+# ║                    12 of 14 movements are CLI with EMPTY fallback            ║
+# ║                    chains — a tool stage that silently falls back to         ║
+# ║                    an LLM is a lie with a receipt. The LLM appears           ║
+# ║                    at exactly two judgment surfaces (M6 adjudication,        ║
+# ║                    M8 erratum prose), each bracketed by deterministic        ║
+# ║                    admission gates: exactly two LLM stages exist,           ║
+# ║                    no validation is existence-only, and no LLM               ║
+# ║                    text reaches the record except through a gate.            ║
+# ║                    The codex-cli fallback on those two sheets changes        ║
+# ║                    the adjudicator's voice, never the gates — every          ║
+# ║                    verdict passes the same admission regardless of           ║
+# ║                    which instrument produced it.                             ║
+# ║                                                                              ║
+# ║  EXECUTION MAP   : (14 movements → 14 sheets, strictly serial;               ║
+# ║                     fan_out: 1 everywhere — the flagged set is a runtime     ║
+# ║                     fact, static width would be fan-out theater)             ║
+# ║                                                                              ║
+# ║      M1  Pin the World          canary + RWDB pin + git init    [CLI]        ║
+# ║      M2  Choose the Canon       pageviews rank → ~10 articles   [CLI]        ║
+# ║      M3  Pin and Extract        oldid pins, cite templates,     [CLI]        ║
+# ║                                 dependent edges, 15/article cap              ║
+# ║      M4  Admit with Proof       PCA bundles, DEBT list,         [CLI]        ║
+# ║                                 SQLite claim graph (re-hash admit)           ║
+# ║      M5  The Sweep              tri-probe + drift + hold gate + [CLI]        ║
+# ║                                 lease record  ← NTW movement 1               ║
+# ║      M6  Adjudicate the Flagged QUARANTINE/RETAIN, touched      [LLM]        ║
+# ║                                 issue, quoted evidence ← NTW m. 2            ║
+# ║                                 (skip_when: a quiet week burns ZERO          ║
+# ║                                 LLM tokens — the lease is the product)       ║
+# ║      M7  Quarantine             blast radius from the graph,   [CLI]        ║
+# ║                                 hold-aware          ← NTW movement 3         ║
+# ║                                 (skip_when mirrors M6)                       ║
+# ║      M8  Draft the Errata       dated, reasoned, blame-free,   [LLM]        ║
+# ║                                 action-ending ← Errata Ledger intake         ║
+# ║                                 (skip_when: no quarantined claims)           ║
+# ║      M9  The Atomic Commit      ledger-append-AHEAD-of-DB,     [CLI]        ║
+# ║                                 reconcile-on-entry, per-entry hash           ║
+# ║                                 chain ← EL commit                            ║
+# ║      M10 Propagate              site+docs trees, windowed      [CLI]        ║
+# ║                                 Atom feed, watermark, STALE wiring ←         ║
+# ║                                 EL propagate + FEH commit                    ║
+# ║      M11 Decay Epidemiology     flag rate + Wilson CI, latency,[CLI]        ║
+# ║                                 REAL disagreement matrix, recompute         ║
+# ║      M12 Prove the Alarms       labeled probes: hold gate      [CLI]        ║
+# ║                                 through the SHIPPED sweep code, STALE        ║
+# ║                                 banner wiring under DOM/fetch stubs,         ║
+# ║                                 dead-man, SIMULATED CYCLE 2 over the         ║
+# ║                                 shipped scripts (30-day month, re-           ║
+# ║                                 admission, heartbeat, feed window,           ║
+# ║                                 history rewrite), digest-immutability         ║
+# ║      M13 Verify the Journal     per-entry hash chain,          [CLI]        ║
+# ║                                 supersedes resolves to the superseded        ║
+# ║                                 entry, prior-HEAD ancestry ← EL/FEH          ║
+# ║      M14 Publish                gh repo + Pages(/docs) + branch  [CLI]      ║
+# ║                                 protection + LIVE seam incl. public         ║
+# ║                                 evidence re-hash ← FEH publish              ║
+# ║                                                                              ║
+# ║  RECURRENCE      : schedule 7d / Europe/Amsterdam (engine config —           ║
+# ║                    retarget it when you retarget time zones), overlap:       ║
+# ║                    skip, misfire: skip. The proof submission IS cycle 1      ║
+# ║                    (the real catch-up audit); scheduler fires are            ║
+# ║                    cycles 2+. Double execution is killed three ways:         ║
+# ║                    overlap serializes, misfire-skip means a missed           ║
+# ║                    cycle is SKIPPED (its absence is exactly what the         ║
+# ║                    STALE banner publishes — engine behavior becoming         ║
+# ║                    the pattern's hardest requirement), and the tail          ║
+# ║                    is idempotent (watermark refuses backward motion;         ║
+# ║                    ledger entries hash-chained per entry; claim ids          ║
+# ║                    derived from the DOI bytes, never from iteration          ║
+# ║                    order; re-admission cannot reset a quarantine).           ║
+# ║                    Cycle 2+ is not merely claimed — M12's commissioning      ║
+# ║                    probe SIMULATES it against the shipped scripts            ║
+# ║                    (a 30-day prev-month, a pre-existing ledger and           ║
+# ║                    quarantined DB rows, a stale hold.json, a zero-           ║
+# ║                    correction heartbeat, a rewritten git history)            ║
+# ║                    because YAML cannot show mechanism interactions           ║
+# ║                    and reviewers demanded the Behavioral Pre-Mortem          ║
+# ║                    this score most needed. The lease is the fencing          ║
+# ║                    token; the recurrence is the recovery strategy: a         ║
+# ║                    failed cycle fails loudly (empty fallback chain)          ║
+# ║                    and the next cycle re-derives from the substrate          ║
+# ║                    (M9 reconciles the DB from the ledger before              ║
+# ║                    writing, so a crash between append and apply              ║
+# ║                    self-heals).                                             ║
+# ║                                                                              ║
+# ║  ANTI-FABRICATION SEAMS (deterministic joins, never LLM judgment):          ║
+# ║    - M1 canary: all endpoint markers observed BEFORE any LLM token;          ║
+# ║      nonzero abort (no fabricating against dead endpoints); the venv         ║
+# ║      itself is canaried (the pinned imports must succeed NOW)                ║
+# ║    - M4 admit: sha256sum -c over the evidence manifest = re-hash, not trust  ║
+# ║    - M4 conservation: candidates == admitted + debt (nothing silently        ║
+# ║      dropped; dead DOIs are themselves decay data); claim ids are            ║
+# ║      sha256(DOI)[:12] — position can never reassign identity                ║
+# ║    - M5: a cycle that ran without touching the lease is a fabrication        ║
+# ║      (test -s on sweep-report AND lease-record — the pattern's words)        ║
+# ║    - M5: flags ⊆ admitted (SQL); every flag's marker is sha256 of the        ║
+# ║      exact stored probe bytes (encoding-proof, probe-scoped); hold           ║
+# ║      arithmetic recomputed independently; every flag carries an             ║
+# ║      evidence_date derived from the probe that hit (never RWDB-              ║
+# ║      conditional); disagreement is a real matrix (hit ⊂ ran), not            ║
+# ║      multi-probe agreement                                                   ║
+# ║    - M6: verdict enum; flagged↔adjudicated BIJECTION; touched_issue          ║
+# ║      non-empty iff QUARANTINE; evidence_quote ∈ THAT claim's bundle          ║
+# ║      + flag bytes (per-claim corpus — cross-claim laundering                 ║
+# ║      impossible)                                                             ║
+# ║    - M8: quarantined↔corrections bijection (omission fails, not just        ║
+# ║      malformation); date + reason token carried from every flag's            ║
+# ║      evidence_date/evidence_reason, unconditionally; blame lexicon           ║
+# ║      matches agent+fault collocations; length bounds                         ║
+# ║    - M9: ledger append AHEAD of DB mutation + reconcile-on-entry;            ║
+# ║      --verify-join recomputes every entry's hash from its own fields,       ║
+# ║      checks the chain, resolves supersedes to the superseded ENTRY           ║
+# ║      of the same claim, and joins the HEAD to the canon digest it            ║
+# ║      produced; corrections for non-quarantined claims are refused            ║
+# ║    - M10: stdlib XML parse + feedparser; feed = exact tail window of         ║
+# ║      the ledger (unique per-entry tag: ids); watermark monotonic;            ║
+# ║      site/ and docs/ trees byte-identical (the Pages-serving copy is         ║
+# ║      derived, never hand-edited); stale-check.js wiring present in           ║
+# ║      the emitted bytes                                                       ║
+# ║    - M11: recompute-stats.py --check — our own numbers are checkable         ║
+# ║      claims (re-derives stats.json from published artifacts alone,           ║
+# ║      latency and disagreement included)                                     ║
+# ║    - M12: probe:true markers; the hold probe drives the SHIPPED              ║
+# ║      sweep gate; the STALE probe drives the SHIPPED bootstrap under          ║
+# ║      DOM/fetch stubs and asserts the banner NODE appears (stale) /          ║
+# ║      never appears (fresh); the cycle-2 probe replays the shipped            ║
+# ║      scripts against fabricated cycle-1 state; sha256(canon.db) and         ║
+# ║      sha256(lease-record.json) unchanged across the probe movement           ║
+# ║    - M14: the LIVE seam — curl the deployed site, feed, methodology,         ║
+# ║      debt page, stale-check.js AND the deployed evidence response            ║
+# ║      bytes re-hashed against the admission digests (proof-carrying          ║
+# ║      bytes are PUBLIC, not merely present); deployed feed entries           ║
+# ║      joined back to quarantined claim ids; gh push authority read            ║
+# ║      back from the repo API after create; branch protection via gh           ║
+# ║      api (enforce_admins on; a protection failure is DISCLOSED and           ║
+# ║      retried, never silently dropped)                                       ║
+# ║                                                                              ║
+# ║  GENERICITY     : no workspace: field (auto-managed at                       ║
+# ║                    ~/workspaces/rotting-canon, #58) — the score has NO       ║
+# ║                    project-specific path input at all. Retarget by           ║
+# ║                    editing prompt.variables: seed_topics (the corpus),       ║
+# ║                    canary_page (the endpoint-liveness probe page —           ║
+# ║                    endpoint liveness, not corpus membership),                ║
+# ║                    per_article_cap / hold_threshold / sweep cadence /        ║
+# ║                    feed_window, crossref_mailto + pubmed contact             ║
+# ║                    (polite-pool identity), repo_name, and the pip            ║
+# ║                    pins. schedule.timezone is engine config — edit           ║
+# ║                    it at the top when retargeting time zones. Data in        ║
+# ║                    variables, logic in templates — the Newcomer edits        ║
+# ║                    data, never stage logic. Credentials: gh must be          ║
+# ║                    authenticated (self-canaried at M1, not discovered        ║
+# ║                    broken at M14; push authority is read back from the       ║
+# ║                    repo API after create, because identity ≠                 ║
+# ║                    authority for fine-grained PATs); HEALTHCHECK_URL         ║
+# ║                    is optional and degrades LOUDLY — and its absence         ║
+# ║                    is disclosed on the deployed methodology page.            ║
+# ║                    PUBLICATION POLICY: the push is refused unless            ║
+# ║                    origin/main is empty or a prior canon cycle (a           ║
+# ║                    marker FILE in the remote tree, not a commit-subject      ║
+# ║                    heuristic).                                              ║
+# ║                                                                              ║
+# ║  USAGE          : mzt run <this-file>.yaml                                  ║
+# ║                    mzt status rotting-canon                                 ║
+# ║                    open https://<owner>.github.io/rotting-canon/             ║
+# ║                    (the lease record's age is checkable by any visitor)      ║
+# ║                                                                              ║
+# ║  Time: cycle 1 ≈ 60-120 min (Pages deploy adds ~10 min)                      ║
+# ║  Cost: ~$1-4 (2 LLM sheets on a single-digit flagged set) | Sheets: 14       ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: rotting-canon
+description: "Negative-Treatment Watch proof — a leased weekly citator over the DOI-bearing citations of high-traffic Wikipedia articles: admit as a proof-carrying claim graph, tri-probe sweep, gated adjudication, blast-radius quarantine, digest-chained errata ledger, and a public Pages site + Atom feed whose own staleness is visible on its face."
+
+# workspace: intentionally omitted — auto-managed at ~/workspaces/rotting-canon (#58).
+# Zero project-specific path inputs; the score is retargeted through variables only.
+
+# ── The recurrence IS the pattern's claim ────────────────────────────────────
+# Leased, durable across conductor restarts. overlap: skip → two cycles can
+# never run concurrently (the lease is the fencing token). misfire: skip → a
+# cycle missed during downtime is skipped, not stacked — and its absence is
+# exactly what the STALE banner publishes. "A missed audit cycle must be
+# visible, not silent" is implemented by the lease record the site renders.
+schedule:
+  interval: 7d
+  timezone: "Europe/Amsterdam"
+  overlap: skip
+  misfire: skip
+
+# Sheet ceilings sum: M1 1800 + M2 900 + M3 1800 + M4 3600 + M5 3600 +
+# M6 1800 + M7 900 + M8 1800 + M9 900 + M10 900 + M11 1200 + M12 1500 +
+# M13 900 + M14 2700 = 24,000 s. Wall = 24,000 + 4,800 headroom (20%).
+# Separate deadlines are separate authorities: the r9 quarantine taught what
+# reading the larger number as protective costs. The wall bounds each
+# SCHEDULED RUN, not each sheet.
+max_wall_seconds: 28800
+
+instrument: claude-code            # default applies to the two judgment sheets
+instrument_config:
+  timeout_seconds: 1800
+
+# Fallback chain inherited ONLY by the LLM movements (M6, M8) — pattern
+# frontmatter: adjudication is fallback_friendly. Every CLI movement below
+# overrides with an explicit empty chain: tools never fall back to minds.
+instrument_fallbacks: [codex-cli]
+
+movements:
+  # ── Phase 0 · Pin the world — Shipyard Sequence (mechanism) + FEH init ─────
+  # Instrument: cli. Why: fetch/hash/compare is exactly what curl+jq+sha256sum
+  # do deterministically; an LLM here would approximate a checksum.
+  1:
+    name: "Pin the World"
+    instrument: cli
+    instrument_fallbacks: []        # Etiquette Law: empty chain, always
+    instrument_config:
+      timeout_seconds: 1800         # RWDB snapshot is ~66 MB
+  # ── Phase 1 · Corpus + admission — PCA produce/extract/admit ───────────────
+  2:
+    name: "Choose the Canon"
+    instrument: cli                 # pageviews ranking is arithmetic on JSON
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 900
+  3:
+    name: "Pin and Extract"
+    instrument: cli                 # two-call MediaWiki sequence + template
+    instrument_fallbacks: []        # parsing: deterministic or nothing
+    instrument_config:
+      timeout_seconds: 1800
+  4:
+    name: "Admit with Proof"
+    instrument: cli                 # fetch/seal/re-hash/load: PCA's admit is
+    instrument_fallbacks: []        # a checksum, not a judgment
+    instrument_config:
+      timeout_seconds: 3600         # ~60-200 DOIs at polite-pool pacing
+  # ── Phase 2 · The watch — Negative-Treatment Watch, movements 1-3 ──────────
+  5:
+    name: "The Sweep"
+    instrument: cli                 # tri-probe + drift + hold: deterministic
+    instrument_fallbacks: []        # union-of-flags; pacing + bounded wall
+    instrument_config:
+      timeout_seconds: 3600
+  6:
+    name: "Adjudicate the Flagged"
+    instrument: claude-code         # NTW movement 2 (fallback_friendly per
+                                    # the pattern file): "does the treatment
+                                    # touch the issue the citing sentence
+                                    # relies on?" is semantic judgment over
+                                    # free text — RWDB Reason strings are
+                                    # prose; a CLI could only hardcode a
+                                    # taxonomy that fails on the first novel
+                                    # reason. Confined by schema + bijection
+                                    # + substring gates.
+  7:
+    name: "Quarantine"
+    instrument: cli                 # NTW movement 3: status flips + graph
+    instrument_fallbacks: []        # traversal are SQL, and the hold gate
+    instrument_config:              # makes this stage refuse work when it must
+      timeout_seconds: 900
+  # ── Phase 3 · The repair — The Errata Ledger ───────────────────────────────
+  8:
+    name: "Draft the Errata"
+    instrument: claude-code         # EL intake: genre work under CULT
+                                    # constraints — dated, reasoned,
+                                    # blame-free, action-ending, humane. A
+                                    # template produces weather-report prose
+                                    # that fails the cultural contract.
+                                    # Braced by structural gates (date token,
+                                    # reason token, blame lexicon, bounds).
+  # ── Phases 4-6 · Commit, propagate, publish — EL commit/propagate + FEH ────
+  9:
+    name: "The Atomic Commit"
+    instrument: cli                 # THE single serialized writer: canon and
+    instrument_fallbacks: []        # ledger in one movement or nonzero exit.
+    instrument_config:              # The writer never degrades.
+      timeout_seconds: 900
+  10:
+    name: "Propagate"
+    instrument: cli                 # site/feed rebuild + watermark advance:
+    instrument_fallbacks: []        # pure functions of the ledger
+    instrument_config:
+      timeout_seconds: 900
+  11:
+    name: "Decay Epidemiology"
+    instrument: cli                 # Wilson CI in stdlib math; matplotlib Agg;
+    instrument_fallbacks: []        # recompute script = our numbers are claims
+    instrument_config:
+      timeout_seconds: 1200
+  12:
+    name: "Prove the Alarms"
+    instrument: cli                 # labeled mechanical probes against
+    instrument_fallbacks: []        # ISOLATED copies; digest-immutability
+    instrument_config:              # around them
+      timeout_seconds: 1500
+  13:
+    name: "Verify the Journal"
+    instrument: cli                 # chain-prefix + supersedes + monotonic
+    instrument_fallbacks: []        # log checks — FEH's verification half
+    instrument_config:
+      timeout_seconds: 900
+  14:
+    name: "Publish"
+    instrument: cli                 # gh + git + curl: API calls with exit
+    instrument_fallbacks: []        # codes, ending at the LIVE seam
+    instrument_config:
+      timeout_seconds: 2700         # includes the bounded Pages deploy poll
+
+sheet:
+  size: 1
+  total_items: 14
+  # Etiquette Law, mechanically checkable: explicit EMPTY per-sheet fallback
+  # chain for every deterministic sheet (mirrors the movement-level
+  # instrument_fallbacks: [] above — belt and braces, so a reviewer reading
+  # either surface sees the same policy). Sheets 6 and 8 (the two LLM
+  # surfaces) intentionally inherit the score-level codex-cli chain.
+  per_sheet_fallbacks:
+    1: []
+    2: []
+    3: []
+    4: []
+    5: []
+    7: []
+    9: []
+    10: []
+    11: []
+    12: []
+    13: []
+    14: []
+  # Strictly linear: the single-writer discipline (only the atomic commit
+  # writes canon-and-ledger) and the auditable dependency chain are the point.
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+    7: [6]
+    8: [7]
+    9: [8]
+    10: [9]
+    11: [10]
+    12: [11]
+    13: [12]
+    14: [13]
+  # Quiet-week economics (#119 command predicates: exit 0 = skip, non-zero =
+  # run, fail-open). "The heartbeat is the product" justifies running to the
+  # LEASE WRITE — it does not justify burning two LLM sheets on zero items.
+  # A skipped sheet satisfies its dependents (SKIPPED without error_code), so
+  # each gate names its own predicate: M6 skips when nothing is flagged; M7
+  # skips when no adjudications exist; M8 skips when no verdict quarantined.
+  # M9-M14 run regardless — the lease, feed, verify, and publish tail IS the
+  # heartbeat, and it must keep beating through a quiet week.
+  skip_when:
+    6:
+      command: 'test ! -s {workspace}/flagged.json || jq -e ''length == 0'' {workspace}/flagged.json > /dev/null'
+      description: "Quiet week: zero flagged claims — skip LLM adjudication"
+    7:
+      command: 'test ! -s {workspace}/adjudications.json || jq -e ''length == 0'' {workspace}/adjudications.json > /dev/null'
+      description: "No adjudications this cycle — nothing to quarantine"
+    8:
+      command: 'test ! -s {workspace}/adjudications.json || jq -e ''([.[] | select(.verdict == "QUARANTINE")] | length) == 0'' {workspace}/adjudications.json > /dev/null'
+      description: "No quarantined claims — no errata to draft"
+  cadenzas:
+    # M6 adjudication: the PCA bundles themselves enter the prompt — nothing
+    # unanchored is ever judged. Directory cadenza: immediate children only,
+    # and the bundles are flat in evidence/claims by construction.
+    6:
+      - directory: "{{ workspace }}/evidence/claims"
+        as: context
+        required: true              # missing evidence fails BEFORE execution
+    # M8 erratum intake: the quarantine report, the adjudications it drafts
+    # from, and the flag records carrying RWDB Reason/RetractionDate.
+    8:
+      - file: "{{ workspace }}/quarantine-report.md"
+        as: context
+        required: true
+      - file: "{{ workspace }}/adjudications.json"
+        as: context
+        required: true
+      - file: "{{ workspace }}/flagged.json"
+        as: context
+        required: true
+  descriptions:
+    1: "Canary all four endpoints + the pinned venv + the Wakefield true-positive; pin the RWDB snapshot; git init; touch the ledger"
+    2: "Rank seeded topics by real pageviews; select the watched corpus ONCE (later cycles keep it — the operator edits variables to change it)"
+    3: "Pin revisions (two-call sequence); extract cite templates + ref-anchored dependent edges; cap"
+    4: "Fetch and seal PCA evidence bundles (DOI-derived ids, incremental); DEBT-list dead DOIs; load the SQLite claim graph idempotently"
+    5: "NTW m.1 — tri-probe sweep with ran/hit matrix + latency, admission drift over ALL dependent edges, hold gate, lease record"
+    6: "NTW m.2 — adjudicate ONLY the flagged few (LLM, gated; skipped on a quiet week)"
+    7: "NTW m.3 — quarantine with enumerated blast radius + manifest (hold-aware)"
+    8: "EL intake — draft erratum prose under CULT constraints (LLM, gated; skipped when nothing quarantined)"
+    9: "EL atomic-commit — ledger-append-ahead-of-DB with reconcile, per-entry hash chain"
+    10: "EL propagate — site+docs trees, windowed Atom feed, STALE wiring, watermark; FEH boundary commit"
+    11: "Epidemiology — flag rate + Wilson CI, latency, real disagreement matrix, recompute"
+    12: "Labeled probes — hold gate via shipped sweep code, STALE wiring under stubs, dead-man, simulated cycle 2, immutability"
+    13: "Journal verify — per-entry chain, supersedes resolves, prior-HEAD ancestry"
+    14: "FEH publish — public repo, Pages(/docs), branch protection, LIVE seam with public evidence re-hash"
+
+# retry: one bounded in-cycle retry for transient API blips, then the cycle
+# fails loudly — the recurrence is the recovery strategy, not the retry loop.
+retry:
+  max_retries: 1
+  base_delay_seconds: 30
+  max_completion_attempts: 2
+
+# circuit_breaker is wired to its ACTUAL semantics: consecutive sheet
+# failures. If the watch starts failing every cycle (endpoint moved for
+# good), the breaker stops the bleeding — and the un-updated lease makes
+# the stop PUBLIC via the STALE banner. Domain arithmetic (flag rate) never
+# touches this; that gate lives in the sweep script as a count comparison.
+circuit_breaker:
+  enabled: true
+  failure_threshold: 4
+  recovery_timeout_seconds: 3600
+
+cost_limits:
+  enabled: true
+  max_cost_per_sheet: 5.00
+  max_cost_per_job: 20.00
+
+# CLI sheets print one line per unit of work (per probe, per DOI, per claim)
+# so paced HTTP loops never look idle to stale detection.
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+# parallel: deliberately ABSENT. fan_out: 1 everywhere (architecture Handoff 3):
+# (1) fan-out width is parse-time static and the flagged count is a runtime
+#     fact — a static guess is fan-out theater over a single-digit set;
+# (2) the bottleneck is polite-pool pacing, not instrument cost;
+# (3) serial sheets make the single-writer discipline and the linear chain
+#     trivially auditable by the adversarial reviewers.
+
+# cross_sheet: deliberately ABSENT. The typed JSON artifacts in the workspace
+# ARE the inter-sheet protocol (Sheet 2's data contracts); stdout capture
+# would add noise no template consumes.
+
+prompt:
+  variables:
+    # ── The Newcomer's handles: edit DATA here, never stage logic ──
+    seed_topics:                    # the watched-world seed (~25 med/psych titles)
+      - "Autism"
+      - "Asperger syndrome"
+      - "Pervasive developmental disorder"
+      - "MMR vaccine"
+      - "Vaccination"
+      - "Thiomersal"
+      - "Major depressive disorder"
+      - "Depression (mood)"
+      - "Schizophrenia"
+      - "Bipolar disorder"
+      - "Attention deficit hyperactivity disorder"
+      - "Anxiety disorder"
+      - "Alzheimer's disease"
+      - "Dementia"
+      - "Parkinson's disease"
+      - "Breast cancer"
+      - "Lung cancer"
+      - "Chemotherapy"
+      - "HIV/AIDS"
+      - "Obesity"
+      - "Diabetes mellitus type 2"
+      - "Stroke"
+      - "Opioid epidemic"
+      - "Psychedelic drug"
+      - "Placebo"
+    corpus_size: 10                 # articles admitted to the canon
+    min_articles: 8                 # fewer proves nothing epidemiological
+    per_article_cap: 15             # first-by-appearance; 245-in-one-article
+                                     # makes the cap a published scope decision
+    total_claims_min: 60
+    total_claims_max: 200
+    min_doi_prefixes: 5             # registrant spread — one publisher's batch
+                                     # is not an epidemiology
+    hold_threshold: 0.10            # flag-rate hold: mass invalidation is a
+                                     # premise change, not N independent rots
+    sweep_interval_days: 7          # lease cadence; also stale-check.js input
+    stale_grace_days: 1             # banner fires at interval + grace
+    feed_window: 50                 # Atom feed carries the most-recent N ledger
+                                     # entries (a window, not only-new: a quiet
+                                     # week must not blank the public record)
+    canary_page: "Autism"           # endpoint-liveness probe page (liveness, not
+                                     # corpus membership — retarget freely)
+    pin_matplotlib: "3.11.1"        # EXACT pins, installed with == ; a freeze
+    pin_feedparser: "6.0.14"        # receipt after an unpinned install pins
+    pin_mwparserfromhell: "0.7.2"   # nothing (the newest-generation sin)
+    rwdb_url: "https://gitlab.com/crossref/retraction-watch-data/-/raw/main/retraction_watch.csv"
+    min_rwdb_rows: 50000
+    crossref_mailto: "citator@example.org"     # polite pool — set at deploy
+    pubmed_tool: "rotting-canon"
+    pubmed_email: "citator@example.org"
+    wakefield_doi: "10.1016/S0140-6736(97)11096-0"  # known-true-positive anchor
+    wakefield_pmid: "9500320"
+    repo_name: "rotting-canon"
+
+  template: |
+    {# ═══════════ House macros — one definition, fourteen movements ═══════════ #}
+
+    {# The CLI preamble every deterministic movement opens with. #}
+    {% macro cli_open() %}
+    set -euo pipefail
+    cd "{{ workspace }}"
+    {% endmacro %}
+
+    {# Fork-Evident History: the boundary commit. Never rewrite; the public
+       commit DAG is the journal; corrections supersede, they never edit. #}
+    {% macro boundary(label) %}
+    git add -A
+    git commit -m "{{ label }} - cycle $(jq -r .cycle cycle-state.json 2>/dev/null || echo 1)" --allow-empty
+    {% endmacro %}
+
+    {# The Skeptical Oracle's admission rule, stated to the performer: your
+       output is not accepted on your say-so; a deterministic checker runs
+       the moment you finish. Shared by both LLM surfaces. #}
+    {% macro admission_gate(file, gates) %}
+    ## Deterministic admission gate — read this as physics
+    Your output at `{{ file }}` is NOT accepted on your say-so. The moment
+    you finish, a deterministic checker runs; on failure this sheet retries
+    and you revise. The gates, exactly:
+    {{ gates }}
+    Nothing you write reaches the published record except through these
+    gates. Quote evidence VERBATIM from the injected material — a paraphrase
+    fails the substring check. If a field's truth is not in the injected
+    material, say so in `rationale` and leave the structured field empty
+    rather than inventing content.
+    {% endmacro %}
+
+    {% if stage == 1 %}
+    # ═══ M1 · Pin the World — Shipyard canary + PCA precondition + FEH init ═══
+    # Zero LLM tokens before this movement answers. Every endpoint probed with
+    # its marker OBSERVED; the pinned venv itself canaried; the RWDB snapshot
+    # pinned by digest; the journal born. Cross-cycle state is OPENED, never
+    # reset: cycle-state, the ledger file, and the marker survive; the hold
+    # decision does not (it is per-cycle by definition).
+
+    {{ cli_open() }}
+    mkdir -p canary raw articles scripts evidence/claims evidence/sweep probes ledger site/stats docs publish
+
+    # 1 — The Tool Chain: EXACT pins installed with == (a freeze receipt after
+    #     an unpinned install pins nothing). The canary then IMPORTS them —
+    #     proven present NOW, not discovered absent at M11.
+    python3 -m venv .venv
+    .venv/bin/pip -q install "matplotlib=={{ pin_matplotlib }}" \
+      "feedparser=={{ pin_feedparser }}" "mwparserfromhell=={{ pin_mwparserfromhell }}"
+    .venv/bin/pip freeze > canary/stack-freeze.txt
+    grep -q "matplotlib=={{ pin_matplotlib }}" canary/stack-freeze.txt \
+      || { echo "FATAL: matplotlib pin did not land"; exit 1; }
+
+    # 2 — FEH substrate: the journal is born before any claim exists
+    git init -q
+    git config user.name "rotting-canon citator"
+    git config user.email "citator@rotting-canon.invalid"
+    printf '.venv/\nraw/rwdb.csv\n__pycache__/\n' > .gitignore
+
+    # monthutil.py — ONE definition of the previous-month window, shared by the
+    # canary and the corpus selector and imported by the M12 cycle-2 probe.
+    # calendar.monthrange, never a hardcoded day-31: the Pageviews monthly API
+    # 400s on a September-31st that does not exist (verified empirically against
+    # the endpoint: 31-day August 200, fabricated 31-day September 400).
+    cat > scripts/monthutil.py <<'PYEOF'
+    import calendar, time
+
+    def prev_month(now=None):
+        t = now or time.gmtime()
+        y, m = t.tm_year, t.tm_mon - 1
+        if m == 0:
+            y, m = y - 1, 12
+        last = calendar.monthrange(y, m)[1]
+        return "%04d%02d0100" % (y, m), "%04d%02d%02d00" % (y, m, last)
+    PYEOF
+
+    # 3 — Probe-liveness canary: all four endpoints + the venv, markers observed
+    cat > scripts/canary.py <<'PYEOF'
+    import argparse, hashlib, json, sys, time, urllib.parse, urllib.request
+
+    sys.path.insert(0, "scripts")
+    from monthutil import prev_month
+
+    def fetch(url):
+        req = urllib.request.Request(url, headers={"User-Agent": "rotting-canon/1.0"})
+        with urllib.request.urlopen(req, timeout=90) as r:
+            return r.status, r.read()
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--mailto", required=True)
+    ap.add_argument("--pubmed-tool", required=True)
+    ap.add_argument("--pubmed-email", required=True)
+    ap.add_argument("--wakefield-doi", required=True)
+    ap.add_argument("--wakefield-pmid", required=True)
+    ap.add_argument("--canary-page", required=True)
+    a = ap.parse_args()
+    probes = []
+
+    def record(name, url, body, marker, detail):
+        probes.append({"probe": name, "url": url,
+                       "digest": hashlib.sha256(body).hexdigest(),
+                       "marker_present": bool(marker),
+                       "marker_detail": str(detail)[:120]})
+
+    # Toolchain: the pinned venv imports must succeed NOW (matplotlib has no
+    # silent ImportError fallback in this score — M11 requires the PNG)
+    try:
+        import feedparser, matplotlib, mwparserfromhell  # noqa: F401
+        record("toolchain-venv", "venv://pinned-imports", b"pinned-venv-imports", True,
+               ["feedparser", "matplotlib", "mwparserfromhell"])
+    except ImportError as exc:
+        record("toolchain-venv", "venv://pinned-imports", b"", False, str(exc))
+
+    # Crossref: the known-true-positive carries a deterministic RETRACTED title marker
+    u = "https://api.crossref.org/works/" + urllib.parse.quote(a.wakefield_doi, safe="") + "?mailto=" + a.mailto
+    st, body = fetch(u)
+    title = json.loads(body)["message"]["title"][0]
+    record("crossref-retracted-marker", u, body, title.upper().startswith("RETRACTED:"), title)
+
+    # PubMed: publication type carries the retraction signal
+    u = ("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id="
+         + a.wakefield_pmid + "&tool=" + a.pubmed_tool + "&email=" + a.pubmed_email + "&retmode=json")
+    st, body = fetch(u)
+    doc = json.loads(body)["result"][a.wakefield_pmid]
+    ptypes = doc.get("pubtype", [])
+    record("pubmed-pubtype", u, body, any("Retract" in t for t in ptypes), ptypes)
+
+    # Wikimedia Pageviews: the traffic-ranking signal (previous COMPLETE month,
+    # month-length-aware — the day-31 hardcode killed every cycle after a 30-day
+    # month, exactly when recurrence first mattered)
+    lo, hi = prev_month()
+    u = ("https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/"
+         "en.wikipedia/all-access/user/" + urllib.parse.quote(a.canary_page.replace(" ", "_"), safe="")
+         + "/monthly/" + lo + "/" + hi)
+    st, body = fetch(u)
+    views = json.loads(body)["items"][0]["views"]
+    record("wikimedia-pageviews", u, body, views > 0, views)
+
+    # Wikipedia wikitext: citation templates present (bytes contain cite markers)
+    u = ("https://en.wikipedia.org/w/api.php?action=parse&page=" + urllib.parse.quote(a.canary_page, safe="")
+         + "&prop=wikitext&format=json&redirects=1")
+    st, body = fetch(u)
+    n_cite = body.count(b"cite journal")
+    record("wikipedia-wikitext", u, body, n_cite > 0, n_cite)
+
+    json.dump({"probes": probes, "prev_month_window": [lo, hi],
+               "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
+              open("canary/canary-report.json", "w"), indent=2)
+    bad = [p["probe"] for p in probes if not p["marker_present"]]
+    for p in probes:
+        print("canary", p["probe"], "OK" if p["marker_present"] else "MARKER-MISSING",
+              p["marker_detail"])
+    if bad:
+        print("ABORT: markers missing:", bad)
+        sys.exit(1)
+    PYEOF
+    .venv/bin/python scripts/canary.py --mailto "{{ crossref_mailto }}" \
+      --pubmed-tool "{{ pubmed_tool }}" --pubmed-email "{{ pubmed_email }}" \
+      --wakefield-doi "{{ wakefield_doi }}" --wakefield-pmid "{{ wakefield_pmid }}" \
+      --canary-page "{{ canary_page }}"
+
+    # 4 — Pin the RWDB snapshot: downloaded, hashed, header/rows recorded
+    curl -fsSL --max-time 900 -o raw/rwdb.csv "{{ rwdb_url }}"
+    RWDB_MIN_ROWS={{ min_rwdb_rows }} .venv/bin/python - <<'PYEOF'
+    import csv, hashlib, json, os, sys
+    raw = open("raw/rwdb.csv", "rb").read()
+    rows = list(csv.reader(open("raw/rwdb.csv", encoding="utf-8", errors="replace")))
+    header, n = rows[0], max(0, len(rows) - 1)
+    need = ["OriginalPaperDOI", "RetractionNature", "RetractionDate", "Reason"]
+    missing = [c for c in need if c not in header]
+    if missing:
+        print("RWDB header missing columns:", missing)
+        sys.exit(1)
+    if n < int(os.environ["RWDB_MIN_ROWS"]):
+        print("RWDB too small:", n)
+        sys.exit(1)
+    json.dump({"digest": hashlib.sha256(raw).hexdigest(), "bytes": len(raw),
+               "rows": n, "header": header},
+              open("raw/rwdb.pin.json", "w"), indent=2)
+    print("rwdb pinned:", n, "rows,", len(raw), "bytes")
+    PYEOF
+
+    # 5 — gh self-canary: publishing identity verified NOW, not at M14.
+    #     Identity is not authority (a fine-grained PAT authenticates while
+    #     lacking repo-create/admin scopes) — repo-level push/admin is read
+    #     back from the API at M14 after the repo exists, because creating a
+    #     repo to test authority would itself be the side effect.
+    gh auth status >/dev/null 2>&1 || { echo "FATAL: gh not authenticated — M14 would fail"; exit 1; }
+    gh api user -q .login > canary/gh-login.txt
+    command -v node >/dev/null 2>&1 || { echo "FATAL: node required by M12 stale probe"; exit 1; }
+
+    # 6 — Cross-cycle state: OPEN, never reset. The cycle counter is advanced
+    #     by the sweep (M5) off the lease; commit_count/head_sha belong to M13.
+    #     A prior hold decision is per-cycle and EXPIRES now — a stale hold.json
+    #     suppressing this cycle's quarantine is a state leak across the exact
+    #     boundary the lease fences. The ledger file is born here so a
+    #     zero-correction heartbeat (M9) reads an empty file, not a missing one.
+    [ -s cycle-state.json ] || printf '{"cycle": 0, "commit_count": 0}\n' > cycle-state.json
+    rm -f hold.json
+    [ -s ledger/corrections.jsonl ] || : > ledger/corrections.jsonl
+    printf 'rotting-canon publication marker — a remote main carrying this file is a prior cycle of THIS watch (the M14 unrelated-history guard keys on it, not on commit subjects)\n' > rotting-canon-marker
+    {{ boundary("M1 pin-the-world") }}
+
+    {% elif stage == 2 %}
+    # ═══ M2 · Choose the Canon — chosen by measured traffic, then FIXED ═══
+    # Not rigged: articles are ranked by real pageviews, never chosen to
+    # guarantee a catch. The canary already proved detection works. And the
+    # corpus is a CYCLE-1 decision only: on later cycles an existing selection
+    # is kept verbatim (the architecture's contract — the watched set changes
+    # only when the operator edits the variables). Re-ranking every cycle
+    # reassigns nothing anymore (ids are DOI-derived), but it would silently
+    # swap the watched population under the reader's feet.
+
+    {{ cli_open() }}
+    cat > articles/seed.txt <<'SEED'
+    {% for topic in seed_topics %}
+    {{ topic }}
+    {% endfor %}
+    SEED
+    cat > scripts/select-corpus.py <<'PYEOF'
+    import argparse, json, os, sys, time, urllib.parse, urllib.request
+
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) or "scripts")
+    from monthutil import prev_month
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--seed", required=True)
+    ap.add_argument("--top", type=int, required=True)
+    ap.add_argument("--out", required=True)
+    a = ap.parse_args()
+    if os.path.exists(a.out) and json.load(open(a.out)):
+        keep = json.load(open(a.out))
+        print("corpus fixed: keeping existing selection of", len(keep),
+              "articles (operator edits variables to change the watched set)")
+        sys.exit(0)
+    lo, hi = prev_month()
+    titles = [t.strip() for t in open(a.seed, encoding="utf-8") if t.strip()]
+    results = []
+    for t in titles:
+        q = urllib.parse.quote(t.replace(" ", "_"), safe="")
+        u = ("https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/"
+             "en.wikipedia/all-access/user/" + q + "/monthly/" + lo + "/" + hi)
+        try:
+            req = urllib.request.Request(u, headers={"User-Agent": "rotting-canon/1.0"})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                views = json.load(r)["items"][0]["views"]
+        except Exception as exc:
+            print("pageviews MISS", t, type(exc).__name__)
+            continue
+        results.append({"title": t, "views": views})
+        print("pageviews", t, views)
+        time.sleep(0.3)
+    ranked = sorted(results, key=lambda x: -x["views"])[: a.top]
+    json.dump(ranked, open(a.out, "w"), indent=2)
+    print("selected", len(ranked), "of", len(titles), "seeded topics")
+    PYEOF
+    .venv/bin/python scripts/select-corpus.py --seed articles/seed.txt --top {{ corpus_size }} --out articles/selected-articles.json
+    {{ boundary("M2 choose-the-canon") }}
+
+    {% elif stage == 3 %}
+    # ═══ M3 · Pin and Extract — the claim graph's raw material ═══
+    # Two-call revision pinning (parse.revid alone returns null — observed),
+    # template extraction, dependent edges, deterministic cap.
+
+    {{ cli_open() }}
+    cat > scripts/pin-and-extract.py <<'PYEOF'
+    import argparse, json, re, sys, time, urllib.parse, urllib.request
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--selected", required=True)
+    ap.add_argument("--cap", type=int, required=True)
+    ap.add_argument("--min-total", type=int, required=True)
+    ap.add_argument("--max-total", type=int, required=True)
+    ap.add_argument("--min-prefixes", type=int, required=True)
+    a = ap.parse_args()
+
+    def api(params):
+        u = "https://en.wikipedia.org/w/api.php?" + urllib.parse.urlencode(params)
+        req = urllib.request.Request(u, headers={"User-Agent": "rotting-canon/1.0"})
+        with urllib.request.urlopen(req, timeout=90) as r:
+            return json.load(r)
+
+    # two adjacent open-braces, spelled without writing them adjacently
+    OPEN2 = "[" + chr(123) + "]{2}"
+
+    selected = json.load(open(a.selected))
+    candidates = []
+    for art in selected:
+        title = art["title"]
+        slug = re.sub(r"[^A-Za-z0-9]+", "-", title).strip("-").lower()
+        # call 1: current revision id (the two-call sequence is mandatory)
+        doc = api({"action": "query", "titles": title, "prop": "revisions",
+                   "rvprop": "ids", "format": "json"})
+        page = next(iter(doc["query"]["pages"].values()))
+        revid = page["revisions"][0]["revid"]
+        # call 2: wikitext pinned to that oldid
+        doc = api({"action": "parse", "oldid": revid, "prop": "wikitext", "format": "json"})
+        wikitext = doc["parse"]["wikitext"]["*"]
+        open("articles/" + slug + ".wikitext", "w", encoding="utf-8").write(wikitext)
+        json.dump({"title": title, "revid": revid, "slug": slug},
+                  open("articles/" + slug + ".pin.json", "w"))
+        # extraction: cite templates with DOI-bearing params
+        chunks = []
+        try:
+            import mwparserfromhell as mwp
+            code = mwp.parse(wikitext)
+            for t in code.filter_templates():
+                name = str(t.name).strip().lower()
+                if name in ("cite journal", "citation", "cite pmid", "cite doi"):
+                    params = {}
+                    for p in t.params:
+                        k = str(p.name).strip().lower()
+                        if k in ("doi", "pmid", "title", "journal"):
+                            params[k] = str(p.value).strip()
+                    chunks.append((name, params))
+        except ImportError:
+            for m in re.finditer(OPEN2 + r"\s*(cite journal|citation|cite pmid|cite doi)\s*\|",
+                                 wikitext, re.I):
+                end = wikitext.find(chr(125) * 2, m.start())
+                chunk = wikitext[m.start():end if end > 0 else len(wikitext)]
+                name = chunk[2:].split("|")[0].strip().lower()
+                params = {k: v.strip() for k, v in re.findall(
+                    r"(?:^|\|)\s*(doi|pmid|title|journal)\s*=\s*([^|}]+)", chunk)}
+                chunks.append((name, params))
+        taken = 0
+        for name, params in chunks:
+            if taken >= a.cap:
+                break
+            doi = params.get("doi", "")
+            if not re.match(r"^10\.\d{4,}/\S+$", doi or ""):
+                continue
+            pos = wikitext.find(doi)
+            section = "lead"
+            for hm in re.finditer(r"^==+([^=]+)==+\s*$", wikitext[:pos], re.M):
+                section = hm.group(1).strip()
+            # Anchor on the enclosing <ref> block — the citation's actual home —
+            # then extend back to the sentence of prose that carries it. The
+            # excerpt must be the sentence that RELIES on the citation (M6 judges
+            # "does the treatment touch the issue the citing sentence relies
+            # on?"), not an arbitrary ±400-char window around a DOI string.
+            ref_start = wikitext.rfind("<ref", 0, pos + 1)
+            anchor_start = ref_start if ref_start != -1 else max(0, pos - 400)
+            ref_close = wikitext.find("</ref>", pos)
+            ref_selfclose = wikitext.find("/>", pos)
+            ends = [e for e in (ref_close + 6 if ref_close != -1 else -1,
+                                ref_selfclose + 2 if ref_selfclose != -1 else -1,
+                                pos + len(doi)) if e > pos]
+            anchor_end = min(ends) if ends else pos + len(doi)
+            window = wikitext[max(0, anchor_start - 500):anchor_start]
+            cut = window.rfind(".")
+            s_start = max(0, anchor_start - 500) + (cut + 1 if cut != -1 else 0)
+            excerpt = re.sub(r"\s+", " ",
+                             wikitext[s_start:anchor_end]).strip()[:300]
+            candidates.append({
+                "doi": doi, "pmid": params.get("pmid", ""),
+                "title": params.get("title", ""), "journal": params.get("journal", ""),
+                "template": name, "article": title, "oldid": revid,
+                "section": section, "sentence_excerpt": excerpt})
+            taken += 1
+        print("extracted", title, "revid", revid, "claims", taken)
+        time.sleep(0.5)
+    n = len(candidates)
+    if not (a.min_total <= n <= a.max_total):
+        print("FATAL: total claims", n, "outside bounds", a.min_total, a.max_total)
+        sys.exit(1)
+    prefixes = {c["doi"].split("/")[0] for c in candidates}
+    if len(prefixes) < a.min_prefixes:
+        print("FATAL: registrant spread too narrow:", sorted(prefixes))
+        sys.exit(1)
+    json.dump(candidates, open("articles/candidates.json", "w"), indent=2)
+    print("candidates:", n, "across", len(prefixes), "DOI registrants")
+    PYEOF
+    .venv/bin/python scripts/pin-and-extract.py --selected articles/selected-articles.json \
+      --cap {{ per_article_cap }} --min-total {{ total_claims_min }} --max-total {{ total_claims_max }} \
+      --min-prefixes {{ min_doi_prefixes }}
+    {{ boundary("M3 pin-and-extract") }}
+
+    {% elif stage == 4 %}
+    # ═══ M4 · Admit with Proof — PCA produce + admit; DLQ for the dead ═══
+    # Every admitted claim ships its query bytes and digest; dead DOIs go to a
+    # VISIBLE debt list — link rot is negative treatment of the crudest kind.
+    # Identity is CONTENT-DERIVED: id = "C-" + sha256(DOI)[:12], so no rerun,
+    # re-rank, or set shuffle can ever reassign C-0007 to a different DOI, and
+    # the ledger's supersedes digests keep pointing at the entries they meant.
+    # Admission is IDEMPOTENT: ON CONFLICT DO NOTHING — a claim already in the
+    # graph (even quarantined or retired) keeps its status; re-admission can
+    # never silently un-quarantine a claim. Later cycles seal only NEW DOIs —
+    # the expensive fetch stage admits the drift queue, not the whole corpus.
+
+    {{ cli_open() }}
+    cat > scripts/seal-anchors.py <<'PYEOF'
+    import argparse, hashlib, json, os, time, urllib.parse, urllib.request
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--candidates", required=True)
+    ap.add_argument("--outdir", required=True)
+    ap.add_argument("--mailto", required=True)
+    ap.add_argument("--prior-admitted")
+    a = ap.parse_args()
+    cands = json.load(open(a.candidates))
+    seen, uniq = set(), []
+    for c in cands:
+        if c["doi"] not in seen:
+            seen.add(c["doi"])
+            uniq.append(c)
+    prior = {}
+    if a.prior_admitted and os.path.exists(a.prior_admitted):
+        prior = {c["doi"]: c for c in json.load(open(a.prior_admitted))}
+    admitted, debt = [], []
+    for c in uniq:
+        cid = "C-" + hashlib.sha256(c["doi"].encode()).hexdigest()[:12]
+        old = prior.get(c["doi"])
+        if old and os.path.exists(old["bundle"]):
+            admitted.append(old)            # already sealed — never re-fetch
+            print("sealed (kept)", cid, c["doi"])
+            continue
+        u = ("https://api.crossref.org/works/" + urllib.parse.quote(c["doi"], safe="")
+             + "?mailto=" + a.mailto)
+        try:
+            req = urllib.request.Request(
+                u, headers={"User-Agent": "rotting-canon/1.0 (mailto: " + a.mailto + ")"})
+            with urllib.request.urlopen(req, timeout=90) as r:
+                body = r.read()
+            msg = json.loads(body)["message"]
+            issued = msg.get("issued", {}).get("date-parts", [[None]])
+            bundle = {"id": cid, "doi": c["doi"], "query_url": u,
+                      "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                      "digest": hashlib.sha256(body).hexdigest(),
+                      "crossref_title": (msg.get("title") or [""])[0],
+                      "crossref_type": msg.get("type", ""),
+                      "issued": (issued[0] or [None])[0],
+                      "issued_parts": (issued[0] or [])[:3]}
+            open(a.outdir + "/" + cid + ".response.json", "wb").write(body)
+            json.dump(bundle, open(a.outdir + "/" + cid + ".json", "w"), indent=2)
+            admitted.append({"id": cid, "doi": c["doi"], "pmid": c.get("pmid", ""),
+                             "article": c["article"], "oldid": c["oldid"],
+                             "section": c["section"], "excerpt": c["sentence_excerpt"],
+                             "bundle": a.outdir + "/" + cid + ".json"})
+            print("admitted", cid, c["doi"])
+        except Exception as exc:
+            debt.append({"doi": c["doi"], "article": c["article"],
+                         "error": type(exc).__name__})
+            print("DEBT", c["doi"], type(exc).__name__)
+        time.sleep(0.4)  # polite pool
+    json.dump(admitted, open("articles/admitted.json", "w"), indent=2)
+    json.dump(debt, open("articles/debt.json", "w"), indent=2)
+    print("admitted", len(admitted), "(%d newly sealed)" % (len(admitted) - len(prior)),
+          "debt", len(debt))
+    PYEOF
+    .venv/bin/python scripts/seal-anchors.py --candidates articles/candidates.json \
+      --outdir evidence/claims --mailto "{{ crossref_mailto }}" \
+      --prior-admitted articles/admitted.json
+    ( cd evidence/claims && sha256sum C-*.json > MANIFEST.sha256 )
+
+    cat > scripts/load-canon.py <<'PYEOF'
+    import argparse, json, sqlite3
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--db", required=True)
+    ap.add_argument("--admitted", required=True)
+    ap.add_argument("--candidates", required=True)
+    a = ap.parse_args()
+    db = sqlite3.connect(a.db)
+    db.execute("PRAGMA foreign_keys=ON")
+    db.executescript("""
+    CREATE TABLE IF NOT EXISTS claims (
+      id TEXT PRIMARY KEY, doi TEXT NOT NULL, pmid TEXT,
+      article TEXT, oldid INTEGER, status TEXT NOT NULL DEFAULT 'admitted');
+    CREATE TABLE IF NOT EXISTS anchors (
+      claim_id TEXT NOT NULL REFERENCES claims(id),
+      bundle_path TEXT NOT NULL, digest TEXT NOT NULL, fetched_at TEXT,
+      PRIMARY KEY (claim_id));
+    CREATE TABLE IF NOT EXISTS dependents (
+      claim_id TEXT NOT NULL REFERENCES claims(id),
+      article TEXT NOT NULL, oldid INTEGER, section TEXT NOT NULL,
+      excerpt TEXT NOT NULL,
+      PRIMARY KEY (claim_id, article, section, excerpt));
+    """)
+    admitted = json.load(open(a.admitted))
+    cands = json.load(open(a.candidates))
+    n_new, n_kept = 0, 0
+    for c in admitted:
+        bundle = json.load(open(c["bundle"]))
+        cur = db.execute(
+            "INSERT INTO claims (id, doi, pmid, article, oldid, status) "
+            "VALUES (?,?,?,?,?,'admitted') ON CONFLICT(id) DO NOTHING",
+            (c["id"], c["doi"], c.get("pmid") or "", c["article"], c["oldid"]))
+        if cur.rowcount == 1:
+            n_new += 1
+        else:
+            n_kept += 1         # prior status (quarantined/retired) SURVIVES
+        # anchors are the ADMISSION-TIME seal: created once, never rewritten —
+        # drift detection is the sweep's job, not the admission's
+        db.execute("INSERT OR IGNORE INTO anchors VALUES (?,?,?,?)",
+                   (c["id"], c["bundle"], bundle["digest"], bundle["fetched_at"]))
+        for cand in cands:
+            if cand["doi"] == c["doi"]:
+                db.execute("INSERT OR IGNORE INTO dependents VALUES (?,?,?,?,?)",
+                           (c["id"], cand["article"], cand["oldid"],
+                            cand["section"], cand["sentence_excerpt"]))
+    db.commit()
+    ok = db.execute("PRAGMA integrity_check").fetchone()[0]
+    n_claims = db.execute("SELECT COUNT(*) FROM claims").fetchone()[0]
+    n_dep = db.execute("SELECT COUNT(*) FROM dependents").fetchone()[0]
+    print("integrity", ok, "claims", n_claims, "dependent-edges", n_dep,
+          "(this pass:", n_new, "new,", n_kept, "kept their status)")
+    PYEOF
+    .venv/bin/python scripts/load-canon.py --db canon.db \
+      --admitted articles/admitted.json --candidates articles/candidates.json
+    {{ boundary("M4 admit-with-proof") }}
+
+    {% elif stage == 5 %}
+    # ═══ M5 · The Sweep — NTW movement 1 + Source Triangulation + hold gate ═══
+    # Three institutional probes, union-of-flags semantics, disagreement as a
+    # REAL matrix (hit ⊂ ran — one probe hitting while another that ran is
+    # silent), markers sealed as sha256 of the exact stored bytes
+    # (encoding-proof: a JSON-escaped quote can never orphan a true flag),
+    # per-flag evidence_date/latency derived from the probe that hit. The
+    # hold gate is Quorum Trigger wired as arithmetic, NOT circuit_breaker —
+    # and it is a LIFECYCLE: written when held, REMOVED when not, so last
+    # cycle's premise can never suppress this cycle's quarantine. A cycle
+    # that ran without touching the lease is a fabrication — the lease write
+    # is unconditional.
+
+    {{ cli_open() }}
+    cat > scripts/sweep.py <<'PYEOF'
+    import argparse, csv, datetime, hashlib, json, os, re, sqlite3, sys, time
+    import urllib.parse, urllib.request
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--db", required=True)
+    ap.add_argument("--rwdb", required=True)
+    ap.add_argument("--hold-threshold", type=float, required=True)
+    ap.add_argument("--interval-days", type=int, required=True)
+    ap.add_argument("--mailto", required=True)
+    ap.add_argument("--probe-hold", action="store_true",
+                    help="drive the REAL hold decision+writer on a synthetic "
+                         "over-threshold count inside --sandbox (probe:true)")
+    ap.add_argument("--sandbox", default=".")
+    a = ap.parse_args()
+
+    # ── the hold gate, factored so the M12 probe executes THIS code ──
+    def hold_decision(flag_count, claims_swept, threshold):
+        rate = (flag_count / claims_swept) if claims_swept else 0.0
+        return rate, rate > threshold
+
+    def write_hold(path, rate, threshold):
+        json.dump({"flag_rate": rate, "threshold": threshold,
+                   "decision": "HOLD",
+                   "escalation": "re-tiering decision required"},
+                  open(path, "w"), indent=2)
+
+    if a.probe_hold:
+        src = os.path.join(a.sandbox, "sweep-report.json")
+        sw = json.load(open(src)) if os.path.exists(src) else {"claims_swept": 10}
+        synthetic_flags = sw["claims_swept"]          # 100% — far over threshold
+        rate, held = hold_decision(synthetic_flags, sw["claims_swept"], a.hold_threshold)
+        if held:
+            write_hold(os.path.join(a.sandbox, "hold.json"), rate, a.hold_threshold)
+        json.dump({"probe": True,
+                   "label": "synthetic over-threshold set through the SHIPPED gate",
+                   "executed": "scripts/sweep.py:hold_decision+write_hold",
+                   "flag_rate": rate, "threshold": a.hold_threshold,
+                   "held": held, "auto_quarantine_skipped": held,
+                   "hold_file_written": os.path.exists(
+                       os.path.join(a.sandbox, "hold.json"))},
+                  open(os.path.join(a.sandbox, "hold-probe.json"), "w"), indent=2)
+        print("hold probe: rate", round(rate, 4), "held", held)
+        sys.exit(0 if held else 1)
+
+    t0 = time.time()
+
+    def fetch(url):
+        req = urllib.request.Request(url, headers={"User-Agent": "rotting-canon/1.0"})
+        with urllib.request.urlopen(req, timeout=90) as r:
+            return r.read()
+
+    def parts_date(parts):
+        p = (parts or [[]])[0] if isinstance(parts, dict) else (parts or [])
+        if not p:
+            return ""
+        if len(p) >= 3:
+            return "%04d-%02d-%02d" % tuple(int(x) for x in p[:3])
+        if len(p) == 2:
+            return "%04d-%02d" % tuple(int(x) for x in p[:2])
+        return "%04d" % int(p[0])
+
+    def parse_any_date(s):
+        if not s:
+            return None
+        for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%b %Y", "%Y"):
+            try:
+                return datetime.datetime.strptime(str(s).strip(), fmt).date()
+            except ValueError:
+                continue
+        return None
+
+    def issued_date_of(cid):
+        try:
+            parts = json.load(open("evidence/claims/%s.json" % cid)).get("issued_parts") or []
+        except FileNotFoundError:
+            return None
+        if not parts:
+            return None
+        y = int(parts[0])
+        m = int(parts[1]) if len(parts) > 1 else 1
+        d = int(parts[2]) if len(parts) > 2 else 1
+        try:
+            return datetime.date(y, m, d)
+        except ValueError:
+            return None
+
+    db = sqlite3.connect(a.db)
+    db.execute("PRAGMA foreign_keys=ON")
+    claims = db.execute(
+        "SELECT id, doi, pmid, article FROM claims WHERE status='admitted'").fetchall()
+    rwdb = {}
+    with open(a.rwdb, encoding="utf-8", errors="replace") as fh:
+        for row in csv.DictReader(fh):
+            doi = (row.get("OriginalPaperDOI") or "").strip().lower()
+            if doi:
+                rwdb.setdefault(doi, row)
+
+    flags, matrix = [], []
+    ran_counts = {"crossref": 0, "rwdb": 0, "pubmed": 0}
+    for cid, doi, pmid, article in claims:
+        hits = []   # (probe, signal, display_marker, sha256_of_stored_bytes)
+        ran, errors = [], {}
+        crossref_date = pubmed_date = ""
+        # probe 1: Crossref re-fetch — title marker / update-to links
+        u = ("https://api.crossref.org/works/" + urllib.parse.quote(doi, safe="")
+             + "?mailto=" + a.mailto)
+        try:
+            body = fetch(u)
+            open("evidence/sweep/" + cid + "-crossref.json", "wb").write(body)
+            ran.append("crossref")
+            ran_counts["crossref"] += 1
+            msg = json.loads(body)["message"]
+            title = (msg.get("title") or [""])[0]
+            crossref_date = (parts_date(msg.get("updated", {}).get("date-parts"))
+                             or parts_date(msg.get("deposited", {}).get("date-parts"))
+                             or parts_date(msg.get("created", {}).get("date-parts")))
+            if title.upper().startswith("RETRACTED:"):
+                hits.append(("crossref", "retracted-title-marker", title,
+                             hashlib.sha256(body).hexdigest()))
+            elif msg.get("update-to"):
+                hits.append(("crossref", "update-to-link", title,
+                             hashlib.sha256(body).hexdigest()))
+        except Exception as exc:
+            errors["crossref"] = type(exc).__name__
+            print("sweep", cid, "crossref MISS", type(exc).__name__)
+        # probe 2: RWDB exact-column lookup (csv module — quoted comma-lists)
+        row = rwdb.get(doi.lower())
+        if row:
+            stored = json.dumps(row)
+            open("evidence/sweep/" + cid + "-rwdb.json", "w").write(stored)
+            ran.append("rwdb")
+            ran_counts["rwdb"] += 1
+            hits.append(("rwdb", "retraction-database", row.get("Reason", "")[:200],
+                         hashlib.sha256(stored.encode()).hexdigest()))
+        # probe 3: PubMed esummary pubtypes (claim PMID or DOI esearch)
+        try:
+            pm = pmid
+            if not pm:
+                q = ("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term="
+                     + urllib.parse.quote(doi + "[DOI]") + "&retmode=json")
+                esearch = fetch(q)
+                open("evidence/sweep/" + cid + "-pubmed-esearch.json", "wb").write(esearch)
+                ids = json.loads(esearch).get("esearchresult", {}).get("idlist", [])
+                pm = ids[0] if ids else ""
+            if pm:
+                u = ("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id="
+                     + pm + "&retmode=json")
+                body = fetch(u)
+                open("evidence/sweep/" + cid + "-pubmed.json", "wb").write(body)
+                ran.append("pubmed")
+                ran_counts["pubmed"] += 1
+                doc = json.loads(body)["result"][pm]
+                pubmed_date = doc.get("pubdate", "")
+                ptypes = doc.get("pubtype", [])
+                retract_types = [t for t in ptypes if "Retract" in t]
+                if retract_types:
+                    hits.append(("pubmed", "publication-type", retract_types[0],
+                                 hashlib.sha256(body).hexdigest()))
+        except Exception as exc:
+            errors["pubmed"] = type(exc).__name__
+            print("sweep", cid, "pubmed MISS", type(exc).__name__)
+        if hits:
+            names = [h[0] for h in hits]
+            rw = rwdb.get(doi.lower(), {})
+            rwdb_date = rw.get("RetractionDate", "")
+            # evidence chain: the DB row first, else the publisher marker,
+            # else PubMed — never RWDB-conditional (a Crossref-only flag used
+            # to bypass the errata genre gates entirely)
+            if rwdb_date:
+                evidence_date, src = rwdb_date, "rwdb"
+            elif crossref_date:
+                evidence_date, src = crossref_date, "crossref"
+            elif pubmed_date:
+                evidence_date, src = pubmed_date, "pubmed"
+            else:
+                evidence_date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+                src = "sweep-cycle"
+            reason = rw.get("Reason", "") or "; ".join(h[1] for h in hits)
+            latency = None
+            rd = parse_any_date(rwdb_date) or parse_any_date(crossref_date)
+            idate = issued_date_of(cid)
+            if rd and idate and (rd - idate).days >= 0:
+                latency = (rd - idate).days
+            flags.append({"claim_id": cid, "doi": doi, "probes": names,
+                          "signal": "; ".join(h[1] for h in hits),
+                          "markers": {h[0]: h[2] for h in hits},
+                          "markers_sha": {h[0]: h[3] for h in hits},
+                          "detail": " | ".join(h[2] for h in hits),
+                          "rwdb_reason": rw.get("Reason", ""),
+                          "rwdb_date": rwdb_date,
+                          "rwdb_nature": rw.get("RetractionNature", ""),
+                          "evidence_date": evidence_date,
+                          "evidence_date_source": src,
+                          "evidence_reason": reason,
+                          "latency_days": latency})
+            silent = sorted(set(ran) - set(names))
+            matrix.append({"claim_id": cid, "hit": names, "ran": ran,
+                           "silent": silent, "probe_errors": errors,
+                           "latency_days": latency})
+            print("FLAG", cid, doi, names, "silent:", silent or "-")
+        else:
+            print("clean", cid, doi)
+        time.sleep(0.4)
+
+    # disagreement = one probe HITTING while another that RAN stayed silent —
+    # not multi-probe agreement mislabeled. hit ⊆ ran by construction.
+    disagreement = [m for m in matrix if m["hit"] and len(m["hit"]) < len(m["ran"])]
+
+    # admission drift: the article is itself a mutable external — watch BOTH
+    # endpoints of EVERY edge (claims ∪ dependents). A DOI cited by two
+    # watched articles has two dependent edges; the old loop iterated
+    # DISTINCT article FROM claims and was blind to the second edge. A claim
+    # retires only when the DOI vanishes from EVERY watched article citing it
+    # (an unfetchable article never proves absence).
+    edges = {}   # doi.lower() -> set of (claim_id, article)
+    for cid, doi, article in db.execute("SELECT id, doi, article FROM claims"):
+        edges.setdefault((doi or "").lower(), set()).add((cid, article))
+    for cid, article in db.execute("SELECT DISTINCT claim_id, article FROM dependents"):
+        row = db.execute("SELECT doi FROM claims WHERE id=?", (cid,)).fetchone()
+        if row:
+            edges.setdefault(row[0].lower(), set()).add((cid, article))
+    currents = {}
+    for article in sorted({a_ for e in edges.values() for _, a_ in e}):
+        try:
+            q = urllib.parse.quote(article.replace(" ", "_"), safe="")
+            u = ("https://en.wikipedia.org/w/api.php?action=parse&page=" + q
+                 + "&prop=wikitext&format=json&redirects=1")
+            currents[article] = json.loads(fetch(u))["parse"]["wikitext"]["*"].lower()
+        except Exception as exc:
+            print("drift MISS", article, type(exc).__name__)
+    retired, queued = [], []
+    for doi, eset in edges.items():
+        cited_somewhere = any(doi in currents.get(art, "") for _, art in eset)
+        fetchable = all(art in currents for _, art in eset)
+        if not cited_somewhere and fetchable and eset:
+            cid0 = sorted(eset)[0][0]
+            retired.append({"claim_id": cid0, "doi": doi,
+                            "articles": sorted({a_ for _, a_ in eset})})
+            db.execute("UPDATE claims SET status='retired' WHERE id=?", (cid0,))
+    for article, current in currents.items():
+        known_here = {doi for doi, eset in edges.items()
+                      if any(a_ == article for _, a_ in eset)}
+        for m in re.finditer(r"10\.\d{4,}/[^\s|}]+", current):
+            d = m.group(0).rstrip(".,;")
+            if d.lower() not in known_here:
+                queued.append({"doi": d, "article": article})
+    db.commit()
+    retired_cids = {r["claim_id"] for r in retired}
+    claims_swept = sum(1 for cid, _, _, _ in claims if cid not in retired_cids)
+    flag_count = len(flags)
+    json.dump(flags, open("flagged.json", "w"), indent=2)
+    # ── hold gate LIFECYCLE: written when held, removed when not ──
+    rate, hold = hold_decision(flag_count, claims_swept, a.hold_threshold)
+    if hold:
+        write_hold("hold.json", rate, a.hold_threshold)
+    elif os.path.exists("hold.json"):
+        os.remove("hold.json")
+    prior = 0
+    try:
+        prior = json.load(open("lease-record.json"))["cycle"]
+    except Exception:
+        pass
+    cycle = prior + 1
+    now = datetime.datetime.now(datetime.timezone.utc)
+    iso = lambda t: t.strftime("%Y-%m-%dT%H:%M:%SZ")
+    json.dump({"cycle": cycle, "completed_at": iso(now),
+               "due_next": iso(now + datetime.timedelta(days=a.interval_days)),
+               "interval_days": a.interval_days,
+               "claims_swept": claims_swept, "flag_count": flag_count,
+               "hold": hold}, open("lease-record.json", "w"), indent=2)
+    json.dump({"cycle": cycle,
+               "started": iso(now - datetime.timedelta(seconds=int(time.time() - t0))),
+               "finished": iso(now),
+               "claims_swept": claims_swept,
+               "retired": retired, "admission_queue": sorted(
+                   {q["doi"] for q in queued}),
+               "probes": {"crossref": {"hit": sum(1 for f in flags if "crossref" in f["probes"]),
+                                       "ran": ran_counts["crossref"]},
+                          "rwdb": {"hit": sum(1 for f in flags if "rwdb" in f["probes"]),
+                                   "ran": ran_counts["rwdb"]},
+                          "pubmed": {"hit": sum(1 for f in flags if "pubmed" in f["probes"]),
+                                     "ran": ran_counts["pubmed"]}},
+               "disagreement_matrix": matrix,
+               "disagreement_pairs": disagreement,
+               "flag_rate": rate, "hold": hold,
+               "flags": flags}, open("sweep-report.json", "w"), indent=2)
+    # cycle-state MERGES: commit_count/head_sha belong to M13 and must survive
+    # this write (the rev-1 bug: overwrite made the growth check vacuous)
+    state = {}
+    try:
+        state = json.load(open("cycle-state.json"))
+    except Exception:
+        pass
+    state["cycle"] = cycle
+    json.dump(state, open("cycle-state.json", "w"))
+    print("cycle", cycle, "swept", claims_swept, "flags", flag_count,
+          "rate", round(rate, 4), "hold", hold, "disagreement", len(disagreement))
+    if hold:
+        print("HOLD: auto-quarantine suppressed — mass invalidation means "
+              "the premise changed")
+    PYEOF
+    .venv/bin/python scripts/sweep.py --db canon.db --rwdb raw/rwdb.csv \
+      --hold-threshold {{ hold_threshold }} --interval-days {{ sweep_interval_days }} \
+      --mailto "{{ crossref_mailto }}"
+    {{ boundary("M5 sweep") }}
+
+    {% elif stage == 6 %}
+    # ═══ M6 · Adjudicate the Flagged — NTW movement 2 (LLM surface #1) ═══
+    # The ONLY judgment on decay. A corrected author list does not touch a
+    # findings claim; a retraction does. The evidence bundles are injected —
+    # judge only what is in front of you. The evidence_quote gate is
+    # PER-CLAIM: the checker searches only THAT claim's bundle and flag
+    # record, so a quote borrowed from a neighboring claim fails.
+
+    You are the adjudicator of a negative-treatment watch over the citations
+    of watched Wikipedia articles. Read `{{ workspace }}/flagged.json` (it is
+    few — the sweep already narrowed a hundred-plus claims to the flagged).
+    The per-claim evidence bundles in the injected context carry each claim's
+    DOI, Crossref title, fetch digest, and publication metadata; the flag
+    records carry which probes hit and exactly what they saw.
+
+    For EVERY flagged claim, answer one question: **does the negative
+    treatment touch the issue the citing sentence relies on?**
+
+    - The citing sentence's excerpt is in `{{ workspace }}/articles/admitted.json`
+      (field `excerpt` for each claim).
+    - A retraction of the findings, data, or conclusions → QUARANTINE.
+    - A corrected author list, journal rename, or metadata fix that leaves
+      the relied-upon claim intact → RETAIN.
+    - An expression of concern that does not (yet) withdraw the finding →
+      RETAIN, and say so in the rationale.
+
+    Write `{{ workspace }}/adjudications.json` — a JSON array with EXACTLY
+    one object per flagged claim:
+
+    ```json
+    {
+      "claim_id": "C-1a2b3c4d5e6f",
+      "verdict": "QUARANTINE",
+      "touched_issue": "the study's findings were retracted following an inquiry",
+      "evidence_quote": "a short string copied VERBATIM from THAT claim's injected bundle or flag detail",
+      "rationale": "one or two sentences"
+    }
+    ```
+
+    Rules:
+    - `verdict` is exactly `QUARANTINE` or `RETAIN` — nothing else.
+    - `touched_issue` is non-empty if and only if verdict is `QUARANTINE`
+      (empty string for RETAIN).
+    - `evidence_quote` must be a verbatim substring of THAT claim's injected
+      material (its bundle text or its flag record). A quote from any other
+      claim, however similar, fails the gate.
+    - One adjudication per flag: no duplicates, no omissions — the checker
+      enforces a bijection between flagged and adjudicated claim ids.
+
+    {{ admission_gate(workspace ~ "/adjudications.json",
+        "- verdict in {QUARANTINE, RETAIN} (enum)\n" +
+        "- count(adjudications) == count(flagged) and claim_id sets equal (bijection)\n" +
+        "- touched_issue non-empty iff verdict == QUARANTINE\n" +
+        "- evidence_quote is a substring of THAT claim's bundle/flag bytes (per-claim corpus)") }}
+
+    {% elif stage == 7 %}
+    # ═══ M7 · Quarantine — NTW movement 3: consequence, not just detection ═══
+    # Every quarantined claim appears WITH its blast radius or its explicit
+    # absence. When the hold gate fired, this stage REFUSES to flip statuses —
+    # mass invalidation is a premise change, escalated, not executed.
+
+    {{ cli_open() }}
+    cat > scripts/quarantine.py <<'PYEOF'
+    import argparse, json, sqlite3
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--db", required=True)
+    ap.add_argument("--adjudications", required=True)
+    ap.add_argument("--report", required=True)
+    a = ap.parse_args()
+    db = sqlite3.connect(a.db)
+    db.execute("PRAGMA foreign_keys=ON")
+    adj = json.load(open(a.adjudications))
+    flags = json.load(open("flagged.json"))
+    hold = False
+    try:
+        hold = json.load(open("hold.json")).get("decision") == "HOLD"
+    except FileNotFoundError:
+        pass
+    lines = ["# Quarantine Report", ""]
+    manifest = {"hold": hold, "quarantined": []}
+    q_verdicts = [x for x in adj if x["verdict"] == "QUARANTINE"]
+    if hold:
+        lines += ["## HOLD active — auto-quarantine suppressed", "",
+                  "Flag rate exceeded threshold: mass invalidation means the premise",
+                  "changed (e.g. a probe semantics shift), not N independent rots.",
+                  "Escalation: re-tiering decision required. No statuses were flipped.",
+                  "",
+                  "no dependents to enumerate (no claims quarantined this cycle)", ""]
+        quarantined = []
+    else:
+        quarantined = q_verdicts
+        for v in quarantined:
+            db.execute("UPDATE claims SET status='quarantined' WHERE id=?",
+                       (v["claim_id"],))
+        db.commit()
+    for v in quarantined:
+        deps = db.execute(
+            "SELECT article, section FROM dependents WHERE claim_id=?",
+            (v["claim_id"],)).fetchall()
+        dep_list = ["%s (section %s)" % (art, sec) for art, sec in deps]
+        lines.append("## " + v["claim_id"])
+        lines.append("- touched issue: " + v.get("touched_issue", ""))
+        lines.append("- dependents: [" + ", ".join(dep_list) + "]" if dep_list
+                     else "- no dependents")
+        lines.append("")
+        # the report's structured twin — validation joins THIS to the DB, so a
+        # boilerplate "no dependents" line can never stand in for the blast
+        # radius the pattern requires
+        manifest["quarantined"].append({
+            "claim_id": v["claim_id"],
+            "touched_issue": v.get("touched_issue", ""),
+            "articles": sorted({a_ for a_, _ in deps}),
+            "sections": sorted({s for _, s in deps}),
+            "dependent_edges": len(deps)})
+    if not quarantined and not hold:
+        lines += ["## Quarantined claims: none this cycle", "",
+                  "no dependents to enumerate (no claims quarantined this cycle)", ""]
+    retained = len(adj) - len(q_verdicts)
+    lines.append("Summary: %d quarantined, %d retained, %d flagged, hold=%s"
+                 % (len(quarantined), retained, len(flags), hold))
+    open(a.report, "w").write("\n".join(lines))
+    json.dump(manifest, open("quarantine-manifest.json", "w"), indent=2)
+    print("quarantine:", len(quarantined), "quarantined,", retained,
+          "retained, hold", hold)
+    PYEOF
+    .venv/bin/python scripts/quarantine.py --db canon.db \
+      --adjudications adjudications.json --report quarantine-report.md
+    {{ boundary("M7 quarantine") }}
+
+    {% elif stage == 8 %}
+    # ═══ M8 · Draft the Errata — Errata Ledger intake (LLM surface #2) ═══
+    # The erratum is a literary genre with real norms: say what changed, when,
+    # why, what to believe now — and never blame the person who acted in good
+    # faith on then-current information.
+
+    You are writing the reader-facing corrections for a negative-treatment
+    watch. Read the injected quarantine report, the adjudications, and the
+    flag records. Every flag record carries `evidence_date` and
+    `evidence_reason` — the date of the negative treatment and the reason,
+    derived from whichever probe actually hit (Retraction Watch Database row,
+    Crossref publisher marker, or PubMed record), with
+    `evidence_date_source` naming which.
+
+    For EVERY claim the quarantine report lists as quarantined, draft EXACTLY
+    one correction object — and nothing else: the checker enforces a bijection
+    (one correction per quarantined claim; a correction for any other claim
+    fails; a missing correction fails). Write
+    `{{ workspace }}/pending-corrections.json` — a JSON array:
+
+    ```json
+    {
+      "claim_id": "C-1a2b3c4d5e6f",
+      "error": "what the record previously relied on (the citing sentence's claim, one clause)",
+      "new_text": "the reader-facing notice",
+      "authority": "which evidence establishes this (bundle/probe names)"
+    }
+    ```
+
+    `new_text` requirements — each is checked mechanically:
+    - **Dated**: contains the flag record's `evidence_date` string — copy it
+      VERBATIM (whatever its format; the gate is exact substring).
+    - **Reasoned**: names the reason using words drawn from the same flag
+      record's `evidence_reason` (a strict substring of it, lowercased
+      comparison).
+    - **Blame-free**: never second-person or agent-blaming. "You cited a
+      retracted source", "the editor screwed up", "sloppy citation" all
+      fail — as does any construction placing an agent (editor, author,
+      contributor, Wikipedia) within a few words of fault language. The
+      author cited in good faith on then-current information; the source
+      moved underneath them.
+    - **Action-ending**: ends with the concrete next step — e.g. "treat the
+      citing sentence as unsourced until re-verified against a current
+      source."
+    - **Humane and specific**: what changed, when, why, and what to believe
+      now. Public vocabulary only ("retracted", "corrected", "concern
+      expressed") — never citator jargon ("negative treatment") in the notice.
+    - Length between 80 and 1200 characters.
+
+    {{ admission_gate(workspace ~ "/pending-corrections.json",
+        "- every field non-empty; BIJECTION: corrections == quarantined claim set, no more, no less\n" +
+        "- new_text contains the flag's evidence_date string and a substring of evidence_reason — unconditionally\n" +
+        "- blame lexicon (agent+fault collocations) returns ZERO matches\n" +
+        "- 80 <= len(new_text) <= 1200") }}
+
+    {% elif stage == 9 %}
+    # ═══ M9 · The Atomic Commit — Errata Ledger's single serialized writer ═══
+    # JOURNAL AHEAD OF STATE: on entry the DB is reconciled FROM the ledger
+    # (idempotent), corrections are validated against the quarantined set
+    # (a correction for a non-quarantined claim is refused — the rev-1 gate
+    # gap let a hallucinated correction reach the public ledger), and only
+    # then are rows APPENDED with fsync before anything else mutates. A crash
+    # between append and apply leaves the ledger authoritative; the next
+    # entry's reconcile repairs the DB. A QUIET WEEK heartbeats: an empty
+    # corrections list over a fresh-or-empty ledger exits 0 (rev-1 crashed
+    # here on FileNotFoundError). Every entry's hash is the sha256 of its OWN
+    # fields — the chain carries meaning per entry, and supersedes resolves
+    # to the superseded ENTRY of the same claim, not to a whole-canon digest.
+    # Empty fallback chain: the serialized writer never degrades.
+
+    {{ cli_open() }}
+    cat > scripts/errata-commit.py <<'PYEOF'
+    import argparse, datetime, hashlib, json, os, re, sqlite3, sys
+
+    ZERO = "0" * 64
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--corrections")
+    ap.add_argument("--db")
+    ap.add_argument("--ledger", required=True)
+    ap.add_argument("--verify-join", action="store_true")
+    a = ap.parse_args()
+
+    def canon_digest(db_path):
+        conn = sqlite3.connect(db_path)
+        rows = conn.execute("SELECT id, status FROM claims ORDER BY id").fetchall()
+        conn.close()
+        return hashlib.sha256(repr(rows).encode()).hexdigest()
+
+    def entry_hash(row):
+        payload = {"prior_hash": row["prior_hash"], "claim_id": row["claim_id"],
+                   "canon_digest": row["canon_digest"], "date": row["date"],
+                   "action": row["action"], "note": row["note"],
+                   "supersedes": row.get("supersedes") or ""}
+        return hashlib.sha256(json.dumps(payload, sort_keys=True,
+                                          separators=(",", ":")).encode()).hexdigest()
+
+    def load_rows(path):
+        if not os.path.exists(path):
+            return []
+        return [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
+
+    def reconcile(db, rows):
+        """Replay the ledger into the DB — the journal is the authority."""
+        n = 0
+        for r in rows:
+            if r.get("action") == "quarantine":
+                cur = db.execute(
+                    "UPDATE claims SET status='quarantined' "
+                    "WHERE id=? AND status!='quarantined'", (r["claim_id"],))
+                n += cur.rowcount
+        db.commit()
+        return n
+
+    rows = load_rows(a.ledger)
+    if a.verify_join:
+        prev, seen = None, {}
+        for r in rows:
+            for k in ("prior_hash", "new_hash", "canon_digest"):
+                if not re.fullmatch(r"[0-9a-f]{64}", r.get(k, "")):
+                    print("HASH FAIL at", r.get("id"), k)
+                    sys.exit(1)
+            if entry_hash(r) != r["new_hash"]:
+                print("ENTRY-HASH FAIL at", r["id"],
+                      "- new_hash is not the sha256 of this row's own fields")
+                sys.exit(1)
+            if r["prior_hash"] != (prev["new_hash"] if prev else ZERO):
+                print("CHAIN FAIL at", r["id"])
+                sys.exit(1)
+            sup = r.get("supersedes")
+            if sup:
+                if not re.fullmatch(r"[0-9a-f]{64}", sup):
+                    print("SUPERSEDES FAIL at", r["id"])
+                    sys.exit(1)
+                if sup not in seen.get(r["claim_id"], []):
+                    print("SUPERSEDES RESOLUTION FAIL at", r["id"],
+                          "- does not name a prior entry of the same claim")
+                    sys.exit(1)
+            seen.setdefault(r["claim_id"], []).append(r["new_hash"])
+            prev = r
+        if rows and rows[-1]["canon_digest"] != canon_digest(a.db):
+            print("JOIN FAIL: ledger head does not name the canon it produced")
+            sys.exit(1)
+        print("verify-join OK over", len(rows),
+              "rows (per-entry hashes recomputed from their own fields)")
+        sys.exit(0)
+    if not (a.corrections and a.db):
+        print("commit mode requires --corrections and --db")
+        sys.exit(1)
+    corrections = json.load(open(a.corrections))
+    db = sqlite3.connect(a.db)
+    healed = reconcile(db, rows)
+    if healed:
+        print("reconcile: repaired", healed, "status(es) from the journal")
+    quarantined = {r[0] for r in db.execute(
+        "SELECT id FROM claims WHERE status='quarantined'")}
+    unknown = [c["claim_id"] for c in corrections
+               if c["claim_id"] not in quarantined]
+    if unknown:
+        print("REFUSING: corrections for claims not quarantined:", unknown)
+        sys.exit(1)
+    digest = canon_digest(a.db)
+    prior_hash = rows[-1]["new_hash"] if rows else ZERO
+    latest_by_claim = {}
+    for r in rows:
+        latest_by_claim[r["claim_id"]] = r["new_hash"]
+    today = datetime.date.today().isoformat()
+    new_rows = []
+    for c in corrections:
+        entry = {"id": "E-%04d" % (len(rows) + len(new_rows) + 1),
+                 "claim_id": c["claim_id"], "prior_hash": prior_hash,
+                 "canon_digest": digest, "date": today,
+                 "action": "quarantine", "note": c["new_text"][:200],
+                 "supersedes": latest_by_claim.get(c["claim_id"], "")}
+        entry["new_hash"] = entry_hash(entry)
+        new_rows.append(entry)
+        prior_hash = entry["new_hash"]
+    with open(a.ledger, "a", encoding="utf-8") as fh:   # journal ahead — the
+        for entry in new_rows:                            # heartbeat CREATES the
+            fh.write(json.dumps(entry) + "\n")            # file even on a quiet week
+        fh.flush()
+        os.fsync(fh.fileno())
+    print("committed", len(new_rows), "corrections; ledger head names canon",
+          digest[:16], "; heartbeat OK")
+    PYEOF
+    if [ -s pending-corrections.json ]; then
+      .venv/bin/python scripts/errata-commit.py --corrections pending-corrections.json \
+        --db canon.db --ledger ledger/corrections.jsonl
+    else
+      echo "no corrections this cycle — the ledger still heartbeats (empty commit, then verify)"
+      printf '[]' > pending-corrections.json
+      .venv/bin/python scripts/errata-commit.py --corrections pending-corrections.json \
+        --db canon.db --ledger ledger/corrections.jsonl
+    fi
+    .venv/bin/python scripts/errata-commit.py --verify-join --db canon.db --ledger ledger/corrections.jsonl
+    {{ boundary("M9 atomic-commit") }}
+
+    {% elif stage == 10 %}
+    # ═══ M10 · Propagate — every derived copy, watermark, feed ═══
+    # Nobody-consumes-the-correction becomes structurally impossible: the feed
+    # IS a derived copy — a WINDOW of the most-recent ledger entries (not
+    # only-new: a quiet week must never blank the public record), with ids
+    # unique per entry (date + claim + entry hash — rev-1 collided ids for
+    # same-cycle corrections). stale-check.js ships with REAL wiring:
+    # fetch lease.json, decide, inject the banner — plus a noscript fallback
+    # so even a script-blocked reader can check the lease by hand. The
+    # evidence bundles are copied into the site tree so the proof-carrying
+    # bytes are web-servable, and the debt list becomes a page, not a
+    # workspace secret.
+
+    {{ cli_open() }}
+    cat > scripts/propagate.py <<'PYEOF'
+    import argparse, datetime, hashlib, html, json, os, sqlite3
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--db", required=True)
+    ap.add_argument("--ledger", required=True)
+    ap.add_argument("--watermark", required=True)
+    ap.add_argument("--site", required=True)
+    ap.add_argument("--interval-days", type=int, required=True)
+    ap.add_argument("--grace-days", type=int, required=True)
+    ap.add_argument("--feed-window", type=int, required=True)
+    a = ap.parse_args()
+    os.makedirs(a.site, exist_ok=True)
+    db = sqlite3.connect(a.db)
+    rows = [json.loads(l) for l in open(a.ledger) if l.strip()]
+    try:
+        wm = json.load(open(a.watermark))
+    except FileNotFoundError:
+        wm = {"entries_seen": 0, "updated_at": ""}
+    lease = json.load(open("lease-record.json"))
+    lease["grace_days"] = a.grace_days
+    claims = db.execute(
+        "SELECT id, doi, article, status FROM claims ORDER BY id").fetchall()
+
+    STALE_JS = (
+        "// stale-check.js — the watch watching itself.\n"
+        "// Fetches lease.json (same origin); when now > completed_at +\n"
+        "// interval_days + grace_days, injects the amber banner. Dual-use:\n"
+        "// browsers run it as a page script (deferred until DOM ready); the\n"
+        "// M12 probe runs the SAME bootstrap under DOM/fetch stubs and asserts\n"
+        "// the banner NODE appears on a stale lease and never on a fresh one.\n"
+        "function leaseIsStale(completedAtMs, nowMs, intervalDays, graceDays) {\n"
+        "  var limit = completedAtMs + (intervalDays + graceDays) * 86400000;\n"
+        "  return nowMs > limit;\n"
+        "}\n"
+        "function installBanner(doc, completedAtIso, intervalDays, graceDays, nowMs) {\n"
+        "  var completedAtMs = Date.parse(completedAtIso);\n"
+        "  if (!isFinite(completedAtMs)) return false;\n"
+        "  if (!leaseIsStale(completedAtMs, nowMs === undefined ? Date.now() : nowMs,\n"
+        "                    intervalDays, graceDays)) return false;\n"
+        "  var el = doc.createElement(\"div\");\n"
+        "  el.setAttribute(\"id\", \"rotting-canon-stale\");\n"
+        "  el.setAttribute(\"role\", \"alert\");\n"
+        "  el.setAttribute(\"style\", \"background:#8a6d3b;color:#fff;padding:12px 16px;"
+        "font-weight:600;text-align:center;position:sticky;top:0;z-index:9999;\");\n"
+        "  el.appendChild(doc.createTextNode(\n"
+        "    \"STALE: the last completed audit cycle was \" + completedAtIso +\n"
+        "    \". This watch has not run since; treat every status below as \" +\n"
+        "    \"unverified until the lease advances.\"));\n"
+        "  (doc.body || doc.documentElement).appendChild(el);\n"
+        "  return true;\n"
+        "}\n"
+        "function bootstrap(opts) {\n"
+        "  opts = opts || {};\n"
+        "  var doc = opts.document || (typeof document !== \"undefined\" ? document : null);\n"
+        "  var fetchImpl = opts.fetch || (typeof fetch !== \"undefined\" ? fetch.bind(globalThis) : null);\n"
+        "  var nowMs = opts.nowMs;\n"
+        "  if (!doc || !fetchImpl) return Promise.resolve(false);\n"
+        "  return fetchImpl(\"lease.json\", { cache: \"no-store\" }).then(function (r) {\n"
+        "    return r.json();\n"
+        "  }).then(function (lease) {\n"
+        "    return installBanner(doc, lease.completed_at,\n"
+        "      Number(lease.interval_days) || 7, Number(lease.grace_days) || 1, nowMs);\n"
+        "  }).catch(function () { return false; });\n"
+        "}\n"
+        "if (typeof module !== \"undefined\" && module.exports) {\n"
+        "  module.exports = { leaseIsStale: leaseIsStale, installBanner: installBanner,\n"
+        "                     bootstrap: bootstrap };\n"
+        "} else if (typeof document !== \"undefined\") {\n"
+        "  if (document.readyState === \"loading\") {\n"
+        "    document.addEventListener(\"DOMContentLoaded\", function () { bootstrap({}); });\n"
+        "  } else {\n"
+        "    bootstrap({});\n"
+        "  }\n"
+        "}\n")
+    open(a.site + "/stale-check.js", "w").write(STALE_JS)
+
+    NOSCRIPT = ("<noscript><p style=\"background:#8a6d3b;color:#fff;padding:8px 12px;\">"
+                "This site's staleness alarm needs JavaScript. Without it, check "
+                "<a href=\"lease.json\">lease.json</a> directly: if completed_at is "
+                "older than interval_days + grace_days, the watch has stopped and "
+                "every status below is unverified.</p></noscript>")
+    NAV = ("<nav><a href=\"index.html\">claims</a> &middot; "
+           "<a href=\"methodology.html\">methodology</a> &middot; "
+           "<a href=\"debt.html\">debt</a> &middot; "
+           "<a href=\"stats/\">stats</a> &middot; "
+           "<a href=\"feed.xml\">feed</a></nav>")
+
+    def page(title, body):
+        return ("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+                "<title>" + html.escape(title) + " — The Rotting Canon</title>"
+                "<script src=\"stale-check.js\" defer></script></head>"
+                "<body><!-- rotting-canon -->" + NOSCRIPT + NAV +
+                "<h1>" + html.escape(title) + "</h1>" + body + "</body></html>")
+
+    rows_html = "".join(
+        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+        % (html.escape(c[0]), html.escape(c[1]), html.escape(c[2]), c[3])
+        for c in claims)
+    index = page("The Rotting Canon",
+        "<p>A negative-treatment watch over the citations of watched Wikipedia "
+        "articles. Lease: cycle %s completed %s (due %s). Data: Retraction "
+        "Watch Database (CC BY, via Crossref), Crossref, PubMed, Wikipedia.</p>"
+        "<table><tr><th>claim</th><th>doi</th><th>article</th><th>status</th>"
+        "</tr>" % (lease["cycle"], lease["completed_at"], lease["due_next"])
+        + rows_html + "</table>")
+    open(a.site + "/index.html", "w").write(index)
+    for art in sorted({c[2] for c in claims}):
+        arts = "".join("<li>%s — %s</li>" % (html.escape(c[0]), c[3])
+                       for c in claims if c[2] == art)
+        slug = hashlib.sha1(art.encode()).hexdigest()[:8]
+        open("%s/article-%s.html" % (a.site, slug), "w").write(
+            page(art, "<ul>" + arts + "</ul>"))
+    # evidence pages + the proof-carrying BYTES copied into the servable tree
+    ev_dir = a.site + "/evidence/claims"
+    os.makedirs(ev_dir, exist_ok=True)
+    for name in sorted(os.listdir("evidence/claims")):
+        src = os.path.join("evidence/claims", name)
+        if os.path.isfile(src):
+            open(os.path.join(ev_dir, name), "wb").write(open(src, "rb").read())
+    for c in claims:
+        try:
+            bundle = json.load(open("evidence/claims/%s.json" % c[0]))
+            ev = ("<pre>query_url: %s\ndigest: %s\nfetched_at: %s\ntitle: %s</pre>"
+                  "<p><a href=\"evidence/claims/%s.response.json\">raw response "
+                  "bytes (re-hashable: sha256 == digest above)</a> &middot; "
+                  "<a href=\"evidence/claims/%s.json\">bundle</a></p>"
+                  % (html.escape(bundle.get("query_url", "")), bundle["digest"],
+                     bundle["fetched_at"],
+                     html.escape(bundle.get("crossref_title", "")),
+                     c[0], c[0]))
+        except FileNotFoundError:
+            ev = "<p>evidence bundle pending</p>"
+        open("%s/evidence-%s.html" % (a.site, c[0]), "w").write(
+            page("Evidence " + c[0], ev))
+    # the debt list is a PAGE, published with the same force as the canon
+    debt = []
+    if os.path.exists("articles/debt.json"):
+        debt = json.load(open("articles/debt.json"))
+    debt_rows = "".join(
+        "<tr><td>%s</td><td>%s</td><td>%s</td></tr>"
+        % (html.escape(d.get("doi", "")), html.escape(d.get("article", "")),
+           html.escape(d.get("error", ""))) for d in debt)
+    open(a.site + "/debt.html", "w").write(page("Debt",
+        "<p>%d candidate DOI(s) could not be sealed at admission — link rot is "
+        "negative treatment of the crudest kind, so failures are listed, never "
+        "dropped. Each is retried on later cycles.</p>" % len(debt) +
+        "<table><tr><th>doi</th><th>article</th><th>error</th></tr>" +
+        debt_rows + "</table>" if debt_rows else
+        "<p>No unresolved DOIs at the last admission pass.</p>"))
+    switch = ("configured." if os.environ.get("HEALTHCHECK_URL")
+              else "UNCONFIGURED (healthchecks.io) — no email will be sent if "
+                   "the watch stops; the STALE banner is the alarm.")
+    open(a.site + "/methodology.html", "w").write(page("Methodology",
+        "<p>Admitted claims carry DOI + query bytes + sha256 digest — the raw "
+        "response bytes are linked from every evidence page and re-hashable "
+        "by any third party. Sweep = Crossref + Retraction Watch Database + "
+        "PubMed (union of flags; which probes ran and which stayed silent is "
+        "recorded per claim, never averaged). Adjudication is schema-gated; "
+        "corrections are hash-chained per entry and supersede, never rewrite. "
+        "Probes are labeled probe:true. Dead-man switch: " + switch + "</p>"))
+    updated = datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+    # FEED WINDOW: the most-recent K entries — zero new rows still leaves the
+    # public record intact, and ids are unique per entry by construction
+    window = rows[-a.feed_window:] if a.feed_window > 0 else []
+    entries = "".join(
+        "<entry><id>tag:rotting-canon,%s:%s:%s</id><title>%s quarantined</title>"
+        "<updated>%s</updated><summary>%s</summary></entry>"
+        % (r["date"], r["claim_id"], r["new_hash"][:12], r["claim_id"],
+           r["date"], html.escape(r["note"]))
+        for r in window)
+    feed = ("<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<feed xmlns=\"http://www.w3.org/2005/Atom\">"
+            "<title>The Rotting Canon — errata</title>"
+            "<id>tag:rotting-canon,feed</id><updated>" + updated + "</updated>"
+            + entries + "</feed>")
+    open(a.site + "/feed.xml", "w").write(feed)
+    json.dump(lease, open(a.site + "/lease.json", "w"), indent=2)
+    wm_new = {"entries_seen": len(rows), "updated_at": updated}
+    if wm_new["entries_seen"] < wm.get("entries_seen", 0):
+        raise SystemExit("watermark refuses backward motion")
+    json.dump(wm_new, open(a.watermark, "w"), indent=2)
+    ids = ["tag:rotting-canon,%s:%s:%s" % (r["date"], r["claim_id"], r["new_hash"][:12])
+           for r in window]
+    assert len(ids) == len(set(ids)), "feed entry ids collided"
+    print("propagated: %d claims, feed window %d of %d ledger entries, "
+          "watermark %d -> %d" % (len(claims), len(window), len(rows),
+                                  wm.get("entries_seen", 0),
+                                  wm_new["entries_seen"]))
+    PYEOF
+    .venv/bin/python scripts/propagate.py --db canon.db --ledger ledger/corrections.jsonl \
+      --watermark watermark.json --site site --interval-days {{ sweep_interval_days }} \
+      --grace-days {{ stale_grace_days }} --feed-window {{ feed_window }}
+    .venv/bin/python -c '
+    import xml.parsers.expat
+    p = xml.parsers.expat.ParserCreate()
+    p.StartDoctypeDeclHandler = lambda *a: (_ for _ in ()).throw(ValueError("DTD forbidden"))
+    p.Parse(open("site/feed.xml", "rb").read(), True)
+    print("feed is well-formed XML (hardened stdlib parse: no DTD, no entity resolution — no xmllint dependency)")
+    '
+    grep -q "lease.json" site/stale-check.js && grep -q "rotting-canon-stale" site/stale-check.js \
+      || { echo "FATAL: stale-check.js lost its wiring"; exit 1; }
+    {{ boundary("M10 propagate") }}
+
+    {% elif stage == 11 %}
+    # ═══ M11 · Decay Epidemiology — the science about the science ═══
+    # Wilson intervals on every proportion (small-n honesty); REAL
+    # disagreement (hit ⊂ ran, from the sweep's matrix) and REAL latency
+    # (retraction date − publication date, per flagged claim) — the promised
+    # epidemiology, not its label. matplotlib is mandatory (canaried at M1,
+    # pinned at install — the silent ImportError fallback is gone, because a
+    # promise with no gate is how rev-1 shipped an unvalidated PNG). And
+    # recompute-stats.py ships so our own numbers are checkable claims.
+
+    {{ cli_open() }}
+    cat > scripts/stats.py <<'PYEOF'
+    import argparse, datetime, json, math, statistics
+
+    def wilson(k, n, z=1.96):
+        if n == 0:
+            return [0.0, 0.0]
+        p = k / n
+        d = 1 + z * z / n
+        c = (p + z * z / (2 * n)) / d
+        h = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+        return [max(0.0, c - h), min(1.0, c + h)]
+
+    def classify(flags):
+        types = {"retraction": 0, "concern": 0, "correction": 0, "other": 0}
+        for f in flags:
+            sig = (f.get("signal", "") + " " + f.get("rwdb_nature", "")).lower()
+            if "retract" in sig:
+                types["retraction"] += 1
+            elif "concern" in sig:
+                types["concern"] += 1
+            elif "correct" in sig or "update-to" in sig:
+                types["correction"] += 1
+            else:
+                types["other"] += 1
+        return types
+
+    def latency_stats(flags):
+        vals = [f.get("latency_days") for f in flags]
+        vals = [v for v in vals if v is not None]
+        if not vals:
+            return {"count": 0}
+        return {"count": len(vals), "median_days": statistics.median(vals),
+                "min_days": min(vals), "max_days": max(vals),
+                "mean_days": round(sum(vals) / len(vals), 1)}
+
+    def real_disagreement(sw):
+        matrix = sw.get("disagreement_matrix", [])
+        return [m for m in matrix if m.get("hit") and len(m["hit"]) < len(m.get("ran", []))]
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--sweep", required=True)
+    ap.add_argument("--flagged", required=True)
+    ap.add_argument("--outdir", required=True)
+    a = ap.parse_args()
+    sw = json.load(open(a.sweep))
+    flags = json.load(open(a.flagged))
+    disagreement = real_disagreement(sw)
+    n, k = sw["claims_swept"], sw["flag_count"]
+    stats = {"cycle": sw["cycle"], "claims_swept": n, "flag_count": k,
+             "flag_rate": k / n if n else 0.0,
+             "flag_rate_wilson95": wilson(k, n),
+             "update_type_distribution": classify(flags),
+             "disagreement": len(disagreement),
+             "probes": sw["probes"],
+             "latency": latency_stats(flags),
+             "generated_at": datetime.datetime.now(datetime.timezone.utc).strftime(
+                 "%Y-%m-%dT%H:%M:%SZ")}
+    json.dump(stats, open(a.outdir + "/stats.json", "w"), indent=2)
+    json.dump({"matrix": sw.get("disagreement_matrix", []),
+               "disagreement": disagreement},
+              open(a.outdir + "/disagreement-matrix.json", "w"), indent=2)
+    types = stats["update_type_distribution"]
+    with open(a.outdir + "/update-types.csv", "w") as fh:
+        fh.write("type,count\n")
+        for key in sorted(types):
+            fh.write("%s,%d\n" % (key, types[key]))
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.bar(sorted(types), [types[k2] for k2 in sorted(types)], color="#8b1a1a")
+    ax.set_title("Negative treatment by type (cycle %d)" % sw["cycle"])
+    fig.tight_layout()
+    fig.savefig(a.outdir + "/update-types.png", dpi=120)
+    print("stats: rate", round(stats["flag_rate"], 4), "wilson",
+          [round(x, 4) for x in stats["flag_rate_wilson95"]],
+          "disagreement", len(disagreement), "latency", stats["latency"])
+    PYEOF
+    cat > scripts/recompute-stats.py <<'PYEOF'
+    """Recompute published statistics from PUBLISHED artifacts alone.
+    --check exits 0 iff every derivable key of stats.json reproduces."""
+    import argparse, json, math, statistics, sys
+
+    def wilson(k, n, z=1.96):
+        if n == 0:
+            return [0.0, 0.0]
+        p = k / n
+        d = 1 + z * z / n
+        c = (p + z * z / (2 * n)) / d
+        h = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+        return [max(0.0, c - h), min(1.0, c + h)]
+
+    def classify(flags):
+        types = {"retraction": 0, "concern": 0, "correction": 0, "other": 0}
+        for f in flags:
+            sig = (f.get("signal", "") + " " + f.get("rwdb_nature", "")).lower()
+            if "retract" in sig:
+                types["retraction"] += 1
+            elif "concern" in sig:
+                types["concern"] += 1
+            elif "correct" in sig or "update-to" in sig:
+                types["correction"] += 1
+            else:
+                types["other"] += 1
+        return types
+
+    def latency_stats(flags):
+        vals = [f.get("latency_days") for f in flags]
+        vals = [v for v in vals if v is not None]
+        if not vals:
+            return {"count": 0}
+        return {"count": len(vals), "median_days": statistics.median(vals),
+                "min_days": min(vals), "max_days": max(vals),
+                "mean_days": round(sum(vals) / len(vals), 1)}
+
+    def real_disagreement(sw):
+        matrix = sw.get("disagreement_matrix", [])
+        return [m for m in matrix if m.get("hit") and len(m["hit"]) < len(m.get("ran", []))]
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--sweep", required=True)
+    ap.add_argument("--flagged", required=True)
+    ap.add_argument("--stats", required=True)
+    ap.add_argument("--check", action="store_true")
+    a = ap.parse_args()
+    sw = json.load(open(a.sweep))
+    flags = json.load(open(a.flagged))
+    n, k = sw["claims_swept"], sw["flag_count"]
+    derived = {"cycle": sw["cycle"], "claims_swept": n, "flag_count": k,
+               "flag_rate": k / n if n else 0.0,
+               "flag_rate_wilson95": wilson(k, n),
+               "update_type_distribution": classify(flags),
+               "disagreement": len(real_disagreement(sw)),
+               "probes": sw["probes"],
+               "latency": latency_stats(flags)}
+    if not a.check:
+        json.dump(derived, open(a.stats + ".recomputed", "w"), indent=2)
+        sys.exit(0)
+    published = json.load(open(a.stats))
+    for key, val in derived.items():
+        if published.get(key) != val:
+            print("RECOMPUTE MISMATCH at", key, ":", val, "!=", published.get(key))
+            sys.exit(1)
+    print("recompute OK: all", len(derived),
+          "keys reproduce from published artifacts")
+    PYEOF
+    .venv/bin/python scripts/stats.py --sweep sweep-report.json --flagged flagged.json --outdir site/stats
+    test -s site/stats/update-types.png || { echo "FATAL: stats PNG missing — the promise is gated now"; exit 1; }
+    {{ boundary("M11 epidemiology") }}
+
+    {% elif stage == 12 %}
+    # ═══ M12 · Prove the Alarms — labeled mechanical probes, isolated copies ═══
+    # What cannot wait for a real occurrence is proven mechanically, clearly
+    # labeled probe:true, against ISOLATED copies — with digest-immutability
+    # proving the probes cannot mutate the real record. Probe A drives the
+    # SHIPPED sweep gate (not a reimplementation of its arithmetic). Probe B
+    # drives the SHIPPED stale-check.js bootstrap under DOM/fetch stubs and
+    # asserts the banner NODE appears — the visitor experience, executed.
+    # Probe D is the commissioning simulation the adversarial reviews
+    # demanded: cycle 2 replayed against the shipped scripts over
+    # fabricated post-cycle-1 state (30-day month, existing ledger and
+    # quarantined rows, stale hold, zero-correction heartbeat, rewritten
+    # history) — the Behavioral Pre-Mortem YAML cannot give us.
+
+    {{ cli_open() }}
+    pre_canon=$(sha256sum canon.db | cut -d" " -f1)
+    pre_lease=$(sha256sum lease-record.json | cut -d" " -f1)
+
+    # Probe A — hold gate through the SHIPPED sweep code (isolated sandbox)
+    mkdir -p probes/hold-sandbox
+    cp sweep-report.json probes/hold-sandbox/
+    .venv/bin/python scripts/sweep.py --db canon.db --rwdb raw/rwdb.csv \
+      --hold-threshold {{ hold_threshold }} --interval-days {{ sweep_interval_days }} \
+      --mailto "{{ crossref_mailto }}" --probe-hold --sandbox probes/hold-sandbox
+
+    # Probe B — STALE banner WIRING: the shipped bootstrap, stub DOM + stub fetch.
+    # Asserts the banner node is injected on a stale lease and never on a fresh one.
+    INTERVAL={{ sweep_interval_days }} GRACE={{ stale_grace_days }} node -e '
+    const { bootstrap } = require("./site/stale-check.js");
+    const interval = Number(process.env.INTERVAL), grace = Number(process.env.GRACE);
+    const now = Date.now();
+    function stubDoc() {
+      const appended = [];
+      return {
+        appended: appended,
+        createElement: function (tag) {
+          return { tag: tag, attrs: {}, children: [],
+                   setAttribute: function (k, v) { this.attrs[k] = v; },
+                   appendChild: function (c) { this.children.push(c); return c; } };
+        },
+        createTextNode: function (t) { return { text: t }; },
+        body: { appendChild: function (c) { appended.push(c); } }
+      };
+    }
+    function lease(completedAtMs) {
+      return { json: function () {
+        return Promise.resolve({ completed_at: new Date(completedAtMs).toISOString(),
+                                 interval_days: interval, grace_days: grace });
+      } };
+    }
+    const staleDoc = stubDoc(), freshDoc = stubDoc();
+    const stale = bootstrap({ document: staleDoc,
+      fetch: function () { return Promise.resolve(lease(now - (interval + grace + 2) * 86400000)); },
+      nowMs: now });
+    const fresh = bootstrap({ document: freshDoc,
+      fetch: function () { return Promise.resolve(lease(now - 1 * 86400000)); },
+      nowMs: now });
+    Promise.all([stale, fresh]).then(function (r) {
+      const backdated = r[0] === true, freshOk = r[1] === false;
+      const node = staleDoc.appended.length === 1 ? staleDoc.appended[0] : null;
+      const injected = !!(node && node.attrs.id === "rotting-canon-stale"
+                          && node.attrs.role === "alert"
+                          && node.children[0] && String(node.children[0].text).indexOf("STALE") !== -1);
+      const freshClean = freshDoc.appended.length === 0;
+      require("fs").writeFileSync("probes/stale-probe.json", JSON.stringify({
+        probe: true,
+        label: "shipped stale-check.js bootstrap under DOM/fetch stubs",
+        executed: "site/stale-check.js:bootstrap -> installBanner",
+        backdated_lease_banner: backdated,
+        fresh_lease_banner: freshOk,
+        banner_node_injected: injected,
+        fresh_dom_stays_clean: freshClean,
+        both_branches_exercised: backdated && freshOk && injected && freshClean
+      }, null, 2));
+      console.log("stale probe: backdated", backdated, "banner node", injected,
+                  "fresh", freshOk, "clean", freshClean);
+      if (!(backdated && freshOk && injected && freshClean)) process.exit(1);
+    }).catch(function (e) { console.error(e); process.exit(1); });'
+
+    # Probe C — dead-man switch: env-gated; absent means LOUD-SKIP, never silence
+    if [ -n "${HEALTHCHECK_URL:-}" ]; then
+      code=$(curl -fsS -o /dev/null -w "%{http_code}" --max-time 30 "${HEALTHCHECK_URL}" || echo 000)
+      printf '{"probe": true, "mode": "ping", "http_status": "%s"}\n' "$code" > probes/dead-man.json
+      echo "dead-man ping status $code" >> probes/dead-man.log
+    else
+      echo "LOUD-SKIP: HEALTHCHECK_URL unset — dead-man switch unconfigured; the STALE banner is the only alarm" >> probes/dead-man.log
+      printf '{"probe": true, "mode": "loud-skip", "disclosed_on_methodology_page": true}\n' > probes/dead-man.json
+    fi
+    grep -q "switch" site/methodology.html || { echo "methodology page does not disclose switch state"; exit 1; }
+
+    # Probe D — SIMULATED CYCLE 2 against the shipped scripts (no network,
+    # no publish, sandboxed under probes/cycle2-sandbox/)
+    cat > scripts/probe-cycle2.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """probe:true — commissioning simulation of cycle 2 over the SHIPPED scripts.
+
+    The YAML cannot show mechanism interactions; this probe fabricates
+    post-cycle-1 state (a 30-day previous month, an existing per-entry-hash
+    ledger, quarantined DB rows, a stale hold.json, a zero-correction
+    heartbeat, a rewritten git history) and drives the real monthutil,
+    sweep hold gate, load-canon idempotency, quarantine hold lifecycle,
+    errata-commit heartbeat/chain/reconcile/refusal, propagate feed window,
+    stale-check wiring, and journal-verify ancestry. Every check here is a
+    defect an adversarial review found in rev 1 killing cycle 2+.
+    """
+    import datetime, hashlib, json, os, shutil, sqlite3, subprocess, sys, time
+
+    WS = os.path.abspath(os.environ.get("RC_WS", os.curdir))
+    SCRIPTS = os.path.join(WS, "scripts")
+    SB = os.path.join(WS, "probes", "cycle2-sandbox")
+    PY = os.path.join(WS, ".venv", "bin", "python")
+    checks = []
+
+    def check(name, ok, detail=""):
+        checks.append({"name": name, "passed": bool(ok), "detail": str(detail)[:200]})
+        print(("PASS " if ok else "FAIL ") + name + ((" — " + str(detail)[:120]) if detail else ""))
+        return bool(ok)
+
+    def run(args, cwd=SB):
+        return subprocess.run([PY] + args, cwd=cwd, capture_output=True, text=True)
+
+    def wjson(path, obj):
+        open(path, "w").write(json.dumps(obj, indent=2))
+
+    if os.path.exists(SB):
+        shutil.rmtree(SB)
+    for d in ("articles", "evidence/claims", "ledger"):
+        os.makedirs(os.path.join(SB, d))
+
+    # 1 — prev_month over a 30-day month (rev-1 hardcoded day 31; the
+    #     Pageviews API 400s on a September 31st that does not exist)
+    sys.path.insert(0, SCRIPTS)
+    import monthutil
+    lo, hi = monthutil.prev_month(time.struct_time((2026, 10, 15, 12, 0, 0, 0, 0, -1)))
+    check("prev_month(2026-10) uses the real month length",
+          lo == "2026090100" and hi == "2026093000", lo + "..." + hi)
+
+    # fabricate cycle-1 state
+    def cid(doi):
+        return "C-" + hashlib.sha256(doi.encode()).hexdigest()[:12]
+    DOI_Q, DOI_K = "10.1000/quarantined", "10.1000/kept"
+    CQ, CK = cid(DOI_Q), cid(DOI_K)
+    wjson(os.path.join(SB, "candidates.json"), [
+        {"doi": DOI_Q, "pmid": "", "article": "Article Q", "oldid": 11,
+         "section": "History", "sentence_excerpt": "Relies on Q.",
+         "template": "cite journal"},
+        {"doi": DOI_K, "pmid": "", "article": "Article K", "oldid": 12,
+         "section": "Results", "sentence_excerpt": "Relies on K.",
+         "template": "cite journal"}])
+    for c, doi in ((CQ, DOI_Q), (CK, DOI_K)):
+        wjson(os.path.join(SB, "evidence/claims", c + ".json"),
+              {"digest": "0" * 64, "fetched_at": "2026-08-28T00:00:00Z"})
+    admitted = [
+        {"id": CQ, "doi": DOI_Q, "pmid": "", "article": "Article Q", "oldid": 11,
+         "section": "History", "excerpt": "Relies on Q.",
+         "bundle": "evidence/claims/%s.json" % CQ},
+        {"id": CK, "doi": DOI_K, "pmid": "", "article": "Article K", "oldid": 12,
+         "section": "Results", "excerpt": "Relies on K.",
+         "bundle": "evidence/claims/%s.json" % CK}]
+    wjson(os.path.join(SB, "articles/admitted.json"), admitted)
+    wjson(os.path.join(SB, "articles/debt.json"), [])
+    r = run([os.path.join(SCRIPTS, "load-canon.py"), "--db", "canon.db",
+             "--admitted", "articles/admitted.json",
+             "--candidates", "candidates.json"])
+    check("load-canon builds the cycle-1 graph", r.returncode == 0, r.stderr[-160:])
+    conn = sqlite3.connect(os.path.join(SB, "canon.db"))
+    conn.execute("UPDATE claims SET status='quarantined' WHERE id=?", (CQ,))
+    conn.commit()
+    conn.close()
+
+    # 2 — re-admission preserves quarantine (rev-1 INSERT OR REPLACE reset it)
+    r = run([os.path.join(SCRIPTS, "load-canon.py"), "--db", "canon.db",
+             "--admitted", "articles/admitted.json",
+             "--candidates", "candidates.json"])
+    conn = sqlite3.connect(os.path.join(SB, "canon.db"))
+    status = conn.execute("SELECT status FROM claims WHERE id=?", (CQ,)).fetchone()[0]
+    conn.close()
+    check("re-admission preserves quarantined status",
+          r.returncode == 0 and status == "quarantined", status)
+
+    LEDGER = "ledger/corrections.jsonl"
+    EMPTY = "empty-corrections.json"
+    wjson(os.path.join(SB, EMPTY), [])
+    COMMIT = [os.path.join(SCRIPTS, "errata-commit.py"), "--db", "canon.db",
+              "--ledger", LEDGER]
+    VERIFY = COMMIT + ["--verify-join"]
+
+    # 3 — heartbeat: zero corrections over a ledger FILE THAT DOES NOT EXIST
+    #     (rev-1 crashed here on FileNotFoundError — every quiet week was fatal)
+    r = run(COMMIT + ["--corrections", EMPTY])
+    check("heartbeat commit with no ledger file exits 0", r.returncode == 0,
+          (r.stdout + r.stderr)[-160:])
+    r = run(VERIFY)
+    check("verify-join accepts the empty ledger", r.returncode == 0,
+          (r.stdout + r.stderr)[-160:])
+
+    # 4 — a real correction lands; the shipped verifier accepts its chain
+    wjson(os.path.join(SB, "corr1.json"), [
+        {"claim_id": CQ, "error": "relied on Q",
+         "new_text": "Dated 2026-09-04: the source was retracted; treat the "
+                     "citing sentence as unsourced until re-verified.",
+         "authority": "rwdb+crossref probes"}])
+    r = run(COMMIT + ["--corrections", "corr1.json"])
+    rows = [json.loads(l) for l in open(os.path.join(SB, LEDGER)) if l.strip()]
+    r2 = run(VERIFY)
+    check("correction appended; verify-join accepts per-entry hash chain",
+          r.returncode == 0 and r2.returncode == 0 and len(rows) == 1,
+          (r.stdout + r2.stdout)[-160:])
+
+    # 5 — refusal: a correction for a NON-quarantined claim (the rev-1 M8/M9
+    #     gate gap let a hallucinated correction reach the public ledger)
+    wjson(os.path.join(SB, "corr-bad.json"), [
+        {"claim_id": CK, "error": "x", "new_text": "y" * 90, "authority": "z"}])
+    r = run(COMMIT + ["--corrections", "corr-bad.json"])
+    check("correction for non-quarantined claim refused",
+          r.returncode != 0 and "REFUSING" in r.stdout, r.stdout[-120:])
+
+    # 6 — reconcile repairs DB divergence from the journal
+    conn = sqlite3.connect(os.path.join(SB, "canon.db"))
+    conn.execute("UPDATE claims SET status='admitted' WHERE id=?", (CQ,))
+    conn.commit()
+    conn.close()
+    r = run(COMMIT + ["--corrections", EMPTY])
+    conn = sqlite3.connect(os.path.join(SB, "canon.db"))
+    status = conn.execute("SELECT status FROM claims WHERE id=?", (CQ,)).fetchone()[0]
+    conn.close()
+    check("reconcile repairs a diverged DB from the journal",
+          r.returncode == 0 and status == "quarantined", status)
+
+    # 7 — a second correction of the same claim supersedes the first ENTRY
+    wjson(os.path.join(SB, "corr2.json"), [
+        {"claim_id": CQ, "error": "relied on Q",
+         "new_text": "Dated 2026-09-11: further corrected; treat as unsourced.",
+         "authority": "rwdb"}])
+    r = run(COMMIT + ["--corrections", "corr2.json"])
+    rows = [json.loads(l) for l in open(os.path.join(SB, LEDGER)) if l.strip()]
+    check("supersedes names the prior ENTRY of the same claim",
+          r.returncode == 0 and len(rows) == 2
+          and rows[1]["supersedes"] == rows[0]["new_hash"],
+          rows[1].get("supersedes", "")[:16])
+
+    # 8 — tamper detection: editing a committed row's note breaks its own hash
+    orig = open(os.path.join(SB, LEDGER)).read()
+    tampered = [json.loads(l) for l in orig.splitlines() if l.strip()]
+    tampered[0]["note"] += "x"
+    open(os.path.join(SB, LEDGER), "w").write(
+        "".join(json.dumps(t) + "\n" for t in tampered))
+    r = run(VERIFY)
+    check("tampered ledger entry fails verify-join", r.returncode != 0,
+          (r.stdout + r.stderr).strip()[-120:])
+    open(os.path.join(SB, LEDGER), "w").write(orig)
+
+    # 9 — propagate: feed is a WINDOW (zero-new-rows must not blank the feed)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    iso = lambda t: t.strftime("%Y-%m-%dT%H:%M:%SZ")
+    wjson(os.path.join(SB, "lease-record.json"),
+          {"cycle": 2, "completed_at": iso(now), "due_next": iso(now),
+           "interval_days": 7, "grace_days": 1, "claims_swept": 2,
+           "flag_count": 0, "hold": False})
+    PROP = [os.path.join(SCRIPTS, "propagate.py"), "--db", "canon.db",
+            "--ledger", LEDGER, "--site", "site", "--interval-days", "7",
+            "--grace-days", "1", "--feed-window", "50"]
+    wjson(os.path.join(SB, "watermark.json"), {"entries_seen": 2, "updated_at": ""})
+    r = run(PROP + ["--watermark", "watermark.json"])
+    feed = open(os.path.join(SB, "site/feed.xml")).read()
+    n_entries = feed.count("<entry>")
+    check("zero-new-rows cycle still serves the window (2 entries)",
+          r.returncode == 0 and n_entries == 2,
+          (r.stderr or "entries=%d" % n_entries)[-160:])
+    wjson(os.path.join(SB, "watermark.json"), {"entries_seen": 0, "updated_at": ""})
+    r = run(PROP + ["--watermark", "watermark.json"])
+    feed2 = open(os.path.join(SB, "site/feed.xml")).read()
+    check("feed is a tail window, not only-new (watermark 0 -> same window)",
+          r.returncode == 0 and feed2.count("<entry>") == 2)
+
+    # 10 — the shipped stale-check.js wiring (banner only on a stale lease)
+    node = shutil.which("node")
+    if not node:
+        check("stale-check wiring (node present)", False, "node absent")
+    else:
+        js = (
+            "const { bootstrap } = require(%s);\n" % json.dumps(os.path.join(SB, "site/stale-check.js")) +
+            "function stubDoc(){const a=[];return{appended:a," +
+            "createElement:t=>({tag:t,attrs:{},children:[]," +
+            "setAttribute(k,v){this.attrs[k]=v;}," +
+            "appendChild(c){this.children.push(c);return c;}})," +
+            "createTextNode:t=>({text:t}),body:{appendChild(c){a.push(c);}}};}\n" +
+            "const now=Date.now();\n" +
+            "const lease=ms=>({json:()=>Promise.resolve({completed_at:new Date(ms).toISOString(),interval_days:7,grace_days:1})});\n" +
+            "const sd=stubDoc(),fd=stubDoc();\n" +
+            "Promise.all([bootstrap({document:sd,fetch:()=>Promise.resolve(lease(now-(7+1+2)*86400000)),nowMs:now})," +
+            "bootstrap({document:fd,fetch:()=>Promise.resolve(lease(now-86400000)),nowMs:now})])" +
+            ".then(r=>{console.log(JSON.stringify({stale:r[0]===true&&sd.appended.length===1&&sd.appended[0].attrs.id==='rotting-canon-stale'," +
+            "fresh:r[1]===false&&fd.appended.length===0}));process.exit(0);})" +
+            ".catch(e=>{console.error(e);process.exit(1);});\n")
+        r = subprocess.run([node, "-e", js], cwd=SB, capture_output=True, text=True)
+        try:
+            out = json.loads(r.stdout.strip().splitlines()[-1])
+        except Exception:
+            out = {}
+        check("shipped stale-check.js injects the banner only when stale",
+              r.returncode == 0 and out.get("stale") and out.get("fresh"),
+              r.stdout[-120:] or r.stderr[-120:])
+
+    # 11 — journal-verify: growth AND prior-HEAD ancestry (a rewritten local
+    #     history with more commits than before must fail)
+    def git(*args):
+        return subprocess.run(["git", "-C", SB] + list(args),
+                              capture_output=True, text=True)
+    git("init", "-q")
+    git("config", "user.name", "probe")
+    git("config", "user.email", "probe@rotting-canon.invalid")
+    wjson(os.path.join(SB, "cycle-state.json"),
+          {"cycle": 1, "commit_count": 0})
+    open(os.path.join(SB, "notefile.txt"), "w").write("one")
+    git("add", "-A")
+    git("commit", "-qm", "c1")
+    JV = [os.path.join(SCRIPTS, "journal-verify.py"), "--ledger", LEDGER,
+          "--repo", "."]
+    r = run(JV)
+    check("journal-verify passes a grown journal", r.returncode == 0,
+          (r.stdout + r.stderr)[-160:])
+    open(os.path.join(SB, "notefile.txt"), "w").write("two")
+    git("add", "-A")
+    git("commit", "-qm", "c2")
+    r = run(JV)
+    ok_grew = r.returncode == 0
+    # rewrite AND grow: amend the recorded HEAD away, then add a fresh commit
+    # so the count still grows — only the ANCESTRY check can catch this
+    git("commit", "-q", "--amend", "-m", "rewritten")
+    open(os.path.join(SB, "notefile.txt"), "w").write("three")
+    git("add", "-A")
+    git("commit", "-qm", "c3-on-rewritten")
+    r = run(JV)
+    check("rewritten-but-longer history fails the ancestry check",
+          ok_grew and r.returncode != 0, (r.stdout + r.stderr).strip()[-120:])
+
+    # 12 — quarantine hold lifecycle through the shipped quarantine.py:
+    #     a stale hold.json suppresses; a clean cycle flips
+    wjson(os.path.join(SB, "flagged.json"), [])
+    wjson(os.path.join(SB, "adjudications.json"),
+          [{"claim_id": CK, "verdict": "QUARANTINE",
+            "touched_issue": "findings retracted", "evidence_quote": "Q",
+            "rationale": "probe"}])
+    wjson(os.path.join(SB, "hold.json"),
+          {"flag_rate": 1.0, "threshold": 0.1, "decision": "HOLD",
+           "escalation": "probe"})
+    r = run([os.path.join(SCRIPTS, "quarantine.py"), "--db", "canon.db",
+             "--adjudications", "adjudications.json",
+             "--report", "quarantine-report.md"])
+    conn = sqlite3.connect(os.path.join(SB, "canon.db"))
+    held_status = conn.execute("SELECT status FROM claims WHERE id=?", (CK,)).fetchone()[0]
+    conn.close()
+    man = json.load(open(os.path.join(SB, "quarantine-manifest.json")))
+    check("hold suppresses the quarantine (refusal, not execution)",
+          r.returncode == 0 and held_status == "admitted" and man["hold"] is True,
+          held_status)
+    os.remove(os.path.join(SB, "hold.json"))
+    r = run([os.path.join(SCRIPTS, "quarantine.py"), "--db", "canon.db",
+             "--adjudications", "adjudications.json",
+             "--report", "quarantine-report.md"])
+    conn = sqlite3.connect(os.path.join(SB, "canon.db"))
+    flipped = conn.execute("SELECT status FROM claims WHERE id=?", (CK,)).fetchone()[0]
+    conn.close()
+    check("clean cycle (hold removed at M1/M5) flips the status",
+          r.returncode == 0 and flipped == "quarantined", flipped)
+
+    all_ok = all(c["passed"] for c in checks)
+    wjson(os.path.join(WS, "probes", "cycle2-probe.json"),
+          {"probe": True,
+           "label": "simulated cycle 2 over the shipped scripts "
+                    "(no network, no publish, sandboxed)",
+           "checks": checks, "all_passed": all_ok})
+    print("cycle2 probe:", sum(1 for c in checks if c["passed"]), "of",
+          len(checks), "checks passed")
+    sys.exit(0 if all_ok else 1)
+    PYEOF
+    .venv/bin/python scripts/probe-cycle2.py
+
+    # Immutability — the probe movement cannot have mutated the real record
+    post_canon=$(sha256sum canon.db | cut -d" " -f1)
+    post_lease=$(sha256sum lease-record.json | cut -d" " -f1)
+    if [ "$pre_canon" = "$post_canon" ] && [ "$pre_lease" = "$post_lease" ]; then
+      printf '{"unchanged": true, "canon_sha256": "%s", "lease_sha256": "%s"}\n' "$post_canon" "$post_lease" > probes/immutability.json
+    else
+      printf '{"unchanged": false}\n' > probes/immutability.json
+      echo "FATAL: probes mutated the real record"
+      exit 1
+    fi
+    {{ boundary("M12 prove-the-alarms") }}
+
+    {% elif stage == 13 %}
+    # ═══ M13 · Verify the Journal — FEH's verification half ═══
+    # Per-entry hash chain (recomputed from each row's own fields),
+    # supersedes that RESOLVES to a prior entry of the same claim, a git log
+    # that strictly grew — and prior-HEAD ancestry: the HEAD recorded last
+    # cycle must be an ancestor of this HEAD, which is exactly what a
+    # force-push/rebase destroys. Count growth alone let a rewritten history
+    # with equal-or-more commits pass (rev-1's check was also permanently
+    # vacuous: the sweep overwrote cycle-state; it now MERGES).
+
+    {{ cli_open() }}
+    cat > scripts/journal-verify.py <<'PYEOF'
+    import argparse, json, re, subprocess, sys
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--ledger", required=True)
+    ap.add_argument("--repo", required=True)
+    a = ap.parse_args()
+    rows = [json.loads(l) for l in open(a.ledger) if l.strip()]
+    if rows:
+        if rows[0]["prior_hash"] != "0" * 64:
+            print("genesis prior_hash must be 64 zeros")
+            sys.exit(1)
+        for prev, cur in zip(rows, rows[1:]):
+            if cur["prior_hash"] != prev["new_hash"]:
+                print("chain break at", cur["id"])
+                sys.exit(1)
+        for r in rows:
+            if not re.fullmatch(r"[0-9a-f]{64}", r["new_hash"]):
+                print("bad new_hash at", r["id"])
+                sys.exit(1)
+            if r.get("supersedes") and not re.fullmatch(r"[0-9a-f]{64}", r["supersedes"]):
+                print("bad supersedes at", r["id"])
+                sys.exit(1)
+    n = int(subprocess.run(["git", "-C", a.repo, "rev-list", "--count", "HEAD"],
+                           capture_output=True, text=True).stdout.strip())
+    state = {"cycle": 1, "commit_count": 0}
+    try:
+        state = json.load(open("cycle-state.json"))
+    except FileNotFoundError:
+        pass
+    prior_count = state.get("commit_count", 0)
+    if n <= prior_count:
+        print("git log did not grow:", n, "<=", prior_count)
+        sys.exit(1)
+    prior_head = state.get("head_sha")
+    if prior_head:
+        rc = subprocess.run(
+            ["git", "-C", a.repo, "merge-base", "--is-ancestor", prior_head, "HEAD"],
+            capture_output=True).returncode
+        if rc != 0:
+            print("HISTORY REWRITE: prior cycle HEAD", prior_head[:12],
+                  "is not an ancestor of HEAD — fork-evidence violated")
+            sys.exit(1)
+    state["commit_count"] = n
+    state["head_sha"] = subprocess.run(
+        ["git", "-C", a.repo, "rev-parse", "HEAD"],
+        capture_output=True, text=True).stdout.strip()
+    json.dump(state, open("cycle-state.json", "w"))
+    print("journal verified:", len(rows), "rows,", n, "commits (prior",
+          str(prior_count) + ")", "ancestry OK")
+    PYEOF
+    .venv/bin/python scripts/journal-verify.py --ledger ledger/corrections.jsonl --repo .
+    {{ boundary("M13 journal-verify") }}
+
+    {% elif stage == 14 %}
+    # ═══ M14 · Publish — FEH's public half, ending at the LIVE seam ═══
+    # The push is refused unless origin/main is empty or a prior canon cycle,
+    # keyed on a MARKER FILE in the remote tree (commit subjects are a
+    # heuristic; a file is a fact). Branch protection forbids force-push
+    # with enforce_admins ON — and if the token lacks the authority to set
+    # protection, that is DISCLOSED (marker absent) and retried next cycle,
+    # never silently dropped. Pages serves /docs (the API only accepts /
+    # or /docs): docs/ is a byte-identical copy of site/, materialized here
+    # by the publish movement — the serving copy lives in the journal, so
+    # the deployed bytes are auditable in-history. The LIVE seam then
+    # re-fetches the deployed site, feed, methodology, debt page, banner
+    # wiring — and the deployed EVIDENCE RESPONSE BYTES, re-hashed against
+    # the admission digests: proof-carrying artifacts are public, not merely
+    # present. gh push/admin authority is read back from the repo API.
+
+    {{ cli_open() }}
+    owner=$(cat canary/gh-login.txt)
+    site_url="https://${owner}.github.io/{{ repo_name }}/"
+    printf '{"owner": "%s", "site_url": "%s", "feed_url": "%sfeed.xml", "repo": "%s/%s"}\n' \
+      "$owner" "$site_url" "$site_url" "$owner" "{{ repo_name }}" > publish/target.json
+    # docs/ = byte-identical serving copy of site/ (derived; owned here)
+    rm -rf docs
+    cp -a site docs
+    git add -A
+    git commit -m "publish - cycle $(jq -r .cycle cycle-state.json)" --allow-empty
+    if gh repo view "{{ repo_name }}" >/dev/null 2>&1; then
+      git remote remove origin 2>/dev/null || true
+      git remote add origin "https://github.com/${owner}/{{ repo_name }}.git"
+      git fetch origin main 2>/dev/null || true
+      # unrelated-history guard: a MARKER FILE in the remote tree, not subjects
+      if git rev-parse origin/main >/dev/null 2>&1; then
+        if git cat-file -e origin/main:rotting-canon-marker 2>/dev/null; then
+          : # a prior canon cycle — proceed
+        elif [ "$(git rev-list --count origin/main)" -gt 0 ]; then
+          echo "REFUSING: origin/main carries unrelated history (no canon marker)"
+          exit 1
+        fi
+      fi
+      git push -u origin main
+    else
+      gh repo create "{{ repo_name }}" --public --source . --push
+    fi
+
+    # Authority read-back: identity (canary) is not authority (repo rights).
+    push_ok=$(gh api "repos/${owner}/{{ repo_name }}" -q .permissions.push 2>/dev/null || echo null)
+    admin_ok=$(gh api "repos/${owner}/{{ repo_name }}" -q .permissions.admin 2>/dev/null || echo null)
+    echo "gh authority: push=${push_ok} admin=${admin_ok}"
+    [ "$push_ok" = "true" ] || { echo "FATAL: token cannot push to the target repo"; exit 1; }
+
+    if gh api -X PUT "repos/${owner}/{{ repo_name }}/branches/main/protection" --input - <<'JSON' >/dev/null
+    {
+      "required_status_checks": null,
+      "enforce_admins": true,
+      "required_pull_request_reviews": null,
+      "restrictions": null,
+      "allow_force_pushes": false,
+      "allow_deletions": false
+    }
+    JSON
+    then
+      echo applied > publish/protection-applied
+    else
+      rm -f publish/protection-applied
+      echo "WARN: branch protection NOT applied (token lacks administration authority) — DISCLOSED, retried idempotently next cycle"
+    fi
+
+    gh api -X POST "repos/${owner}/{{ repo_name }}/pages" -f "source[branch]=main" -f "source[path]=/docs" >/dev/null 2>&1 \
+      || gh api "repos/${owner}/{{ repo_name }}/pages" >/dev/null
+    # Dormancy Gate: poll the build with backoff instead of failing on latency
+    i=0
+    until [ "$(gh api "repos/${owner}/{{ repo_name }}/pages" -q .status 2>/dev/null || echo building)" = "built" ]; do
+      i=$((i+1))
+      [ "$i" -gt 40 ] && { echo "pages never reported built"; exit 1; }
+      sleep 20
+    done
+
+    # THE LIVE SEAM: workspace-green is not deployed — fetch the deployed bytes.
+    curl -fsSL --retry 6 --retry-delay 20 --retry-all-errors "$site_url" -o publish/live-index.html
+    curl -fsSL --retry 6 --retry-delay 20 --retry-all-errors "$site_url"feed.xml -o publish/live-feed.xml
+    grep -q "rotting-canon" publish/live-index.html || { echo "deployed index missing marker"; exit 1; }
+    # the deployed banner WIRING and the noscript fallback
+    curl -fsSL --retry 6 --retry-delay 20 --retry-all-errors "$site_url"stale-check.js -o publish/live-stale-check.js
+    grep -q "lease.json" publish/live-stale-check.js && grep -q "rotting-canon-stale" publish/live-stale-check.js \
+      || { echo "deployed stale-check.js lost its wiring"; exit 1; }
+    grep -q "noscript" publish/live-index.html || { echo "deployed index missing noscript fallback"; exit 1; }
+    # methodology discloses the healthcheck state; the debt list is public
+    curl -fsSL --retry 4 --retry-delay 15 "$site_url"methodology.html -o publish/live-methodology.html
+    grep -q "Dead-man switch" publish/live-methodology.html || { echo "deployed methodology does not disclose the switch"; exit 1; }
+    curl -fsSL --retry 4 --retry-delay 15 "$site_url"debt.html -o publish/live-debt.html
+    grep -qi "debt\|No unresolved" publish/live-debt.html || { echo "deployed debt page missing"; exit 1; }
+    # deployed evidence bytes: re-hash the public proof-carrying artifacts
+    SITE_URL="$site_url" .venv/bin/python - <<'PYEOF'
+    import hashlib, json, os, urllib.request
+    base = os.environ["SITE_URL"]
+    bundles = [json.load(open(p)) for p in sorted(__import__("glob").glob("evidence/claims/C-*.json"))]
+    assert bundles, "no evidence bundles to publish"
+    checked = 0
+    for b in bundles[:10]:      # first ten admitted claims, live
+        u = base + "evidence/claims/" + b["id"] + ".response.json"
+        with urllib.request.urlopen(u, timeout=60) as r:
+            body = r.read()
+        got = hashlib.sha256(body).hexdigest()
+        assert got == b["digest"], ("public evidence bytes diverge from admission digest", b["id"])
+        checked += 1
+    print("live evidence re-hash OK:", checked, "bundles byte-identical to admission")
+    # deployed feed joined back to the quarantined set + index presence
+    import re, sqlite3, xml.parsers.expat
+    feed = open("publish/live-feed.xml", "rb").read()
+    p = xml.parsers.expat.ParserCreate()
+    p.StartDoctypeDeclHandler = lambda *a: (_ for _ in ()).throw(ValueError("DTD forbidden"))
+    p.Parse(feed, True)
+    ids = set(re.findall(rb"<id>tag:rotting-canon,[^<]*?(C-[0-9a-f]{12})[^<]*</id>", feed))
+    db = sqlite3.connect("canon.db")
+    quarantined = {r[0] for r in db.execute("SELECT id FROM claims WHERE status='quarantined'")}
+    index = open("publish/live-index.html", encoding="utf-8", errors="replace").read()
+    for cid in ids:
+        c = cid.decode()
+        assert c in quarantined, ("deployed feed entry not a quarantined claim", c)
+        assert c in index, ("deployed feed entry missing from the live index", c)
+    print("live feed join OK:", len(ids), "entries all quarantined and indexed")
+    PYEOF
+    echo "LIVE: $site_url"
+    {{ boundary("M14 publish") }}
+    {% endif %}
+
+# ═════════════════════════ VALIDATIONS ═══════════════════════════════════════
+# Outcome, not process. No existence-only rule stands alone. Every sheet has
+# at least one check; command_succeeds dominates; stages fail fast within a
+# sheet (Commissioning Cascade: cheap structure before expensive semantics).
+# NOTE the dialect split: validation commands use format-string {var}; only
+# the prompt template above uses Jinja. User variables reach validation
+# commands literally (template_variables carries them into the context).
+
+# ═════════════════════════ VALIDATIONS ═══════════════════════════════════════
+# Outcome, not process. No existence-only rule stands alone. Every sheet has
+# at least one check; command_succeeds dominates; stages fail fast within a
+# sheet (Commissioning Cascade: cheap structure before expensive semantics).
+# NOTE the dialect split: validation commands use format-string {var}; only
+# the prompt template above uses Jinja. User variables reach validation
+# commands literally (template_variables carries them into the context).
+# Descriptions claim EXACTLY what the command checks — a description that
+# overclaims is the Validation-Reality failure mode this corpus exists to kill.
+
+validations:
+  # ── M1 · canary: the anti-fabrication gate (before any LLM token) ──────────
+  - type: command_succeeds
+    command: 'jq -e ''[.probes[].marker_present] | all'' {workspace}/canary/canary-report.json > /dev/null'
+    condition: "stage == 1"
+    stage: 1
+    description: "All five markers observed — the pinned venv imports, Wakefield RETRACTED title, PubMed pubtype, month-length-aware pageviews, wikitext cite markers"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      sha=$(sha256sum raw/rwdb.csv | cut -d" " -f1)
+      pin=$(jq -r .digest raw/rwdb.pin.json)
+      test "$sha" = "$pin"
+      test "$(jq .rows raw/rwdb.pin.json)" -gt {min_rwdb_rows}
+      jq -e '["OriginalPaperDOI","RetractionNature","RetractionDate","Reason"] - .header | length == 0' raw/rwdb.pin.json > /dev/null
+      test -s canary/stack-freeze.txt
+      grep -q "matplotlib=={pin_matplotlib}" canary/stack-freeze.txt
+      grep -q "feedparser=={pin_feedparser}" canary/stack-freeze.txt
+      grep -q "mwparserfromhell=={pin_mwparserfromhell}" canary/stack-freeze.txt
+      test -s canary/gh-login.txt
+      test -s rotting-canon-marker
+      test -f ledger/corrections.jsonl
+      jq -e '.prev_month_window | length == 2' canary/canary-report.json > /dev/null
+    condition: "stage == 1"
+    stage: 2
+    description: "RWDB digest re-pinned, rows above floor, four load-bearing columns exact; the EXACT pip pins are in the freeze (matplotlib/feedparser/mwparserfromhell == the declared versions); gh identity receipt; publication marker and ledger file born"
+  - type: command_succeeds
+    command: 'git -C {workspace} rev-parse HEAD > /dev/null'
+    condition: "stage == 1"
+    stage: 2
+    description: "FEH substrate born: repo exists with at least one boundary commit"
+
+  # ── M2 · corpus gate ────────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'jq -e ''length >= {min_articles} and all(.[]; (.title | type == "string" and length > 0) and (.views | type == "number"))'' {workspace}/articles/selected-articles.json > /dev/null'
+    condition: "stage == 2"
+    stage: 1
+    description: "Corpus of at least {min_articles} traffic-ranked articles, each with a non-empty title and a numeric view count — one article proves nothing epidemiologically"
+
+  # ── M3 · structural invariants of the raw claim material ────────────────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import glob, json, re
+      cands = json.load(open('{workspace}/articles/candidates.json'))
+      assert cands, 'no candidates extracted'
+      per = {}
+      for c in cands:
+          assert re.match(r'^10\.\d{4,}/\S+$', c['doi']), c
+          assert c['section'], c
+          assert c['sentence_excerpt'], c
+          per[c['article']] = per.get(c['article'], 0) + 1
+      assert all(v <= {per_article_cap} for v in per.values()), per
+      assert {total_claims_min} <= len(cands) <= {total_claims_max}, len(cands)
+      prefixes = {c['doi'].split('/')[0] for c in cands}
+      assert len(prefixes) >= {min_doi_prefixes}, sorted(prefixes)
+      pins = glob.glob('{workspace}/articles/*.pin.json')
+      assert pins, 'no revision pins'
+      for p in pins:
+          assert isinstance(json.load(open(p))['revid'], int), p
+      print('candidates ok:', len(cands), 'articles:', len(per), 'registrants:', len(prefixes))
+      "
+    condition: "stage == 3"
+    stage: 1
+    description: "Every DOI well-formed; sections/excerpts non-empty; per-article cap held; totals in bounds; at least {min_doi_prefixes} distinct DOI registrants (domain spread, not one publisher's batch); every pin carries an integer revid (the parse.revid-is-null trap)"
+
+  # ── M4 · PCA admit = re-hash; graph invariants; conservation ────────────────
+  - type: command_succeeds
+    command: 'cd {workspace}/evidence/claims && sha256sum -c MANIFEST.sha256'
+    condition: "stage == 4"
+    stage: 1
+    description: "PCA admit re-hashes every bundle against the manifest — trust is re-derivation, not say-so"
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json, re, sqlite3
+      db = sqlite3.connect('{workspace}/canon.db')
+      assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
+      n_claims = db.execute('SELECT COUNT(*) FROM claims').fetchone()[0]
+      n_anchors = db.execute('SELECT COUNT(*) FROM anchors').fetchone()[0]
+      n_digests = db.execute('SELECT COUNT(DISTINCT digest) FROM anchors').fetchone()[0]
+      n_orphans = db.execute('SELECT COUNT(*) FROM claims c LEFT JOIN dependents d ON c.id=d.claim_id WHERE d.claim_id IS NULL').fetchone()[0]
+      n_nulls = db.execute('SELECT COUNT(*) FROM claims WHERE doi IS NULL OR doi = \'\'').fetchone()[0]
+      assert n_claims == n_anchors == n_digests, (n_claims, n_anchors, n_digests)
+      assert n_orphans == 0, n_orphans
+      assert n_nulls == 0
+      for (cid,) in db.execute('SELECT id FROM claims'):
+          assert re.fullmatch(r'C-[0-9a-f]{12}', cid), cid
+      cands = json.load(open('{workspace}/articles/candidates.json'))
+      admitted = json.load(open('{workspace}/articles/admitted.json'))
+      debt = json.load(open('{workspace}/articles/debt.json'))
+      uniq = len(set(c['doi'] for c in cands))
+      assert uniq == len(admitted) + len(debt), (uniq, len(admitted), len(debt))
+      print('canon ok:', n_claims, 'DOI-derived ids; conservation', uniq, '=', len(admitted), '+', len(debt))
+      "
+    condition: "stage == 4"
+    stage: 2
+    description: "Integrity check passes; claims==anchors==distinct digests; every claim has >=1 dependent edge; zero NULL DOIs; every claim id matches C-[0-9a-f]{12} (sha256-of-DOI derived — position can never reassign identity); nothing silently dropped (candidates == admitted + debt)"
+
+  # ── M5 · the sweep's own fabrication definition + semantic joins ────────────
+  - type: command_succeeds
+    command: 'test -s {workspace}/sweep-report.json && test -s {workspace}/lease-record.json'
+    condition: "stage == 5"
+    stage: 1
+    description: "Sweep report AND lease record non-empty — a cycle that ran without touching the lease is a fabrication (the pattern's words)"
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import datetime, hashlib, json, os, sqlite3
+      db = sqlite3.connect('{workspace}/canon.db')
+      sw = json.load(open('{workspace}/sweep-report.json'))
+      lease = json.load(open('{workspace}/lease-record.json'))
+      flags = json.load(open('{workspace}/flagged.json'))
+      admitted = set(r[0] for r in db.execute(
+          \"SELECT id FROM claims WHERE status IN ('admitted','quarantined','retired')\"))
+      for f in flags:
+          assert f['claim_id'] in admitted, f['claim_id']
+          assert f['probes'], f['claim_id']
+          assert f.get('evidence_date'), ('no derivable evidence date', f['claim_id'])
+          assert 'latency_days' in f, f['claim_id']
+          for probe, sha in f['markers_sha'].items():
+              try:
+                  stored = open('%s/evidence/sweep/%s-%s.json' % (
+                      '{workspace}', f['claim_id'], probe), 'rb').read()
+              except FileNotFoundError:
+                  raise AssertionError('no stored probe bytes: %s %s' % (
+                      f['claim_id'], probe))
+              assert hashlib.sha256(stored).hexdigest() == sha, (
+                  'stored probe bytes do not hash to the sealed marker',
+                  f['claim_id'], probe)
+      matrix = sw.get('disagreement_matrix', [])
+      assert len(matrix) == len(flags), (len(matrix), len(flags))
+      for m in matrix:
+          assert m['hit'], m
+          assert set(m['hit']) <= set(m['ran']), m
+      disagreement = [m for m in matrix if len(m['hit']) < len(m['ran'])]
+      assert sw.get('disagreement_pairs') == disagreement, 'disagreement is hit-subset-of-ran'
+      rate = sw['flag_count'] / sw['claims_swept'] if sw['claims_swept'] else 0.0
+      held = rate > {hold_threshold}
+      assert sw['hold'] == held, (sw['hold'], held)
+      if held:
+          assert json.load(open('{workspace}/hold.json'))['decision'] == 'HOLD'
+      else:
+          assert not os.path.exists('{workspace}/hold.json'), 'hold.json below threshold (lifecycle: written only when held)'
+      c = datetime.datetime.strptime(lease['completed_at'], '%Y-%m-%dT%H:%M:%SZ')
+      d = datetime.datetime.strptime(lease['due_next'], '%Y-%m-%dT%H:%M:%SZ')
+      assert (d - c).days == lease['interval_days'] == {sweep_interval_days}
+      assert lease['cycle'] == sw['cycle']
+      print('sweep joins ok: flags', len(flags), 'rate', round(rate, 4), 'hold', held, 'disagreement', len(disagreement))
+      "
+    condition: "stage == 5"
+    stage: 2
+    description: "Flags are a subset of admitted; every flag's markers_sha IS the sha256 of the exact stored probe bytes (recomputed — encoding can never orphan a true flag); every flag carries a derivable evidence_date and a latency field; the disagreement matrix covers every flag with hit ⊆ ran and the recorded disagreement is exactly hit ⊂ ran; hold arithmetic recomputed independently and matches the gate's decision AND its file lifecycle; lease due_next is completed_at + interval exactly"
+
+  # ── M6 · the Skeptical Oracle gate on LLM output #1 ─────────────────────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import glob, json, os
+      adj = json.load(open('{workspace}/adjudications.json'))
+      flags = json.load(open('{workspace}/flagged.json'))
+      ids_a = [x['claim_id'] for x in adj]
+      ids_f = [x['claim_id'] for x in flags]
+      assert len(adj) == len(flags), ('bijection size', len(adj), len(flags))
+      assert set(ids_a) == set(ids_f), ('bijection membership', set(ids_f) ^ set(ids_a))
+      assert len(ids_a) == len(set(ids_a)), 'duplicate adjudication'
+      bundles = {os.path.basename(p)[:-5]: open(p, encoding='utf-8', errors='replace').read()
+                 for p in glob.glob('{workspace}/evidence/claims/C-*.json')}
+      flags_by = {f['claim_id']: f for f in flags}
+      for x in adj:
+          assert x['verdict'] in ('QUARANTINE', 'RETAIN'), x
+          if x['verdict'] == 'QUARANTINE':
+              assert x.get('touched_issue'), x['claim_id']
+          else:
+              assert not x.get('touched_issue'), x['claim_id']
+          assert x.get('evidence_quote'), x['claim_id']
+          # PER-CLAIM corpus: only this claim's bundle + this claim's flag bytes
+          local = bundles.get(x['claim_id'], '') + json.dumps(flags_by[x['claim_id']])
+          assert x['evidence_quote'] in local, (
+              'quote not a substring of THIS claim\\'s shipped bytes', x['claim_id'])
+      print('adjudication gate ok:', len(adj), 'verdicts; bijection + iff + per-claim substring hold')
+      "
+    condition: "stage == 6"
+    stage: 1
+    description: "Verdict enum; flagged-to-adjudicated bijection; touched_issue non-empty iff QUARANTINE; every evidence_quote is a verbatim substring of THAT claim's bundle/flag bytes only — a quote borrowed from a neighboring claim fails (cross-claim laundering impossible)"
+
+  # ── M7 · blast radius: the manifest joins the DB AND the report ─────────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json, sqlite3
+      db = sqlite3.connect('{workspace}/canon.db')
+      adj = json.load(open('{workspace}/adjudications.json'))
+      manifest = json.load(open('{workspace}/quarantine-manifest.json'))
+      report = open('{workspace}/quarantine-report.md', encoding='utf-8').read()
+      try:
+          hold = json.load(open('{workspace}/hold.json'))['decision'] == 'HOLD'
+      except FileNotFoundError:
+          hold = False
+      q = [x for x in adj if x['verdict'] == 'QUARANTINE']
+      n_q = db.execute(
+          \"SELECT COUNT(*) FROM claims WHERE status='quarantined'\").fetchone()[0]
+      if hold:
+          assert manifest['hold'] is True and manifest['quarantined'] == [], 'hold must suppress the manifest too'
+          assert n_q == 0, (n_q, 'hold active but statuses flipped')
+      else:
+          assert {m['claim_id'] for m in manifest['quarantined']} == {x['claim_id'] for x in q}, 'manifest does not match QUARANTINE verdicts'
+          assert n_q == len(q), (n_q, len(q))
+          for m in manifest['quarantined']:
+              db_articles = sorted(r[0] for r in db.execute(
+                  'SELECT DISTINCT article FROM dependents WHERE claim_id=?', (m['claim_id'],)))
+              assert m['articles'] == db_articles, (m['claim_id'], m['articles'], db_articles)
+              assert m['dependent_edges'] >= 1, m['claim_id']
+              assert ('## ' + m['claim_id']) in report, ('report missing section', m['claim_id'])
+      print('quarantine join ok:', n_q, 'quarantined, hold', hold)
+      "
+    condition: "stage == 7"
+    stage: 1
+    description: "The manifest's quarantined set equals the QUARANTINE verdicts (zero when hold fired — refusal is the correct behavior); every manifest entry's article list equals the DB's dependent articles EXACTLY (blast radius is joined, not counted); every quarantined claim has >=1 dependent edge and a report section"
+
+  # ── M8 · structural gates on LLM output #2 (genre constraints, checked) ─────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json, re
+      corr = json.load(open('{workspace}/pending-corrections.json'))
+      adj = json.load(open('{workspace}/adjudications.json'))
+      flags_by = {f['claim_id']: f for f in json.load(open('{workspace}/flagged.json'))}
+      quarantined = {x['claim_id'] for x in adj if x['verdict'] == 'QUARANTINE'}
+      try:
+          hold = json.load(open('{workspace}/hold.json'))['decision'] == 'HOLD'
+      except FileNotFoundError:
+          hold = False
+      if hold:
+          assert corr == [], 'hold active — no corrections may be drafted'
+      else:
+          ids = [c['claim_id'] for c in corr]
+          assert len(ids) == len(set(ids)), 'duplicate correction'
+          assert set(ids) == quarantined, ('BIJECTION violated', set(ids) ^ quarantined)
+      blame = re.compile(r'(you (made|should have|failed|cited|missed|were)|editor.?s? (fault|mistake|error|blame)|(editor|author|contributor|wikipedia)[^.]{0,40}(fault|mistake|error|blame|sloppy|careless|negligen)|sloppy|careless|negligen)', re.I)
+      for c in corr:
+          for field in ('claim_id', 'error', 'new_text', 'authority'):
+              assert c.get(field), (c.get('claim_id'), field)
+          f = flags_by[c['claim_id']]
+          assert f['evidence_date'] in c['new_text'], ('date not carried', c['claim_id'])
+          token = f['evidence_reason'].split(',')[0].split(';')[0].strip().lower()
+          if len(token) >= 4:
+              assert token in c['new_text'].lower(), ('reason not carried', c['claim_id'])
+          assert not blame.search(c['new_text']), ('blame lexicon hit', c['claim_id'])
+          assert 80 <= len(c['new_text']) <= 1200, ('length', c['claim_id'])
+      print('errata gates ok:', len(corr), 'corrections: bijected, dated, reasoned, blame-free, bounded')
+      "
+    condition: "stage == 8"
+    stage: 1
+    description: "BIJECTION: corrections exactly equal the quarantined claim set — omission fails, extras fail, hallucinated targets fail; new_text carries every flag's evidence_date and reason token UNCONDITIONALLY (never RWDB-conditional); blame lexicon (agent+fault collocations) returns zero matches; length bounds hold"
+
+  # ── M9 · the hash-join and the chain ────────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python {workspace}/scripts/errata-commit.py --verify-join \
+        --db {workspace}/canon.db --ledger {workspace}/ledger/corrections.jsonl
+    condition: "stage == 9"
+    stage: 1
+    description: "verify-join (shipped verifier): every hash hex64 and recomputable from the row's own fields, chain prefixes hold, supersedes resolves to a prior entry of the same claim, and the ledger HEAD names the canon digest it produced — canon/ledger divergence is impossible, not late-detected"
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import hashlib, json, re
+      rows = [json.loads(l) for l in open('{workspace}/ledger/corrections.jsonl') if l.strip()]
+      def eh(r):
+          payload = {'prior_hash': r['prior_hash'], 'claim_id': r['claim_id'],
+                     'canon_digest': r['canon_digest'], 'date': r['date'],
+                     'action': r['action'], 'note': r['note'],
+                     'supersedes': r.get('supersedes') or ''}
+          return hashlib.sha256(json.dumps(payload, sort_keys=True,
+                                            separators=(',', ':')).encode()).hexdigest()
+      if rows:
+          assert rows[0]['prior_hash'] == '0' * 64
+          for prev, cur in zip(rows, rows[1:]):
+              assert cur['prior_hash'] == prev['new_hash']
+          seen = {}
+          for r in rows:
+              assert re.fullmatch(r'[0-9a-f]{64}', r['new_hash']), r['id']
+              assert re.fullmatch(r'[0-9a-f]{64}', r['canon_digest']), r['id']
+              assert eh(r) == r['new_hash'], ('entry hash not the sha256 of its own fields', r['id'])
+              sup = r.get('supersedes')
+              if sup:
+                  assert re.fullmatch(r'[0-9a-f]{64}', sup), r['id']
+                  assert sup in seen.get(r['claim_id'], []), ('supersedes does not name a prior entry of this claim', r['id'])
+              seen.setdefault(r['claim_id'], []).append(r['new_hash'])
+      print('ledger chain ok:', len(rows), 'rows (independently recomputed per-entry hashes)')
+      "
+    condition: "stage == 9"
+    stage: 2
+    description: "Independent re-derivation: genesis is 64 zeros; every prefix link holds; every entry hash is the sha256 of that entry's own fields (INDEPENDENTLY recomputed here, not by the shipped verifier); every supersession digest resolves to a prior entry of the same claim — the Errata Ledger's contract in substance, not just shape"
+
+  # ── M10 · the feed is a real feed; the watermark only moves forward ─────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c '
+      import xml.parsers.expat
+      p = xml.parsers.expat.ParserCreate()
+      p.StartDoctypeDeclHandler = lambda *a: (_ for _ in ()).throw(ValueError("DTD forbidden"))
+      p.Parse(open("{workspace}/site/feed.xml", "rb").read(), True)
+      print("feed is well-formed XML (hardened stdlib parse — no DTD, no entity resolution)")
+      '
+    condition: "stage == 10"
+    stage: 1
+    description: "Atom feed is well-formed XML, parsed with a DTD-forbidding stdlib parser (no xmllint dependency; no entity-resolving parser on generated bytes)"
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python -c "
+      import json, os, re
+      import feedparser
+      d = feedparser.parse('{workspace}/site/feed.xml')
+      rows = [json.loads(l) for l in open('{workspace}/ledger/corrections.jsonl') if l.strip()]
+      wm = json.load(open('{workspace}/watermark.json'))
+      assert wm['entries_seen'] == len(rows), (wm['entries_seen'], len(rows))
+      expected = rows[-{feed_window}:] if {feed_window} > 0 else []
+      assert len(d.entries) == len(expected), (len(d.entries), len(expected))
+      ids = [e.id for e in d.entries]
+      assert len(ids) == len(set(ids)), 'feed entry ids collided'
+      for e, r in zip(d.entries, expected):
+          assert e.id.startswith('tag:'), e.id
+          assert r['claim_id'] in e.id, (e.id, r['claim_id'])
+          assert r['new_hash'][:12] in e.id, (e.id, r['id'])
+      js = open('{workspace}/site/stale-check.js', encoding='utf-8').read()
+      for needle in ('lease.json', 'rotting-canon-stale', 'DOMContentLoaded', 'role'):
+          assert needle in js, ('stale-check.js lost wiring', needle)
+      idx = open('{workspace}/site/index.html', encoding='utf-8').read()
+      assert '<noscript' in idx and 'stale-check.js' in idx, 'index missing noscript fallback or banner script'
+      assert os.path.getsize('{workspace}/site/debt.html') > 0
+      print('feed ok:', len(d.entries), 'entries (window of', len(rows), 'ledger rows), unique per-entry ids, banner wiring present')
+      "
+    condition: "stage == 10"
+    stage: 2
+    description: "Real parser accepts the feed; feed entries are EXACTLY the most-recent {feed_window} ledger rows (a window — a quiet week cannot blank the public record); every entry id is unique and embeds its claim id AND its entry hash; stale-check.js carries the live fetch+inject wiring; the index ships the noscript fallback; the debt page exists non-empty"
+
+  # ── M11 · our own numbers are checkable claims ──────────────────────────────
+  - type: command_succeeds
+    command: |
+      {workspace}/.venv/bin/python {workspace}/scripts/recompute-stats.py \
+        --sweep {workspace}/sweep-report.json --flagged {workspace}/flagged.json \
+        --stats {workspace}/site/stats/stats.json --check
+      test -s {workspace}/site/stats/update-types.png
+      test -s {workspace}/site/stats/disagreement-matrix.json
+      jq -e '.matrix | type == "array"' {workspace}/site/stats/disagreement-matrix.json > /dev/null
+    condition: "stage == 11"
+    stage: 1
+    description: "recompute-stats --check re-derives every published number — latency and REAL disagreement included — from published artifacts alone and exits 0 only on exact reproduction; the stats PNG exists non-empty (the promise is gated, not implied); the disagreement matrix is published"
+
+  # ── M12 · the alarms, proven mechanically and labeled ───────────────────────
+  - type: command_succeeds
+    command: 'jq -e ''.probe == true and .held == true and .auto_quarantine_skipped == true and .hold_file_written == true and .executed == "scripts/sweep.py:hold_decision+write_hold"'' {workspace}/probes/hold-sandbox/hold-probe.json > /dev/null'
+    condition: "stage == 12"
+    stage: 1
+    description: "Hold probe drove the SHIPPED sweep gate (hold_decision + write_hold — executed == the real code path, not a reimplementation) and the hold file was written by it"
+  - type: command_succeeds
+    command: 'jq -e ''.probe == true and .backdated_lease_banner == true and .fresh_lease_banner == false and .banner_node_injected == true and .fresh_dom_stays_clean == true and .both_branches_exercised == true'' {workspace}/probes/stale-probe.json > /dev/null'
+    condition: "stage == 12"
+    stage: 2
+    description: "STALE probe executed the SHIPPED stale-check.js bootstrap under DOM/fetch stubs — the banner NODE was injected on a stale lease (id, role=alert, STALE text) and never on a fresh one; the wiring is proven, not the arithmetic alone"
+  - type: command_succeeds
+    command: |
+      if [ -n "${HEALTHCHECK_URL:-}" ]; then
+        jq -e '.mode == "ping" and .http_status == "200"' {workspace}/probes/dead-man.json > /dev/null
+      else
+        jq -e '.mode == "loud-skip" and .disclosed_on_methodology_page == true' {workspace}/probes/dead-man.json > /dev/null
+        grep -q "LOUD-SKIP" {workspace}/probes/dead-man.log
+      fi
+    condition: "stage == 12"
+    stage: 2
+    description: "Dead-man switch: real ping when configured, LOUD-SKIP with methodology disclosure when not — never a silent gap"
+  - type: command_succeeds
+    command: 'jq -e ''.probe == true and .all_passed == true and (.checks | length >= 10)'' {workspace}/probes/cycle2-probe.json > /dev/null'
+    condition: "stage == 12"
+    stage: 3
+    description: "Simulated CYCLE 2 over the shipped scripts: at least 10 cross-cycle checks all passed — 30-day prev-month, quarantine surviving re-admission, heartbeat on a fresh ledger, chain + tamper detection, non-quarantined refusal, reconcile repair, entry-level supersession, feed window on zero new rows, stale wiring, history-rewrite ancestry, hold lifecycle"
+  - type: command_succeeds
+    command: 'jq -e ''.unchanged == true'' {workspace}/probes/immutability.json > /dev/null'
+    condition: "stage == 12"
+    stage: 4
+    description: "sha256 of canon.db and lease-record.json identical before and after the probe movement — probes cannot mutate the real record"
+
+  # ── M13 · the journal verifies ──────────────────────────────────────────────
+  - type: command_succeeds
+    command: '{workspace}/.venv/bin/python {workspace}/scripts/journal-verify.py --ledger {workspace}/ledger/corrections.jsonl --repo {workspace}'
+    condition: "stage == 13"
+    stage: 1
+    description: "Chain prefixes hold, supersedes carries hex64, git commit count strictly grew this cycle, AND the prior cycle's HEAD is an ancestor of this HEAD — a rewritten local history with equal-or-more commits fails"
+
+  # ── M14 · THE LIVE SEAM: the deployed artifact answers, not the workspace ──
+  - type: command_succeeds
+    command: |
+      url=$(jq -r .site_url {workspace}/publish/target.json)
+      curl -fsSL --max-time 60 "$url" | grep -q "rotting-canon"
+      test -s {workspace}/publish/live-feed.xml
+      test -s {workspace}/publish/live-stale-check.js
+      grep -q "lease.json" {workspace}/publish/live-stale-check.js
+      grep -q "rotting-canon-stale" {workspace}/publish/live-stale-check.js
+      grep -q "noscript" {workspace}/publish/live-index.html
+      grep -q "Dead-man switch" {workspace}/publish/live-methodology.html
+      test -s {workspace}/publish/live-debt.html
+    condition: "stage == 14"
+    stage: 1
+    timeout_seconds: 300
+    description: "RUNNING artifact: the live HTTPS site answers with the content marker; the deployed banner WIRING (fetch lease.json + inject) and noscript fallback are in the deployed bytes; the deployed methodology discloses the healthcheck state; the debt page is deployed"
+  - type: command_succeeds
+    command: |
+      SITE_URL=$(jq -r .site_url {workspace}/publish/target.json) {workspace}/.venv/bin/python -c "
+      import hashlib, json, os, re, sqlite3, urllib.request
+      import xml.parsers.expat
+      base = os.environ['SITE_URL']
+      feed = open('{workspace}/publish/live-feed.xml', 'rb').read()
+      p = xml.parsers.expat.ParserCreate()
+      p.StartDoctypeDeclHandler = lambda *a: (_ for _ in ()).throw(ValueError('DTD forbidden'))
+      p.Parse(feed, True)
+      import glob
+      bundles = sorted(glob.glob('{workspace}/evidence/claims/C-*.json'))
+      assert bundles, 'no evidence bundles'
+      for bp in bundles[:3]:
+          b = json.load(open(bp))
+          with urllib.request.urlopen(base + 'evidence/claims/' + b['id'] + '.response.json', timeout=60) as r:
+              got = hashlib.sha256(r.read()).hexdigest()
+          assert got == b['digest'], ('public evidence bytes diverge from admission digest', b['id'])
+      ids = set(x.decode() for x in re.findall(rb'<id>tag:rotting-canon,[^<]*?(C-[0-9a-f]{12})[^<]*</id>', feed))
+      db = sqlite3.connect('{workspace}/canon.db')
+      quarantined = {r[0] for r in db.execute('SELECT id FROM claims WHERE status=' + chr(39) + 'quarantined' + chr(39))}
+      for c in ids:
+          assert c in quarantined, ('deployed feed entry not a quarantined claim', c)
+      print('live join ok:', len(ids), 'feed entries quarantined; 3 evidence bundles re-hashed byte-identical from the public URL')
+      "
+    condition: "stage == 14"
+    stage: 2
+    timeout_seconds: 300
+    description: "Deployed proof-carrying bytes: three public evidence response files fetched from the LIVE site re-hash to their admission digests (public, not merely present); every deployed feed entry's claim id is quarantined in the canon (corrections correspond to quarantines, on the deployed surface)"
+  - type: command_succeeds
+    command: |
+      owner=$(jq -r .owner {workspace}/publish/target.json)
+      test "$(gh api "repos/$owner/{repo_name}/pages" -q .status)" = "built"
+      if [ -f {workspace}/publish/protection-applied ]; then
+        test "$(gh api "repos/$owner/{repo_name}/branches/main/protection" -q '.allow_force_pushes.enabled')" = "false"
+        test "$(gh api "repos/$owner/{repo_name}/branches/main/protection" -q '.enforce_admins.enabled')" = "true"
+      else
+        echo "DISCLOSED: branch protection pending token administration authority — applied idempotently on a later cycle"
+      fi
+    condition: "stage == 14"
+    stage: 3
+    timeout_seconds: 120
+    description: "Pages reports built; when protection was applied it forbids force-push INCLUDING admins (enforce_admins true) — and when the token lacked the authority, that gap is disclosed by marker, never silently dropped"

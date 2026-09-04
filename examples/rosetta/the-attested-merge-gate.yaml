@@ -1,0 +1,3116 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║      THE BABEL RELEASE — The Attested Merge Gate proof score (rev 2)         ║
+# ║     revised against 05-review-1 (Practitioner), 05-review-2 (Skeptic),      ║
+# ║                       05-review-3 (Newcomer) — all "needs revision"         ║
+# ║                                                                              ║
+# ║  PRIMARY PATTERN : The Attested Merge Gate — a frozen interface writable     ║
+# ║                    before the work starts, N writers attesting              ║
+# ║                    consumed/produced hashes, a deterministic sweep          ║
+# ║                    (CLI, empty fallback) whose REPORT-COMPLETENESS is       ║
+# ║                    itself gated, one serial authority that GRANTS the       ║
+# ║                    merge only to attestation-AND-sweep passers, and         ║
+# ║                    post-merge verification bound to the served bytes.       ║
+# ║                    Babel done right: the tower ships.                       ║
+# ║                                                                              ║
+# ║  COMPOSING       : First Article Characterization (es is produced, then      ║
+# ║                    measured by a DIFFERENT vendor family into a keyed        ║
+# ║                    reference manifest whose thresholds were pre-registered   ║
+# ║                    BEFORE volume — an instrument calibrating itself is not   ║
+# ║                    calibration), Join-Semilattice Merge (the catalog layer   ║
+# ║                    joins algebraically — union by msgid, dedupe by digest,   ║
+# ║                    NO LLM — while the gate governs the composite layer       ║
+# ║                    algebra cannot), Standby–GO (buffer A — the live          ║
+# ║                    English site — keeps serving while buffer B builds; arm   ║
+# ║                    verifies the complete ack set + every B-artifact passing  ║
+# ║                    sweep + buffer A unchanged; GO is one non-force pointer   ║
+# ║                    flip, whole-or-old, never half-translated — TWO armed     ║
+# ║                    cues total, disclosed here and enforced by the same       ║
+# ║                    cue-log discipline: `babel-go-1` ships the editions,      ║
+# ║                    `babel-evidence-1` completes the evidence page AFTER      ║
+# ║                    the seal is computed, so no sealed surface is ever        ║
+# ║                    mutated after sealing), The Etiquette Law (every gate     ║
+# ║                    below is a command with an exit code and an empty         ║
+# ║                    fallback chain — the LLM never judges its own merge       ║
+# ║                    admission; a fallback for a clock is a second clock).     ║
+# ║                                                                              ║
+# ║  PROBLEM SOLVED  : The public Mzzkc/marianne-ai-compose docs ship in         ║
+# ║                    English only. Five writers on four instruments            ║
+# ║                    spanning three model families produce es/fr/de/pt-BR/ar  ║
+# ║                    editions against a frozen glossary + skeleton +           ║
+# ║                    register contract; none of the five is trusted; one      ║
+# ║                    admissible multilingual release emerges — live on         ║
+# ║                    GitHub Pages with hreflang + per-locale RSS + mirrored    ║
+# ║                    RTL Arabic, plus installable gettext catalogs as a        ║
+# ║                    GitHub release asset, plus an evidence page making        ║
+# ║                    every quality claim recomputable from the served bytes.   ║
+# ║                    Arabic is first-class: text direction, mirroring, and     ║
+# ║                    bidi balance are GATED properties.                        ║
+# ║                                                                              ║
+# ║  VENDOR TRUTH    : the calibration chain is THREE MODEL FAMILIES, probed     ║
+# ║                    from the live conductor config at movement 1 and         ║
+# ║                    recorded in pin/instrument-families.json (default        ║
+# ║                    models, derived family per instrument):                   ║
+# ║                      es writer     = claude-code      → GLM (Z.AI)  [A]     ║
+# ║                      characterizer = codex-cli        → GPT (OpenAI)[B]     ║
+# ║                      oracle        = opencode-gemma   → Gemma (local)[C]    ║
+# ║                    A/B/C pairwise distinct; movement 1 REFUSES to start      ║
+# ║                    if any two collapse to one family. Volume writers         ║
+# ║                    (fr=opencode/GLM, de=codex-cli/GPT, pt-BR=claude-         ║
+# ║                    code/GLM, ar=opencode/GLM) and the merge authority        ║
+# ║                    (claude-code) have NO calibration role and may fall      ║
+# ║                    back across vendors. Instrument-name inequality           ║
+# ║                    proves nothing on a host where two CLIs default to        ║
+# ║                    one family — so the family join is made from the         ║
+# ║                    config's own model strings, not from names.              ║
+# ║                                                                              ║
+# ║  PRODUCES        : <auto-workspace>/babel-release/ → repo/ (pinned clone) · ║
+# ║                    pin/ (buffer-A-fingerprint, host-inventory,              ║
+# ║                    instrument-families, license-clearance) · contract/       ║
+# ║                    (canonical-en.pot, glossary.json, register-*.md,          ║
+# ║                    rtl-spec.md, thresholds.json incl. per-locale length      ║
+# ║                    bounds, MANIFEST) · work/locale-*/ (writers' .po +        ║
+# ║                    attestations + acks) · reference/manifest.json ·          ║
+# ║                    fixtures/negative/ (TEN corrupted artifacts, each        ║
+# ║                    failing exactly its intended gate FOR THE RECORDED       ║
+# ║                    REASON) · .namespace-baseline (pre-volume fingerprint)   ║
+# ║                    · joined/ + join-conflicts.json · buffer-B/ (six          ║
+# ║                    editions, portal, evidence, RSS) · sweep-report.json ·    ║
+# ║                    release-manifest.json + dispositions/ · armed-*.json ·    ║
+# ║                    cue-log.jsonl · recompute-seal.json — and the LIVE        ║
+# ║                    multilingual site + release assets a human opens.         ║
+# ║                                                                              ║
+# ║  INSTRUMENTS     : AI (semantic transfer only — contract authoring, five     ║
+# ║                    translation writers, first-article characterization by    ║
+# ║                    family B, merge adjudication with jq-bounded admission,   ║
+# ║                    back-translation oracle by family C) · Localization       ║
+# ║                    (babel 2.18.0 plural rules, polib==1.2.0 via uv —         ║
+# ║                    msgfmt/hugo/linkchecker/xmllint probed and recorded,      ║
+# ║                    substitutions named) · Data (jq, python3 stdlib           ║
+# ║                    statistics) · Publishing (git, gh authenticated as        ║
+# ║                    the owner, GitHub Pages subpaths + Releases) ·            ║
+# ║                    Testing (the in-score gate-teeth movement + this          ║
+# ║                    file's validation battery). 9 of 18 movements are         ║
+# ║                    CLI with EMPTY fallback chains. The calibration          ║
+# ║                    chain (5, 6, 18) carries empty fallback chains — any      ║
+# ║                    silent family collapse voids the calibration claim,      ║
+# ║                    so those sheets fail loudly instead.                      ║
+# ║                                                                              ║
+# ║  PREREQUISITES   : (the price, stated before you pay it)                    ║
+# ║                    - three vendor CLIs on PATH with working auth:            ║
+# ║                      `claude` (GLM route), `codex` (GPT route), and         ║
+# ║                      opencode configured with a NON-GLM default model        ║
+# ║                      for the oracle profile (this host: opencode-gemma       ║
+# ║                      → ollama/gemma4:26b, local daemon must be up)           ║
+# ║                    - `gh` authenticated AS THE REPO OWNER (the score         ║
+# ║                      pushes gh-pages subpaths and attaches release           ║
+# ║                      assets; only the owner can run movements 15-17)        ║
+# ║                    - a gh-pages branch with GitHub Pages enabled            ║
+# ║                    - network for `uv` (polib==1.2.0 / babel==2.18.0 are     ║
+# ║                      not in system python)                                  ║
+# ║                    - rough cost: ~8 AI sheets on frontier/context models     ║
+# ║                      ≈ $10-25 depending on your subscriptions; the          ║
+# ║                      local-Gemma oracle is compute, not dollars             ║
+# ║                    - unattended risk: fail_fast:true + max_retries:1        ║
+# ║                      means one dead writer sheet ends the run with the       ║
+# ║                      composer as recovery path — deliberate: a partial      ║
+# ║                      Babel release must never half-serve                    ║
+# ║                                                                              ║
+# ║  EXECUTION MAP   : (18 movements → 20 expanded sheets; fan-out at 9)         ║
+# ║                                                                              ║
+# ║      1  Pin the World          clone@sha + license + A-print + [AI]          ║
+# ║         |                       self-canary (gh id, PROBED tool             ║
+# ║         |                       inventory, 3-family probe from live         ║
+# ║         |                       conductor config)                            ║
+# ║      2  Canonical Census       POT skeleton + segment-census    [AI]        ║
+# ║         |                      (msgid_sha per segment; validated            ║
+# ║         |                      for source coverage, not just bijection)     ║
+# ║      3  Contract Authoring     glossary + registers + RTL spec  [AI]        ║
+# ║         |                      + THRESHOLD PRE-REGISTRATION incl.           ║
+# ║         |                      per-locale length-ratio bounds               ║
+# ║      4  Pin + Ruler Factory    MANIFEST + config fingerprint    [CLI]       ║
+# ║         |                      + ruler + join + exp-gate + build            ║
+# ║         |                      + the oracle SAMPLE FRAME (authored          ║
+# ║         |                      HERE, deterministically — the judged         ║
+# ║         |                      party never authors its own denominator)     ║
+# ║      5  First Article (es)     writer family A, no reference    [AI-A]      ║
+# ║      6  Characterize (es)      family B ≠ A; keyed manifest +   [AI-B]      ║
+# ║         |                      first-article statistics + negative          ║
+# ║         |                      control + semantic spot-check; the           ║
+# ║         |                      validation RECOMPUTES the distribution       ║
+# ║         |                      from es.po bytes and RE-RUNS the             ║
+# ║         |                      negative control — self-report is not        ║
+# ║         |                      evidence here                                ║
+# ║      7  Reference Freeze       config-hash stamp; skip_when     [CLI]        ║
+# ║         |                      fingerprint probe (both ways)                ║
+# ║      8  Gate Teeth             TEN corrupted fixtures, each     [CLI]        ║
+# ║         |  (teeth before       failing EXACTLY its intended gate            ║
+# ║         |   ALL volume,        FOR THE RECORDED REASON (plural/            ║
+# ║         |   not just ar)       format/term/length/rtl/noclip/ack/           ║
+# ║         |                      cue/fingerprint/conflict) + the              ║
+# ║         |                      pre-volume namespace baseline                ║
+# ║      9  Volume Writers   ×3 ── fr / de / pt-BR fan-out ─────── [AI mix]     ║
+# ║         |   (dependency [8,7]: NO writer token is spent against            ║
+# ║         |    unproven teeth)                                                 ║
+# ║     10  Arabic Writer          same gate, plus RTL teeth        [AI]        ║
+# ║         |                                                                   ║
+# ║     11  Lattice Join           union by msgid, dedupe by      [CLI]         ║
+# ║         |                      digest, metadata (Plural-Forms)              ║
+# ║         |                      CARRIED, conflict DETECTED; probes:          ║
+# ║         |                      idempotence + commutativity                 ║
+# ║     12  Build Buffer B         six editions + hreflang + RSS   [CLI]        ║
+# ║         |                      + portal + evidence + dir=rtl; page          ║
+# ║         |                      filenames DERIVED from the census            ║
+# ║     13  EXP Battery + Sweep    pseudo-loc no-clip + plural +   [CLI]        ║
+# ║         |                      RTL DOM + the deterministic sweep            ║
+# ║         |                      (report-completeness gate feeding            ║
+# ║         |                      the authority — red rows ROUTE, they         ║
+# ║         |                      do not halt)                                 ║
+# ║     14  Merge Authority        THE GRANT: admit attestation-AND- [AI]      ║
+# ║         |                      sweep passers; adjudicate the planted        ║
+# ║         |                      conflict; dispositions, never silent         ║
+# ║         |                      overwrite; rogue ABSENCE proven at           ║
+# ║         |                      the byte level, not by digest-set            ║
+# ║         |                      intersection                                 ║
+# ║     15  Ack Set + Arm-Gate     complete acks + B-green +        [CLI]        ║
+# ║         |                      buffer-A re-fingerprint → armed              ║
+# ║     16  GO  (cue babel-go-1)   exactly-once cue; ONE non-force [CLI]        ║
+# ║         |                      gh-pages subpath push + release asset;       ║
+# ║         |                      buffer A root never touched                  ║
+# ║     17  Live Verify + Seal     re-run gates on SERVED bytes;   [CLI]        ║
+# ║         |                      seal covers CONTENT pages + catalogs         ║
+# ║         |                      (joined .po verified against the            ║
+# ║         |                      DOWNLOADED release asset); then cue          ║
+# ║         |                      babel-evidence-1 completes the               ║
+# ║         |                      evidence page — nothing sealed is            ║
+# ║         |                      mutated after sealing                        ║
+# ║     18  Back-Translation       family C oracle over the        [AI-C]       ║
+# ║                                movement-4 sample frame; recall              ║
+# ║                                measures ENGLISH-term recovery from           ║
+# ║                                ENGLISH back-translations, computed          ║
+# ║                                by script — only the number enters           ║
+# ║                                                                              ║
+# ║  ANTI-FRAUD SEAMS (all deterministic joins, never LLM judgment):            ║
+# ║    - characterization thresholds byte-equal the M3-era pre-registration      ║
+# ║      AND the first-article mean/sd/n RECOMPUTED from es.po bytes            ║
+# ║      by the validation (a generous sd cannot green-light volume)            ║
+# ║    - negative controls RE-EXECUTED by validations, never trusted            ║
+# ║      from JSON booleans                                                     ║
+# ║    - attestation hashes recomputed against actual bytes; the                ║
+# ║      pre-volume namespace baseline makes every writer's actual              ║
+# ║      filesystem delta visible — listed-path checks cannot hide              ║
+# ║      out-of-namespace writes                                                ║
+# ║    - sweep = every keyed check × every locale present in sweep-report.json  ║
+# ║      (cross-join — a missing cell fails); a degraded fixture lands          ║
+# ║      outside its band (the distribution discriminates)                      ║
+# ║    - join probes: idempotence + commutativity + per-locale msgid            ║
+# ║      coverage == skeleton + metadata carriage                               ║
+# ║    - admitted == both-green set exactly; every non-admitted item            ║
+# ║      carries a disposition; the PLANTED rogue is detected by the join,       ║
+# ║      dispositioned by the authority, and proven absent BYTES-WISE           ║
+# ║      (its marker string greps empty across joined/ and buffer-B/)           ║
+# ║    - arm refuses on ANY missing ack, any non-green B-artifact, or           ║
+# ║      buffer-A drift (HOLD with A still serving — never fire); both          ║
+# ║      GOs refuse unless armed, append their cue exactly once, and            ║
+# ║      push non-force with a stale-clone refresh and an empty-commit          ║
+# ║      guard                                                                  ║
+# ║    - live seal: recomputed digests from served URLs equal the release       ║
+# ║      manifest — workspace-green is not deployed-green; release              ║
+# ║      assets are re-downloaded and hash-joined to the same manifest          ║
+# ║    - the oracle's sample frame is authored by movement 4's CLI,             ║
+# ║      not by the oracle; recall's denominator is guaranteed                  ║
+# ║      term-bearing by construction                                           ║
+# ║                                                                              ║
+# ║  GENERICITY     : no workspace: field (auto-managed, #58). Project-         ║
+# ║                    specific inputs are prompt.variables: github_owner /     ║
+# ║                    docs_repo / pinned_sha / pages_base / site_url /         ║
+# ║                    gh_pages_ref / docs_subset. Page filenames are NOT       ║
+# ║                    hardcoded downstream: movements 12/16/17 derive          ║
+# ║                    them from docs_subset (prompts) and from the             ║
+# ║                    census (validations), with a drift gate tying the        ║
+# ║                    two together. SCOPED, not generic, and said so:          ║
+# ║                    the license verdict vocabulary (AGPL dual-license        ║
+# ║                    reading) is shaped for THIS repo's LICENSE +             ║
+# ║                    LICENSE-AGPL pair; movements 15-17 require the           ║
+# ║                    repo owner's gh auth. The entire deterministic           ║
+# ║                    substrate is heredoc-authored inside CLI movements       ║
+# ║                    into the WORKSPACE at run time — this score is ONE       ║
+# ║                    self-contained file, so a dual install is a             ║
+# ║                    byte-compare of one file. DEPLOYMENT POSTURE (a          ║
+# ║                    named scope decision): additive locale subpaths on       ║
+# ║                    the EXISTING gh-pages branch; buffer A (root            ║
+# ║                    English) is never touched. The next upstream            ║
+# ║                    deploy MAY remove the subpaths; the durable             ║
+# ║                    artifacts are the release-asset catalogs, the           ║
+# ║                    build recipe, and the sealed digests — the              ║
+# ║                    evidence page discloses this in plain text.             ║
+# ║                                                                              ║
+# ║  KEYING NOTE    : this file mixes two keying regimes — do not edit          ║
+# ║                    blind. `stage == N` in the template and `condition:      ║
+# ║                    stage == N` are MOVEMENT numbers. But `cadenzas`,        ║
+# ║                    `per_sheet_instruments`, `descriptions`, and              ║
+# ║                    `per_sheet_fallbacks` are EXPANDED-SHEET numbers         ║
+# ║                    (sheets 9/10/11 = the fr/de/pt-BR instances of          ║
+# ║                    movement 9; sheet 12 = movement 10 (ar); sheet 13        ║
+# ║                    = movement 11 (join); ... sheet 20 = movement 18).       ║
+# ║                    "Sheet 10" and "stage 10" name different writers.        ║
+# ║                                                                              ║
+# ║  USAGE          : mzt run <this-file>.yaml                                  ║
+# ║                    mzt status babel-release                                 ║
+# ║                    open https://<pages_base>/<docs_repo>/portal/            ║
+# ║                                                                              ║
+# ║  Time: ~2-4 h wall (fan-out 3 concurrent)  |  Sheets: 20                    ║
+# ║  Budget: per-sheet ceilings sum to ~9.5 h AI + ~3 h CLI worst-case serial;  ║
+# ║  the DAG's concurrency spends ~2 writer walls of that. Separate deadlines   ║
+# ║  are separate authorities — every ceiling below is explicit.                ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: babel-release
+description: "The Attested Merge Gate proof — five vendor-diverse writers against a frozen localization contract, admitted by a deterministic sweep, merged by one serial authority, cut over atomically to live GitHub Pages subpaths with gettext catalogs as a release asset."
+
+# workspace: intentionally omitted — auto-managed at <workspace-root>/babel-release (#58).
+# The score never writes outside its workspace except the two HERALDED external
+# effects, both gated: the gh-pages subpath push + release asset at GO (armed
+# first), and the evidence-page seal push at movement 17.
+
+instrument: claude-code
+instrument_config:
+  timeout_seconds: 1800
+
+# Judgment movements WITHOUT a calibration role may fall back across vendors.
+# The calibration chain (5, 6, 9, 10, 18) overrides this with empty chains —
+# see per-movement instrument_fallbacks below.
+instrument_fallbacks: [codex-cli, opencode]
+
+movements:
+  # ── Phase 0-1 · Pin the world, then manufacture the interface ────────────────
+  1:
+    name: "Pin the World"
+    instrument: claude-code    # license clause-by-clause reading is genuine
+                               # legal-semantic judgment; every probe around it
+                               # is prescribed CLI the validation re-runs
+  2:
+    name: "Canonical Census"
+    instrument: claude-code    # extraction is tooling; segment-boundary curation
+                               # (what IS a translatable unit in prose) is where
+                               # quality lives — semantic
+  3:
+    name: "Contract Authoring"
+    instrument: claude-code
+    instrument_config:
+      timeout_seconds: 3600    # glossary × 6 locales + 5 registers + RTL spec
+                               # + threshold pre-registration, one sitting
+  # ── Phase 1-2 · The gate's frozen interface and its ruler ────────────────────
+  4:
+    name: "Pin + Ruler Factory"
+    instrument: cli            # Etiquette Law: hashing and ruler materialization
+    instrument_fallbacks: []   # are deterministic; an LLM touching the manifest
+                               # would violate the law at the boundary's root
+  # ── Phase 2 · First article, characterized by a different family ─────────────
+  5:
+    name: "First Article (es)"
+    instrument: claude-code    # family A — the article being characterized
+    instrument_fallbacks: []   # ANY fallback collapses the family separation
+    instrument_config:         # and voids the calibration claim: fail loudly
+      timeout_seconds: 3600
+  6:
+    name: "Characterize (es)"
+    instrument: codex-cli      # family B ≠ writer family — mandatory anti-fraud
+    instrument_fallbacks: []   # structure, not preference; empty by the same law
+    instrument_config:
+      timeout_seconds: 3600
+  7:
+    name: "Reference Freeze"
+    instrument: cli            # stamping a hash is a command
+    instrument_fallbacks: []
+  # ── Phase 2-3 · Teeth before volume ──────────────────────────────────────────
+  8:
+    name: "Gate Teeth"
+    instrument: cli            # fixtures must fail against commands, not opinions
+    instrument_fallbacks: []
+  # ── Phase 3 · Volume fan-out ─────────────────────────────────────────────────
+  9:
+    name: "Volume Writers"
+    instrument: opencode       # instance 1 (fr); instances 2/3 overridden below —
+    instrument_fallbacks: []   # pinned vendor spread (idiomatic range); the
+    instrument_config:         # sweep measures them, they never measure themselves
+      timeout_seconds: 3600
+  10:
+    name: "Arabic Writer"
+    instrument: opencode
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 3600
+  # ── Phase 4-5 · Algebra, then the composite the algebra cannot join ──────────
+  11:
+    name: "Lattice Join"
+    instrument: cli            # Join-Semilattice Merge: NO LLM participates in
+    instrument_fallbacks: []   # merging — this is the proof's Etiquette centerpiece
+  12:
+    name: "Build Buffer B"
+    instrument: cli            # a static build is a function of its inputs
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 1800    # six editions + RSS + hreflang matrix
+  13:
+    name: "EXP Battery + Sweep"
+    instrument: cli            # the sweep GRANTS the merge; empty fallback —
+    instrument_fallbacks: []   # a fallback for a clock is a second clock
+    instrument_config:
+      timeout_seconds: 1800    # pseudo-loc edition build + full sweep
+  # ── Phase 6-8 · Authority, cutover, live seam ────────────────────────────────
+  14:
+    name: "Merge Authority"
+    instrument: claude-code    # conflict adjudication + disposition prose are
+    instrument_config:         # judgment; admission power is mechanically bounded
+      timeout_seconds: 1800    # by jq-checkable preconditions — a full-CLI merge
+                               # would silently overwrite the dissent the corpus
+                               # says to preserve
+  15:
+    name: "Ack Set + Arm-Gate"
+    instrument: cli            # Standby-GO: ack arithmetic + fingerprint compare
+    instrument_fallbacks: []   # must be mechanical; hold-fail leaves A serving
+  16:
+    name: "GO"
+    instrument: cli            # pointer flip + release attach are API calls with
+    instrument_fallbacks: []   # exit codes; exactly-once by cue-log construction
+    instrument_config:
+      timeout_seconds: 2400    # includes the bounded Pages deploy poll
+  17:
+    name: "Live Verify + Seal"
+    instrument: cli            # curl the DEPLOYED artifact; recompute from the
+    instrument_fallbacks: []   # PUBLISHED bytes alone
+    instrument_config:
+      timeout_seconds: 1200
+  18:
+    name: "Back-Translation Oracle"
+    instrument: opencode-gemma # family C (Gemma, local) ≠ writer-of-record (GLM)
+    instrument_fallbacks: []   # and ≠ characterizer (GPT) — the third family;
+    instrument_config:         # empty chain so any collapse fails loudly. The
+      timeout_seconds: 2400    # family join is validated from pin/instrument-
+                               # families.json, not from instrument names.
+
+sheet:
+  size: 1
+  total_items: 18            # movements pre-expansion; engine expands to 20 sheets
+  fan_out:
+    9: 3                     # volume writers: fr / de / pt-BR (sheets 9-11)
+  dependencies:              # movement-keyed; engine expands to the sheet DAG
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+    7: [6]
+    8: [7]
+    9: [8, 7]                # teeth before ALL volume (rev 2: rev 1 gated only
+                             # ar behind movement 8 — the three LTR writers ran
+                             # parallel to the teeth, spending tokens against
+                             # gates that might be dead). Every writer now
+                             # depends on PROVEN teeth; movement-keyed
+                             # dependencies make pre-gate admission
+                             # structurally unrenderable, not merely discouraged
+    10: [8, 7]               # ar: same gate, plus the RTL tooth
+    11: [9, 10]              # join waits for ALL writers (fan-in)
+    12: [11]
+    13: [12]
+    14: [13]
+    15: [14]
+    16: [15]
+    17: [16]
+    18: [16]                 # oracle is post-GO by design: an LLM opinion must
+                             # never be a cutover condition; oracle failure
+                             # routes to the errata path, not a half-served state
+
+  # Vendor assignment table, pinned as score data (load-bearing — see header).
+  # Families (probed at movement 1 into pin/instrument-families.json):
+  #   es=claude-code(GLM)[A] · characterize=codex-cli(GPT)[B] · oracle=
+  #   opencode-gemma(Gemma)[C] — pairwise distinct. Volume spread: fr=opencode
+  #   (GLM) · de=codex-cli(GPT) · pt-BR=claude-code(GLM) · ar=opencode(GLM);
+  #   merge authority=claude-code (no calibration role, fallback allowed).
+  per_sheet_instruments:
+    9: opencode               # expanded sheet 9  = volume instance 1 (fr)
+    10: codex-cli             # expanded sheet 10 = volume instance 2 (de)
+    11: claude-code           # expanded sheet 11 = volume instance 3 (pt-BR)
+
+  skip_when:
+    7:                        # reference-freeze fingerprint probe, command-form:
+      command: '[ -f {workspace}/reference/manifest.json ] && jq -e --arg h "$(jq -r .config_fingerprint {workspace}/contract/MANIFEST.json 2>/dev/null)" ''.config_hash == $h'' {workspace}/reference/manifest.json >/dev/null 2>&1'
+      description: "Skip re-freeze when the reference already binds the CURRENT contract fingerprint"
+      timeout_seconds: 30
+
+  cadenzas:
+    # Contract slices — each writer receives ONLY its interface slice (skeleton
+    # + glossary + own register + reference thresholds), never another locale's
+    # work. Injected as skill: methodology BEFORE the body; required: a missing
+    # contract file fails the sheet before execution. NOTE: the architecture
+    # proposed spec_dir/spec_tags for this wiring, but the spec corpus loads at
+    # job REGISTRATION from the workspace — before movement 3 authors the
+    # contract — so the runtime-negotiated contract rides cadenzas, which are
+    # read at sheet-execution time. Intent preserved; mechanism corrected.
+    5:                        # es first article — NO reference exists yet
+      - file: "{{ workspace }}/contract/canonical-en.pot"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/contract/glossary.json"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/contract/register-es.md"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/contract/thresholds.json"
+        as: skill
+        required: true
+    9:                        # fr — volume writer, reference in hand
+      - file: "{{ workspace }}/contract/canonical-en.pot"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/contract/glossary.json"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/contract/register-fr.md"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/reference/manifest.json"
+        as: skill
+        required: true
+    10:                       # de
+      - file: "{{ workspace }}/contract/canonical-en.pot"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/contract/glossary.json"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/contract/register-de.md"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/reference/manifest.json"
+        as: skill
+        required: true
+    11:                       # pt-BR
+      - file: "{{ workspace }}/contract/canonical-en.pot"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/contract/glossary.json"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/contract/register-pt-BR.md"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/reference/manifest.json"
+        as: skill
+        required: true
+    12:                       # ar — plus the RTL specification
+      - file: "{{ workspace }}/contract/canonical-en.pot"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/contract/glossary.json"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/contract/register-ar.md"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/contract/rtl-spec.md"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/reference/manifest.json"
+        as: skill
+        required: true
+
+  descriptions:
+    1: "Pin the world — clone@sha, license verdict, buffer-A fingerprint, host inventory, three-family self-canary"
+    2: "Canonical census — POT skeleton + segment-census.json from the frozen docs subset"
+    3: "Contract authoring — glossary ×6 locales, registers, RTL spec, threshold PRE-registration"
+    4: "Pin the contract (MANIFEST + config fingerprint) + materialize the static measurement ruler"
+    5: "First article — es translation + attestation (family A, no reference yet)"
+    6: "Characterize es — keyed manifest + first-article statistics + negative control (family B)"
+    7: "Reference freeze — config-hash stamp; skips iff the fingerprint is unchanged"
+    8: "Gate teeth — nine corrupted fixtures, each failing exactly its intended gate"
+    9: "Volume writer — fr (opencode, instance-tagged namespace)"
+    10: "Volume writer — de (codex-cli, instance-tagged namespace)"
+    11: "Volume writer — pt-BR (claude-code, instance-tagged namespace)"
+    12: "Arabic writer — ar, gated behind proven RTL teeth (opencode)"
+    13: "Lattice join — union by msgid, conflict detection, idempotence + commutativity probes"
+    14: "Build buffer B — six editions, hreflang matrix, per-locale RSS, portal, evidence stub, dir=rtl"
+    15: "EXP battery + the deterministic sweep that grants the merge (pseudo-loc no-clip, plurals, RTL DOM)"
+    16: "Merge authority — admit attestation-AND-sweep passers; adjudicate the planted conflict; dispositions"
+    17: "Ack-set completion + arm-gate incl. buffer-A re-fingerprint (hold, never fire, on drift)"
+    18: "GO — exactly-once cue, one non-force subpath push, release asset, bounded deploy poll"
+    19: "Live verify + terminal recompute seal from served URLs; evidence page completed"
+    20: "Back-translation oracle — seeded stratified sample, scripted recall (family C)"
+
+parallel:
+  enabled: true
+  max_concurrent: 4          # the DAG's widest level is 4: gate teeth + the
+  fail_fast: true            # 3-way writer fan-out, all independent of each other
+
+# cross_sheet: deliberately ABSENT — the workspace IS the shared memory (the
+# contract, attestations, reports), and writers must not see each other's
+# stdout: independence is the mechanism, not a limitation.
+
+retry:
+  max_retries: 1             # GO is idempotent by cue-log construction (a retry
+  base_delay_seconds: 30     # of an already-fired GO re-verifies, never re-fires)
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800 # CLI movements run silent subprocess fans; the #1
+                             # cause of stuck verification stages is a tight idle
+
+prompt:
+  variables:
+    # ── The only project-specific inputs (GENERICITY) ─────────────────────────
+    github_owner: "Mzzkc"
+    docs_repo: "marianne-ai-compose"
+    pinned_sha: "802f9903f0068310d21124a97f9fea3b759a00ea"
+    pages_base: "mzzkc.github.io"
+    site_url: "https://mzzkc.github.io/marianne-ai-compose"
+    gh_pages_ref: "refs/heads/gh-pages"
+    # ── Corpus shape ───────────────────────────────────────────────────────────
+    docs_subset:
+      - "docs/getting-started.md"
+      - "docs/README.md"
+    locales: ["es", "fr", "de", "pt-BR", "ar"]
+    volume_locale_by_instance: {1: "fr", 2: "de", 3: "pt-BR"}
+    locale_direction: {es: "ltr", fr: "ltr", de: "ltr", "pt-BR": "ltr", ar: "rtl"}
+    # ── Tool pins (host facts re-probed by movement 1; msgfmt/hugo/linkchecker
+    #    are ABSENT — polib compiles .mo, the build is pure-Python, links are
+    #    checked by the shipped checker) ───────────────────────────────────────
+    polib_pin: "1.2.0"
+    babel_pin: "2.18.0"
+    ruler_py: "uv run --quiet --with polib==1.2.0 --with babel==2.18.0 python"
+    # ── Oracle sample frame (auditable denominator — scope decision 4) ─────────
+    oracle_seed: 42
+    oracle_sample_per_locale: 15
+    # ── Standby-GO cue identity (TWO armed cues, both disclosed in the header) ─
+    cue: "babel-go-1"
+    evidence_cue: "babel-evidence-1"
+
+  template: |
+    {# ══════════ Macros: the house style, defined once ══════════════════════ #}
+    {% macro strict() %}
+    set -euo pipefail
+    cd "{{ workspace }}"
+    {% endmacro %}
+
+    {% macro ruler(py = ruler_py) %}{{ py }}{% endmacro %}
+
+    {% macro ai_ground_rules() %}
+    ## Ground Rules (non-negotiable)
+    - Fabrication wears completion's clothes: never write a placeholder where a
+      real artifact is owed, and never claim a command ran without running it.
+    - Stamp every JSON artifact you author with `"instrument": "{{ instrument_name }}"`
+      — the evidence page renders the ACTUAL vendor table from these stamps.
+    - The deterministic gates are the coordination. If a gate fails against your
+      work, fix the work or route the disagreement to a disposition record —
+      never the gate.
+    {% endmacro %}
+
+    {% macro attestation_contract() %}
+    ## Attestation (write exactly this schema, real hashes — recomputed later)
+    `work/locale-{{ '*' }}/attestation.json` — replace {{ '*' }} with your locale:
+    ```json
+    {
+      "locale": "<your locale>",
+      "instrument": "{{ instrument_name }}",
+      "consumed_spec_hashes": {"<contract file>": "<sha256 of the file you READ>"},
+      "output_files": ["work/locale-<X>/<X>.po"],
+      "output_hashes": {"work/locale-<X>/<X>.po": "<sha256>"},
+      "conformance_claim": "one honest sentence: what you conformed to, and any dissent"
+    }
+    ```
+    Compute hashes with `sha256sum`. The validation recomputes every one.
+    {% endmacro %}
+
+    {% macro writer_mission(locale, has_reference, is_rtl) %}
+    # Translation Writer — locale `{{ locale }}`
+
+    Your cadenza (injected above) is your ENTIRE interface: the canonical
+    English skeleton, the negotiated bilingual glossary, your locale's style
+    register{% if is_rtl %}, and the Arabic RTL/bidi specification{% endif %}{% if has_reference %}, plus the frozen
+    reference manifest (keyed checks + first-article statistics + thresholds){% endif %}.
+    You receive no other locale's work. Nobody receives yours.
+
+    ## Task
+    Translate EVERY msgid in the skeleton into `{{ locale }}`, writing a valid
+    gettext catalog to `{{ workspace }}/work/locale-{{ locale }}/{{ locale }}.po`:
+    - metadata header with `Language: {{ locale }}` and a `Plural-Forms:` line
+      whose `nplurals` matches babel's rule for `{{ locale }}`
+      ({{ locale_direction[locale] }}{% if is_rtl %} — RTL: bidi, mirroring, and numeral rules are gated, see the spec{% endif %});
+    - one entry per skeleton msgid, `msgstr` carrying the translation;
+    - glossary decisions are CONTRACT: `keep` means the English term appears
+      verbatim; `translate`/`hybrid` means the glossary's term appears
+      (hybrid may gloss it on first use);
+    - format-string tokens (`%s`, `%(name)s`, `{name}`) pass through EXACTLY;
+    - register rules govern voice, address form, and idiom-vs-calque.
+    {% if has_reference %}
+    ## Self-measurement (the ruler is not your judge — the sweep is)
+    Run the ruler on your own output and iterate until it passes:
+    ```
+    cd {{ workspace }} && {{ ruler() }} scripts/catalog-validate.py \
+      --po work/locale-{{ locale }}/{{ locale }}.po \
+      --skeleton contract/canonical-en.pot --glossary contract/glossary.json \
+      --thresholds contract/thresholds.json --locale {{ locale }} \
+      --reference reference/manifest.json{% if is_rtl %} --rtl{% endif %} \
+      --report work/locale-{{ locale }}/self-check.json
+    ```
+    {% else %}
+    ## Self-measurement (no reference exists yet — you ARE the reference)
+    Run the ruler without `--reference` (the z-score check will be born from
+    your output; the band checks still apply):
+    ```
+    cd {{ workspace }} && {{ ruler() }} scripts/catalog-validate.py \
+      --po work/locale-{{ locale }}/{{ locale }}.po \
+      --skeleton contract/canonical-en.pot --glossary contract/glossary.json \
+      --thresholds contract/thresholds.json --locale {{ locale }} \
+      --report work/locale-{{ locale }}/self-check.json
+    ```
+    {% endif %}
+    ## Namespace discipline
+    Write ONLY inside `work/locale-{{ locale }}/`. Touching any other locale's
+    namespace (or the contract tree) is a boundary violation the attestation
+    cannot hide.
+
+    ## Ack
+    When your catalog passes the ruler, write `{{ workspace }}/ready-{{ locale }}.json`:
+    `{"locale": "{{ locale }}", "instrument": "{{ instrument_name }}", "po_sha256": "<hash>"}`.
+    If you cannot complete, write NOTHING — a missing ack holds the cue (the
+    arm-gate counts acks, it does not beg for them).
+
+    {{ attestation_contract() }}
+    {{ ai_ground_rules() }}
+    {% endmacro %}
+
+    {% if stage == 1 %}
+    # Movement 1 · Pin the World — nothing downstream may move until this lands
+
+    You hold FIVE probes and one judgment. Run the probes exactly as given
+    (their validations re-run them), then make the judgment.
+
+    ## 1. Clone + pin the source
+    ```bash
+    {{ strict() }}
+    mkdir -p pin
+    if [ ! -d repo/.git ]; then
+      git clone -q "https://github.com/{{ github_owner }}/{{ docs_repo }}.git" repo
+    fi
+    git -C repo checkout -q {{ pinned_sha }}
+    echo "$(git -C repo rev-parse HEAD)" > pin/clone-head.txt
+    ```
+    `pin/clone-head.txt` must equal `{{ pinned_sha }}`.
+
+    ## 2. Buffer-A fingerprint (the live English site we must never break)
+    ```bash
+    {{ strict() }}
+    curl -sfL "{{ site_url }}/" -o pin/buffer-A-index.html
+    idx="$(sha256sum pin/buffer-A-index.html | cut -d' ' -f1)"
+    head="$(git ls-remote "https://github.com/{{ github_owner }}/{{ docs_repo }}.git" {{ gh_pages_ref }} | cut -f1)"
+    jq -n --arg i "$idx" --arg h "$head" --arg u "{{ site_url }}/" \
+      '{served_index_sha256: $i, gh_pages_head: $h, url: $u,
+        probed_at: (now | todate)}' > pin/buffer-A-fingerprint.json
+    ```
+
+    ## 3. Host inventory (every tool any shipped script names — PROBED, absences
+    ##    included; a score whose identity is "probe, never assume" must not
+    ##    ship an inventory that asserts its absences instead of probing them)
+    ```bash
+    {{ strict() }}
+    present() { command -v "$1" >/dev/null 2>&1 && echo true || echo false; }
+    jq -n \
+      --argjson git "$(present git)" --argjson curl "$(present curl)" \
+      --argjson jq "$(present jq)" --argjson gh "$(present gh)" \
+      --argjson uv "$(present uv)" --argjson sha256sum "$(present sha256sum)" \
+      --argjson msgfmt "$(present msgfmt)" --argjson hugo "$(present hugo)" \
+      --argjson linkchecker "$(present linkchecker)" --argjson xmllint "$(present xmllint)" \
+      --arg babel "$({{ ruler() }} -c 'import babel; print(babel.__version__)' 2>/dev/null || echo absent)" \
+      --arg polib "$({{ ruler() }} -c 'import polib; print(polib.__version__)' 2>/dev/null || echo absent)" \
+      '{git: $git, curl: $curl, jq: $jq, gh: $gh, uv: $uv, sha256sum: $sha256sum,
+        msgfmt: $msgfmt, hugo: $hugo, linkchecker: $linkchecker, xmllint: $xmllint,
+        babel: $babel, polib: $polib}' > pin/host-inventory.json
+    ```
+    (On this host msgfmt/hugo/linkchecker/xmllint are expected ABSENT — the
+    substitutions are polib-compiled `.mo`, a pure-Python build, and the
+    shipped link checker. The inventory records what the PROBE says; if a
+    tool is present where a substitution assumed absence, the score still
+    uses its own substitution — but the record is true.)
+
+    ## 4. Vendor-family probe — instrument names prove nothing; model strings do
+    ```bash
+    {{ strict() }}
+    mzt instruments list --json > pin/instruments-raw.json
+    python3 - <<'PY'
+    import json, sys
+    raw = json.load(open("pin/instruments-raw.json"))
+    # Instruments without a pinned default model route by their own vendor
+    # construction (codex-cli is OpenAI's Codex CLI), so the brand is the
+    # family source of record for them; pinned models outrank brands. The
+    # family_source field keeps the provenance auditable either way.
+    BRAND = {"codex-cli": "GPT"}
+    def fam(model):
+        m = (model or "").lower()
+        if any(k in m for k in ("glm", "zai", "z.ai")): return "GLM"
+        if any(k in m for k in ("gpt", "openai", "o3", "o4", "codex")): return "GPT"
+        if any(k in m for k in ("gemma", "gemini", "google")): return "GEMMA"
+        if "claude" in m: return "ANTHROPIC"
+        return None
+    want = ["claude-code", "codex-cli", "opencode-gemma", "opencode"]
+    rows = {}
+    for r in raw:
+        if r.get("name") not in want:
+            continue
+        model = r.get("default_model")
+        by_model = fam(model)
+        by_brand = BRAND.get(r["name"])
+        rows[r["name"]] = {
+            "status": r.get("status"), "default_model": model,
+            "family": by_model or by_brand or "UNKNOWN",
+            "family_source": "model-pin" if by_model else
+                             ("instrument-brand" if by_brand else "none")}
+    missing = [n for n in want if n not in rows]
+    if missing:
+        sys.exit("FAIL: instruments not configured: %s" % missing)
+    chain = {"writer_es": "claude-code", "characterizer": "codex-cli",
+             "oracle": "opencode-gemma"}
+    fams = {role: rows[inst]["family"] for role, inst in chain.items()}
+    if len(set(fams.values())) != 3:
+        sys.exit("FAIL: calibration-family collapse: %s — instrument names are "
+                 "not vendor separation; fix the profiles' default models" % fams)
+    for role, inst in chain.items():
+        if rows[inst]["status"] != "ready":
+            sys.exit("FAIL: %s (%s) not ready" % (inst, role))
+    json.dump({"instruments": rows, "calibration_chain": chain,
+               "calibration_families": fams},
+              open("pin/instrument-families.json", "w"), indent=2, sort_keys=True)
+    print("families:", fams)
+    PY
+    ```
+
+    ## 5. Self-canary — the publish identity (re-run verbatim by the validation)
+    ```bash
+    {{ strict() }}
+    gh auth status >/dev/null 2>&1 || { echo "FAIL: gh not authenticated"; exit 1; }
+    [ "$(gh api user -q .login)" = "{{ github_owner }}" ] || { echo "FAIL: gh is $(gh api user -q .login), score publishes as {{ github_owner }}"; exit 1; }
+    for bin in claude codex opencode; do
+      command -v "$bin" >/dev/null 2>&1 || { echo "FAIL: $bin missing — its pinned sheet would die mid-run"; exit 1; }
+    done
+    echo "self-canary ok"
+    ```
+
+    ## 5. License clearance (the judgment)
+    Read `repo/LICENSE` and `repo/LICENSE-AGPL` clause by clause, for
+    derivative-translation rights and notice-carry-through obligations on the
+    `{{ docs_subset | join(", ") }}` subset. Write `{{ workspace }}/pin/license-clearance.md`
+    with: the exact clauses relied on, the notices the multilingual edition must
+    carry, and a final line, verbatim one of:
+    `VERDICT: AGPL-COMPLIANT-WITH-NOTICES`
+    `VERDICT: FALLBACK-TRIGGERED`
+    If (and only if) the verdict is FALLBACK-TRIGGERED: write the file first,
+    then exit NONZERO with a message naming the blocking clause — the run holds
+    loudly with buffer A still serving and no translation token spent; the
+    canonical-source fallback is a composer decision, not a sheet's.
+
+    {{ ai_ground_rules() }}
+
+    {% elif stage == 2 %}
+    # Movement 2 · Canonical Census — measure N, never assume it
+
+    The frozen docs subset is `{{ docs_subset | join(", ") }}` inside `{{ workspace }}/repo`
+    (already pinned to `{{ pinned_sha }}`). Produce the gettext skeleton the
+    five writers will translate against.
+
+    ## Task
+    1. Author `{{ workspace }}/scripts/segment-markdown.py`: split each document
+       into translatable units — headings, paragraphs, list items, table cells,
+       blockquote prose — leaving code fences, inline code, URLs, and YAML
+       front-matter verbatim. Record `{msgid, source_path, line, kind,
+       msgid_sha}` per segment, where `msgid_sha` is the first 16 hex chars of
+       `sha256(msgid)` — the RSS guids, the oracle sample frame, and the
+       characterization spot-checks all key on it, so it must be present and
+       exact. Curate the boundaries: a segment too long loses glossary
+       precision; too short loses register. You choose the grain; the census
+       records it.
+    2. Write the POT with polib (one POEntry per segment, empty msgstr,
+       occurrences `(source_path, line)`) to `{{ workspace }}/contract/canonical-en.pot`.
+    3. Write `{{ workspace }}/contract/segment-census.json`: the full segment
+       list. Then append to `{{ workspace }}/pin/pin-record.json`:
+       `{"canonical_pot_sha256": "<sha256>", "segment_count": <N>}`.
+    4. Print the census table (kind → count) to stdout.
+
+    COVERAGE IS THE OUTCOME: the census must carry every heading and ≥85% of
+    the prose words of each subset document (code fences excluded) — the
+    validation measures both against the pinned bytes, not against your own
+    output. A bijective POT/census pair that omits half a document is process
+    hygiene, not a census.
+
+    Every msgid must be traceable to a source path and line; the count in the
+    census must equal the POT's entry count exactly.
+
+    {{ ai_ground_rules() }}
+
+    {% elif stage == 3 %}
+    # Movement 3 · Contract Authoring — the interface, frozen BEFORE any writer
+
+    Everything you author here is pinned by hash in the next movement and
+    gated downstream. Nothing in this contract may reference any translation —
+    none exists. Thresholds are PRE-REGISTRATION: declare what good looks like
+    before the first article is measured, and know that moving one afterward is
+    detectable by construction (the contract is hash-pinned).
+
+    ## 1. `{{ workspace }}/contract/glossary.json` — the bilingual terminology contract
+    Enumerate the project's orchestral jargon from the skeleton (at minimum:
+    score, movement, sheet, concert, conductor, composer, musician, instrument,
+    prelude, cadenza, venue — plus every domain term the docs carry). Schema,
+    exactly:
+    ```json
+    {"terms": [{"term_id": "...", "en": "...",
+      "translations": {"es": {"term": "...", "note": "...", "decision": "keep|translate|hybrid"},
+                       "fr": {...}, "de": {...}, "pt-BR": {...}, "ar": {...}}}]}
+    ```
+    Every locale × every term carries a decision. `keep` ⇒ `term` equals `en`.
+
+    ## 2. `{{ workspace }}/contract/register-{es,fr,de,pt-BR,ar}.md` — voice per market
+    Address form, tone, idiom-vs-calque policy, code-term handling. Each file's
+    first line: `REGISTER: <locale>`.
+
+    ## 3. `{{ workspace }}/contract/rtl-spec.md` — Arabic as a first-class surface
+    Bidirectional punctuation, numeral rendering, mirroring. Every checkable
+    property on its own line: `PROP: <machine-checkable statement>` (catalog
+    level: bracket balance per msgstr, numeral policy; page level: `dir="rtl"`,
+    mirrored navigation order — the gates implement exactly these).
+
+    ## 4. `{{ workspace }}/contract/thresholds.json` — PRE-REGISTERED metrology
+    Exactly these keys, numeric, each with a one-sentence rationale in a
+    sibling `_rationale` field:
+    ```json
+    {"terminology_hit_rate_min": 0.90,
+     "terminology_hit_rate_min_rationale": "...",
+     "length_ratio_z_max": 4.0,
+     "length_ratio_z_max_rationale": "...",
+     "length_ratio_bounds_by_locale": {"es": {"min": 0.6, "max": 1.8},
+                                        "fr": {"min": 0.6, "max": 1.8},
+                                        "de": {"min": 0.7, "max": 2.0},
+                                        "pt-BR": {"min": 0.6, "max": 1.9},
+                                        "ar": {"min": 0.5, "max": 1.8}},
+     "length_ratio_bounds_rationale": "one sentence: the linguistics behind
+                                       each per-locale band (German expansion,
+                                       Arabic contraction, ...)",
+     "oracle_recall_floor": 0.85,
+     "oracle_recall_floor_rationale": "..."}
+    ```
+    You choose the numbers; you defend them in the rationales; the sweep
+    enforces them verbatim. The per-locale absolute bands matter: the z-score
+    against the Spanish first article is a RELATIVE instrument, and a
+    typologically distant locale can be honestly outside it for linguistics,
+    not quality — the absolute bands are the pre-registered per-locale truth,
+    the z-score the drift detector. Floors are bounded by the validation
+    (a pre-registration of 0.05 is pre-registration-shaped, not
+    pre-registration-strong).
+
+    {{ ai_ground_rules() }}
+
+    {% elif stage == 4 %}
+    {{ strict() }}
+    # ── Movement 4 · Pin the contract + materialize the ruler ──────────────────
+    # Deterministic. No LLM fallback (empty chain). The ruler is STATIC so the
+    # characterizer can select and restate checks but never machine the ruler.
+    mkdir -p scripts reference
+    python3 - <<'PY'
+    import hashlib, json, subprocess, sys
+    from pathlib import Path
+    ws = Path(".")
+    contract_files = sorted(p for p in (ws / "contract").iterdir()
+                            if p.is_file() and p.name != "MANIFEST.json")
+    files = {str(p.relative_to(ws)): hashlib.sha256(p.read_bytes()).hexdigest()
+             for p in contract_files}
+    def tool_ver():
+        return subprocess.run(
+            ["uv", "run", "--quiet", "--with", "polib=={{ polib_pin }}",
+             "--with", "babel=={{ babel_pin }}", "python", "-c",
+             "import babel, polib; print(babel.__version__, polib.__version__)"],
+            capture_output=True, text=True).stdout.strip()
+    tv = tool_ver()
+    if not tv:
+        sys.exit("FAIL: pinned toolchain did not answer")
+    fp_src = json.dumps([tv, files["contract/canonical-en.pot"],
+                         files["contract/thresholds.json"]], sort_keys=True)
+    manifest = {
+        "files": files,
+        "toolchain": tv,
+        "config_fingerprint": hashlib.sha256(fp_src.encode()).hexdigest(),
+    }
+    (ws / "contract" / "MANIFEST.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
+    print("pinned", len(files), "contract files; fingerprint", manifest["config_fingerprint"][:16])
+    PY
+
+    # ── The ruler: catalog-validate.py ─────────────────────────────────────────
+    cat > scripts/catalog-validate.py <<'PY'
+    #!/usr/bin/env python3
+    """The deterministic catalog ruler. One locale per invocation.
+    Checks (keys): format_parity, plural_coverage, skeleton_coverage (unless
+    --partial), terminology_hit_rate, length_ratio_abs (per-locale absolute
+    band — the pre-registered per-locale truth), length_ratio_z (only with
+    --reference — the drift detector). --rtl adds the bidi balance gate.
+    Exit 0 iff every applicable check passes; JSON report either way."""
+    import argparse, json, re, sys
+    import polib
+    from babel.messages.plurals import get_plural
+
+    TOKEN_RE = re.compile(r"%\([^)]+\)[sd]|%[sd]|\{[A-Za-z_][A-Za-z0-9_]*\}")
+
+    def tokens(s):
+        return sorted(TOKEN_RE.findall(s or ""))
+
+    def wordish(term):
+        return re.compile(r"(?<!\w)" + re.escape(term) + r"(?!\w)", re.IGNORECASE)
+
+    def main():
+        ap = argparse.ArgumentParser()
+        ap.add_argument("--po", required=True)
+        ap.add_argument("--skeleton", required=True)
+        ap.add_argument("--glossary", required=True)
+        ap.add_argument("--thresholds", required=True)
+        ap.add_argument("--locale", required=True)
+        ap.add_argument("--reference")
+        ap.add_argument("--rtl", action="store_true")
+        ap.add_argument("--partial", action="store_true",
+                        help="skip skeleton bijection (single-defect fixture mode)")
+        ap.add_argument("--report")
+        a = ap.parse_args()
+
+        th = json.load(open(a.thresholds))
+        po = polib.pofile(a.po)
+        skel = polib.pofile(a.skeleton)
+        checks = {}
+        entries = [e for e in po if e.msgid.strip() and not e.obsolete]
+
+        # skeleton_coverage — bijection: nothing dropped, nothing invented
+        # (skipped only in --partial fixture mode; every real catalog is whole)
+        if not a.partial:
+            sk_ids = {e.msgid for e in skel if e.msgid.strip()}
+            po_ids = {e.msgid for e in entries}
+            missing_n = len(sk_ids - po_ids)
+            invented_n = len(po_ids - sk_ids)
+            checks["skeleton_coverage"] = {
+                "verdict": (missing_n == 0 and invented_n == 0),
+                "measured": {"missing": missing_n, "invented": invented_n},
+                "threshold": {"missing": 0, "invented": 0}}
+
+        # format_parity — strict multiset bijection of format tokens
+        bad_fmt = []
+        for e in entries:
+            src = tokens(e.msgid) + tokens(e.msgid_plural or "")
+            dst = tokens(e.msgstr or "") + tokens("".join((e.msgstr_plural or {}).values()))
+            if src != dst:
+                bad_fmt.append(e.msgid[:40])
+        checks["format_parity"] = {"verdict": not bad_fmt, "measured": len(bad_fmt),
+                                   "threshold": 0, "failures": bad_fmt[:5]}
+
+        # plural_coverage — header nplurals matches babel's rule for the locale
+        loc = a.locale.replace("-", "_")
+        try:
+            nplurals, _expr = get_plural(loc)
+        except Exception:
+            nplurals = None
+        header = po.metadata.get("Plural-Forms", "")
+        m = re.search(r"nplurals\s*=\s*(\d+)", header)
+        declared = int(m.group(1)) if m else None
+        plural_ok = (nplurals is not None and declared == nplurals)
+        short_plurals = [e.msgid[:40] for e in entries
+                         if e.msgid_plural and len(e.msgstr_plural or {}) < nplurals]
+        checks["plural_coverage"] = {
+            "verdict": bool(plural_ok and not short_plurals),
+            "babel_nplurals": nplurals, "declared_nplurals": declared,
+            "threshold": nplurals, "short_entries": short_plurals[:5]}
+
+        # terminology_hit_rate — word-boundary aware (never 'score' in 'scoreboard')
+        gl = json.load(open(a.glossary))["terms"]
+        denom, hits, misses = 0, 0, []
+        for t in gl:
+            tr = t["translations"].get(a.locale)
+            if not tr:
+                continue
+            expected = t["en"] if tr["decision"] == "keep" else tr["term"]
+            src_re, dst_re = wordish(t["en"]), wordish(expected)
+            for e in entries:
+                if src_re.search(e.msgid):
+                    denom += 1
+                    if dst_re.search(e.msgstr or ""):
+                        hits += 1
+                    else:
+                        misses.append({"term_id": t["term_id"], "msgid": e.msgid[:40]})
+        rate = (hits / denom) if denom else 1.0
+        floor = float(th["terminology_hit_rate_min"])
+        checks["terminology_hit_rate"] = {
+            "verdict": rate >= floor, "measured": round(rate, 4), "threshold": floor,
+            "n": denom, "misses": misses[:8]}
+
+        # length_ratio_abs — per-locale ABSOLUTE band, pre-registered in the
+        # contract (the per-locale truth; independent of any reference locale)
+        ratios = [len(e.msgstr or "") / len(e.msgid) for e in entries
+                  if (e.msgstr or "").strip() and len(e.msgid) >= 8]
+        bounds = th.get("length_ratio_bounds_by_locale", {}).get(
+            a.locale, {"min": 0.5, "max": 2.5})
+        lo, hi = float(bounds["min"]), float(bounds["max"])
+        out_of_band = [r for r in ratios if r < lo or r > hi]
+        worst_abs = max(ratios) if ratios else None
+        checks["length_ratio_abs"] = {
+            "verdict": not out_of_band, "measured": round(worst_abs, 3) if worst_abs else None,
+            "threshold": {"min": lo, "max": hi},
+            "n_out_of_band": len(out_of_band)}
+
+        # length_ratio_z — against the first-article distribution, if referenced
+        if a.reference:
+            ref = json.load(open(a.reference))
+            fa = ref["first_article"]["length_ratio"]
+            mean, sd = float(fa["mean"]), float(fa["sd"])
+            zmax = float(th["length_ratio_z_max"])
+            worst = max(abs((r - mean) / sd) for r in ratios) if ratios and sd > 0 else 0.0
+            checks["length_ratio_z"] = {
+                "verdict": worst <= zmax, "measured": round(worst, 3), "threshold": zmax,
+                "n": len(ratios)}
+        else:
+            checks["length_ratio_z"] = {
+                "verdict": True, "measured": None, "threshold": None,
+                "note": "no reference supplied (first article)"}
+
+        # rtl — bidi balance: mirrored pairs must balance per msgstr
+        if a.rtl:
+            unbal = []
+            for e in entries:
+                s = e.msgstr or ""
+                if s.count("(") != s.count(")") or s.count("[") != s.count("]"):
+                    unbal.append(e.msgid[:40])
+            checks["rtl_bidi_balance"] = {"verdict": not unbal, "measured": len(unbal),
+                                          "threshold": 0, "failures": unbal[:5]}
+
+        report = {"locale": a.locale, "checks": checks,
+                  "pass": all(c["verdict"] for c in checks.values())}
+        if a.report:
+            import os
+            rdir = os.path.dirname(a.report)
+            if rdir:
+                os.makedirs(rdir, exist_ok=True)
+            json.dump(report, open(a.report, "w"), indent=2, sort_keys=True)
+        print(("PASS " if report["pass"] else "FAIL ") + a.locale +
+              " " + ",".join(k for k, c in checks.items() if not c["verdict"]))
+        sys.exit(0 if report["pass"] else 1)
+    main()
+    PY
+
+    # ── The algebraic join: join-catalogs.py (authored here, teeth at mv 8,
+    #    executed for real at mv 11 — no LLM ever participates) ─────────────────
+    cat > scripts/join-catalogs.py <<'PY'
+    #!/usr/bin/env python3
+    """Join-Semilattice Merge at the catalog layer: union by msgid per locale,
+    dedupe by content digest, CONFLICT DETECTION for same-locale/same-msgid
+    divergence. Deterministic: sorted iteration, content-addressed. Probes
+    (idempotence, commutativity) are run by the caller on this script's output."""
+    import argparse, hashlib, json
+    from pathlib import Path
+    import polib
+
+    def digest(entry):
+        return hashlib.sha256((entry.msgid + "\x00" + (entry.msgstr or "") +
+                               "\x00" + (entry.msgid_plural or "")).encode()).hexdigest()
+
+    def main():
+        ap = argparse.ArgumentParser()
+        ap.add_argument("--inputs", nargs="+", required=True,
+                        help="po files; basename-minus-.po is the claimed locale")
+        ap.add_argument("--out-dir", required=True)
+        ap.add_argument("--conflicts-out", required=True)
+        a = ap.parse_args()
+        out = Path(a.out_dir); out.mkdir(parents=True, exist_ok=True)
+        by_locale = {}
+        for p in a.inputs:
+            locale = Path(p).name[:-3]
+            by_locale.setdefault(locale, []).append(Path(p))
+        conflicts, merged, metas = [], {}, {}
+        for locale in sorted(by_locale):
+            best, seen = None, {}
+            for path in sorted(by_locale[locale]):
+                po = polib.pofile(str(path))
+                if best is None:
+                    best = po
+                    # carry the writer's metadata VERBATIM — Plural-Forms above
+                    # all: a joined catalog that loses it declares nplurals=None
+                    # and the sweep red-flags every locale for a join artifact,
+                    # not a translation defect
+                    metas[locale] = dict(po.metadata)
+                for e in po:
+                    if not e.msgid.strip() or e.obsolete:
+                        continue
+                    d = digest(e)
+                    if e.msgid in seen and seen[e.msgid][0] != d:
+                        conflicts.append({
+                            "locale": locale, "msgid": e.msgid,
+                            "digests": sorted([seen[e.msgid][0], d]),
+                            "sources": sorted([seen[e.msgid][1], str(path)])})
+                    elif e.msgid not in seen:
+                        seen[e.msgid] = (d, str(path))
+            if best is not None:
+                keep = {mid: d for mid, (d, _) in seen.items()}
+                for e in best:
+                    if e.msgid in keep and e.msgid.strip() and not e.obsolete:
+                        merged.setdefault(locale, []).append(e)
+        for locale, entries in merged.items():
+            po = polib.POFile()
+            po.metadata = metas.get(locale, {"Language": locale})
+            for e in sorted(entries, key=lambda x: x.msgid):
+                po.append(e)
+            po.save(str(out / (locale + ".po")))
+        Path(a.conflicts_out).write_text(json.dumps(conflicts, indent=2, sort_keys=True))
+        print("joined", sorted(merged), "locales;", len(conflicts), "conflicts")
+    main()
+    PY
+
+    # ── The EXP gate: exp-gate.py (no-clip, RTL DOM, hreflang, links) ──────────
+    cat > scripts/exp-gate.py <<'PY'
+    #!/usr/bin/env python3
+    """EXP battery. Modes: --noclick DIR (pseudo-loc strings render COMPLETE +
+    CSS never truncates) · --rtl PAGE BASE (dir=rtl + nav mirror) ·
+    --hreflang DIR (reciprocal alternate matrix) · --links DIR (internal hrefs
+    resolve). Exit 0 iff the mode passes."""
+    import argparse, json, re, sys
+    from pathlib import Path
+    from xml.etree import ElementTree
+
+    def pages(d):
+        return sorted(Path(d).rglob("*.html"))
+
+    def main():
+        ap = argparse.ArgumentParser()
+        ap.add_argument("--noclick", dest="noclick")
+        ap.add_argument("--strings", help="JSON list of pseudo strings that must appear IN FULL")
+        ap.add_argument("--rtl", nargs=2, metavar=("AR_PAGE", "BASE_PAGE"))
+        ap.add_argument("--hreflang"); ap.add_argument("--links")
+        a = ap.parse_args()
+        if a.noclick:
+            strings = json.load(open(a.strings))
+            css = ""
+            union = ""
+            for p in pages(a.noclick):
+                html = p.read_text(encoding="utf-8")
+                union += html
+                css += "\n".join(re.findall(r"<style[^>]*>(.*?)</style>", html, re.S))
+            def esc(t):
+                return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            missing = [s for s in strings
+                       if s not in union and esc(s) not in union]
+            if missing:
+                sys.exit("FAIL noclip: %d stress strings truncated or absent, e.g. %r"
+                         % (len(missing), missing[0][:50]))
+            for forbidden in ("text-overflow:ellipsis", "text-overflow: ellipsis"):
+                if forbidden in css:
+                    sys.exit("FAIL noclip: truncating CSS policy: " + forbidden)
+            if "overflow-wrap" not in css and "word-break" not in css:
+                sys.exit("FAIL noclip: no overflow-wrap/word-break policy in CSS")
+            print("noclip ok:", len(strings), "stress strings render complete; CSS non-truncating")
+        elif a.rtl:
+            ar = Path(a.rtl[0]).read_text(encoding="utf-8")
+            base = Path(a.rtl[1]).read_text(encoding="utf-8")
+            if 'dir="rtl"' not in ar:
+                sys.exit("FAIL rtl: dir=rtl absent")
+            if 'lang="ar"' not in ar:
+                sys.exit("FAIL rtl: lang=ar absent")
+            nav = lambda h: re.findall(r'<nav[^>]*>.*?</nav>', h, re.S)
+            def order(h):
+                m = nav(h)
+                if not m:
+                    sys.exit("FAIL rtl: no nav element")
+                return re.findall(r'href="([^"]+)"', m[0])
+            if order(ar) != list(reversed(order(base))):
+                sys.exit("FAIL rtl: navigation is not mirrored")
+            print("rtl ok: dir=rtl, lang=ar, mirrored navigation")
+        elif a.hreflang:
+            # FULL RECIPROCITY over EDITION pages, not matrix-shape. An
+            # EDITION page is one whose self-language alternate resolves to
+            # itself (the hreflang definition of a translation equivalent).
+            # For every edition page P and every language l it declares:
+            # resolve to a concrete page T, and T's alternate for P's own
+            # language must resolve back to P. Auxiliary pages (portal,
+            # evidence: language-neutral hubs whose en-alternate is the
+            # canonical en home, never themselves) must still declare the
+            # full language set and resolve every alternate — but they
+            # participate in no equivalence clique, so no back-link is
+            # required of them. The root must be the WHOLE site tree.
+            import posixpath
+            root = Path(a.hreflang)
+            matrix = {}
+            for p in pages(a.hreflang):
+                html = p.read_text(encoding="utf-8")
+                m = re.search(r'<html[^>]+lang="([^"]+)"', html)
+                alts = re.findall(r'<link[^>]+rel="alternate"[^>]+hreflang="([^"]+)"[^>]+href="([^"]+)"', html)
+                alts += re.findall(r'<link[^>]+hreflang="([^"]+)"[^>]+rel="alternate"[^>]+href="([^"]+)"', html)
+                if alts:
+                    matrix[p.relative_to(root).as_posix()] = {
+                        "lang": m.group(1) if m else "?", "alts": dict(alts)}
+            if not matrix:
+                sys.exit("FAIL hreflang: no alternates declared anywhere")
+            def resolve(page_rel, href):
+                if href.startswith(("http://", "https://", "mailto:")):
+                    return None
+                base = posixpath.dirname(page_rel)
+                joined = posixpath.join(base, href) if base else href
+                tgt = posixpath.normpath(joined)
+                if href.endswith("/"):
+                    tgt += "/index.html"
+                elif tgt == ".":
+                    tgt = "index.html"
+                return tgt
+            canon = sorted(next(iter(matrix.values()))["alts"])
+            editions = 0
+            for p, info in matrix.items():
+                if sorted(info["alts"]) != canon:
+                    sys.exit("FAIL hreflang: alternate set diverges at %s" % p)
+                own = info["alts"].get(info["lang"])
+                is_edition = own is not None and resolve(p, own) == p
+                for l, href in info["alts"].items():
+                    if l == "x-default":
+                        continue
+                    tgt = resolve(p, href)
+                    if tgt is None or tgt not in matrix:
+                        sys.exit("FAIL hreflang: dangling alternate %s at %s -> %s"
+                                 % (l, p, href))
+                    if not is_edition or l == info["lang"]:
+                        continue
+                    back = matrix[tgt]["alts"].get(info["lang"])
+                    if back is None:
+                        sys.exit("FAIL hreflang: %s (%s) -> %s, but target "
+                                 "declares no %s back-alternate"
+                                 % (p, info["lang"], tgt, info["lang"]))
+                    if resolve(tgt, back) != p:
+                        sys.exit("FAIL hreflang: not reciprocal: %s -> %s, "
+                                 "back-alternate resolves to %s"
+                                 % (p, tgt, resolve(tgt, back)))
+                if is_edition:
+                    editions += 1
+            if not editions:
+                sys.exit("FAIL hreflang: no edition pages found — nothing reciprocal")
+            print("hreflang ok: %d pages, %d edition pages pairwise-reciprocal"
+                  % (len(matrix), editions))
+        elif a.links:
+            root = Path(a.links)
+            for p in pages(root):
+                for href in re.findall(r'href="([^"#][^"]*)"', p.read_text(encoding="utf-8")):
+                    if href.startswith(("http://", "https://", "mailto:")):
+                        continue
+                    target = (p.parent / href).resolve()
+                    if not target.exists():
+                        sys.exit("FAIL links: %s -> %s does not resolve" % (p, href))
+            for rss in sorted(root.rglob("*.xml")):
+                ElementTree.parse(str(rss))
+            print("links ok: internal hrefs resolve; RSS well-formed")
+        else:
+            ap.error("choose a mode")
+    main()
+    PY
+    # ── The oracle SAMPLE FRAME (rev 2: authored HERE, deterministically —     ─
+    #    rev 1 let the oracle author its own sampler, so the judged party drew
+    #    the auditable denominator of its own recall measurement; a degenerate
+    #    frame of term-free segments scored recall 1.0 vacuously)
+    cat > scripts/oracle-sample.py <<'PY'
+    #!/usr/bin/env python3
+    """Deterministic stratified sample frame for the back-translation oracle.
+    Seeded; stratified by census kind; GUARANTEED term-bearing coverage per
+    locale (the recall denominator cannot be zero by construction). Output:
+    {"seed": S, "per_locale": {loc: [{"msgid_sha", "kind", "term_ids"}]},
+     "term_bearing": {loc: n}}"""
+    import argparse, hashlib, json, random, re, sys
+
+    def wordish(term):
+        return re.compile(r"(?<!\w)" + re.escape(term) + r"(?!\w)", re.IGNORECASE)
+
+    def main():
+        ap = argparse.ArgumentParser()
+        ap.add_argument("--census", required=True)
+        ap.add_argument("--glossary", required=True)
+        ap.add_argument("--per-locale", type=int, default=15)
+        ap.add_argument("--seed", type=int, default=42)
+        ap.add_argument("--min-term-bearing", type=int, default=5)
+        ap.add_argument("--out", required=True)
+        a = ap.parse_args()
+        census = json.load(open(a.census))
+        terms = json.load(open(a.glossary))["terms"]
+        for s in census:
+            s["msgid_sha"] = hashlib.sha256(s["msgid"].encode()).hexdigest()[:16]
+        for seg in census:
+            seg["term_ids"] = sorted(
+                t["term_id"] for t in terms if wordish(t["en"]).search(seg["msgid"]))
+        by_kind = {}
+        for seg in census:
+            by_kind.setdefault(seg["kind"], []).append(seg)
+        tb = [s for s in census if s["term_ids"]]
+        need_tb = min(a.min_term_bearing, len(tb))
+        if need_tb < 1:
+            sys.exit("FAIL: census carries no glossary-term-bearing segments — "
+                     "the oracle recall denominator cannot be guaranteed")
+        out = {"seed": a.seed, "per_locale": {}, "term_bearing": {}}
+        for loc in ["es", "fr", "de", "pt-BR", "ar"]:
+            rng = random.Random("%s:%d" % (loc, a.seed))
+            picked, seen = [], set()
+            tb_pool = [s for s in tb if id(s) not in seen]
+            for seg in rng.sample(sorted(tb_pool, key=lambda s: s["msgid_sha"]), need_tb):
+                picked.append(seg); seen.add(id(seg))
+            rest = [s for s in census if id(s) not in seen]
+            kinds = sorted(by_kind)
+            while len(picked) < a.per_locale and rest:
+                kind = kinds[len(picked) % len(kinds)] if kinds else None
+                pool = sorted((s for s in rest if kind is None or s["kind"] == kind),
+                              key=lambda s: s["msgid_sha"]) or \
+                       sorted(rest, key=lambda s: s["msgid_sha"])
+                seg = pool[rng.randrange(len(pool))]
+                picked.append(seg); seen.add(id(seg))
+                rest = [s for s in rest if id(s) is not id(seg)]
+            out["per_locale"][loc] = [
+                {"msgid_sha": s["msgid_sha"], "kind": s["kind"],
+                 "term_ids": s["term_ids"]} for s in sorted(picked, key=lambda x: x["msgid_sha"])]
+            out["term_bearing"][loc] = sum(1 for s in picked if s["term_ids"])
+        json.dump(out, open(a.out, "w"), indent=2, sort_keys=True)
+        print("sample frame:", {k: len(v) for k, v in out["per_locale"].items()},
+              "term-bearing:", out["term_bearing"])
+    main()
+    PY
+    {{ ruler() }} -m py_compile scripts/catalog-validate.py scripts/join-catalogs.py scripts/exp-gate.py scripts/oracle-sample.py
+    echo "ruler factory complete"
+
+    {% elif stage == 5 %}
+    {{ writer_mission('es', false, false) }}
+
+    {% elif stage == 6 %}
+    # Movement 6 · Characterize the First Article — you are family B, the writer was family A
+
+    The Spanish first article (`work/locale-es/es.po`) was written by a DIFFERENT
+    vendor family than you. That separation is the calibration claim. Your
+    measurements, not your opinions, become the reference the four volume
+    locales are judged against.
+
+    ## Task
+    Working in `{{ workspace }}`, author `reference-input/characterization.json`:
+    ```json
+    {"instrument": "{{ instrument_name }}",
+     "checks": [{"key": "format_parity", "threshold": 0},
+                 {"key": "plural_coverage", "threshold": "<babel nplurals for es>"},
+                 {"key": "terminology_hit_rate", "threshold": "<RESTATE contract/thresholds.json EXACTLY>"},
+                 {"key": "length_ratio_abs", "threshold": "<RESTATE the es bounds EXACTLY>"},
+                 {"key": "length_ratio_z", "threshold": "<RESTATE contract/thresholds.json EXACTLY>"}],
+     "first_article": {"locale": "es", "length_ratio": {"mean": <m>, "sd": <s>, "n": <n>}},
+     "negative_control": {"fixture": "reference-input/broken.po (a dropped format token)",
+                          "catalog_validate_exit_code": <nonzero>,
+                          "failing_check": "format_parity"},
+     "semantic_adequacy": {"verdict": "adequate|inadequate",
+                           "spot_checks": [{"msgid_sha": "...",
+                                            "en_back_translation": "...",
+                                            "note": "one honest sentence"}]},
+     "method_notes": "how each number was computed, in honest sentences"}
+    ```
+    1. Measure the first-article length-ratio distribution (mean, sd, n) with
+       the same definition the ruler uses: `len(msgstr)/len(msgid)` over entries
+       with non-empty msgstr and msgid length ≥ 8. Compute with python3; show
+       the command in `method_notes`. THE VALIDATION RECOMPUTES THESE THREE
+       NUMBERS FROM `work/locale-es/es.po` BYTES — a generous sd cannot
+       green-light volume through you.
+    2. RESTATE the thresholds from `contract/thresholds.json` byte-exactly — the
+       anti-fraud probe diffs them; any drift fails this movement. Your keyed
+       `checks` list is not ceremony: the merge-authority validation requires
+       every admitted locale's sweep report to carry exactly these keys green.
+    3. Negative control (mandatory, RE-RUN by the validation): create
+       `reference-input/broken.po` by copying the es catalog and deleting one
+       format token from one msgstr; run the ruler on it; record the nonzero
+       exit and the failing check. The file STAYS — the validation re-executes
+       the corruption probe itself:
+       ```
+       cd {{ workspace }} && cp work/locale-es/es.po reference-input/broken.po
+       # (corrupt one msgstr's format token)
+       {{ ruler() }} scripts/catalog-validate.py --po reference-input/broken.po \
+         --skeleton contract/canonical-en.pot --glossary contract/glossary.json \
+         --thresholds contract/thresholds.json --locale es --partial \
+         --report reference-input/broken-report.json
+       ```
+    4. SEMANTIC spot-check (you are the only instrument between a mechanically
+       plausible article and the reference population every volume locale will
+       be z-scored against): back-translate ≥3 sampled es segments into
+       English yourself, quote them under `semantic_adequacy.spot_checks`
+       (msgid_sha from the census), and verdict honestly. `inadequate` fails
+       this movement on purpose — a bad-but-token-preserving first article
+       must not become the ruler's population.
+    5. Do NOT edit `contract/` — you measure the world, you do not tune it.
+
+    {{ ai_ground_rules() }}
+
+    {% elif stage == 7 %}
+    {{ strict() }}
+    # ── Movement 7 · Reference freeze — bind the reference to the contract ─────
+    # CLI, empty fallback. skip_when probes this same binding: an unchanged
+    # fingerprint skips, a changed one forces re-characterization downstream.
+    python3 - <<'PY'
+    import hashlib, json
+    from pathlib import Path
+    ws = Path(".")
+    man = json.loads((ws / "contract" / "MANIFEST.json").read_text())
+    ch = json.loads((ws / "reference-input" / "characterization.json").read_text())
+    ref = {
+        "config_hash": man["config_fingerprint"],
+        "characterization_sha256": hashlib.sha256(
+            (ws / "reference-input" / "characterization.json").read_bytes()).hexdigest(),
+        "checks": ch["checks"],
+        "first_article": ch["first_article"],
+        "instrument": ch.get("instrument", "unknown"),
+    }
+    (ws / "reference").mkdir(exist_ok=True)
+    (ws / "reference" / "manifest.json").write_text(json.dumps(ref, indent=2, sort_keys=True))
+    print("reference frozen against", man["config_fingerprint"][:16])
+    PY
+
+    {% elif stage == 8 %}
+    {{ strict() }}
+    # ── Movement 8 · Gate teeth — nine fixtures, each failing EXACTLY its gate ─
+    # Exploit-Failure-as-Signal, in-score, BEFORE any volume token is spent.
+    # Fixtures live in the workspace (their single source of truth is this
+    # movement) so composition-time commissioning renders and re-proves the
+    # SAME teeth. A gate without a demonstrated tooth is undischarged risk.
+    mkdir -p fixtures/negative fixtures/work fixtures/remote
+    cat > fixtures/negative/broken-plural.po <<'PO'
+    msgid ""
+    msgstr ""
+    "Language: ar\n"
+    "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+    msgid "one file"
+    msgid_plural "many files"
+    msgstr[0] "ملف واحد"
+    PO
+    cat > fixtures/negative/dropped-format.po <<'PO'
+    msgid ""
+    msgstr ""
+    "Language: es\n"
+    "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+    msgid "Run the batch tool with the {name} flag"
+    msgstr "Ejecuta la herramienta por lotes con la opción"
+    PO
+    # (term-free msgid on purpose: a format-token fixture whose msgid carried a
+    # glossary term ALSO fails terminology, muddying the single-defect
+    # attribution the battery exists to prove)
+    cat > fixtures/negative/term-drift.po <<'PO'
+    msgid ""
+    msgstr ""
+    "Language: es\n"
+    "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+    msgid "The conductor starts every concert"
+    msgstr "El zzdriftzz inicia cada concierto"
+    msgid "A score has many movements"
+    msgstr "Una partitura tiene muchos tiempos"
+    PO
+    cat > fixtures/negative/rtl-unbalanced.po <<'PO'
+    msgid ""
+    msgstr ""
+    "Language: ar\n"
+    "Plural-Forms: nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n%100<=10 ? 3 : n%100>=11 ? 4 : 5);\n"
+    msgid "See the guide (advanced section)"
+    msgstr "انظر الدليل (القسم المتقدم"
+    PO
+    cat > fixtures/negative/ratio-blowout.po <<'PO'
+    msgid ""
+    msgstr ""
+    "Language: de\n"
+    "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+    msgid "A quiet afternoon in the library"
+    msgstr "Ein ganz besonders ruhiger und ausgedehnter Nachmittag in der alten Bibliothek zwischen den hohen Regalen mit den vielen bunten Büchern, den staubigen Lesesaal und die kleine Lampe"
+    PO
+    # (ratio-blowout is deliberately TERM-FREE and token-free so the ONLY gate
+    # it can fail is the length band — the one keyed check rev 1 shipped with
+    # no negative fixture at all, i.e. the most trust-dependent gate was the
+    # only one whose teeth were asserted, never demonstrated. Its ratio is
+    # ~5.5x; the validation caps pre-registered per-locale maxima at 4.0, so
+    # no honest contract can admit it.)
+    # (the ninth fixture — the rogue fr catalog — is DERIVED at run time in the
+    #  teeth battery below, from the real es catalog, so its colliding msgid is
+    #  guaranteed to exist in the real skeleton)
+
+    # ── Protocol scripts: arm-gate.sh and go.sh (teeth HERE, real use at 15/16)
+    cat > scripts/arm-gate.sh <<'SH'
+    #!/usr/bin/env bash
+    # Standby-GO arm. Verifies: complete ack set for ADMITTED locales, every
+    # admitted B-artifact sweep-green, the expected gh-pages head matches the
+    # PIN (local compare FIRST, so a drift refusal is hermetic and cannot be
+    # mimicked by network failure), and buffer A unchanged LIVE. Any failure =>
+    # exit 1 with buffer A still serving. NEVER fires anything.
+    set -euo pipefail
+    ws="${ARM_WS:-$(cd "$(dirname "$0")/.." && pwd)}"
+    cue="$1"; expected_head="$2"
+    admitted="$(jq -r '.admitted | join(",")' "$ws/release-manifest.json")"
+    sweep="$(jq -r '.overall | to_entries | map(select(.value == true) | .key) | join(",")' "$ws/sweep-report.json")"
+    [ -z "$admitted" ] && { echo "HOLD: no admitted locales"; exit 1; }
+    for loc in ${admitted//,/ }; do
+      [ -f "$ws/ready-$loc.json" ] || { echo "HOLD: missing ack ready-$loc.json"; exit 1; }
+      [[ ",$sweep," == *",$loc,"* ]] || { echo "HOLD: $loc not sweep-green"; exit 1; }
+    done
+    pin_head="$(jq -r .gh_pages_head "$ws/pin/buffer-A-fingerprint.json")"
+    [ "$expected_head" = "$pin_head" ] || { echo "HOLD: gh-pages head moved since pin (local compare): expected $expected_head, pin has $pin_head"; exit 1; }
+    idx="$(curl -sfL "$(jq -r .url "$ws/pin/buffer-A-fingerprint.json")" | sha256sum | cut -d' ' -f1)"
+    pin_idx="$(jq -r .served_index_sha256 "$ws/pin/buffer-A-fingerprint.json")"
+    head="$(git ls-remote "https://github.com/{{ github_owner }}/{{ docs_repo }}.git" {{ gh_pages_ref }} | cut -f1)"
+    [ "$idx" = "$pin_idx" ] || { echo "HOLD: buffer A index drifted since pin"; exit 1; }
+    [ "$head" = "$expected_head" ] || { echo "HOLD: gh-pages head moved since pin: $head"; exit 1; }
+    jq -n --arg c "$cue" --arg h "$head" --arg i "$idx" --arg a "$admitted" \
+      '{cue: $c, verified_gh_pages_head: $h, verified_index_sha256: $i,
+        acked: ($a | split(",")), armed_at: (now | todate)}' > "$ws/armed-$cue.json"
+    echo "ARMED $cue (acks: $admitted; buffer A verified unchanged)"
+    SH
+    cat > scripts/go.sh <<'SH'
+    #!/usr/bin/env bash
+    # Standby-GO fire. Refuses unless armed; appends the cue EXACTLY ONCE;
+    # pushes NON-FORCE. mode real   = locale subpaths + portal + evidence +
+    #                                    release assets + live poll
+    #                 fixture = same push path against a local bare remote
+    #                 evidence= ONLY the evidence subtree (the second armed
+    #                           cue, babel-evidence-1, fired at movement 17
+    #                           AFTER the seal is computed)
+    # Idempotent on re-run: an already-fired cue re-verifies and exits 0
+    # without re-firing. Deploy-tree hygiene on every live path: fetch+reset
+    # (a stale clone must not fabricate a conflict or an empty commit), and
+    # the commit itself is guarded (re-running after a push that landed must
+    # not die on git's empty-commit refusal).
+    set -euo pipefail
+    ws="$(cd "$(dirname "$0")/.." && pwd)"
+    cue="$1"; remote="$2"; mode="$3"
+    # absolutize LOCAL remote paths: a relative remote.origin.url is resolved
+    # against the deploy clone's own directory by later `git -C` calls, not
+    # against this workspace — the fixture push would die with "does not
+    # appear to be a git repository" (a rev-1 bug invisible to its dead tooth)
+    case "$remote" in
+      /*|http://*|https://*|git@*) : ;;
+      *) remote="$(cd "$(dirname "$remote")" && pwd)/$(basename "$remote")" ;;
+    esac
+    armed="$ws/armed-$cue.json"
+    [ -f "$armed" ] || { echo "REFUSED: not armed ($armed absent)"; exit 1; }
+    mkdir -p "$ws/deploy"
+    [ -f "$ws/cue-log.jsonl" ] || : > "$ws/cue-log.jsonl"
+    already="$(grep -c "^GO $cue$" "$ws/cue-log.jsonl" || true)"
+    if [ "$already" -ge 1 ]; then
+      echo "cue $cue already fired exactly-once; verifying deployed state only"
+    else
+      if [ ! -d "$ws/deploy/gh-pages/.git" ]; then
+        git clone -q --branch gh-pages "$remote" "$ws/deploy/gh-pages" 2>/dev/null \
+          || { git init -q -b gh-pages "$ws/deploy/gh-pages"; \
+               git -C "$ws/deploy/gh-pages" remote add origin "$remote"; }
+      fi
+      git -C "$ws/deploy/gh-pages" fetch -q origin gh-pages \
+        && git -C "$ws/deploy/gh-pages" reset -q --hard FETCH_HEAD \
+        || echo "(fresh gh-pages tree; nothing to refresh)"
+      case "$mode" in
+        evidence)
+          rm -rf "$ws/deploy/gh-pages/evidence"
+          cp -r "$ws/buffer-B/evidence" "$ws/deploy/gh-pages/evidence"
+          ;;
+        real|fixture)
+          for loc in en {{ locales | join(' ') }}; do
+            rm -rf "$ws/deploy/gh-pages/$loc"
+            cp -r "$ws/buffer-B/$loc" "$ws/deploy/gh-pages/$loc"
+          done
+          rm -rf "$ws/deploy/gh-pages/portal"
+          cp -r "$ws/buffer-B/portal" "$ws/deploy/gh-pages/portal"
+          rm -rf "$ws/deploy/gh-pages/evidence"
+          cp -r "$ws/buffer-B/evidence" "$ws/deploy/gh-pages/evidence"
+          ;;
+        *) echo "REFUSED: unknown mode $mode"; exit 1;;
+      esac
+      git -C "$ws/deploy/gh-pages" add -A
+      git -C "$ws/deploy/gh-pages" diff --cached --quiet || \
+        git -C "$ws/deploy/gh-pages" -c user.name="The Babel Release" \
+          -c user.email="babel@localhost" \
+          commit -qm "Babel Release ($mode, cue $cue)"
+      git -C "$ws/deploy/gh-pages" push -q origin gh-pages
+      printf 'GO %s\n' "$cue" >> "$ws/cue-log.jsonl"
+    fi
+    if [ "$mode" = real ]; then
+      mkdir -p "$ws/release-assets"
+      for loc in {{ locales | join(' ') }}; do
+        cp "$ws/joined/$loc.po" "$ws/release-assets/$loc.po"
+        # polib.pofile() — NOT POFile(): the constructor silently discards a
+        # positional fpath and compiles a ZERO-ENTRY .mo (rev 1's tenth site
+        # of the same hallucination class its commissioning had caught nine of)
+        {{ ruler() }} -c "import polib; polib.pofile('$ws/joined/$loc.po').save_as_mofile('$ws/release-assets/$loc.mo'); print('$loc.mo compiled')"
+      done
+      tag="babel-{{ pinned_sha[:7] }}"
+      if gh release view "$tag" >/dev/null 2>&1; then
+        # replay against a pre-existing release: verify it is OUR release
+        # (target must be the pinned sha), then re-attach current assets —
+        # a stale release must not be accepted just because the tag exists
+        got_target="$(gh release view "$tag" --json targetCommitish -q .targetCommitish)"
+        [ "$got_target" = "{{ pinned_sha }}" ] || { echo "REFUSED: release $tag targets $got_target, not the pinned sha"; exit 1; }
+        gh release upload "$tag" "$ws"/release-assets/*.po "$ws"/release-assets/*.mo --clobber
+      else
+        gh release create "$tag" \
+          --target "{{ pinned_sha }}" --title "Babel Release catalogs ($tag)" \
+          --notes "Installable gettext catalogs (.po + compiled .mo) for es/fr/de/pt-BR/ar, produced against the attested contract. See the evidence page for methodology and honesty caveats." \
+          "$ws"/release-assets/*.po "$ws"/release-assets/*.mo
+      fi
+      for i in $(seq 1 45); do
+        code="$(curl -s -o /dev/null -w "%{http_code}" "{{ site_url }}/portal/" || true)"
+        [ "$code" = 200 ] && break
+        sleep 20
+      done
+      [ "$code" = 200 ] || { echo "deploy did not go live: $code"; exit 1; }
+      echo "LIVE: {{ site_url }}/portal/"
+    elif [ "$mode" = evidence ]; then
+      for i in $(seq 1 45); do
+        code="$(curl -s -o /dev/null -w "%{http_code}" "{{ site_url }}/evidence/" || true)"
+        [ "$code" = 200 ] && break
+        sleep 20
+      done
+      [ "$code" = 200 ] || { echo "evidence page did not go live: $code"; exit 1; }
+      echo "LIVE: {{ site_url }}/evidence/"
+    else
+      echo "fixture mode: no release asset, no live poll"
+    fi
+    SH
+    chmod +x scripts/arm-gate.sh scripts/go.sh
+    bash -n scripts/arm-gate.sh scripts/go.sh
+
+    # ── The teeth battery ──────────────────────────────────────────────────────
+    # A tooth is a fixture failing FOR ITS RECORDED REASON, not merely exiting
+    # nonzero: tooth() captures the tool's own failure signature and the
+    # battery asserts it. An exit code alone cannot distinguish "the gate
+    # bit" from "the gate never ran".
+    R="{{ ruler() }}"
+    pass=0; fail=0
+    tooth() { # name expected(fail|pass) reason-substring command...
+      local name="$1" expect="$2" want_reason="$3"; shift 3
+      local out rc ok
+      set +e; out="$("$@" 2>&1)"; rc=$?; set -e
+      ok=false
+      if [ "$expect" = fail ] && [ "$rc" -ne 0 ] && grep -qF "$want_reason" <<<"$out"; then ok=true; fi
+      if [ "$expect" = pass ] && [ "$rc" -eq 0 ]; then ok=true; fi
+      jq -n --arg n "$name" --arg e "$expect" --arg w "$want_reason" \
+         --argjson rc "$rc" --argjson ok "$ok" --arg r "$(tail -n 2 <<<"$out" | head -c 300)" \
+        '{fixture: $n, expected: $e, want_reason: $w, exit_code: $rc, reason: $r,
+          verdict: (if $ok then "tooth-proven" else "TOOTH-MISSING" end)}' >> fixtures/teeth.jsonl
+      if $ok; then pass=$((pass+1)); else fail=$((fail+1)); echo "TOOTH-MISSING: $name (rc=$rc, expected $expect wanting '$want_reason')"; fi
+    }
+    : > fixtures/teeth.jsonl
+    # Catalog teeth run against the REAL contract. --partial skips the
+    # skeleton-bijection check so each single-defect fixture fails EXACTLY its
+    # intended gate (a partial catalog would otherwise also fail
+    # skeleton_coverage and muddy the attribution).
+    SK=contract/canonical-en.pot; GL=contract/glossary.json; TH=contract/thresholds.json
+    REF=reference/manifest.json
+    tooth broken-plural:plural_coverage   fail plural_coverage    $R scripts/catalog-validate.py --po fixtures/negative/broken-plural.po --skeleton $SK --glossary $GL --thresholds $TH --locale ar --reference $REF --partial
+    tooth dropped-format:format_parity    fail format_parity      $R scripts/catalog-validate.py --po fixtures/negative/dropped-format.po --skeleton $SK --glossary $GL --thresholds $TH --locale es --reference $REF --partial
+    tooth term-drift:terminology_hit_rate fail terminology_hit_rate $R scripts/catalog-validate.py --po fixtures/negative/term-drift.po --skeleton $SK --glossary $GL --thresholds $TH --locale es --reference $REF --partial
+    tooth ratio-blowout:length_band       fail length_ratio_abs   $R scripts/catalog-validate.py --po fixtures/negative/ratio-blowout.po --skeleton $SK --glossary $GL --thresholds $TH --locale de --partial
+    tooth rtl-unbalanced:rtl_bidi_balance fail rtl_bidi_balance   $R scripts/catalog-validate.py --po fixtures/negative/rtl-unbalanced.po --skeleton $SK --glossary $GL --thresholds $TH --locale ar --rtl --partial
+    # no-clip — a truncating fixture page must fail the noclip gate
+    mkdir -p fixtures/negative/noclip-bad
+    cat > fixtures/negative/noclip-bad/index.html <<'HTML'
+    <html><head><style>body{overflow:hidden}p{text-overflow:ellipsis}</style></head>
+    <body><p>[àéĩõü x40 stress string that must render in full]</p></body></html>
+    HTML
+    printf '%s' '["[àéĩõü x40 stress string that must render in full]"]' > fixtures/negative/noclip-bad/strings.json
+    tooth overflow-pseudo-loc:noclip fail "FAIL noclip" python3 scripts/exp-gate.py --noclick fixtures/negative/noclip-bad --strings fixtures/negative/noclip-bad/strings.json
+    # conflict — the rogue is DERIVED at run time from the real es catalog
+    # (one msgstr diverged), so the collision is skeleton-independent. The
+    # join infers locale from FILENAME, so the rogue lives in its own
+    # directory as fr.po to collide with the fr-claiming copy. The tooth is
+    # the conflict count, asserted below.
+    mkdir -p fixtures/negative/rogue fixtures/work
+    cp work/locale-es/es.po fixtures/work/fr.po
+    $R - <<'PY'
+    import polib
+    po = polib.pofile("fixtures/work/fr.po")
+    po.metadata["Language"] = "fr"
+    first = next(e for e in po if e.msgid.strip())
+    first.msgstr = (first.msgstr or "") + " [rogue divergent]"
+    po.save("fixtures/negative/rogue/fr.po")
+    print("rogue derived: one msgstr diverged on", first.msgid[:30])
+    PY
+    $R scripts/join-catalogs.py --inputs fixtures/work/fr.po fixtures/negative/rogue/fr.po \
+      --out-dir fixtures/work/joined --conflicts-out fixtures/work/join-conflicts.json
+    # arm/go protocol teeth — synthetic state in an ISOLATED ARM_WS dir so
+    # each refusal happens for its INTENDED reason, plus a local bare git remote
+    git init -q --bare fixtures/remote/gh-pages.git
+    mkdir -p fixtures/work/arm-case/pin buffer-B/portal buffer-B/evidence
+    for loc in en {{ locales | join(' ') }}; do mkdir -p "buffer-B/$loc"; echo stub > "buffer-B/$loc/index.html"; done
+    echo stub > buffer-B/portal/index.html; echo stub > buffer-B/evidence/index.html
+    jq -n '{admitted: ["es"]}' > fixtures/work/arm-case/release-manifest.json
+    jq -n '{overall: {es: true}}' > fixtures/work/arm-case/sweep-report.json
+    cp pin/buffer-A-fingerprint.json fixtures/work/arm-case/pin/
+    tooth missing-ack:arm_holds fail "HOLD: missing ack" env ARM_WS="$PWD/fixtures/work/arm-case" bash scripts/arm-gate.sh missing-ack-cue 0000000000000000000000000000000000000000
+    tooth unarmed:go_refuses fail "REFUSED: not armed" bash scripts/go.sh unarmed-cue fixtures/remote/gh-pages.git fixture
+    # duplicate cue: the REAL exactly-once exercise — arm the fixture cue, fire
+    # TWICE, and assert the cue appended exactly once and the deploy happened
+    # (rev 1's tooth never armed its cue, so go.sh refused pre-append and the
+    # tooth re-proved unarmed refusal — a dead tooth inside a self-certifying
+    # battery)
+    touch fixtures/work/arm-case/ready-es.json
+    # go.sh resolves its workspace from its OWN location, not ARM_WS — the
+    # armed fixture must be visible where go.sh looks, or the tooth re-proves
+    # unarmed refusal instead of the exactly-once append (rev 1's dead tooth).
+    # The armed state is FABRICATED here (go.sh's exactly-once is the behavior
+    # under test; arm-gate has its own teeth above and its real run at 15).
+    jq -n --arg c dup-cue '{cue: $c, acked: ["es"],
+      verified_gh_pages_head: "fixture", verified_index_sha256: "fixture"}' > armed-dup-cue.json
+    rm -f cue-log.jsonl
+    tooth duplicate-cue:go_appends_once pass "already fired" bash -c 'bash scripts/go.sh dup-cue fixtures/remote/gh-pages.git fixture; first=$(grep -c "^GO dup-cue$" cue-log.jsonl); bash scripts/go.sh dup-cue fixtures/remote/gh-pages.git fixture; second=$(grep -c "^GO dup-cue$" cue-log.jsonl); deployed=$(git -C fixtures/remote/gh-pages.git rev-list --count gh-pages); [ "$first" = 1 ] && [ "$second" = 1 ] && [ "$deployed" = 1 ]'
+    # drifted fingerprint: arm must hold when the expected head diverges from
+    # the pin — checked LOCALLY (hermetic), with the reason asserted
+    tooth drifted-fingerprint:arm_holds fail "HOLD: gh-pages head moved" bash -c 'set -e; ARM_WS="$PWD/fixtures/work/arm-case" bash scripts/arm-gate.sh drift-cue ffffffffffffffffffffffffffffffffffffffff; [ ! -f fixtures/work/arm-case/armed-drift-cue.json ]'
+    # restore the real workspace state after fixture surgery
+    rm -f cue-log.jsonl armed-dup-cue.json
+    rm -rf deploy
+    # conflict + summary gates
+    jq -e 'length == 1 and .[0].locale == "fr"' fixtures/work/join-conflicts.json >/dev/null
+    jq -s --argjson p "$pass" --argjson f "$fail" \
+      '{fixtures: length, pass: $p, fail: $f, zero_unexplained: ($f == 0)}' \
+      fixtures/teeth.jsonl > fixtures/gate-teeth.json
+    [ "$fail" -eq 0 ] || { echo "FAIL: $fail teeth missing"; cat fixtures/teeth.jsonl; exit 1; }
+    # ── Pre-volume namespace baseline (rev 2) ────────────────────────────────
+    # Every writer's validation re-lists the workspace and diffs against this
+    # baseline: the ACTUAL filesystem delta must be confined to the writer's
+    # own namespace. Listed-path attestation checks cannot hide out-of-
+    # namespace writes; a diff can. (repo/ and deploy/ excluded: the pinned
+    # clone and the deploy tree are not writer surfaces.)
+    find . -path ./repo -prune -o -path ./deploy -prune -o -name '.namespace-*' -prune -o -type f -print0 \
+      | sort -z | xargs -0 sha256sum > .namespace-baseline.tmp
+    mv .namespace-baseline.tmp .namespace-baseline.txt
+    wc -l < .namespace-baseline.txt
+    echo "gate teeth: $pass fixtures, each failing exactly its intended gate for the recorded reason"
+
+    {% elif stage == 9 %}
+    {{ writer_mission(volume_locale_by_instance[instance], true, false) }}
+
+    {% elif stage == 10 %}
+    {{ writer_mission('ar', true, true) }}
+
+    {% elif stage == 11 %}
+    {{ strict() }}
+    # ── Movement 11 · Catalog lattice join — no LLM participates in merging ────
+    R="{{ ruler() }}"
+    $R scripts/join-catalogs.py \
+      --inputs {% for loc in locales %}work/locale-{{ loc }}/{{ loc }}.po {% endfor %} \
+      --out-dir joined --conflicts-out join-conflicts.json
+    # the planted rogue rides along: derived HERE from the REAL joined fr
+    # catalog with exactly one msgstr diverged, claiming locale fr from its
+    # directory — so the conflict set is EXACTLY the one planted msgid (an
+    # es-derived rogue diverges from the real fr translation on every entry,
+    # drowning the planted conflict in noise)
+    $R - <<'PY'
+    import os
+    import polib
+    po = polib.pofile("joined/fr.po")
+    first = next(e for e in po if e.msgid.strip())
+    first.msgstr = (first.msgstr or "") + " [rogue divergent]"
+    os.makedirs("fixtures/negative/rogue-probe", exist_ok=True)
+    # filename MUST be fr.po: the join infers the locale from the basename
+    po.save("fixtures/negative/rogue-probe/fr.po")
+    print("probe rogue derived from joined/fr.po on", first.msgid[:30])
+    PY
+    $R scripts/join-catalogs.py \
+      --inputs joined/fr.po fixtures/negative/rogue-probe/fr.po \
+      --out-dir joined-probe --conflicts-out join-conflicts-rogue.json
+    mv join-conflicts-rogue.json join-conflicts.json
+    rm -rf joined-probe
+    # probes: idempotence (join twice, byte-identical) + commutativity (reorder)
+    $R scripts/join-catalogs.py --inputs {% for loc in locales %}work/locale-{{ loc }}/{{ loc }}.po {% endfor %} --out-dir joined-again --conflicts-out /dev/null
+    diff -r joined joined-again
+    {% set rev = locales | list | reverse %}
+    $R scripts/join-catalogs.py --inputs {% for loc in rev %}work/locale-{{ loc }}/{{ loc }}.po {% endfor %} --out-dir joined-rev --conflicts-out /dev/null
+    diff -r joined joined-rev
+    rm -rf joined-again joined-rev
+    # coverage: per-locale msgid set == skeleton (nothing dropped, nothing invented)
+    $R - <<'PY'
+    import polib, sys
+    skel = {e.msgid for e in polib.pofile("contract/canonical-en.pot") if e.msgid.strip()}
+    ok = True
+    for loc in {{ locales | tojson }}:
+        got = {e.msgid for e in polib.pofile("joined/%s.po" % loc) if e.msgid.strip()}
+        if got != skel:
+            ok = False
+            print("FAIL coverage %s: %d missing, %d invented" % (loc, len(skel - got), len(got - skel)))
+    sys.exit(0 if ok else 1)
+    PY
+    echo "join: algebraic, idempotent, commutative, skeleton-covering; conflicts recorded"
+
+    {% elif stage == 12 %}
+    {{ strict() }}
+    # ── Movement 12 · Build buffer B — six editions, whole-or-old in waiting ──
+    cat > scripts/build-site.py <<'PY'
+    #!/usr/bin/env python3
+    """Pure-Python static build (hugo ABSENT — named substitution). Renders the
+    six editions from the joined catalogs + pinned canonical census: per-locale
+    pages, language switcher, hreflang matrix, per-locale RSS, portal, evidence
+    stub, dir=rtl + mirrored nav for ar. Deterministic: sorted everything."""
+    import argparse, json
+    from pathlib import Path
+    from xml.etree import ElementTree as ET
+    import polib
+
+    LOCALES = {{ locales | tojson }}
+    DIRS = {{ locale_direction | tojson }}
+    SUBSET = {{ docs_subset | tojson }}
+
+    CSS = """body{font-family:system-ui,sans-serif;max-width:46rem;margin:0 auto;
+    padding:1rem;line-height:1.6;overflow-wrap:anywhere;word-break:break-word}
+    nav a{margin-right:.8rem}.stamp{color:#567}"""
+
+    def esc(t):
+        return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    def seg_text(census):
+        by_path = {}
+        for seg in census:
+            by_path.setdefault(seg["source_path"], []).append(seg)
+        return by_path
+
+    def page(locale, title, body, alts, direction, nav_order):
+        links = "\n".join('<link rel="alternate" hreflang="%s" href="%s">' % (l, h)
+                          for l, h in sorted(alts.items()))
+        nav = "".join('<a href="%s">%s</a>' % (href, label)
+                      for href, label in nav_order)
+        return """<!DOCTYPE html>
+    <html lang="%s"%s>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    %s
+    <title>%s</title><style>%s</style></head>
+    <body><header><h1>%s</h1><nav>%s</nav>
+    <p class="stamp">%s</p></header>
+    <main>%s</main>
+    <footer><p>%s</p></footer></body></html>""" % (
+            locale, ' dir="rtl"' if direction == "rtl" else "", links, esc(title), CSS,
+            esc(title), nav, " · ".join(sorted(alts)), body,
+            "Marianne AI Compose — dual-licensed (see LICENSE, LICENSE-AGPL). "
+            "Translated edition produced by The Babel Release; notices carried per contract.")
+
+    def main():
+        ap = argparse.ArgumentParser()
+        ap.add_argument("--catalog-dir", default="joined")
+        ap.add_argument("--census", default="contract/segment-census.json")
+        ap.add_argument("--out", default="buffer-B")
+        ap.add_argument("--sweep", help="sweep-report.json; renders evidence verdicts when given")
+        a = ap.parse_args()
+        out = Path(a.out)
+        census = json.load(open(a.census))
+        by_path = seg_text(census)
+        for locale in ["en"] + LOCALES:
+            catalog = {}
+            if locale != "en":
+                for e in polib.pofile("%s/%s.po" % (a.catalog_dir, locale)):
+                    if e.msgid.strip():
+                        catalog[e.msgid] = e.msgstr or e.msgid
+            t = lambda s: catalog.get(s, s)
+            (out / locale).mkdir(parents=True, exist_ok=True)
+            for src in SUBSET:
+                segs = sorted(by_path.get(src, []), key=lambda s: s["line"])
+                parts = []
+                for seg in segs:
+                    if seg["kind"] == "heading":
+                        parts.append("<h2>%s</h2>" % esc(t(seg["msgid"])))
+                    else:
+                        parts.append("<p>%s</p>" % esc(t(seg["msgid"])))
+                stem = Path(src).stem
+                alts = {"en": "../en/%s.html" % stem if locale != "en" else "%s.html" % stem}
+                for l in LOCALES:
+                    alts[l] = ("%s.html" % stem) if l == locale else "../%s/%s.html" % (l, stem)
+                alts["x-default"] = "../en/%s.html" % stem if locale != "en" else "%s.html" % stem
+                nav_base = [("index.html", "Home")] + [
+                    ("%s.html" % Path(s).stem, Path(s).stem.replace("-", " ")) for s in SUBSET]
+                nav = nav_base if locale == "en" or DIRS[locale] == "ltr" else list(reversed(nav_base))
+                (out / locale / ("%s.html" % stem)).write_text(
+                    page(locale, t("Marianne AI Compose — %s" % Path(src).stem),
+                         "\n".join(parts), alts, DIRS.get(locale, "ltr"), nav),
+                    encoding="utf-8")
+            # edition home — every page's nav links here; the links gate
+            # resolves it, so it must EXIST, carry the hreflang matrix, and
+            # mirror for ar like every other page
+            idx_alts = {"en": "../en/" if locale != "en" else "./"}
+            for l in LOCALES:
+                idx_alts[l] = ("./") if l == locale else "../%s/" % l
+            idx_alts["x-default"] = "../en/" if locale != "en" else "./"
+            nav_base = [("index.html", "Home")] + [
+                ("%s.html" % Path(s).stem, Path(s).stem.replace("-", " ")) for s in SUBSET]
+            nav = nav_base if locale == "en" or DIRS[locale] == "ltr" else list(reversed(nav_base))
+            listing = "".join('<li><a href="%s.html">%s</a></li>'
+                              % (Path(s).stem, t(Path(s).stem.replace("-", " ")))
+                              for s in SUBSET)
+            (out / locale / "index.html").write_text(
+                page(locale, t("Marianne AI Compose"),
+                     '<ul>%s</ul>' % listing, idx_alts, DIRS.get(locale, "ltr"), nav),
+                encoding="utf-8")
+            # per-locale RSS (stdlib XML; xmllint absent — ElementTree writes it)
+            rss = ET.Element("rss", version="2.0")
+            ch = ET.SubElement(rss, "channel")
+            ET.SubElement(ch, "title").text = "Marianne AI Compose (%s)" % locale
+            ET.SubElement(ch, "link").text = "../%s/" % locale
+            ET.SubElement(ch, "description").text = t("Documentation edition")
+            for seg in sorted((s for s in census if s["kind"] == "heading"),
+                              key=lambda s: (s["source_path"], s["line"]))[:10]:
+                item = ET.SubElement(ch, "item")
+                ET.SubElement(item, "title").text = t(seg["msgid"])[:80]
+                ET.SubElement(item, "guid").text = "%s#%s" % (seg["source_path"], seg["msgid_sha"])
+            ET.ElementTree(rss).write(str(out / locale / "rss.xml"), encoding="utf-8", xml_declaration=True)
+        # portal (full alternate matrix: a language-neutral page still declares
+        # every edition so the global reciprocity clique closes through it)
+        (out / "portal").mkdir(parents=True, exist_ok=True)
+        rows = "\n".join('<li><a href="../%s/">%s</a></li>' % (l, l) for l in LOCALES)
+        portal_alts = {"en": "../en/", "x-default": "../en/"}
+        for l in LOCALES:
+            portal_alts[l] = "../%s/" % l
+        (out / "portal" / "index.html").write_text(page(
+            "en", "The Babel Release — choose your edition",
+            '<ul>%s</ul><p><a href="../en/">English (canonical)</a></p>' % rows,
+            portal_alts, "ltr", [("../en/", "English")]), encoding="utf-8")
+        # evidence page: stub here, verdicts with --sweep, completed at movement 17
+        ev_alts = {"en": "../en/", "x-default": "../en/"}
+        for l in LOCALES:
+            ev_alts[l] = "../%s/" % l
+        verdicts = "<p>Verdicts render after the sweep (movement 13).</p>"
+        if a.sweep:
+            rep = json.load(open(a.sweep))
+            rows = []
+            for loc in LOCALES:
+                cells = "".join("<td>%s</td>" % c["verdict"] for c in rep[loc]["checks"].values())
+                rows.append("<tr><td>%s</td>%s<td>%s</td></tr>" % (loc, cells, rep[loc]["checks"] and rep["overall"].get(loc, "")))
+            verdicts = "<table><tr><th>locale</th><th colspan=\"4\">checks</th></tr>%s</table>" % "".join(rows)
+        (out / "evidence").mkdir(parents=True, exist_ok=True)
+        (out / "evidence" / "index.html").write_text(page(
+            "en", "The Babel Release — evidence",
+            """<h2>Methodology</h2><p>Frozen contract (glossary, skeleton, registers, RTL
+            spec, PRE-registered thresholds) → five writers across three model
+            families → deterministic
+            sweep → one serial merge authority → atomic cutover. No writer judged its own
+            admission; no LLM judged any merge.</p>
+            <h2>Verdicts</h2>%s
+            <h2>Honesty caveats</h2><p>This multilingual edition lives on ADDITIVE subpaths
+            of the gh-pages branch. The next upstream mkdocs deploy may remove them; the
+            durable artifacts are the release-asset catalogs, the build recipe, and the
+            sealed digests. Pseudo-loc no-clip is verified structurally (full-string
+            presence + non-truncating CSS), not in a visual browser.</p>""" % verdicts,
+            ev_alts, "ltr", [("../en/", "English")]), encoding="utf-8")
+        print("buffer B built:", sorted(p.name for p in out.iterdir()))
+    main()
+    PY
+    {{ ruler() }} -m py_compile scripts/build-site.py
+    {{ ruler() }} scripts/build-site.py --catalog-dir joined --census contract/segment-census.json --out buffer-B
+    # structural gates on the BUILT pages (per-locale dirs, hreflang reciprocity
+    # over the WHOLE tree, internal links, RSS well-formedness, RTL mirroring).
+    # Page filenames derive from the census — never hardcoded.
+    python3 scripts/exp-gate.py --links buffer-B
+    python3 scripts/exp-gate.py --hreflang buffer-B
+    stem="$(jq -r '[.[].source_path] | unique | sort | .[0]' contract/segment-census.json | xargs basename | sed 's/\.md$//')"
+    python3 scripts/exp-gate.py --rtl "buffer-B/ar/$stem.html" "buffer-B/en/$stem.html"
+    echo "buffer B whole: six editions + portal + evidence (rtl probe on $stem)"
+
+    {% elif stage == 13 %}
+    {{ strict() }}
+    # ── Movement 13 · EXP battery + THE deterministic sweep (empty fallback) ───
+    # The sweep is a REPORT-COMPLETENESS gate: every keyed check × every
+    # locale present, red rows included — the rows ROUTE to the merge
+    # authority, which is where the grant actually happens. A fallback for a
+    # clock is a second clock.
+    R="{{ ruler() }}"
+    # pseudo-loc stress: >= +40%-length accented strings through the SAME
+    # pipeline. The pseudo catalog claims locale es (content is irrelevant to
+    # layout stress) so build-site renders its msgstrs into real pages.
+    $R - <<'PY'
+    import json
+    from pathlib import Path
+    import polib
+    census = json.load(open("contract/segment-census.json"))
+    Path("fixtures/pseudo").mkdir(parents=True, exist_ok=True)
+    npl = {"es": 2, "fr": 2, "de": 2, "pt-BR": 2, "ar": 6}
+    first = None
+    # one pseudo catalog PER LOCALE: build-site renders every edition from the
+    # catalog dir it is given, and a missing fr.po is a parse crash, not a
+    # stress test (a rev-1 kill no review found)
+    for loc in ["es", "fr", "de", "pt-BR", "ar"]:
+        po = polib.POFile()
+        po.metadata = {"Language": loc,
+                       "Plural-Forms": "nplurals=%d; plural=(n > 1);" % npl[loc]}
+        for s in census:
+            pad = "àéĩõü" * (len(s["msgid"]) // 3 + 8)
+            po.append(polib.POEntry(msgid=s["msgid"], msgstr=s["msgid"] + " " + pad))
+        po.save("fixtures/pseudo/%s.po" % loc)
+        if first is None:
+            first = po
+    Path("fixtures/pseudo/strings.json").write_text(
+        json.dumps([e.msgstr for e in first], ensure_ascii=False))
+    print("pseudo-loc stress catalogs:", len(census), "entries x 5 locales")
+    PY
+    mkdir -p fixtures/pseudo-parsed
+    cp fixtures/pseudo/*.po fixtures/pseudo-parsed/
+    {{ ruler() }} scripts/build-site.py --catalog-dir fixtures/pseudo-parsed \
+      --census contract/segment-census.json --out buffer-B-pseudo
+    python3 scripts/exp-gate.py --noclick buffer-B-pseudo/es --strings fixtures/pseudo/strings.json
+    rm -rf buffer-B-pseudo fixtures/pseudo-parsed
+    # THE SWEEP — every keyed check × every locale, over the ACTUAL bytes
+    printf '{' > sweep-report.json
+    first=true
+    for loc in {{ locales | join(' ') }}; do
+      rtl=""
+      if [ "$loc" = ar ]; then rtl="--rtl"; fi
+      # || true: a red locale gets its REPORT row like every other — the sweep's
+      # own success is REPORT COMPLETENESS; routing the red locale to a
+      # disposition is the merge authority's job, not a reason to halt here
+      $R scripts/catalog-validate.py --po joined/$loc.po \
+        --skeleton contract/canonical-en.pot --glossary contract/glossary.json \
+        --thresholds contract/thresholds.json --locale "$loc" \
+        --reference reference/manifest.json $rtl \
+        --report "sweep-$loc.json" || true
+      test -s "sweep-$loc.json"
+      $first || printf ',' >> sweep-report.json; first=false
+      printf '"%s": ' "$loc" >> sweep-report.json
+      cat "sweep-$loc.json" >> sweep-report.json
+    done
+    printf '}' >> sweep-report.json
+    jq '. + {overall: (to_entries | map({key: .key, value: .value.pass}) | from_entries)}' sweep-report.json > sweep-report-tmp.json
+    mv sweep-report-tmp.json sweep-report.json
+    rm -f sweep-es.json sweep-fr.json sweep-de.json sweep-pt-BR.json sweep-ar.json
+    # the distribution DISCRIMINATES: the term-drift fixture must land outside its band
+    set +e
+    $R scripts/catalog-validate.py --po fixtures/negative/term-drift.po \
+      --skeleton contract/canonical-en.pot --glossary contract/glossary.json \
+      --thresholds contract/thresholds.json --locale es --reference reference/manifest.json \
+      --report fixtures/degraded-through-sweep.json
+    rc=$?
+    set -e
+    [ "$rc" -ne 0 ] || { echo "FAIL: degraded fixture PASSED the sweep — the bands do not discriminate"; exit 1; }
+    # refresh evidence page with sweep verdicts
+    {{ ruler() }} scripts/build-site.py --catalog-dir joined --census contract/segment-census.json --out buffer-B --sweep sweep-report.json
+    echo "SWEEP COMPLETE — the report is the merge authority's input, red rows included"
+
+    {% elif stage == 14 %}
+    # Movement 14 · Merge Authority — serial, one mind, mechanically bounded
+
+    You are the single merge authority. Your ADMISSION power is bounded by
+    jq-checkable preconditions; your freedom is confined to disposition prose.
+
+    Read, in `{{ workspace }}`:
+    - `sweep-report.json` — every check × every locale over the actual bytes
+    - `work/locale-*/attestation.json` — every writer's consumed/produced hashes
+    - `join-conflicts.json` — the planted rogue (fr, one divergent msgid)
+    - `contract/MANIFEST.json` — what each writer SHOULD have consumed
+
+    ## Task
+    1. Compute the admissible set: a locale is admitted IFF its sweep overall
+       is green AND its attestation hashes verify against the actual bytes.
+       You may not admit anything else; you may not fail anything that meets
+       both bars. The admitted set must EQUAL the both-green set — not a
+       subset, not a superset.
+    2. Route EVERYTHING non-admitted — the rogue conflict above all — to
+       `{{ workspace }}/dispositions/{id}.json`:
+       `{"id": "...", "subject": "...", "kind": "conflict|rejection",
+         "evidence": "<exact msgid / check / hash, quoted>", "decision": "...",
+         "prose": "<your argued judgment — the ONLY free text in this score>"}`
+       Disagreement with the glossary is PRESERVED here, never overwritten —
+       dissent is evidence about the contract.
+    3. Write `{{ workspace }}/release-manifest.json`:
+       ```json
+       {"instrument": "{{ instrument_name }}",
+        "admitted": ["<locales>"],
+        "rejected": ["<locales-or-items>"],
+        "content_digests": {"joined/<loc>.po": "<sha256>",
+                            "buffer-B/<loc>/<page>.html": "<sha256>"},
+        "bound_attestations": {"<locale>": "<attestation path>"},
+        "rogue_marker_absent": true}
+       ```
+       TWO digest domains, never conflated: `joined/<loc>.po` are CATALOG
+       bytes (the seal verifies them against the DOWNLOADED release asset);
+       `buffer-B/...` are SITE pages (the seal fetches them from the live
+       URLs). Site digests cover EVERY built page of EVERY deployed edition
+       (the canonical `en` subpath plus all pages of each admitted locale)
+       and the portal — but NOT the evidence page: the evidence page is
+       COMPLETED and published only after the seal is computed, and a seal
+       must never cover a surface that mutates after sealing. Set
+       `rogue_marker_absent` true only if the rogue marker string is absent
+       from joined/ and buffer-B/ — the validation greps it independently.
+    4. Print the admission table to stdout.
+
+    {{ ai_ground_rules() }}
+
+    {% elif stage == 15 %}
+    {{ strict() }}
+    # ── Movement 15 · Ack set + arm-gate (hold, never fire) ────────────────────
+    bash scripts/arm-gate.sh "{{ cue }}" "$(jq -r .gh_pages_head pin/buffer-A-fingerprint.json)"
+    echo "armed; buffer A still serving at {{ site_url }}/"
+
+    {% elif stage == 16 %}
+    {{ strict() }}
+    # ── Movement 16 · GO — exactly-once, one non-force push, whole-or-old ──────
+    bash scripts/go.sh "{{ cue }}" "https://github.com/{{ github_owner }}/{{ docs_repo }}.git" real
+    test "$(grep -c "^GO {{ cue }}$" cue-log.jsonl)" -eq 1
+    echo "BABEL SHIPPED: {{ site_url }}/portal/"
+
+    {% elif stage == 17 %}
+    {{ strict() }}
+    # ── Movement 17 · Live verify + terminal recompute seal ────────────────────
+    # Workspace-green is not deployed-green: every gate re-runs against the
+    # SERVED bytes, and the seal re-derives digests from the live URLs (site
+    # pages) and the DOWNLOADED release assets (catalogs). The evidence page
+    # is completed and published AFTER the seal computes, under its OWN armed
+    # cue — no sealed surface is mutated after sealing.
+    base="{{ site_url }}"
+    # fetch the deployed tree: every built page (curl cannot create parent
+    # directories, so each nested parent is made explicitly — rev 1's loop
+    # wrote ZERO files and died vacuously-green then wrong-reason)
+    rm -rf validation-live && mkdir -p validation-live
+    cd buffer-B
+    for p in $(find . -name '*.html' | sed 's|^\./||'); do
+      mkdir -p "../validation-live/$(dirname "$p")"
+      curl -sfL "$base/$p" -o "../validation-live/$p"
+    done
+    cd ..
+    # minimum coverage: the deployed fetch must actually have fetched the tree
+    built=$(cd buffer-B && find . -name '*.html' | wc -l)
+    got=$(find validation-live -name '*.html' | wc -l)
+    [ "$got" -ge "$built" ] || { echo "FAIL: live fetch incomplete: $got/$built pages"; exit 1; }
+    python3 scripts/exp-gate.py --links validation-live
+    python3 scripts/exp-gate.py --hreflang validation-live
+    stem="$(jq -r '[.[].source_path] | unique | sort | .[0]' contract/segment-census.json | xargs basename | sed 's/\.md$//')"
+    python3 scripts/exp-gate.py --rtl "validation-live/ar/$stem.html" "validation-live/en/$stem.html"
+    # recompute seal — TWO digest domains, explicitly dispatched:
+    #   buffer-B/<path> → live URL fetch
+    #   joined/<loc>.po → workspace bytes AND the release-asset download
+    tag="babel-{{ pinned_sha[:7] }}"
+    rm -rf seal-verify && mkdir -p seal-verify
+    gh release download "$tag" --pattern "*.po" --dir seal-verify --clobber
+    python3 - <<'PY'
+    import hashlib, json, sys, urllib.request
+    from pathlib import Path
+    man = json.load(open("release-manifest.json"))
+    seal, bad = {}, []
+    for rel, expected in sorted(man["content_digests"].items()):
+        if rel.startswith("buffer-B/"):
+            url = "{{ site_url }}/" + rel.replace("buffer-B/", "")
+            try:
+                body = urllib.request.urlopen(url, timeout=60).read()
+            except Exception as exc:
+                bad.append((rel, str(exc))); continue
+            src = "live:" + url
+        elif rel.startswith("joined/"):
+            body = Path(rel).read_bytes()
+            asset = Path("seal-verify") / Path(rel).name
+            if not asset.exists():
+                bad.append((rel, "release asset missing: %s" % asset)); continue
+            if hashlib.sha256(asset.read_bytes()).hexdigest() != expected:
+                bad.append((rel, "release asset digest != manifest")); continue
+            src = "asset:" + str(asset)
+        else:
+            bad.append((rel, "unknown digest domain")); continue
+        got = hashlib.sha256(body).hexdigest()
+        seal[src] = {"expected": expected, "measured": got, "match": got == expected}
+        if got != expected:
+            bad.append((rel, "digest mismatch"))
+    json.dump({"checked": len(seal), "mismatches": len(bad), "urls": seal},
+              open("recompute-seal.json", "w"), indent=2, sort_keys=True)
+    if bad:
+        print("SEAL FAILED:", bad[:5]); sys.exit(1)
+    print("recompute seal:", len(seal), "sources re-derive the release digests exactly")
+    PY
+    # complete the evidence page (dispositions + seal), then publish it under
+    # the SECOND armed cue — the same arm invariants, the same exactly-once
+    # cue-log discipline as the GO that shipped the editions
+    python3 - <<'PY'
+    import json
+    from pathlib import Path
+    disp = sorted(Path("dispositions").glob("*.json"))
+    rows = "".join("<li><b>%s</b> (%s): %s</li>" % (
+        json.load(open(d))["id"], json.load(open(d))["kind"],
+        json.load(open(d))["prose"][:200]) for d in disp)
+    ev = Path("buffer-B/evidence/index.html").read_text(encoding="utf-8")
+    add = "<h2>Dispositions</h2><ul>%s</ul><h2>Recompute seal</h2><p>%s sources re-derived the release digests exactly (recompute-seal.json). This page and the seal file are published under armed cue {{ evidence_cue }} AFTER the seal was computed; the seal deliberately covers content pages and catalogs only — never this page.</p>" % (
+        rows, len(json.load(open("recompute-seal.json"))["urls"]))
+    ev = ev.replace("</main>", add + "</main>")
+    Path("buffer-B/evidence/index.html").write_text(ev, encoding="utf-8")
+    Path("buffer-B/evidence/recompute-seal.json").write_text(
+        Path("recompute-seal.json").read_text())
+    print("evidence page completed:", len(disp), "dispositions, seal attached")
+    PY
+    bash scripts/arm-gate.sh "{{ evidence_cue }}" "$(jq -r .gh_pages_head pin/buffer-A-fingerprint.json)"
+    bash scripts/go.sh "{{ evidence_cue }}" "https://github.com/{{ github_owner }}/{{ docs_repo }}.git" evidence
+    echo "LIVE SEAM VERIFIED"
+
+    {% elif stage == 18 %}
+    # Movement 18 · Back-Translation Oracle — family C, post-GO by design
+
+    You are the oracle: a THIRD vendor family — not the es writer's, not the
+    characterizer's. Your prose judges nothing; the scripted recall computation
+    is the only thing that enters the record.
+
+    ## Task
+    1. Draw the stratified sample frame with the movement-4 script —
+       deterministic, seeded, term-bearing coverage guaranteed. You do NOT
+       author the sampler (rev 1 let the judged party draw its own
+       denominator; the frame is now CLI-authored and validated):
+    ```bash
+    cd {{ workspace }} && python3 scripts/oracle-sample.py \
+      --census contract/segment-census.json --glossary contract/glossary.json \
+      --per-locale {{ oracle_sample_per_locale }} --seed {{ oracle_seed }} \
+      --out oracle-sample.json
+    ```
+    The output frame is auditable by construction, exactly this shape:
+    `{"seed": {{ oracle_seed }}, "per_locale": {"<loc>": [{"msgid_sha": "...", "kind": "...", "term_ids": [...]}]}}`
+    — every msgid_sha drawn is recorded, so the recall denominator is
+    reconstructable long after your context window closes.
+    2. For EACH sampled segment of EACH locale, back-translate the locale's
+       `msgstr` into ENGLISH — genuine English prose, not transliteration and
+       not copies of the localized text. Write `{{ workspace }}/oracle-{locale}.json`:
+       ```json
+       {"locale": "<loc>", "instrument": "{{ instrument_name }}",
+        "entries": [{"msgid_sha": "...", "back_translation": "..."}]}
+       ```
+    3. Print per-locale counts to stdout. Misses are NOT failures to hide —
+       the recall computation lists them; disagreements are evidence. The
+       scripted recall measures ENGLISH glossary-term recovery from your
+       English back-translations: a faithful back-translation of a segment
+       carrying "conductor" contains "conductor"-the-English-word (for keep
+       and translate decisions alike — the glossary's en term is the
+       recovered target).
+
+    {{ ai_ground_rules() }}
+
+    {% endif %}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VALIDATIONS — staged fail-fast (Commissioning Cascade). `condition: stage == N`
+# selects the movement; the `stage:` field orders rules WITHIN a sheet. Every
+# load-bearing claim is a command with an exit code — The Etiquette Law. The
+# fan-out movement validates per-instance via {instance}; writer locales are
+# derived inside the command (the .format engine cannot map instance→locale).
+# ═══════════════════════════════════════════════════════════════════════════════
+
+validations:
+  # ── Movement 1 · Pin the World ─────────────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/pin/license-clearance.md"
+    condition: "stage == 1"
+    stage: 1
+    description: "License clearance document exists"
+  - type: command_succeeds
+    command: |
+      grep -qxE 'VERDICT: (AGPL-COMPLIANT-WITH-NOTICES|FALLBACK-TRIGGERED)' {workspace}/pin/license-clearance.md
+      test "$(cat {workspace}/pin/clone-head.txt)" = "{pinned_sha}"
+    condition: "stage == 1"
+    stage: 2
+    description: "Verdict is one of the two allowed literals; clone HEAD is the pinned sha"
+  - type: command_succeeds
+    command: |
+      grep -qxE 'VERDICT: AGPL-COMPLIANT-WITH-NOTICES' {workspace}/pin/license-clearance.md
+    condition: "stage == 1"
+    stage: 3
+    description: "The hold is MECHANICAL: a FALLBACK-TRIGGERED verdict fails the sheet even if the writer exited 0 — the run must never continue into translations of a source the score itself declared legally blocked"
+  - type: command_succeeds
+    command: |
+      set -e
+      idx="$(curl -sfL {site_url}/ | sha256sum | cut -d' ' -f1)"
+      pin="$(jq -r .served_index_sha256 {workspace}/pin/buffer-A-fingerprint.json)"
+      test "$idx" = "$pin"
+      test "$(gh api user -q .login)" = "{github_owner}"
+    condition: "stage == 1"
+    stage: 2
+    description: "Buffer-A fingerprint REPRODUCES against the live site; the gh identity is RE-PROBED by the validation, not trusted from the inventory"
+  - type: command_succeeds
+    command: |
+      set -e
+      jq -e '.git and .curl and .jq and .gh and .uv and .sha256sum' {workspace}/pin/host-inventory.json
+      jq -e '.babel == "{babel_pin}" and .polib == "{polib_pin}"' {workspace}/pin/host-inventory.json
+      jq -e 'has("msgfmt") and has("hugo") and has("linkchecker") and has("xmllint")' {workspace}/pin/host-inventory.json
+      for bin in claude codex opencode; do command -v "$bin" >/dev/null; done
+    condition: "stage == 1"
+    stage: 3
+    description: "Inventory: every tool any shipped script names is PROBED (absences recorded from probes, matching the named substitutions); pinned versions answer; all three vendor CLIs canaried"
+  - type: command_succeeds
+    command: |
+      set -e
+      jq -e '(.calibration_families | to_entries | map(.value) | unique | length) == 3' {workspace}/pin/instrument-families.json
+      jq -e '.instruments["opencode-gemma"].family == "GEMMA" and .instruments["codex-cli"].family == "GPT" and .instruments["claude-code"].family == "GLM"' {workspace}/pin/instrument-families.json
+    condition: "stage == 1"
+    stage: 3
+    description: "VENDOR SEPARATION from model strings, not names: the calibration chain (writer/characterizer/oracle) resolves to three pairwise-distinct model families recorded from the live conductor config"
+
+  # ── Movement 2 · Canonical census ──────────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      uv run --quiet --with polib=={polib_pin} --with babel=={babel_pin} python -c "
+      import json, polib
+      po = polib.pofile('contract/canonical-en.pot')
+      census = json.load(open('contract/segment-census.json'))
+      ids = [e.msgid for e in po if e.msgid.strip()]
+      cids = [s['msgid'] for s in census]
+      assert sorted(ids) == sorted(cids), 'census %d != pot %d' % (len(cids), len(ids))
+      assert len(ids) == len(set(ids)), 'duplicate msgids in skeleton'
+      for s in census:
+          assert s.get('source_path') and s.get('line') and s.get('kind'), s
+      pin = json.load(open('pin/pin-record.json'))
+      assert pin['segment_count'] == len(ids), 'pin-record count stale'
+      print('census ok:', len(ids), 'segments, bijective, traceable')
+      "
+    condition: "stage == 2"
+    stage: 1
+    description: "POT parses; census count == msgid count (bijection); every segment traceable to path/line/kind"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      python3 - <<'PY'
+      import hashlib, json, re, subprocess
+      census = json.load(open('contract/segment-census.json'))
+      for s in census:
+          want = hashlib.sha256(s['msgid'].encode()).hexdigest()[:16]
+          assert s.get('msgid_sha') == want, 'msgid_sha stale at %s:%s' % (s['source_path'], s['line'])
+      # census paths == the declared docs subset exactly (drift gate)
+      subset = sorted({docs_subset})
+      assert sorted({s['source_path'] for s in census}) == subset, 'census paths != docs_subset'
+      # SOURCE COVERAGE, not generated-file consistency: every markdown
+      # heading of every subset document appears as a census msgid, and >=85%
+      # of prose words (outside code fences) are carried by census msgids
+      for rel in subset:
+          raw = subprocess.run(['git', '-C', 'repo', 'show', '{pinned_sha}:' + rel],
+                               capture_output=True, text=True, check=True).stdout
+          lines = raw.splitlines()
+          headings, words, fence = [], [], False
+          for ln in lines:
+              if ln.lstrip().startswith('```'):
+                  fence = not fence; continue
+              if fence:
+                  continue
+              if ln.lstrip().startswith('#'):
+                  headings.append(re.sub(r'^#+\s*', '', ln).strip())
+              else:
+                  words += re.findall(r'[A-Za-z]{3,}', ln)
+          msgids_l = ' \n '.join(s['msgid'] for s in census
+                                 if s['source_path'] == rel).lower()
+          for h in headings:
+              assert h.lower() in msgids_l, 'heading not in census: %r' % h[:60]
+          uniq = set(words)
+          have = sum(1 for w in uniq if w.lower() in msgids_l)
+          assert uniq and have / len(uniq) >= 0.85, \
+              '%s: word coverage %.2f < 0.85' % (rel, have / max(1, len(uniq)))
+          # line traceability against the pinned bytes
+          for s in (x for x in census if x['source_path'] == rel):
+              assert 1 <= s['line'] <= len(lines), 'line out of range: %s:%d' % (rel, s['line'])
+              probe = re.sub(r'\s+', ' ', s['msgid'])[:24].strip().lower()
+              window = re.sub(r'\s+', ' ',
+                              ' '.join(lines[max(0, s['line'] - 2):s['line'] + 8])).lower()
+              assert not probe or probe in window, \
+                  'msgid text not found near recorded line: %s:%d' % (rel, s['line'])
+      print('census covers source: headings 100%, words >=85%, lines traceable')
+      PY
+    condition: "stage == 2"
+    stage: 2
+    description: "COVERAGE IS THE OUTCOME: every subset heading in the census, >=85% prose-word coverage against the PINNED bytes, msgid_sha exact, census paths == docs_subset (the drift gate that lets downstream derive page filenames from the census)"
+
+  # ── Movement 3 · Contract authoring ────────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      jq -e '.terms | length >= 10' contract/glossary.json
+      jq -e '[.terms[] | .translations | keys] | all(. == ["ar","de","es","fr","pt-BR"])' contract/glossary.json
+      jq -e '[.terms[].translations[] | select(.decision == "keep") | .term] | length > 0' contract/glossary.json
+      jq -e '[.terms[].translations[].decision] | all(. == "keep" or . == "translate" or . == "hybrid")' contract/glossary.json
+      jq -e '[.terms[] | {en: .en, tr: (.translations | to_entries[])} | select(.tr.value.decision == "keep") | select(.tr.value.term != .en)] | length == 0' contract/glossary.json
+    condition: "stage == 3"
+    stage: 1
+    description: "Glossary: >=10 terms, all five locales per term, decision enum enforced, and keep ⇒ term == the ENGLISH term (rev 1's line here was a masked jq syntax error that could never fail — the exact decorative-validation species this corpus condemns)"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      for loc in es fr de pt-BR ar; do
+        head -1 "contract/register-$loc.md" | grep -qx "REGISTER: $loc"
+      done
+      grep -q '^PROP: ' contract/rtl-spec.md
+      test "$(grep -c '^PROP: ' contract/rtl-spec.md)" -ge 4
+    condition: "stage == 3"
+    stage: 2
+    description: "Each register names its locale; RTL spec carries >=4 machine-checkable PROP lines"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      jq -e 'has("terminology_hit_rate_min") and has("length_ratio_z_max") and has("oracle_recall_floor") and has("length_ratio_bounds_by_locale")' contract/thresholds.json
+      jq -e '.terminology_hit_rate_min >= 0.5 and .terminology_hit_rate_min <= 1' contract/thresholds.json
+      jq -e '.length_ratio_z_max >= 1.5 and .length_ratio_z_max <= 6' contract/thresholds.json
+      jq -e '.oracle_recall_floor >= 0.5 and .oracle_recall_floor <= 1' contract/thresholds.json
+      jq -e '.length_ratio_bounds_by_locale | keys | sort == ["ar","de","es","fr","pt-BR"]' contract/thresholds.json
+      jq -e '.length_ratio_bounds_by_locale | to_entries | all(.value.min >= 0.4 and .value.min < 1 and .value.max > 1 and .value.max <= 4)' contract/thresholds.json
+      jq -e '.terminology_hit_rate_min_rationale and .length_ratio_z_max_rationale and .oracle_recall_floor_rationale and .length_ratio_bounds_rationale' contract/thresholds.json
+    condition: "stage == 3"
+    stage: 3
+    description: "THRESHOLDS PRE-REGISTERED with ANTI-FRAUD FLOORS: hit-rate and recall floors >= 0.5 (a 0.05 pre-registration is pre-registration-shaped, not strong), z-band <= 6, and per-locale length bounds for all five locales inside [0.4, 4] with min < 1 < max — a band that could admit the ratio-blowout fixture (ratio ~5.5) cannot be pre-registered"
+
+  # ── Movement 4 · Contract pin + ruler ──────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      python3 -c "
+      import hashlib, json
+      from pathlib import Path
+      man = json.load(open('contract/MANIFEST.json'))
+      bad = []
+      for rel, want in man['files'].items():
+          got = hashlib.sha256(Path(rel).read_bytes()).hexdigest()
+          if got != want:
+              bad.append(rel)
+      assert not bad, 'contract tree drifted from its own manifest: %s' % bad
+      assert man['config_fingerprint'] and man['toolchain']
+      print('manifest re-hash ok:', len(man['files']), 'files')
+      "
+    condition: "stage == 4"
+    stage: 1
+    description: "Re-hash of the contract tree equals MANIFEST.json (the pattern's stage-1 validation, verbatim)"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      uv run --quiet --with polib=={polib_pin} --with babel=={babel_pin} python -m py_compile scripts/catalog-validate.py scripts/join-catalogs.py scripts/exp-gate.py scripts/oracle-sample.py
+      test -x scripts/catalog-validate.py
+    condition: "stage == 4"
+    stage: 2
+    description: "The ruler and the oracle sample frame compile under the pinned toolchain"
+
+  # ── Movement 5 · First article (es) ────────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      uv run --quiet --with polib=={polib_pin} --with babel=={babel_pin} python scripts/catalog-validate.py \
+        --po work/locale-es/es.po --skeleton contract/canonical-en.pot \
+        --glossary contract/glossary.json --thresholds contract/thresholds.json \
+        --locale es --report work/locale-es/self-check.json
+    condition: "stage == 5"
+    stage: 1
+    description: "es catalog passes the ruler (parse, bijection, format parity, plurals, hit-rate band)"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      python3 -c "
+      import hashlib, json
+      from pathlib import Path
+      at = json.load(open('work/locale-es/attestation.json'))
+      assert at['locale'] == 'es' and at['instrument'], at
+      man = json.load(open('contract/MANIFEST.json'))
+      for rel, want in at['consumed_spec_hashes'].items():
+          assert man['files'].get(rel) == want, 'attested contract hash != pinned: %s' % rel
+      for rel, want in at['output_hashes'].items():
+          got = hashlib.sha256(Path(rel).read_bytes()).hexdigest()
+          assert got == want, 'attested output hash != bytes: %s' % rel
+          assert rel.startswith('work/locale-es/'), 'namespace violation: %s' % rel
+      print('es attestation verifies against actual bytes')
+      "
+    condition: "stage == 5"
+    stage: 2
+    description: "Attestation: consumed hashes == pinned contract; output hashes == actual bytes; namespace clean"
+
+  # ── Movement 6 · Characterization (family B) ───────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      python3 - <<'PY'
+      import json
+      th = json.load(open('contract/thresholds.json'))
+      ch = json.load(open('reference-input/characterization.json'))
+      bykey = {c['key']: c['threshold'] for c in ch['checks']}
+      mandatory = {'format_parity', 'plural_coverage', 'terminology_hit_rate',
+                   'length_ratio_abs', 'length_ratio_z'}
+      assert mandatory <= set(bykey), 'keyed checks missing: %s' % (mandatory - set(bykey))
+      assert float(bykey['terminology_hit_rate']) == float(th['terminology_hit_rate_min']), 'hit-rate threshold drifted'
+      assert float(bykey['length_ratio_z']) == float(th['length_ratio_z_max']), 'z threshold drifted'
+      print('keyed thresholds byte-equal the pre-registration')
+      PY
+      uv run --quiet --with polib=={polib_pin} python - <<'PY'
+      import json, math, statistics
+      import polib
+      ch = json.load(open('reference-input/characterization.json'))
+      fa = ch['first_article']['length_ratio']
+      assert fa['n'] > 0 and fa['sd'] > 0 and fa['mean'] > 0, fa
+      ratios = [len(e.msgstr or '') / len(e.msgid) for e in polib.pofile('work/locale-es/es.po')
+                if (e.msgstr or '').strip() and len(e.msgid) >= 8]
+      m = statistics.fmean(ratios)
+      sd = statistics.stdev(ratios) if len(ratios) > 1 else 0.0
+      assert len(ratios) == fa['n'], 'n drifted: %d vs %d' % (len(ratios), fa['n'])
+      assert math.isclose(m, float(fa['mean']), rel_tol=1e-9), 'mean drifted'
+      assert math.isclose(sd, float(fa['sd']), rel_tol=1e-9), 'sd drifted'
+      print('distribution recomputed from bytes: n=%d mean=%.4f sd=%.4f' % (len(ratios), m, sd))
+      PY
+    condition: "stage == 6"
+    stage: 1
+    description: "ANTI-FRAUD PROBE: keyed thresholds byte-equal the M3-era pre-registration AND the first-article mean/sd/n are RECOMPUTED from es.po bytes with the ruler's definition — a self-reported distribution cannot green-light volume"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set +e
+      uv run --quiet --with polib=={polib_pin} --with babel=={babel_pin} python scripts/catalog-validate.py \
+        --po reference-input/broken.po --skeleton contract/canonical-en.pot \
+        --glossary contract/glossary.json --thresholds contract/thresholds.json \
+        --locale es --partial --report reference-input/broken-report.json 2>&1 | tail -1 > /tmp/babel-m6-nc.txt
+      rc=${PIPESTATUS[0]}
+      set -e
+      test "$rc" -ne 0
+      grep -q "format_parity" reference-input/broken-report.json
+      jq -e '.checks.format_parity.verdict == false' reference-input/broken-report.json
+      jq -e '.negative_control.failing_check == "format_parity"' reference-input/characterization.json
+    condition: "stage == 6"
+    stage: 2
+    description: "The negative control is RE-EXECUTED by the validation (rev 1 trusted the JSON boolean — self-report at exactly the place the proof claims to reject self-report): the corrupted catalog fails NOW, on format_parity specifically"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      python3 - <<'PY'
+      import json
+      ch = json.load(open('reference-input/characterization.json'))
+      census = {s['msgid_sha'] for s in json.load(open('contract/segment-census.json'))}
+      sa = ch['semantic_adequacy']
+      assert sa['verdict'] == 'adequate', 'first article semantically inadequate — it must not become the reference population'
+      assert len(sa['spot_checks']) >= 3, 'fewer than 3 semantic spot-checks'
+      for sc in sa['spot_checks']:
+          assert sc['msgid_sha'] in census, 'spot-check msgid_sha not in census'
+          assert len((sc.get('en_back_translation') or '').split()) >= 3, 'back-translation too thin'
+      fam = json.load(open('pin/instrument-families.json'))
+      writer_inst = json.load(open('work/locale-es/attestation.json'))['instrument']
+      ch_fam = fam['instruments'][ch['instrument']]['family']
+      wr_fam = fam['instruments'][writer_inst]['family']
+      assert ch_fam != wr_fam, 'CALIBRATION FRAUD: characterizer family (%s) == writer family (%s)' % (ch_fam, wr_fam)
+      print('family separation: writer %s / characterizer %s' % (wr_fam, ch_fam))
+      PY
+    condition: "stage == 6"
+    stage: 3
+    description: "Semantic adequacy verdict fail-closed with >=3 census-keyed back-translation spot-checks; characterizer MODEL FAMILY != writer MODEL FAMILY, joined through the movement-1 probe of the live conductor config (instrument-name inequality proves nothing)"
+
+  # ── Movement 7 · Reference freeze ──────────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      python3 -c "
+      import json
+      man = json.load(open('contract/MANIFEST.json'))
+      ref = json.load(open('reference/manifest.json'))
+      assert ref['config_hash'] == man['config_fingerprint'], 'reference not bound to the contract fingerprint'
+      assert ref['first_article']['length_ratio']['n'] > 0
+      print('reference frozen against the live contract fingerprint')
+      "
+    condition: "stage == 7"
+    stage: 1
+    description: "config_hash == contract fingerprint (the binding the skip_when probe re-checks)"
+
+  # ── Movement 8 · Gate teeth ────────────────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      jq -e '.zero_unexplained == true and .fail == 0 and .fixtures >= 10' fixtures/gate-teeth.json
+      jq -s -e 'all(.verdict == "tooth-proven")' fixtures/teeth.jsonl
+      jq -s -e 'all(.want_reason != null and .want_reason != "")' fixtures/teeth.jsonl
+      jq -e 'length == 1 and .[0].locale == "fr"' fixtures/work/join-conflicts.json
+      test -s .namespace-baseline.txt
+    condition: "stage == 8"
+    stage: 1
+    description: "All TEN negative fixtures failed their intended gate FOR THE RECORDED REASON (every tooth carries a want_reason — an exit code alone cannot distinguish bit from never-ran); the planted conflict is DETECTED; the pre-volume namespace baseline exists"
+
+  # ── Movement 9 · Volume writers (per fan-out instance) ─────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      loc=$(python3 -c "print({1:'fr',2:'de',3:'pt-BR'}[{instance}])")
+      uv run --quiet --with polib=={polib_pin} --with babel=={babel_pin} python scripts/catalog-validate.py \
+        --po "work/locale-$loc/$loc.po" --skeleton contract/canonical-en.pot \
+        --glossary contract/glossary.json --thresholds contract/thresholds.json \
+        --locale "$loc" --reference reference/manifest.json \
+        --report "work/locale-$loc/self-check.json"
+    condition: "stage == 9"
+    stage: 1
+    description: "Volume catalog passes the ruler WITH the reference (z-scores against the first article)"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      loc=$(python3 -c "print({1:'fr',2:'de',3:'pt-BR'}[{instance}])")
+      python3 -c "
+      import hashlib, json, sys
+      from pathlib import Path
+      loc = sys.argv[1]
+      at = json.load(open('work/locale-%s/attestation.json' % loc))
+      man = json.load(open('contract/MANIFEST.json'))
+      assert at['locale'] == loc, at
+      for rel, want in at['consumed_spec_hashes'].items():
+          assert man['files'].get(rel) == want, 'contract hash mismatch: %s' % rel
+      for rel, want in at['output_hashes'].items():
+          got = hashlib.sha256(Path(rel).read_bytes()).hexdigest()
+          assert got == want and rel.startswith('work/locale-%s/' % loc), rel
+      ack = json.load(open('ready-%s.json' % loc))
+      assert ack['po_sha256'] == hashlib.sha256(Path('work/locale-%s/%s.po' % (loc, loc)).read_bytes()).hexdigest()
+      print(loc, 'attestation + ack verify')
+      " "$loc"
+    condition: "stage == 9"
+    stage: 2
+    description: "Writer attestation + ready-ack verify; instance-tagged namespace only"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      loc=$(python3 -c "print({1:'fr',2:'de',3:'pt-BR'}[{instance}])")
+      find . -path ./repo -prune -o -path ./deploy -prune -o -name '.namespace-*' -prune -o -type f -print0 \
+        | sort -z | xargs -0 sha256sum > .namespace-now.tmp
+      python3 - "$loc" <<'PY'
+      import sys
+      loc = sys.argv[1]
+      def load(p):
+          d = {}
+          for ln in open(p):
+              h, _, f = ln.rstrip("\n").partition("  ")
+              d[f[2:] if f.startswith("./") else f] = h
+          return d
+      base = load(".namespace-baseline.txt")
+      now = load(".namespace-now.tmp")
+      all_loc = ["es", "fr", "de", "pt-BR", "ar"]
+      foreign_ns = []
+      for other in all_loc:
+          if other != loc:
+              foreign_ns += ["work/locale-%s/" % other, "ready-%s.json" % other]
+      changed = sorted(f for f in now if now.get(f) != base.get(f))
+      deleted = sorted(f for f in base if f not in now)
+      own = [f for f in changed
+             if f.startswith("work/locale-%s/" % loc) or f == "ready-%s.json" % loc]
+      unexplained = [f for f in changed if f not in own
+                     and not any(f.startswith(ns.rstrip('/')) or f == ns for ns in foreign_ns)]
+      # sibling writers' namespaces are policed by THEIR validations; anything
+      # outside the union of writer namespaces is a boundary violation HERE
+      assert not deleted, 'files deleted since baseline: %s' % deleted[:5]
+      assert not unexplained, '%s touched out-of-namespace paths: %s' % (loc, unexplained[:5])
+      assert own, 'no writes in own namespace — attestation cannot cover silent work'
+      print(loc, 'namespace clean:', len(own), 'own files changed')
+      PY
+      rm -f .namespace-now.tmp
+    condition: "stage == 9"
+    stage: 3
+    description: "ACTUAL FILESYSTEM DELTA vs the movement-8 baseline: this writer changed only its own namespace, deleted nothing, and touched nothing outside the writer-namespace union — listed-path attestation cannot hide out-of-namespace writes; a diff cannot be unlisted"
+
+  # ── Movement 10 · Arabic writer, gated ─────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      uv run --quiet --with polib=={polib_pin} --with babel=={babel_pin} python scripts/catalog-validate.py \
+        --po work/locale-ar/ar.po --skeleton contract/canonical-en.pot \
+        --glossary contract/glossary.json --thresholds contract/thresholds.json \
+        --locale ar --reference reference/manifest.json --rtl \
+        --report work/locale-ar/self-check.json
+    condition: "stage == 10"
+    stage: 1
+    description: "ar passes the full battery PLUS the RTL bidi-balance gate (admission structurally post-teeth: dependency on movement 8)"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      python3 -c "
+      import hashlib, json
+      from pathlib import Path
+      at = json.load(open('work/locale-ar/attestation.json'))
+      for rel, want in at['output_hashes'].items():
+          got = hashlib.sha256(Path(rel).read_bytes()).hexdigest()
+          assert got == want and rel.startswith('work/locale-ar/'), rel
+      ack = json.load(open('ready-ar.json'))
+      assert ack['po_sha256'] == hashlib.sha256(Path('work/locale-ar/ar.po').read_bytes()).hexdigest()
+      print('ar attestation + ack verify')
+      "
+    condition: "stage == 10"
+    stage: 2
+    description: "ar attestation + ack verify against actual bytes"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      find . -path ./repo -prune -o -path ./deploy -prune -o -name '.namespace-*' -prune -o -type f -print0 \
+        | sort -z | xargs -0 sha256sum > .namespace-now.tmp
+      python3 - <<'PY'
+      def load(p):
+          d = {}
+          for ln in open(p):
+              h, _, f = ln.rstrip("\n").partition("  ")
+              d[f[2:] if f.startswith("./") else f] = h
+          return d
+      base, now = load(".namespace-baseline.txt"), load(".namespace-now.tmp")
+      changed = sorted(f for f in now if now.get(f) != base.get(f))
+      deleted = sorted(f for f in base if f not in now)
+      own = [f for f in changed
+             if f.startswith("work/locale-ar/") or f == "ready-ar.json"]
+      foreign_prefixes = tuple("work/locale-%s/" % o for o in ("es", "fr", "de", "pt-BR")) \
+                         + tuple("ready-%s.json" % o for o in ("es", "fr", "de", "pt-BR"))
+      unexplained = [f for f in changed if f not in own and not f.startswith(foreign_prefixes)
+                     and not any(f == p for p in foreign_prefixes)]
+      assert not deleted, 'files deleted since baseline: %s' % deleted[:5]
+      assert not unexplained, 'ar touched out-of-namespace paths: %s' % unexplained[:5]
+      assert own, 'no writes in own namespace'
+      print('ar namespace clean:', len(own), 'own files changed')
+      PY
+      rm -f .namespace-now.tmp
+    condition: "stage == 10"
+    stage: 3
+    description: "ACTUAL FILESYSTEM DELTA vs the movement-8 baseline for the ar writer: own namespace only, nothing deleted, nothing outside the writer-namespace union"
+
+  # ── Movement 11 · Lattice join ─────────────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      uv run --quiet --with polib=={polib_pin} --with babel=={babel_pin} python scripts/join-catalogs.py \
+        --inputs work/locale-es/es.po work/locale-fr/fr.po work/locale-de/de.po work/locale-pt-BR/pt-BR.po work/locale-ar/ar.po \
+        --out-dir joined-verify --conflicts-out join-verify.json
+      diff -r joined joined-verify
+      rm -rf joined-verify join-verify.json
+    condition: "stage == 11"
+    stage: 1
+    description: "IDEMPOTENCE: joining the writers' catalogs again reproduces the joined tree byte-identically"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      uv run --quiet --with polib=={polib_pin} --with babel=={babel_pin} python scripts/join-catalogs.py \
+        --inputs work/locale-ar/ar.po work/locale-pt-BR/pt-BR.po work/locale-de/de.po work/locale-fr/fr.po work/locale-es/es.po \
+        --out-dir joined-rev --conflicts-out /dev/null
+      for loc in es fr de pt-BR ar; do cmp "joined/$loc.po" "joined-rev/$loc.po"; done
+      rm -rf joined-rev
+    condition: "stage == 11"
+    stage: 2
+    description: "COMMUTATIVITY: reordered inputs join to identical per-locale bytes"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      jq -e 'length >= 1' join-conflicts.json
+      uv run --quiet --with polib=={polib_pin} --with babel=={babel_pin} python -c "
+      import polib
+      skel = {e.msgid for e in polib.pofile('contract/canonical-en.pot') if e.msgid.strip()}
+      for loc in ['es', 'fr', 'de', 'pt-BR', 'ar']:
+          got = {e.msgid for e in polib.pofile('joined/%s.po' % loc) if e.msgid.strip()}
+          assert got == skel, '%s: %d missing / %d invented' % (loc, len(skel - got), len(got - skel))
+      print('coverage: every locale covers the skeleton exactly')
+      "
+    condition: "stage == 11"
+    stage: 3
+    description: "Planted conflict recorded (>=1); per-locale msgid coverage == skeleton — nothing dropped, nothing invented"
+
+  # ── Movement 12 · Build buffer B ───────────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      stems=$(jq -r '[.[].source_path] | unique | sort | .[]' contract/segment-census.json | xargs -n1 basename | sed 's/\.md$//')
+      for loc in en es fr de pt-BR ar; do
+        for stem in $stems; do
+          test -s "buffer-B/$loc/$stem.html"
+        done
+        test -s "buffer-B/$loc/index.html" && test -s "buffer-B/$loc/rss.xml"
+      done
+      test -s buffer-B/portal/index.html && test -s buffer-B/evidence/index.html
+    condition: "stage == 12"
+    stage: 1
+    description: "Six editions + portal + evidence + per-locale RSS exist, page filenames DERIVED FROM THE CENSUS (rev 1 hardcoded getting-started/README — changing docs_subset broke movement 12 with no warning from the variable)"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      uv run --quiet --with polib=={polib_pin} python - <<'PY'
+      import json, re
+      from html.parser import HTMLParser
+      from pathlib import Path
+      import polib
+      census = json.load(open('contract/segment-census.json'))
+      by_path = {}
+      for s in census:
+          by_path.setdefault(s['source_path'], []).append(s)
+      class Text(HTMLParser):
+          def __init__(self):
+              super().__init__(); self.buf = []
+          def handle_data(self, d):
+              self.buf.append(d)
+      def page_text(p):
+          t = Text(); t.feed(Path(p).read_text(encoding='utf-8'))
+          return re.sub(r'\s+', ' ', ' '.join(t.buf))
+      for loc in ['en', 'es', 'fr', 'de', 'pt-BR', 'ar']:
+          cat = {}
+          if loc != 'en':
+              cat = {e.msgid: (e.msgstr or e.msgid) for e in polib.pofile('joined/%s.po' % loc)
+                     if e.msgid.strip()}
+          for src, segs in by_path.items():
+              stem = Path(src).stem
+              html = page_text('buffer-B/%s/%s.html' % (loc, stem))
+              for s in segs:
+                  rendered = cat.get(s['msgid'], s['msgid'])
+                  rendered = re.sub(r'\s+', ' ', rendered).strip()
+                  if rendered:
+                      assert rendered[:60] in html, \
+                          '%s/%s: segment not rendered: %r' % (loc, stem, rendered[:40])
+      print('every census segment renders into every edition — no silent empty pages')
+      PY
+    condition: "stage == 12"
+    stage: 2
+    description: "CONTENT COVERAGE: every census segment's rendered text appears in its edition's page (rev 1's exp-gate --links checks hrefs, not content — a drifted census produced a green, empty site)"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      python3 scripts/exp-gate.py --links buffer-B
+      python3 scripts/exp-gate.py --hreflang buffer-B
+      stem="$(jq -r '[.[].source_path] | unique | sort | .[0]' contract/segment-census.json | xargs basename | sed 's/\.md$//')"
+      python3 scripts/exp-gate.py --rtl "buffer-B/ar/$stem.html" "buffer-B/en/$stem.html"
+    condition: "stage == 12"
+    stage: 3
+    description: "Internal links resolve; hreflang matrix pairwise-RECIPROCAL over the whole tree; ar carries dir=rtl AND mirrored navigation"
+
+  # ── Movement 13 · EXP battery + THE SWEEP ──────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      jq -e 'keys | sort == ["ar", "de", "es", "fr", "overall", "pt-BR"]' sweep-report.json
+      jq -e '.es.checks | keys | sort == ["format_parity", "length_ratio_abs", "length_ratio_z", "plural_coverage", "skeleton_coverage", "terminology_hit_rate"]' sweep-report.json
+      jq -e '.ar.checks | keys | sort == ["format_parity", "length_ratio_abs", "length_ratio_z", "plural_coverage", "rtl_bidi_balance", "skeleton_coverage", "terminology_hit_rate"]' sweep-report.json
+      jq -e 'all(.[] | select(.checks); .checks | has("format_parity", "plural_coverage", "skeleton_coverage", "terminology_hit_rate", "length_ratio_abs", "length_ratio_z"))' sweep-report.json
+    condition: "stage == 13"
+    stage: 1
+    description: "SWEEP COMPLETE: report-completeness cross-join with CONSISTENT key inventories (rev 1 demanded exactly four keys union-wide while also demanding ar's fifth — unsatisfiable; the sweep runs whole catalogs WITHOUT --partial, so skeleton_coverage is always present, and rev 2's ruler always emits length_ratio_abs — the expected sets match what the ruler actually emits, per locale, exactly)"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      test -s fixtures/degraded-through-sweep.json
+      jq -e '.checks.terminology_hit_rate.verdict == false' fixtures/degraded-through-sweep.json
+      grep -q 'Verdicts' buffer-B/evidence/index.html
+    condition: "stage == 13"
+    stage: 2
+    description: "The distribution DISCRIMINATES: the degraded fixture landed outside its band; evidence page carries verdicts"
+
+  # ── Movement 14 · Merge authority ──────────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      python3 - <<'PY'
+      import hashlib, json
+      from pathlib import Path
+      rm_ = json.load(open('release-manifest.json'))
+      sweep = json.load(open('sweep-report.json'))
+      overall = sweep['overall']
+      admitted = set(rm_['admitted'])
+      green = {loc for loc, ok in overall.items() if ok is True}
+      assert admitted, 'empty admitted set — no positive release candidate'
+      assert admitted == green, 'admitted %s != both-green set %s' % (sorted(admitted), sorted(green))
+      for loc in sorted(admitted):
+          at = json.load(open('work/locale-%s/attestation.json' % loc))
+          man = json.load(open('contract/MANIFEST.json'))
+          for rel, want in at['consumed_spec_hashes'].items():
+              assert man['files'].get(rel) == want, 'attested contract hash drifted: %s' % rel
+          for rel, want in at['output_hashes'].items():
+              got = hashlib.sha256(Path(rel).read_bytes()).hexdigest()
+              assert got == want, 'attestation stale against bytes at authority time: %s' % rel
+          checks = sweep[loc]['checks']
+          ref_keys = {c['key'] for c in json.load(open('reference/manifest.json'))['checks']}
+          ref_keys |= {'skeleton_coverage'}
+          assert ref_keys <= set(checks), '%s sweep missing reference keys: %s' % (loc, ref_keys - set(checks))
+          for k in ref_keys:
+              assert checks[k]['verdict'] is True, '%s: reference check %s not green' % (loc, k)
+      rogue = json.load(open('join-conflicts.json'))[0]
+      disp = sorted(Path('dispositions').glob('*.json'))
+      subjects = ' '.join(Path(d).read_text() for d in disp)
+      assert rogue['msgid'][:30] in subjects, 'planted conflict has no disposition citing it'
+      non_admitted = set(overall) - admitted
+      assert non_admitted == set(rm_['rejected']), 'rejected list != non-admitted set'
+      for rel, want in rm_['content_digests'].items():
+          got = hashlib.sha256(Path(rel).read_bytes()).hexdigest()
+          assert got == want, 'release digest mismatch: %s' % rel
+          assert rel.startswith(('joined/', 'buffer-B/')), 'unknown digest domain: %s' % rel
+          assert not rel.startswith('buffer-B/evidence'), 'evidence page must NOT be sealed — it is completed after the seal computes'
+      print('authority bounded: admitted == both-green exactly; attestations re-verified against bytes at authority time; digests bind')
+      PY
+      if grep -rqF '[rogue divergent]' joined/ buffer-B/; then
+        echo 'FAIL: rogue marker string present in release bytes'
+        exit 1
+      fi
+      jq -e '.rogue_marker_absent == true' release-manifest.json
+    condition: "stage == 14"
+    stage: 1
+    description: "Admitted set == the both-green set EXACTLY (rev 1 allowed an empty admitted set and never required equality); attestations RE-VERIFIED at authority time against current bytes; every admitted locale carries the characterizer's reference keys green (the keyed list now bites); rogue absence proven BYTES-WISE — its marker string greps empty across joined/ and buffer-B/ (rev 1 compared entry digests against page digests: different hash domains, structurally empty intersection)"
+
+  # ── Movement 15 · Arm-gate ─────────────────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      test -f "armed-{cue}.json"
+      python3 -c "
+      import json
+      arm = json.load(open('armed-{cue}.json'))
+      rm_ = json.load(open('release-manifest.json'))
+      pin = json.load(open('pin/buffer-A-fingerprint.json'))
+      assert arm['cue'] == '{cue}'
+      assert sorted(arm['acked']) == sorted(rm_['admitted']), 'ack set != admitted set'
+      assert arm['verified_gh_pages_head'] == pin['gh_pages_head'], 'armed against a drifted gh-pages'
+      assert arm['verified_index_sha256'] == pin['served_index_sha256']
+      print('armed with the COMPLETE ack set; buffer A verified unchanged since the pin')
+      "
+    condition: "stage == 15"
+    stage: 1
+    description: "Armed file exists with the complete admitted ack set and a re-verified buffer-A fingerprint (hold, never fire)"
+
+  # ── Movement 16 · GO ───────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      test "$(grep -c "^GO {cue}$" cue-log.jsonl)" -eq 1
+      curl -sfL -o /dev/null "{site_url}/portal/"
+    condition: "stage == 16"
+    stage: 1
+    description: "RUNNING ARTIFACT: cue fired exactly once; the deployed portal answers HTTP 200 at the live URL"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      stems=$(jq -r '[.[].source_path] | unique | sort | .[]' contract/segment-census.json | xargs -n1 basename | sed 's/\.md$//')
+      for loc in es fr de pt-BR ar; do
+        for stem in $stems; do
+          curl -sfL -o /dev/null "{site_url}/$loc/$stem.html"
+        done
+      done
+      tag="babel-$(printf %s {pinned_sha} | cut -c1-7)"
+      gh release view "$tag" --json assets -q '.assets | length >= 10'
+      test "$(gh release view "$tag" --json targetCommitish -q .targetCommitish)" = "{pinned_sha}"
+    condition: "stage == 16"
+    stage: 2
+    description: "RUNNING ARTIFACT: every deployed locale page answers (stems from the census, not hardcoded); the release carries .po+.mo for five locales AND targets the pinned sha — a pre-existing tag is not accepted just because it exists"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      tag="babel-$(printf %s {pinned_sha} | cut -c1-7)"
+      mkdir -p release-verify
+      for loc in es fr de pt-BR ar; do
+        gh release download "$tag" --pattern "$loc.mo" --pattern "$loc.po" --dir release-verify --clobber
+        uv run --quiet --with polib=={polib_pin} python -c "import polib; m = polib.mofile('release-verify/$loc.mo'); assert len(m) > 0; print('$loc.mo parses,', len(m), 'entries')"
+      done
+      python3 - <<'PY'
+      import hashlib, json
+      from pathlib import Path
+      man = json.load(open('release-manifest.json'))
+      for loc in ['es', 'fr', 'de', 'pt-BR', 'ar']:
+          rel = 'joined/%s.po' % loc
+          want = man['content_digests'][rel]
+          got = hashlib.sha256(Path('release-verify/%s.po' % loc).read_bytes()).hexdigest()
+          assert got == want, 'release asset %s.po != manifest digest' % loc
+      print('release .po assets hash-join to the release manifest exactly')
+      PY
+      rm -rf release-verify
+    condition: "stage == 16"
+    stage: 3
+    description: "Release .mo assets download and polib-parse with NONZERO entries (rev 1's empty-.mo compile bug is dead at the source and detected here); .po assets re-hash to the release manifest's joined digests — stale assets cannot stand in for this run's catalogs"
+
+  # ── Movement 17 · Live verify + seal ───────────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      built=$(cd buffer-B && find . -name '*.html' | wc -l)
+      got=$(find validation-live -name '*.html' | wc -l)
+      test "$got" -ge "$built"
+      python3 scripts/exp-gate.py --links validation-live
+      python3 scripts/exp-gate.py --hreflang validation-live
+      stem="$(jq -r '[.[].source_path] | unique | sort | .[0]' contract/segment-census.json | xargs basename | sed 's/\.md$//')"
+      python3 scripts/exp-gate.py --rtl "validation-live/ar/$stem.html" "validation-live/en/$stem.html"
+    condition: "stage == 17"
+    stage: 1
+    description: "RUNNING ARTIFACT: the live fetch actually covered the built tree (>= every built page — rev 1's empty-directory gate passed vacuously); links, hreflang reciprocity, and RTL mirroring verified against the SERVED bytes"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      jq -e '.mismatches == 0 and .checked >= 12' recompute-seal.json
+      jq -e '[.urls | keys[] | select(startswith("live:"))] | length >= 6' recompute-seal.json
+      jq -e '[.urls | keys[] | select(startswith("asset:"))] | length == 5' recompute-seal.json
+    condition: "stage == 17"
+    stage: 2
+    description: "TERMINAL SEAL: >=12 sources re-derive the release digests exactly, spanning BOTH domains — >=6 live-fetched site pages and all 5 catalog assets re-downloaded from the release (rev 1 fetched joined/*.po as site URLs that 404 — the seal killed itself on a perfect run)"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      test "$(grep -c "^GO {evidence_cue}$" cue-log.jsonl)" -eq 1
+      test "$(grep -c "^GO {cue}$" cue-log.jsonl)" -eq 1
+      curl -sfL "{site_url}/evidence/recompute-seal.json" -o seal-served.tmp
+      cmp seal-served.tmp recompute-seal.json
+      rm -f seal-served.tmp
+      curl -sfL "{site_url}/evidence/" | grep -q 'Recompute seal'
+      curl -sfL "{site_url}/evidence/" | grep -q 'Dispositions'
+    condition: "stage == 17"
+    stage: 3
+    description: "TWO armed cues, each fired exactly once (the evidence push rides the same exactly-once discipline as the GO — rev 1 performed it as a bare git push outside any cue); the SERVED seal is byte-identical to the workspace seal; the served evidence page carries the seal and the dispositions"
+
+  # ── Movement 18 · Back-translation oracle ──────────────────────────────────
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      python3 - <<'PY'
+      import json, re
+      th = json.load(open('contract/thresholds.json'))
+      sample = json.load(open('oracle-sample.json'))
+      gl = {t['term_id']: t for t in json.load(open('contract/glossary.json'))['terms']}
+      census = {s['msgid_sha']: s for s in json.load(open('contract/segment-census.json'))}
+      def wordish(term):
+          return re.compile(r'(?<!\w)' + re.escape(term) + r'(?!\w)', re.IGNORECASE)
+      floor = float(th['oracle_recall_floor'])
+      results = {}
+      for loc in ['es', 'fr', 'de', 'pt-BR', 'ar']:
+          entries = json.load(open('oracle-%s.json' % loc))['entries']
+          drawn = {e['msgid_sha'] for e in sample['per_locale'][loc]}
+          assert {e['msgid_sha'] for e in entries} >= drawn, 'oracle skipped sampled segments: %s' % loc
+          denom = hits = 0
+          for e in entries:
+              seg = census[e['msgid_sha']]
+              # the back-translation is ENGLISH: the recovered target is the
+              # glossary's ENGLISH term for keep AND translate decisions alike
+              # (rev 1 searched the LOCALIZED term inside the English text —
+              # structurally unmatchable when translation did its job, so
+              # recall measured the glossary's keep/translate mix, not
+              # semantic fidelity)
+              src_terms = [t for t in gl.values() if wordish(t['en']).search(seg['msgid'])]
+              for t in src_terms:
+                  denom += 1
+                  if wordish(t['en']).search(e['back_translation']):
+                      hits += 1
+          assert denom > 0, 'zero denominator for %s — the frame guarantees term-bearing coverage' % loc
+          recall = hits / denom
+          results[loc] = round(recall, 4)
+          assert recall >= floor, 'oracle recall %s: %.3f < floor %.3f' % (loc, recall, floor)
+      print('oracle recall per locale:', results, 'floor', floor)
+      PY
+    condition: "stage == 18"
+    stage: 1
+    description: "SCRIPTED recall (never the oracle's prose): every sampled segment answered; ENGLISH-term recovery from ENGLISH back-translations, per (segment, term) pair; denominator > 0 STRUCTURALLY (rev 1's degenerate-frame escape awarded recall 1.0 when denom was 0)"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      set -e
+      jq -e '.seed == {oracle_seed} and (.per_locale | to_entries | all(.value | length == {oracle_sample_per_locale}))' oracle-sample.json
+      python3 - <<'PY'
+      import json
+      sample = json.load(open('oracle-sample.json'))
+      census = {s['msgid_sha']: s for s in json.load(open('contract/segment-census.json'))}
+      for loc, picks in sample['per_locale'].items():
+          for p in picks:
+              assert p['msgid_sha'] in census, 'frame draws unknown msgid_sha'
+          kinds = {p['kind'] for p in picks}
+          assert len(kinds) >= 2 or len(census) < 2, '%s: not stratified (%s)' % (loc, kinds)
+          tb = sample['term_bearing'][loc]
+          assert tb >= 1, '%s: no term-bearing segments — denominator unguaranteed' % loc
+      print('frame auditable: seeded, exact counts, census-valid, stratified, term-bearing everywhere')
+      PY
+    condition: "stage == 18"
+    stage: 2
+    description: "Sample frame auditable AND honest: seeded, exact per-locale count, every msgid_sha in the census, >=2 kinds per locale, term-bearing coverage everywhere — authored by movement 4's CLI, never by the oracle being measured"
+  - type: command_succeeds
+    command: |
+      cd {workspace}
+      python3 - <<'PY'
+      import json
+      fam = json.load(open('pin/instrument-families.json'))
+      writer = json.load(open('work/locale-es/attestation.json'))['instrument']
+      oracle = json.load(open('oracle-es.json'))['instrument']
+      o_fam = fam['instruments'][oracle]['family']
+      w_fam = fam['instruments'][writer]['family']
+      assert o_fam != w_fam, 'oracle family (%s) == writer-of-record family (%s)' % (o_fam, w_fam)
+      print('oracle family %s != writer-of-record family %s' % (o_fam, w_fam))
+      PY
+    condition: "stage == 18"
+    stage: 3
+    description: "The third leg: oracle's MODEL FAMILY != the es writer's, joined through the movement-1 config probe"
