@@ -10,7 +10,12 @@
 #                                      tier is part of the slug, not --effort)
 #   agy --effort <low|medium|high>     reasoning effort for the session
 #   agy --dangerously-skip-permissions auto-approve tools
-#   agy --sandbox <bool>               terminal sandbox toggle
+#   agy --sandbox <bool>               terminal sandbox toggle (agy <=1.1.x era;
+#                                      on agy 1.1.26 --sandbox is a valueless
+#                                      flag that ENABLES restrictions — the
+#                                      two-token "--sandbox false" form is
+#                                      rejected with an unexpected-argument
+#                                      error that still exits 0)
 #   agy --print-timeout <duration>     print-mode wait timeout
 #   agy models                         lists configured models
 #   workspace .agents/mcp_config.json  initializes configured MCP servers
@@ -208,9 +213,11 @@ cli:
       - GOOGLE_APPLICATION_CREDENTIALS
       - GOOGLE_CLOUD_PROJECT
       - CLOUDSDK_CONFIG
+    # --sandbox is now a valueless flag that ENABLES restrictions; the retired
+    # two-token "--sandbox false" form is rejected by agy 1.1.26 with an
+    # unexpected-argument error that still exits 0. Omitting it entirely means
+    # no sandbox — the original intent of "--sandbox false".
     extra_flags:
-      - "--sandbox"
-      - "false"
       - "--print-timeout"
       - "30m"
   interactive:
@@ -226,9 +233,9 @@ cli:
     enabled_by_default: true
     inherit_auto_approve: true
     inherit_mcp_disable_args: false
-    extra_args:
-      - "--sandbox"
-      - "false"
+    # --sandbox retired as two-token form (see extra_flags note above);
+    # omitting it means no sandbox, which was always the intent.
+    extra_args: []
     startup_gates:
       - pattern: "Do you trust the contents of this project"
         keys: ["Enter"]
@@ -271,3 +278,4 @@ cli:
     crash_patterns:
       - "\\bbubbletea:\\s*error opening TTY\\b"
       - "\\bcould not open TTY\\b"
+      - "\\bunexpected argument\\b"

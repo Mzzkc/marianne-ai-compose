@@ -149,3 +149,10 @@ cli:
     auth_error_patterns:
       - "authenticat"
       - "invalid.*api.*key"
+    # Codex prints hard API errors as `ERROR: {"type":"error",...}` on stdout
+    # and still exits 0 (probed 2026-09-04: an unsupported --model value
+    # returns HTTP 400, prints the JSON error twice, exit code 0). Without a
+    # crash classifier the exit-0 lie is treated as success and the failure
+    # only surfaces later as a validation miss with the retry budget spent.
+    crash_patterns:
+      - 'ERROR: \{"type":"error"'
