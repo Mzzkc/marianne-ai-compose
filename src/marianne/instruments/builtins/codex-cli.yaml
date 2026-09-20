@@ -25,6 +25,16 @@ capabilities:
 default_timeout_seconds: 1800
 
 models:
+  # ── GPT-6 family (current flagship, checked 2026-09-20) ───────────────
+  # Astra: flagship tier — 1,050,000-token API context (922,000 max input);
+  # follows the 272000 client-facing convention of the non-[1m] rows below.
+  - name: gpt-6-astra
+    context_window: 272000
+    cost_per_1k_input: 0.01
+    cost_per_1k_output: 0.05
+    max_output_tokens: 128000
+    max_concurrent: 4
+
   # ── GPT-5.6 family (July 2026) ────────────────────────────────────────
   # GPT-5.6 is a model family played through this Codex instrument.
   # No default_model is set: the installed Codex client selects its default
@@ -74,8 +84,8 @@ models:
   # ── Legacy / prior-generation models ──
   - name: o3
     context_window: 200000
-    cost_per_1k_input: 0.01
-    cost_per_1k_output: 0.04
+    cost_per_1k_input: 0.002
+    cost_per_1k_output: 0.008
     max_output_tokens: 100000
   - name: o4-mini
     context_window: 200000

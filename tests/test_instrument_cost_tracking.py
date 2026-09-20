@@ -27,12 +27,13 @@ the protocol, skip is not.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import pytest
 
 from marianne.daemon.baton.musician import _estimate_cost
 from marianne.execution.base import ExecutionResult
-from marianne.instruments.loader import load_all_profiles
+from marianne.instruments.loader import InstrumentProfileLoader
 from marianne.instruments.registry import InstrumentRegistry
 
 # ---------------------------------------------------------------------------
@@ -64,7 +65,8 @@ def _make_exec_result(
 def registry() -> InstrumentRegistry:
     """A registry populated from the same YAML profile loader as the daemon."""
     r = InstrumentRegistry()
-    r.replace_all(load_all_profiles())
+    builtins = Path(__file__).parents[1] / "src/marianne/instruments/builtins"
+    r.replace_all(InstrumentProfileLoader.load_directory(builtins))
     return r
 
 
@@ -87,7 +89,7 @@ def test_claude_sonnet_profile_pricing_is_used_and_matches_profile(
     """
     profile = registry.get("claude-code")
     assert profile is not None
-    sonnet = next(m for m in profile.models if "sonnet" in m.name)
+    sonnet = next(m for m in profile.models if m.name == "claude-sonnet-4-20250514")
 
     result = _make_exec_result(input_tokens=10_000, output_tokens=2_000)
     cost = _estimate_cost(
@@ -119,7 +121,7 @@ def test_claude_opus_profile_pricing_distinguishes_profile_from_fallback(
     """
     profile = registry.get("claude-code")
     assert profile is not None
-    opus = next((m for m in profile.models if "opus" in m.name), None)
+    opus = next((m for m in profile.models if m.name == "claude-opus-4-20250514"), None)
     assert opus is not None, "Claude Code profile is expected to include Opus"
 
     result = _make_exec_result(input_tokens=100_000, output_tokens=10_000)
@@ -338,3 +340,32 @@ def test_none_tokens_are_treated_as_zero() -> None:
     assert cost == 0.0, (
         f"None tokens must be treated as zero; got {cost}."
     )
+
+
+@pytest.mark.parametrize("instrument,model_name,input_rate,output_rate", [
+    ("claude-code", "claude-fable-5-1", 0.01, 0.05),
+    ("claude-code", "claude-opus-5", 0.005, 0.025),
+    ("claude-code", "claude-sonnet-5", 0.002, 0.01),
+    ("claude-code", "claude-haiku-4-5-20251001", 0.001, 0.005),
+    ("codex-cli", "gpt-6-astra", 0.01, 0.05),
+    ("codex-cli", "o3", 0.002, 0.008),
+])
+def test_current_model_standard_api_rates_reach_cost_estimator(
+    registry: InstrumentRegistry,
+    instrument: str,
+    model_name: str,
+    input_rate: float,
+    output_rate: float,
+) -> None:
+    """Per-million published rates must be converted to the profile's per-1K unit."""
+    profile = registry.get(instrument)
+    assert profile is not None
+    model = next(m for m in profile.models if m.name == model_name)
+    assert model.cost_per_1k_input == input_rate
+    assert model.cost_per_1k_output == output_rate
+    result = _make_exec_result(input_tokens=100_000, output_tokens=10_000)
+    assert _estimate_cost(
+        result,
+        cost_per_1k_input=model.cost_per_1k_input,
+        cost_per_1k_output=model.cost_per_1k_output,
+    ) == pytest.approx(100 * input_rate + 10 * output_rate)

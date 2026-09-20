@@ -60,6 +60,29 @@ models:
     max_output_tokens: 65536
     max_concurrent: 8
 
+  # ── Claude 5 family (current generation, checked 2026-09-20) ──
+  # Fable 5.1: flagship tier — adaptive always-on thinking (default effort
+  # high), 1M context, 128K output. Selectable via the fable alias.
+  - name: claude-fable-5-1
+    context_window: 1000000
+    cost_per_1k_input: 0.01
+    cost_per_1k_output: 0.05
+    max_output_tokens: 128000
+    max_concurrent: 4
+  - name: claude-opus-5
+    context_window: 1000000
+    cost_per_1k_input: 0.005
+    cost_per_1k_output: 0.025
+    max_output_tokens: 128000
+    max_concurrent: 4
+  # Sonnet 5: native 1M window; the [1m] suffix is not required.
+  - name: claude-sonnet-5
+    context_window: 1000000
+    cost_per_1k_input: 0.002
+    cost_per_1k_output: 0.01
+    max_output_tokens: 128000
+    max_concurrent: 6
+
   # ── Sonnet tier (mid-range: fast, capable, cost-effective) ──
   - name: claude-sonnet-4-20250514
     context_window: 200000
@@ -109,8 +132,8 @@ models:
   # ── Haiku tier (lightweight: fast, cheap, high concurrency) ──
   - name: claude-haiku-4-5-20251001
     context_window: 200000
-    cost_per_1k_input: 0.0008
-    cost_per_1k_output: 0.004
+    cost_per_1k_input: 0.001
+    cost_per_1k_output: 0.005
     max_output_tokens: 64000
     max_concurrent: 8
 
