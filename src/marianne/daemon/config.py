@@ -159,6 +159,15 @@ class SocketConfig(BaseModel):
         ge=1,
         description="Maximum pending connections in the socket listen queue",
     )
+    enforce_peer_uid: bool = Field(
+        default=True,
+        description=(
+            "Reject IPC connections from peers whose UID differs from the "
+            "conductor's effective UID. Defense-in-depth over socket file "
+            "permissions (0o660 admits the owning group); disable only "
+            "when a cross-UID client is explicitly required."
+        ),
+    )
 
 
 class ObserverConfig(BaseModel):

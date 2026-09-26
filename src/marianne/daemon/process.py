@@ -15,8 +15,6 @@ import fcntl
 import json
 import os
 import signal
-import socket
-import struct
 import sys
 import time
 from pathlib import Path
@@ -82,26 +80,24 @@ def _read_proc_text(pid: int, name: str) -> str | None:
 
 def _ipc_peer_metadata(writer: asyncio.StreamWriter) -> dict[str, Any]:
     """Best-effort Unix socket peer metadata for control-plane audit logs."""
-    metadata: dict[str, Any] = {}
-    sock = writer.get_extra_info("socket")
-    peercred = getattr(socket, "SO_PEERCRED", None)
-    if sock is None or peercred is None:
-        return metadata
+    from marianne.daemon.ipc.peercred import read_peer_credentials
 
-    try:
-        raw = sock.getsockopt(socket.SOL_SOCKET, peercred, struct.calcsize("3i"))
-        pid, uid, gid = struct.unpack("3i", raw)
-    except (OSError, TypeError, AttributeError, struct.error):
-        return metadata
+    creds = read_peer_credentials(writer)
+    if creds is None:
+        return {}
 
-    metadata.update(client_pid=pid, client_uid=uid, client_gid=gid)
+    metadata: dict[str, Any] = {
+        "client_pid": creds.pid,
+        "client_uid": creds.uid,
+        "client_gid": creds.gid,
+    }
 
-    comm = _read_proc_text(pid, "comm")
+    comm = _read_proc_text(creds.pid, "comm")
     if comm:
         metadata["client_comm"] = comm
 
     try:
-        metadata["client_exe"] = os.readlink(f"/proc/{pid}/exe")
+        metadata["client_exe"] = os.readlink(f"/proc/{creds.pid}/exe")
     except (FileNotFoundError, OSError, PermissionError):
         pass
 
@@ -527,6 +523,7 @@ class DaemonProcess:
                 handler,
                 permissions=self._config.socket.permissions,
                 max_connections=self._config.socket.backlog,
+                enforce_peer_uid=self._config.socket.enforce_peer_uid,
             )
             await server.start()
 
@@ -643,6 +640,15 @@ class DaemonProcess:
 
         async def handle_submit(params: dict[str, Any], _w: Any) -> dict[str, Any]:
             request = JobRequest(**params)
+            # Provenance: attempts are logged before the manager verdict so a
+            # rogue or accidental same-UID submission is attributable after
+            # the fact.  Peer credentials are user-granular — this identifies
+            # *which process* asked, it does not authorize anything.
+            _logger.info(
+                "ipc_job_submitted",
+                **_ipc_peer_metadata(_w),
+                config_path=str(request.config_path),
+            )
             response = await manager.submit_job(request)
             return response.model_dump()
 
@@ -1049,6 +1055,11 @@ class DaemonProcess:
             ("socket.path", self._config.socket.path, new_config.socket.path),
             ("socket.permissions", self._config.socket.permissions, new_config.socket.permissions),
             ("socket.backlog", self._config.socket.backlog, new_config.socket.backlog),
+            (
+                "socket.enforce_peer_uid",
+                self._config.socket.enforce_peer_uid,
+                new_config.socket.enforce_peer_uid,
+            ),
             ("pid_file", self._config.pid_file, new_config.pid_file),
         ]
         for field_name, old_val, new_val in _non_reloadable:

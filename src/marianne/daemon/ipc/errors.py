@@ -38,6 +38,7 @@ JOB_ALREADY_RUNNING = -32002
 DAEMON_SHUTTING_DOWN = -32003
 JOB_NOT_RESUMABLE = -32004
 WORKSPACE_NOT_FOUND = -32005
+IPC_PEER_DENIED = -32006
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +93,16 @@ def invalid_params(
     return make_error(INVALID_PARAMS, f"Invalid params: {detail}", request_id)
 
 
+def peer_denied(
+    request_id: int | str | None, detail: str = ""
+) -> JsonRpcError:
+    """Connection rejected: peer UID is not the conductor owner's."""
+    msg = "Connection rejected: peer is not the conductor owner"
+    if detail:
+        msg = f"{msg}: {detail}"
+    return make_error(IPC_PEER_DENIED, msg, request_id)
+
+
 def internal_error(
     request_id: int | str | None, detail: str = ""
 ) -> JsonRpcError:
@@ -136,6 +147,7 @@ _CODE_EXCEPTION_MAP: dict[int, type[DaemonError]] = {
     DAEMON_SHUTTING_DOWN: DaemonError,
     JOB_NOT_RESUMABLE: JobSubmissionError,
     WORKSPACE_NOT_FOUND: JobSubmissionError,
+    IPC_PEER_DENIED: DaemonError,
     METHOD_NOT_FOUND: MethodNotFoundError,
 }
 
@@ -153,6 +165,7 @@ __all__ = [
     "INTERNAL_ERROR",
     "INVALID_PARAMS",
     "INVALID_REQUEST",
+    "IPC_PEER_DENIED",
     "JOB_ALREADY_RUNNING",
     "JOB_NOT_FOUND",
     "JOB_NOT_RESUMABLE",
@@ -167,5 +180,6 @@ __all__ = [
     "map_exception_to_rpc_error",
     "method_not_found",
     "parse_error",
+    "peer_denied",
     "rpc_error_to_exception",
 ]

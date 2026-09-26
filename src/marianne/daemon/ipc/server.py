@@ -16,8 +16,13 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from marianne.core.logging import get_logger
-from marianne.daemon.ipc.errors import invalid_request, parse_error
+from marianne.daemon.ipc.errors import (
+    invalid_request,
+    parse_error,
+    peer_denied,
+)
 from marianne.daemon.ipc.handler import RequestHandler
+from marianne.daemon.ipc.peercred import read_peer_credentials
 from marianne.daemon.ipc.protocol import JsonRpcRequest
 from marianne.daemon.task_utils import log_task_exception
 
@@ -63,6 +68,18 @@ class DaemonServer:
     max_concurrent_requests:
         Maximum requests being processed at once across all connections.
         This is the real concurrency control (~50).
+    read_idle_timeout:
+        Seconds a connection may sit between complete messages before the
+        server closes it (dead/stuck client FD hygiene).
+    enforce_peer_uid:
+        Refuse connections whose peer UID differs from the daemon's
+        effective UID.  Defense-in-depth over socket file permissions —
+        the 0o660 mode admits the owning *group*, and root bypasses file
+        modes entirely.  On platforms where the peer UID cannot be read
+        (no ``SO_PEERCRED``) the gate fails open, because absence of the
+        credential is not evidence of a foreign peer.  Unix credentials
+        are user-granular: this stops *other users*, not other processes
+        running as the same user.
     """
 
     def __init__(
@@ -74,6 +91,7 @@ class DaemonServer:
         max_connections: int = DEFAULT_MAX_CONNECTIONS,
         max_concurrent_requests: int = DEFAULT_MAX_CONCURRENT_REQUESTS,
         read_idle_timeout: float = DEFAULT_READ_IDLE_TIMEOUT,
+        enforce_peer_uid: bool = True,
     ) -> None:
         if max_connections < 1:
             raise ValueError(f"max_connections must be >= 1, got {max_connections}")
@@ -92,6 +110,7 @@ class DaemonServer:
         self._max_connections = max_connections
         self._max_concurrent_requests = max_concurrent_requests
         self._read_idle_timeout = read_idle_timeout
+        self._enforce_peer_uid = enforce_peer_uid
         self._server: asyncio.Server | None = None
         self._connections: set[asyncio.Task[None]] = set()
         self._connection_semaphore = asyncio.Semaphore(max_connections)
@@ -203,6 +222,48 @@ class DaemonServer:
         self._connections.discard(task)
         log_task_exception(task, _logger, "connection_task_failed", level="warning")
 
+    def _read_peer_uid(self, writer: asyncio.StreamWriter) -> int | None:
+        """Peer's UID, or ``None`` when the platform cannot report it."""
+        creds = read_peer_credentials(writer)
+        return None if creds is None else creds.uid
+
+    async def _admit_peer(
+        self, writer: asyncio.StreamWriter, peer: object
+    ) -> bool:
+        """Peer-UID admission gate.
+
+        Denies peers whose UID differs from the daemon's effective UID,
+        answers them with ``IPC_PEER_DENIED`` (so the failure is
+        diagnosable, not a silent hang), and logs the attempt.  Fails
+        open only when the platform provides no peer credential at all.
+        """
+        peer_uid = self._read_peer_uid(writer)
+        if peer_uid is None:
+            _logger.warning("ipc_peercred_unavailable", peer=str(peer))
+            return True
+
+        expected_uid = os.geteuid()
+        if peer_uid == expected_uid:
+            return True
+
+        _logger.warning(
+            "ipc_peer_denied",
+            peer=str(peer),
+            client_uid=peer_uid,
+            expected_uid=expected_uid,
+            socket_path=str(self._socket_path),
+        )
+        await self._write_response(
+            writer,
+            peer_denied(
+                None,
+                f"peer uid {peer_uid} is not the conductor owner "
+                f"(uid {expected_uid}); IPC clients must run as the "
+                "conductor's user, or set socket.enforce_peer_uid=false",
+            ),
+        )
+        return False
+
     async def _handle_connection(
         self,
         reader: asyncio.StreamReader,
@@ -213,6 +274,11 @@ class DaemonServer:
         _logger.debug("client_connected", peer=str(peer))
 
         try:
+            if self._enforce_peer_uid and not await self._admit_peer(
+                writer, peer
+            ):
+                return
+
             while True:
                 try:
                     line = await asyncio.wait_for(

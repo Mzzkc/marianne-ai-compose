@@ -112,6 +112,7 @@ from marianne.daemon.exceptions import (
 from marianne.daemon.ipc.errors import (
     _CODE_EXCEPTION_MAP,
     DAEMON_SHUTTING_DOWN,
+    IPC_PEER_DENIED,
     JOB_ALREADY_RUNNING,
     JOB_NOT_FOUND,
     JOB_NOT_RESUMABLE,
@@ -366,6 +367,7 @@ class TestIPCErrorCodeMapping:
             DAEMON_SHUTTING_DOWN,
             JOB_NOT_RESUMABLE,
             WORKSPACE_NOT_FOUND,
+            IPC_PEER_DENIED,
             METHOD_NOT_FOUND,
         }
         mapped_codes = set(_CODE_EXCEPTION_MAP.keys())
