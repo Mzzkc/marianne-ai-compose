@@ -32,7 +32,13 @@ import httpx
 from marianne.core.config.instruments import validate_openai_response_format
 from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger
-from marianne.execution.base import Backend, ExecutionResult, HttpxClientMixin
+from marianne.execution.base import (
+    RESPONSE_FORMAT_UNSET,
+    Backend,
+    ExecutionResult,
+    HttpxClientMixin,
+    SheetRequestState,
+)
 from marianne.utils.time import utc_now
 
 _logger = get_logger("execution.openai_compat")
@@ -170,6 +176,12 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         # always restore the profile default, even when no other override
         # was applied.
         self._response_format = self._default_response_format
+        # W-F3: preamble/prompt_extensions are per-sheet prompt bytes — a
+        # prior sheet's healing-preamble evidence must never survive
+        # release into the next sheet's outbound prompt on this shared
+        # singleton (sequential smear, reachable with zero concurrency).
+        self._preamble = None
+        self._prompt_extensions = []
         if not self._has_overrides:
             return
         self.model = self._saved_model  # type: ignore[assignment]
@@ -181,7 +193,14 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         self._has_overrides = False
 
     def set_preamble(self, preamble: str | None) -> None:
-        """Set the dynamic preamble for the next execution."""
+        """Set the dynamic preamble for the next execution.
+
+        Direct-use contract only: the pooled dispatch path carries the
+        per-attempt preamble request-locally (``SheetRequestState``) — see
+        ``Backend.set_preamble``. On this shared HTTP singleton a mutable
+        preamble is the W-F3 sequential-smear seam; ``clear_overrides()``
+        resets it.
+        """
         self._preamble = preamble
 
     def set_response_format(
@@ -189,12 +208,14 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
     ) -> None:
         """Set an opt-in structured-output response_format for this sheet.
 
-        Applied per dispatch from the sheet's merged instrument_config
-        (an explicit ``None`` opts out of the profile default; an absent
-        key never reaches this setter). The value is validated by the
-        shared wire-contract validator — invalid shapes raise ValueError
-        and must surface as a dispatch failure, never a silent drop.
-        ``clear_overrides()`` restores the profile default at release.
+        Direct-use contract only (exclusively-owned backends, tests, and
+        the adapter's capability probe): the pooled dispatch path resolves
+        the sheet's value once and carries it request-locally on
+        ``SheetRequestState`` — never through this mutable slot, which is
+        the W-F1/W-F2 transfer seam on the shared HTTP singleton. The
+        value is validated by the shared wire-contract validator — invalid
+        shapes raise ValueError. ``clear_overrides()`` restores the
+        profile default at release.
         """
         self._response_format = (
             validate_openai_response_format(response_format)
@@ -239,24 +260,47 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
     def _build_prompt(self, prompt: str) -> str:
         """Assemble the full prompt with preamble and extensions.
 
+        Legacy direct-call assembly over the mutable per-sheet slots; the
+        dispatch path resolves the same values request-locally and calls
+        ``_assemble_prompt`` directly (W-F1/W-F2/W-F3).
+
         Args:
             prompt: The base prompt text.
 
         Returns:
             Assembled prompt string.
         """
-        if not self._preamble and not self._prompt_extensions:
+        return self._assemble_prompt(
+            prompt, self._preamble, tuple(self._prompt_extensions)
+        )
+
+    @staticmethod
+    def _assemble_prompt(
+        prompt: str,
+        preamble: str | None,
+        prompt_extensions: tuple[str, ...],
+    ) -> str:
+        """Assemble prompt bytes for one outbound request.
+
+        Order is byte-frozen: preamble, prompt, then extensions joined as
+        one trailing block (legacy payload contract).
+        """
+        if not preamble and not prompt_extensions:
             return prompt
         parts: list[str] = []
-        if self._preamble:
-            parts.append(self._preamble)
+        if preamble:
+            parts.append(preamble)
         parts.append(prompt)
-        if self._prompt_extensions:
-            parts.append("\n".join(self._prompt_extensions))
+        if prompt_extensions:
+            parts.append("\n".join(prompt_extensions))
         return "\n".join(parts)
 
     async def execute(
-        self, prompt: str, *, timeout_seconds: float | None = None,
+        self,
+        prompt: str,
+        *,
+        timeout_seconds: float | None = None,
+        request: SheetRequestState | None = None,
     ) -> ExecutionResult:
         """Execute a prompt via the selected OpenAI-compatible API.
 
@@ -266,6 +310,13 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             prompt: The prompt to send.
             timeout_seconds: Per-call timeout override. Logged but not
                 enforced (httpx client timeout from __init__ is used).
+            request: Per-sheet state resolved once at dispatch. When
+                provided, EVERY payload field it carries is request-local
+                (W-F1/W-F2/W-F3): ``response_format`` applies its tri-state
+                against the profile default, never the mutable slot another
+                dispatch may have written; preamble/extensions come from the
+                request alone. ``None`` preserves the legacy direct-call
+                behavior of the mutable setters.
 
         Returns:
             ExecutionResult with API response and metadata.
@@ -312,7 +363,30 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
                 model=self.model,
             )
 
-        assembled_prompt = self._build_prompt(prompt)
+        # Request-local per-sheet state (W-F1/W-F2/W-F3): the pooled HTTP
+        # singleton is shared by concurrent sheets across jobs, so the
+        # values that build THIS payload come from the dispatch-resolved
+        # request — never from mutable attributes another dispatch may
+        # have written between this sheet's dispatch and its payload build.
+        if request is not None:
+            response_format = (
+                self._default_response_format
+                if request.response_format is RESPONSE_FORMAT_UNSET
+                else request.response_format
+            )
+            preamble = request.preamble
+            prompt_extensions = request.prompt_extensions
+        else:
+            # Legacy direct-call path: exclusively-owned backends and
+            # direct callers that configure the setters keep their
+            # documented behavior.
+            response_format = self._response_format
+            preamble = self._preamble
+            prompt_extensions = tuple(self._prompt_extensions)
+
+        assembled_prompt = self._assemble_prompt(
+            prompt, preamble, prompt_extensions
+        )
 
         payload: dict[str, Any] = {
             "model": self.model,
@@ -323,8 +397,8 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         # Opt-in structured output: forwarded exactly as validated — the
         # provider, not this transport, owns the object's semantics. Absent
         # configuration keeps the legacy four-key payload byte-identical.
-        if self._response_format is not None:
-            payload["response_format"] = self._response_format
+        if response_format is not None:
+            payload["response_format"] = response_format
 
         try:
             client = await self._get_client()

@@ -42,6 +42,7 @@ MAX_FALLBACK_HISTORY: int = 50
 # de facto running state), the rename has no behavioral impact.
 from marianne.core.checkpoint import SheetStatus
 from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.execution.base import RESPONSE_FORMAT_UNSET, ResponseFormatResolution
 
 BatonSheetStatus = SheetStatus
 
@@ -141,6 +142,18 @@ class AttemptContext:
     previous_files: dict[str, str] = field(default_factory=dict)
     """File contents captured via capture_files patterns. Keys are file paths.
     Populated by the adapter from workspace files matching CrossSheetConfig patterns."""
+
+    response_format: ResponseFormatResolution = RESPONSE_FORMAT_UNSET
+    """Per-sheet structured-output resolution for this attempt (W-F1/W-F2).
+
+    Tri-state: ``RESPONSE_FORMAT_UNSET`` (the sheet did not configure one —
+    the backend applies its profile default at execute), ``None`` (explicit
+    opt-out of a profile default), or a validated mapping forwarded to the
+    OpenAI-compatible wire contract. Resolved ONCE at dispatch (adapter,
+    validated by the shared wire-contract validator) and consumed
+    request-locally by the musician via ``SheetRequestState`` — it never
+    rides the shared pooled backend as mutable attribute state.
+    """
 
 
 # =============================================================================

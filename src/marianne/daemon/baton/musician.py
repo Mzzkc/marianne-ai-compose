@@ -51,7 +51,7 @@ from marianne.core.tokens import estimate_tokens, get_effective_window_size
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.state import AttemptContext
 from marianne.daemon.technique_router import ClassifiedOutput, OutputKind, TechniqueRouter
-from marianne.execution.base import Backend, ExecutionResult
+from marianne.execution.base import Backend, ExecutionResult, SheetRequestState
 from marianne.execution.code_mode import (
     CodeExecutionResult,
     CodeExecutionStatus,
@@ -110,9 +110,11 @@ async def sheet_task(
             calling _build_prompt(). This enables the full 9-layer
             prompt assembly pipeline including spec fragments, learned
             patterns, and failure history.
-        preamble: Optional pre-built preamble. Set on the backend via
-            set_preamble() before execution. Only used when rendered_prompt
-            is also provided (the PromptRenderer separates them).
+        preamble: Optional pre-built preamble. Passed to the backend
+            request-locally at execution (SheetRequestState — W-F3), never
+            via the mutable set_preamble() slot. Only used when
+            rendered_prompt is also provided (the PromptRenderer separates
+            them).
         cost_per_1k_input: Cost per 1000 input tokens (USD) from the
             instrument profile's ModelCapacity. None uses hardcoded fallback.
         cost_per_1k_output: Cost per 1000 output tokens (USD) from the
@@ -151,10 +153,12 @@ async def sheet_task(
         # Step 1: Build prompt
         if rendered_prompt is not None:
             # F-104 via PromptRenderer — pre-rendered with all 9 layers.
-            # Preamble is separated and set on the backend directly.
+            # The preamble is separated by the renderer but travels
+            # REQUEST-LOCALLY (W-F3): a pooled backend shared across
+            # sheets/jobs must never hold another sheet's prompt bytes in
+            # a mutable slot, so it is passed to execute() below instead
+            # of set_preamble().
             prompt = rendered_prompt
-            if preamble is not None:
-                backend.set_preamble(preamble)
         else:
             # Fallback: inline rendering (covers basic cases)
             prompt = _build_prompt(
@@ -169,8 +173,19 @@ async def sheet_task(
             prompt, effective_instrument, sheet.instrument_config.get("model")
         )
 
-        # Step 2-3: Execute through backend
-        exec_result = await _execute(backend, prompt, sheet.timeout_seconds)
+        # Step 2-3: Execute through backend. The per-sheet request state
+        # (W-F1/W-F2/W-F3) is dispatch-resolved and immutable: the pooled
+        # HTTP singleton is shared by concurrent sheets across jobs, so
+        # this attempt's response_format/preamble must reach the payload
+        # build through the request, never through mutable backend
+        # attributes another dispatch may have written or may write.
+        request_state = SheetRequestState(
+            response_format=attempt_context.response_format,
+            preamble=preamble,
+        )
+        exec_result = await _execute(
+            backend, prompt, sheet.timeout_seconds, request_state
+        )
 
         # Step 3a: Classify output via TechniqueRouter (Stage 2a).
         # Only runs when a router is provided AND execution succeeded —
@@ -979,13 +994,20 @@ async def _execute(
     backend: Backend,
     prompt: str,
     timeout_seconds: float,
+    request: SheetRequestState | None = None,
 ) -> ExecutionResult:
     """Execute the prompt through the backend.
 
-    This is a thin wrapper that passes the timeout and returns the result.
+    This is a thin wrapper that passes the timeout and the per-sheet
+    request state and returns the result. The request travels explicitly
+    (W-F1/W-F2/W-F3): pooled backends are shared across concurrent sheets
+    and jobs, so per-sheet values must never ride mutable backend
+    attributes between dispatch and payload build.
     All exception handling is done by the caller (sheet_task).
     """
-    return await backend.execute(prompt, timeout_seconds=timeout_seconds)
+    return await backend.execute(
+        prompt, timeout_seconds=timeout_seconds, request=request
+    )
 
 
 def _is_nonzero_exit_rescuable(

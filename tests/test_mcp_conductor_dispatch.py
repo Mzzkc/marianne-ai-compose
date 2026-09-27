@@ -17,7 +17,7 @@ from marianne.core.config.job import PromptConfig
 from marianne.core.config.techniques import TechniqueConfig, TechniqueKind
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.events import ShutdownRequested
-from marianne.execution.base import ExecutionResult
+from marianne.execution.base import ExecutionResult, SheetRequestState
 
 BUILTINS_DIR = Path(__file__).parent.parent / "src" / "marianne" / "instruments" / "builtins"
 
@@ -67,6 +67,7 @@ class _BackendWithMcpConfig:
         prompt: str,
         *,
         timeout_seconds: float | None = None,
+        request: SheetRequestState | None = None,
     ) -> ExecutionResult:
         self.config_seen_during_execute = self.config_at_execute
         return ExecutionResult(
@@ -97,6 +98,7 @@ class _BackendWithoutMcpConfig:
         prompt: str,
         *,
         timeout_seconds: float | None = None,
+        request: SheetRequestState | None = None,
     ) -> ExecutionResult:
         self.prompt_seen = prompt
         stdout = (

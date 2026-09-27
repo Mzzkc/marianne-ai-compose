@@ -34,6 +34,7 @@ from marianne.core.sheet import Sheet
 from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.daemon.baton.backend_pool import _create_backend_for_profile
 from marianne.daemon.baton.state import SheetExecutionState
+from marianne.execution.base import RESPONSE_FORMAT_UNSET, SheetRequestState
 from marianne.execution.instruments.openai_compat_backend import (
     OpenAICompatibleBackend,
 )
@@ -352,7 +353,12 @@ def _success_result() -> MagicMock:
 
 
 async def test_sheet_response_format_reaches_backend_at_dispatch() -> None:
-    """instrument_config.response_format is applied to the backend per sheet."""
+    """instrument_config.response_format reaches execute() request-locally.
+
+    W-F1/W-F2: dispatch resolves and validates the value once and threads it
+    on SheetRequestState — the pooled singleton's mutable slots are never
+    written between dispatch and the payload build.
+    """
     adapter, pool = _adapter_with_registered_sheet(
         {
             "response_format": {
@@ -374,19 +380,21 @@ async def test_sheet_response_format_reaches_backend_at_dispatch() -> None:
     if adapter._active_tasks:
         await asyncio.gather(*adapter._active_tasks.values(), return_exceptions=True)
 
-    backend.set_response_format.assert_called_once_with(
-        {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "sheet_schema",
-                "schema": {"type": "object"},
-            },
-        }
-    )
+    # The validated value traveled on the request, not the mutable slot.
+    backend.set_response_format.assert_not_called()
+    assert backend.execute.await_count >= 1
+    request = backend.execute.call_args.kwargs["request"]
+    assert request.response_format == {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sheet_schema",
+            "schema": {"type": "object"},
+        },
+    }
 
 
 async def test_absent_sheet_config_leaves_backend_untouched() -> None:
-    """No response_format key → the setter is never called (legacy path)."""
+    """No response_format key → UNSET travels on the request (profile default)."""
     adapter, pool = _adapter_with_registered_sheet({"model": "test-model"})
     backend = MagicMock()
     backend.set_response_format = MagicMock()
@@ -399,6 +407,8 @@ async def test_absent_sheet_config_leaves_backend_untouched() -> None:
         await asyncio.gather(*adapter._active_tasks.values(), return_exceptions=True)
 
     backend.set_response_format.assert_not_called()
+    request = backend.execute.call_args.kwargs["request"]
+    assert request.response_format is RESPONSE_FORMAT_UNSET
 
 
 async def test_backend_without_support_skips_with_warning() -> None:
@@ -438,3 +448,87 @@ async def test_invalid_sheet_response_format_becomes_dispatch_failure() -> None:
     assert "response_format" in failure_msg
     # The backend was released back to the pool, not leaked.
     pool.release.assert_awaited_once()
+
+
+# =========================================================================
+# Request-local state contract (W-F1/W-F2/W-F3)
+# =========================================================================
+
+
+async def test_request_state_tri_state_against_profile_default() -> None:
+    """The dispatch-resolved tri-state governs the payload, never the slot.
+
+    UNSET → profile default; explicit None → omitted; mapping → forwarded.
+    """
+    schema = {
+        "type": "json_schema",
+        "json_schema": {"name": "s", "schema": {"type": "object"}},
+    }
+    backend, captured = _capturing_backend(
+        response_format={"type": "json_object"}
+    )
+
+    await backend.execute("p1", request=SheetRequestState())
+    assert captured["payload"]["response_format"] == {"type": "json_object"}
+
+    await backend.execute("p2", request=SheetRequestState(response_format=None))
+    assert "response_format" not in captured["payload"]
+
+    await backend.execute("p3", request=SheetRequestState(response_format=schema))
+    assert captured["payload"]["response_format"] == schema
+
+
+async def test_request_state_wins_over_mutated_singleton_slots() -> None:
+    """A request-bearing execute never reads the mutable slots (W-F1/W-F2).
+
+    Another dispatch may have left a foreign format/preamble on the shared
+    singleton — with a request in hand, none of it may reach the payload.
+    """
+    backend, captured = _capturing_backend()
+    # Foreign residue on the singleton, as another sheet's dispatch would
+    # have left it before the repair (or a direct setter user today).
+    backend.set_response_format({"type": "json_object"})
+    backend.set_preamble("FOREIGN-PREAMBLE-EVIDENCE-TOKEN=999")
+    backend.set_prompt_extensions(["FOREIGN-EXTENSION"])
+
+    result = await backend.execute(
+        "own-prompt", request=SheetRequestState(preamble="OWN-PREAMBLE")
+    )
+
+    assert result.success is True
+    payload = captured["payload"]
+    assert "response_format" not in payload  # explicit absence honored
+    content = payload["messages"][0]["content"]
+    assert "OWN-PREAMBLE" in content
+    assert "FOREIGN-PREAMBLE-EVIDENCE-TOKEN" not in content
+    assert "FOREIGN-EXTENSION" not in content
+
+
+async def test_no_request_preserves_legacy_setter_path() -> None:
+    """request=None keeps the documented direct-call setter behavior."""
+    backend, captured = _capturing_backend()
+    backend.set_response_format({"type": "json_object"})
+    backend.set_preamble("LEGACY")
+
+    result = await backend.execute("hi")
+
+    assert result.success is True
+    assert captured["payload"]["response_format"] == {"type": "json_object"}
+    assert captured["payload"]["messages"][0]["content"] == "LEGACY\nhi"
+
+
+async def test_clear_overrides_resets_preamble_and_extensions() -> None:
+    """Release-time reset covers the full per-sheet prompt-state class (W-F3)."""
+    backend, captured = _capturing_backend()
+    backend.set_preamble("SHEET-A-EVIDENCE-TOKEN=314159")
+    backend.set_prompt_extensions(["EXTENSION-BLOCK-EVIDENCE"])
+    backend.clear_overrides()
+
+    assert backend._preamble is None
+    assert backend._prompt_extensions == []
+    await backend.execute("next-sheet")
+
+    content = captured["payload"]["messages"][0]["content"]
+    assert "SHEET-A-EVIDENCE-TOKEN" not in content
+    assert "EXTENSION-BLOCK-EVIDENCE" not in content
+    assert content == "next-sheet"

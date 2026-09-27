@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
     import httpx
@@ -17,6 +17,51 @@ from marianne.utils.time import utc_now
 
 # Type alias for exit reasons - provides exhaustive pattern matching
 ExitReason = Literal["completed", "timeout", "killed", "error"]
+
+
+class _ResponseFormatUnset:
+    """Sentinel type: no response_format was resolved for this request.
+
+    Distinct from ``None`` (an explicit opt-out of a profile default) so the
+    tri-state (absent / null / mapping) survives threading from dispatch to
+    the payload build without reading mutable backend state (W-F1/W-F2).
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "RESPONSE_FORMAT_UNSET"
+
+
+RESPONSE_FORMAT_UNSET: _ResponseFormatUnset = _ResponseFormatUnset()
+
+# Tri-state resolution carried on SheetRequestState / AttemptContext.
+ResponseFormatResolution = Union[dict[str, Any], None, "_ResponseFormatUnset"]
+
+
+@dataclass(frozen=True)
+class SheetRequestState:
+    """Per-sheet outbound-request state, resolved once at dispatch.
+
+    The pooled HTTP backend is a daemon-global singleton shared by
+    concurrent sheets across jobs; per-sheet values riding as mutable
+    backend attributes can transfer between in-flight sheets (W-F1/W-F2)
+    or smear sequentially across release (W-F3). Dispatch resolves this
+    immutable state and ``execute()`` consumes it request-locally —
+    nothing in the request build is read from (or written to) shared
+    backend state.
+
+    ``response_format`` is tri-state: ``RESPONSE_FORMAT_UNSET`` (the sheet
+    did not configure one — the backend applies its profile default),
+    ``None`` (explicit opt-out of a profile default), or a validated
+    mapping (forwarded). Only the OpenAI-compatible HTTP contract consumes
+    it; other backends ignore it (the adapter logs the capability warning
+    at dispatch).
+    """
+
+    response_format: ResponseFormatResolution = RESPONSE_FORMAT_UNSET
+    preamble: str | None = None
+    prompt_extensions: tuple[str, ...] = ()
 
 
 @dataclass
@@ -124,7 +169,11 @@ class Backend(ABC):
 
     @abstractmethod
     async def execute(
-        self, prompt: str, *, timeout_seconds: float | None = None,
+        self,
+        prompt: str,
+        *,
+        timeout_seconds: float | None = None,
+        request: SheetRequestState | None = None,
     ) -> ExecutionResult:
         """Execute a prompt and return the result.
 
@@ -132,6 +181,14 @@ class Backend(ABC):
             prompt: The prompt to send to Claude
             timeout_seconds: Per-call timeout override. If provided, overrides
                 the backend's default timeout for this single execution.
+            request: Per-sheet outbound-request state resolved once at
+                dispatch (W-F1/W-F2/W-F3). Pooled backends are shared by
+                concurrent sheets across jobs, so per-sheet values must
+                travel here, never as mutable backend attributes read at
+                payload build. ``None`` preserves the legacy direct-call
+                behavior of the mutable setters. Backends that cannot honor
+                a field ignore it — the adapter logs capability warnings at
+                dispatch.
 
         Returns:
             ExecutionResult with output and metadata
@@ -304,9 +361,11 @@ class Backend(ABC):
     def set_preamble(self, _preamble: str | None) -> None:  # noqa: B027
         """Set the dynamic preamble for the next execution.
 
-        Called per-sheet by the musician with a context-aware preamble built by
-        ``build_preamble()``. The preamble includes sheet identity, position,
-        workspace, and retry status.
+        Direct-use contract: the dispatch path carries the per-attempt
+        preamble request-locally on ``SheetRequestState`` (W-F3 — a pooled
+        backend shared across sheets must never hold another sheet's prompt
+        bytes in a mutable slot). This setter remains for exclusively-owned
+        backends and direct callers; ``clear_overrides()`` must reset it.
 
         Override in subclasses that support prompt injection.
         Default implementation is a no-op for backends without this capability.
@@ -319,8 +378,9 @@ class Backend(ABC):
         """Set prompt extensions for the next execution.
 
         Extensions are additional directive blocks injected after the
-        preamble. Called per-sheet by the musician to apply score-level and
-        sheet-level prompt extensions (GH#76).
+        preamble. Direct-use contract — the dispatch path carries them on
+        ``SheetRequestState`` (see ``set_preamble``). ``clear_overrides()``
+        must reset them.
 
         Override in subclasses that support prompt injection.
         Default implementation is a no-op for backends without this capability.

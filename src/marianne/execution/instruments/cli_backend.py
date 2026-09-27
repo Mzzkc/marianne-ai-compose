@@ -30,7 +30,12 @@ from typing import Any
 
 from marianne.core.config.instruments import InstrumentProfile
 from marianne.core.logging import get_logger
-from marianne.execution.base import Backend, ExecutionResult, ExitReason
+from marianne.execution.base import (
+    Backend,
+    ExecutionResult,
+    ExitReason,
+    SheetRequestState,
+)
 from marianne.utils.json_path import extract_json_path
 from marianne.utils.process import safe_killpg as _safe_killpg
 
@@ -278,18 +283,31 @@ class PluginCliBackend(Backend):
 
     def clear_overrides(self) -> None:
         """Restore original backend parameters after per-sheet execution."""
-        if not self._has_overrides:
-            return
-        self._model = self._saved_model
-        self._saved_model = None
-        self._has_overrides = False
+        if self._has_overrides:
+            self._model = self._saved_model
+            self._saved_model = None
+            self._has_overrides = False
+        # W-F3: per-sheet prompt bytes never survive release into a
+        # free-list-reused backend — the next sheet carries its own values
+        # request-locally or via the setters, never a previous sheet's.
+        self._preamble = None
+        self._prompt_extensions = []
 
     def set_preamble(self, preamble: str | None) -> None:
-        """Set preamble to prepend to the next prompt."""
+        """Set preamble to prepend to the next prompt.
+
+        Direct-use contract: the dispatch path carries the per-attempt
+        preamble request-locally (``SheetRequestState``) — see
+        ``Backend.set_preamble``. ``clear_overrides()`` resets it at release.
+        """
         self._preamble = preamble
 
     def set_prompt_extensions(self, extensions: list[str]) -> None:
-        """Set prompt extensions to append to the next prompt."""
+        """Set prompt extensions to append to the next prompt.
+
+        Direct-use contract — see ``Backend.set_prompt_extensions``.
+        ``clear_overrides()`` resets them at release.
+        """
         self._prompt_extensions = list(extensions)
 
     def set_output_callback(
@@ -417,20 +435,35 @@ class PluginCliBackend(Backend):
                 exc_info=True,
             )
 
-    def _build_prompt(self, prompt: str) -> str:
+    def _build_prompt(
+        self,
+        prompt: str,
+        preamble: str | None = None,
+        prompt_extensions: tuple[str, ...] | None = None,
+    ) -> str:
         """Assemble the full prompt with preamble and extensions.
 
         Args:
             prompt: The core prompt text.
+            preamble: Request-local preamble (W-F3). When both this and
+                ``prompt_extensions`` are None (direct/test callers), the
+                mutable per-sheet slots are used — the dispatch path always
+                passes the values resolved from ``SheetRequestState`` so a
+                pooled backend's slots can never leak into this request.
+            prompt_extensions: Request-local extensions (same contract).
 
         Returns:
             Complete prompt with preamble prepended and extensions appended.
         """
+        if preamble is None and prompt_extensions is None:
+            preamble = self._preamble
+            prompt_extensions = tuple(self._prompt_extensions)
         parts: list[str] = []
-        if self._preamble:
-            parts.append(self._preamble)
+        if preamble:
+            parts.append(preamble)
         parts.append(prompt)
-        parts.extend(self._prompt_extensions)
+        if prompt_extensions:
+            parts.extend(prompt_extensions)
         return "\n\n".join(parts)
 
     def _build_command(
@@ -439,6 +472,8 @@ class PluginCliBackend(Backend):
         *,
         timeout_seconds: float | None,
         force_stdin: bool = False,
+        preamble: str | None = None,
+        prompt_extensions: tuple[str, ...] | None = None,
     ) -> list[str]:
         """Build the CLI command from the profile configuration.
 
@@ -452,6 +487,8 @@ class PluginCliBackend(Backend):
             timeout_seconds: Per-execution timeout, or None.
             force_stdin: GH#188 — when True, omit prompt from args even if the
                 profile uses positional delivery. Caller handles stdin.
+            preamble: Request-local preamble threaded from ``execute`` (W-F3).
+            prompt_extensions: Request-local extensions (same contract).
 
         Returns:
             List of command arguments for subprocess.
@@ -501,7 +538,7 @@ class PluginCliBackend(Backend):
             # Otherwise, omit the prompt from args entirely — the CLI
             # reads from stdin by default.
         else:
-            full_prompt = self._build_prompt(prompt)
+            full_prompt = self._build_prompt(prompt, preamble, prompt_extensions)
             if cmd.prompt_flag:
                 args.append(cmd.prompt_flag)
                 args.append(full_prompt)
@@ -886,6 +923,7 @@ class PluginCliBackend(Backend):
         prompt: str,
         *,
         timeout_seconds: float | None = None,
+        request: SheetRequestState | None = None,
     ) -> ExecutionResult:
         """Execute a prompt through the CLI instrument.
 
@@ -901,11 +939,25 @@ class PluginCliBackend(Backend):
         """
         effective_timeout = timeout_seconds or self._profile.default_timeout_seconds
 
+        # Request-local per-sheet prompt state (W-F3): when a dispatch
+        # resolved SheetRequestState, its preamble/extensions are the ONLY
+        # ones this request may carry — the mutable slots (set by direct
+        # setter users or a previous sheet before the release reset) must
+        # not bleed into this prompt.
+        if request is not None:
+            req_preamble: str | None = request.preamble
+            req_extensions: tuple[str, ...] | None = request.prompt_extensions
+        else:
+            req_preamble = None
+            req_extensions = None
+
         # GH#188: Force stdin delivery when the assembled prompt is large.
         # CLI tools crash when receiving 100KB+ prompts as positional
         # arguments. Marianne prompts routinely exceed this with
         # cadenza/prelude injection. 32KB is a conservative threshold.
-        full_prompt_for_size = self._build_prompt(prompt)
+        full_prompt_for_size = self._build_prompt(
+            prompt, req_preamble, req_extensions
+        )
         use_stdin = self._cli.command.prompt_via_stdin
         prompt_bytes = len(full_prompt_for_size.encode("utf-8"))
         if not use_stdin and prompt_bytes > 32_768:
@@ -932,6 +984,8 @@ class PluginCliBackend(Backend):
         cmd = self._build_command(
             prompt, timeout_seconds=effective_timeout,
             force_stdin=use_stdin and not self._cli.command.prompt_via_stdin,
+            preamble=req_preamble,
+            prompt_extensions=req_extensions,
         )
         env = self._build_env()
 
@@ -1059,7 +1113,9 @@ class PluginCliBackend(Backend):
             # waits for stdin EOF before producing output, reading stdout
             # first would deadlock.
             if use_stdin and proc.stdin is not None:
-                full_prompt = self._build_prompt(prompt)
+                full_prompt = self._build_prompt(
+                    prompt, req_preamble, req_extensions
+                )
                 proc.stdin.write(full_prompt.encode("utf-8"))
                 await proc.stdin.drain()
                 proc.stdin.close()

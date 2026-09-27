@@ -31,7 +31,7 @@ from pathlib import Path
 from marianne.core.config.instruments import InstrumentProfile, InteractiveCliConfig
 from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger
-from marianne.execution.base import Backend, ExecutionResult
+from marianne.execution.base import Backend, ExecutionResult, SheetRequestState
 from marianne.execution.instruments.interactive.driver import (
     DriverResult,
     InteractiveSessionDriver,
@@ -234,13 +234,24 @@ class InteractiveCliBackend(Backend):
         self._max_nudges = DEFAULT_MAX_NUDGES
         self._nudge_message = None
         self._attempt_identity = None
+        # W-F3: per-sheet prompt bytes neither — see Backend.set_preamble.
+        self._preamble = None
+        self._prompt_extensions = []
 
     def set_preamble(self, preamble: str | None) -> None:
-        """Set preamble to prepend to the next prompt."""
+        """Set preamble to prepend to the next prompt.
+
+        Direct-use contract: the dispatch path carries the per-attempt
+        preamble request-locally (``SheetRequestState``) — see
+        ``Backend.set_preamble``.
+        """
         self._preamble = preamble
 
     def set_prompt_extensions(self, extensions: list[str]) -> None:
-        """Set prompt extensions to append to the next prompt."""
+        """Set prompt extensions to append to the next prompt.
+
+        Direct-use contract — see ``Backend.set_prompt_extensions``.
+        """
         self._prompt_extensions = list(extensions)
 
     # ── Execution ──────────────────────────────────────────────────────
@@ -270,13 +281,28 @@ class InteractiveCliBackend(Backend):
         args.extend(interactive.extra_args)
         return args
 
-    def _build_prompt(self, prompt: str, marker: Path) -> str:
-        """Assemble preamble + prompt + extensions + completion protocol."""
+    def _build_prompt(
+        self,
+        prompt: str,
+        marker: Path,
+        preamble: str | None = None,
+        prompt_extensions: tuple[str, ...] | None = None,
+    ) -> str:
+        """Assemble preamble + prompt + extensions + completion protocol.
+
+        ``preamble``/``prompt_extensions`` are the request-local values
+        (W-F3) threaded from ``execute``; when both are None (direct/test
+        callers), the mutable per-sheet slots are used.
+        """
+        if preamble is None and prompt_extensions is None:
+            preamble = self._preamble
+            prompt_extensions = tuple(self._prompt_extensions)
         parts: list[str] = []
-        if self._preamble:
-            parts.append(self._preamble)
+        if preamble:
+            parts.append(preamble)
         parts.append(prompt)
-        parts.extend(self._prompt_extensions)
+        if prompt_extensions:
+            parts.extend(prompt_extensions)
         parts.append(_completion_suffix(marker))
         return "\n\n".join(parts)
 
@@ -309,6 +335,7 @@ class InteractiveCliBackend(Backend):
         prompt: str,
         *,
         timeout_seconds: float | None = None,
+        request: SheetRequestState | None = None,
     ) -> ExecutionResult:
         """Execute a prompt by driving a live interactive session.
 
@@ -323,8 +350,18 @@ class InteractiveCliBackend(Backend):
         marker.parent.mkdir(parents=True, exist_ok=True)
         transcript = _TRANSCRIPT_DIR / f"{session}.log"
 
+        # Request-local per-sheet prompt state (W-F3) — see the CLI backend.
+        if request is not None:
+            req_preamble: str | None = request.preamble
+            req_extensions: tuple[str, ...] | None = request.prompt_extensions
+        else:
+            req_preamble = None
+            req_extensions = None
+
         command = self._build_command()
-        full_prompt = self._build_prompt(prompt, marker)
+        full_prompt = self._build_prompt(
+            prompt, marker, req_preamble, req_extensions
+        )
         policy = StaticNudgePolicy(
             self._nudge_message,
         ) if self._nudge_message else StaticNudgePolicy()

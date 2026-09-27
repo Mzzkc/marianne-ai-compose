@@ -53,6 +53,7 @@ from marianne.core.config.execution import (
     SkipWhenCommand,
     StaleDetectionConfig,
 )
+from marianne.core.config.instruments import validate_openai_response_format
 from marianne.core.constants import VALIDATION_PASS_RATE_KEY
 from marianne.core.sheet import Sheet
 from marianne.daemon.a2a.inbox import A2AInbox
@@ -80,6 +81,7 @@ from marianne.daemon.baton.state import (
 )
 from marianne.daemon.output_hub import OutputStreamHub
 from marianne.daemon.technique_router import TechniqueRouter
+from marianne.execution.base import RESPONSE_FORMAT_UNSET, ResponseFormatResolution
 from marianne.execution.validation.history import FailureHistoryStore, HistoricalFailure
 from marianne.utils.process import safe_killpg as _safe_killpg
 
@@ -2808,21 +2810,33 @@ class BatonAdapter:
             if sheets_set is not None:
                 sheets_set.discard(sheet_num)
 
-        # Opt-in structured output: forward this sheet's merged
-        # instrument_config.response_format to backends that carry the
-        # generic OpenAI-compatible contract (feature-detected like
-        # set_mcp_config below). An explicit null opts out of a profile
-        # default; an absent key inherits it. set_response_format
-        # validates loudly — a ValueError here surfaces as a structured
-        # dispatch failure, never a silent drop.
+        # Opt-in structured output (W-F1/W-F2): resolve this sheet's merged
+        # instrument_config.response_format ONCE, request-locally. The
+        # pooled HTTP singleton is shared by concurrent sheets across jobs,
+        # so a per-sheet value written to a mutable backend attribute can
+        # transfer into another sheet's payload (inherit-during-flight) or
+        # be overwritten before this sheet's payload build defeats an
+        # explicit null. The resolution rides AttemptContext →
+        # SheetRequestState → execute(); an explicit null opts out of a
+        # profile default and an absent key leaves RESPONSE_FORMAT_UNSET
+        # (the backend applies its profile default at execute). The shared
+        # wire-contract validator raises ValueError here — surfacing as a
+        # structured dispatch failure with a real pool release, never a
+        # silent drop.
         _icfg_rf = (
             sheet.instrument_config
             if isinstance(sheet.instrument_config, dict)
             else {}
         )
+        sheet_response_format: ResponseFormatResolution = RESPONSE_FORMAT_UNSET
         if "response_format" in _icfg_rf:
             if hasattr(backend, "set_response_format"):
-                backend.set_response_format(_icfg_rf["response_format"])
+                _raw_rf = _icfg_rf["response_format"]
+                sheet_response_format = (
+                    validate_openai_response_format(_raw_rf)
+                    if _raw_rf is not None
+                    else None
+                )
             else:
                 _logger.warning(
                     "adapter.dispatch.response_format_unsupported",
@@ -2854,6 +2868,7 @@ class BatonAdapter:
             healing_context=(
                 prior_failure if mode != AttemptMode.COMPLETION else None
             ),
+            response_format=sheet_response_format,
         )
         if mcp_config_path is not None and hasattr(backend, "set_mcp_config"):
             backend.set_mcp_config(mcp_config_path)

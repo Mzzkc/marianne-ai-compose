@@ -15,7 +15,7 @@ from marianne.core.sheet import Sheet
 from marianne.daemon.a2a.inbox import A2AInbox, A2ATaskStatus
 from marianne.daemon.a2a.registry import AgentCardRegistry
 from marianne.daemon.baton.events import SheetAttemptResult, ShutdownRequested
-from marianne.execution.base import ExecutionResult
+from marianne.execution.base import ExecutionResult, SheetRequestState
 
 
 def _sheet(workspace: Path, num: int = 1, movement: int = 1) -> Sheet:
@@ -74,6 +74,7 @@ class _FakeBackend:
         prompt: str,
         *,
         timeout_seconds: float | None = None,
+        request: SheetRequestState | None = None,
     ) -> ExecutionResult:
         self._pool.prompts.append(prompt)
         return ExecutionResult(
