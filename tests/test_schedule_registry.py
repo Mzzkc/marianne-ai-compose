@@ -113,6 +113,7 @@ async def test_upsert_replaces_same_id_and_preserves_created_at(
     assert replaced.score_path == Path("/scores/weekday-report-v2.yaml")
     assert replaced.source_digest == "digest-after"
     assert replaced.next_due_at == 200.0
+    assert replaced.pinned_source_digest is None
     assert json.loads(replaced.schedule_json) == {
         "cron": "0 9 * * 1-5",
         "enabled": True,
@@ -120,6 +121,7 @@ async def test_upsert_replaces_same_id_and_preserves_created_at(
         "jitter_seconds": 0,
         "misfire": "skip",
         "overlap": "skip",
+        "pin_source_digest": False,
         "timezone": "Europe/Berlin",
     }
 

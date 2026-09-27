@@ -88,8 +88,19 @@ class RecurrenceController:
         *,
         before_wait: LifecycleProbe | None = None,
         before_mutation: LifecycleAdmission | None = None,
+        pin: bool | None = None,
     ) -> ScheduleRecord | None:
-        """Register or replace the current schedule declaration for one score."""
+        """Register or replace the current schedule declaration for one score.
+
+        Registration is the daemon-owned authority channel for source pinning:
+        ``pin=None`` derives the opt-in from the score's
+        ``schedule.pin_source_digest`` declaration, while an explicit
+        ``pin=True``/``pin=False`` overrides it (for embedders that hold their
+        own activation authority). The pin value stored in the registry row is
+        the digest of the bytes read at registration, so a conscious
+        re-registration amends the pin; mutable score bytes cannot rewrite the
+        row between registrations.
+        """
         resolved_path = score_path.resolve(strict=False)
         async with self._registration_lock:
             source_config, source_digest = await self._load_score(resolved_path)
@@ -125,6 +136,8 @@ class RecurrenceController:
 
                 current = self._current_time()
                 due = next_due_at(config.schedule, current)
+                pin_declared = config.schedule.pin_source_digest
+                pin_source = pin_declared if pin is None else pin
                 await self._registry.upsert(
                     config.name,
                     config.name,
@@ -132,6 +145,7 @@ class RecurrenceController:
                     config.schedule,
                     source_digest,
                     due.timestamp(),
+                    pinned_source_digest=source_digest if pin_source else None,
                 )
                 self._cancel_timer(config.name)
                 record = await self._registry.get(config.name)
@@ -225,6 +239,34 @@ class RecurrenceController:
                 schedule_id=record.schedule_id,
                 score_path=str(score_path),
                 error_type=type(exc).__name__,
+            )
+            return None
+
+        # Launch-side pin: the registry row, not the score bytes, holds the
+        # authority for a pinned schedule. Any byte or identity drift —
+        # including a deleted schedule section or a renamed score — refuses
+        # this tick before the digest/cadence/identity upsert below and
+        # before job submission. The pinned row is retained and re-armed so
+        # refusal stays loud; amendment requires the registration channel.
+        if record.pinned_source_digest is not None and (
+            source_digest != record.pinned_source_digest
+            or config.name != record.schedule_id
+            or config.schedule is None
+        ):
+            await self._record_outcome(
+                record.schedule_id,
+                due_at,
+                "source_drift_refused",
+                next_due,
+                dropped=True,
+            )
+            self._arm_next(record.schedule_id, score_path, stored_schedule, next_due, current)
+            _logger.error(
+                "schedule.source_drift_refused",
+                schedule_id=record.schedule_id,
+                score_path=str(score_path),
+                digest_matched=source_digest == record.pinned_source_digest,
+                identity_changed=config.name != record.schedule_id,
             )
             return None
 

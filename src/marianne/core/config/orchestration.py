@@ -43,6 +43,14 @@ class ScheduleConfig(BaseModel):
     misfire: MisfirePolicy = Field(default=MisfirePolicy.SKIP, description="Downtime policy")
     overlap: OverlapPolicy = Field(default=OverlapPolicy.SKIP, description="Active-run policy")
     jitter_seconds: int = Field(default=0, ge=0, description="Bounded dispatch jitter")
+    pin_source_digest: bool = Field(
+        default=False,
+        description="Opt in to daemon-side source pinning: registration records the "
+        "score's byte digest as launch-side authority in the schedule registry, "
+        "and every tick refuses byte or identity drift before registry upsert "
+        "and before job submission. Unpinned schedules keep generic re-bind "
+        "semantics for operator-managed edits.",
+    )
 
     @model_validator(mode="after")
     def _validate_timing(self) -> ScheduleConfig:

@@ -58,6 +58,7 @@ class ScheduleRecord:
     last_run_id: str | None
     last_outcome: str | None
     consecutive_drops: int
+    pinned_source_digest: str | None = None
     diagnostic: str | None = None
 
 
@@ -144,6 +145,7 @@ class ScheduleRegistry:
             "CREATE INDEX IF NOT EXISTS idx_schedules_due "
             "ON schedules (enabled, next_due_at)"
         )
+        await _add_missing_columns(conn)
         await conn.commit()
 
     async def upsert(
@@ -154,8 +156,16 @@ class ScheduleRegistry:
         schedule: ScheduleConfig,
         source_digest: str,
         next_due_at: float,
+        *,
+        pinned_source_digest: str | None = None,
     ) -> None:
-        """Insert or replace a schedule declaration without losing its creation time."""
+        """Insert or replace a schedule declaration without losing its creation time.
+
+        ``pinned_source_digest`` stores launch-side authority in this
+        daemon-owned row: when set, ticks must refuse byte or identity drift
+        instead of re-binding. Each registration re-derives it from the
+        pinning declaration, so a conscious re-registration amends the pin.
+        """
         _require_epoch(next_due_at, name="next_due_at")
         now = time.time()
         await self._execute_mutation(
@@ -163,13 +173,15 @@ class ScheduleRegistry:
             """
             INSERT INTO schedules (
                 schedule_id, score_name, score_path, schedule_json,
-                source_digest, enabled, next_due_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                source_digest, pinned_source_digest, enabled, next_due_at,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(schedule_id) DO UPDATE SET
                 score_name = excluded.score_name,
                 score_path = excluded.score_path,
                 schedule_json = excluded.schedule_json,
                 source_digest = excluded.source_digest,
+                pinned_source_digest = excluded.pinned_source_digest,
                 enabled = excluded.enabled,
                 next_due_at = excluded.next_due_at,
                 updated_at = excluded.updated_at
@@ -180,6 +192,7 @@ class ScheduleRegistry:
                 str(score_path),
                 schedule.model_dump_json(),
                 source_digest,
+                pinned_source_digest,
                 int(schedule.enabled),
                 next_due_at,
                 now,
@@ -500,6 +513,7 @@ class ScheduleRegistry:
             ),
             last_outcome=last_outcome,
             consecutive_drops=_drop_count(row["consecutive_drops"]),
+            pinned_source_digest=_pinned_digest(row["pinned_source_digest"]),
         )
 
     @staticmethod
@@ -546,6 +560,14 @@ class ScheduleRegistry:
         raise ScheduleRegistryError(
             f"Schedule registry {operation} failed{context}: {exc}"
         ) from exc
+
+
+async def _add_missing_columns(conn: aiosqlite.Connection) -> None:
+    """Apply additive column migrations for state databases created earlier."""
+    cursor = await conn.execute("PRAGMA table_info(schedules)")
+    columns = {row["name"] for row in await cursor.fetchall()}
+    if "pinned_source_digest" not in columns:
+        await conn.execute("ALTER TABLE schedules ADD COLUMN pinned_source_digest TEXT")
 
 
 def _require_epoch(value: float, *, name: str) -> None:
@@ -596,3 +618,18 @@ def _drop_count(value: object) -> int:
     if type(value) is not int or value < 0:
         raise ScheduleRegistryDataError("Invalid persisted consecutive_drops")
     return value
+
+
+def _pinned_digest(value: object) -> str | None:
+    """Decode the optional launch-side pin without coercing corruption."""
+    if value is None:
+        return None
+    if not isinstance(value, str) or len(value) != 64:
+        raise ScheduleRegistryDataError("Invalid persisted pinned_source_digest")
+    try:
+        int(value, 16)
+    except ValueError as exc:
+        raise ScheduleRegistryDataError(
+            "Invalid persisted pinned_source_digest"
+        ) from exc
+    return value.lower()
