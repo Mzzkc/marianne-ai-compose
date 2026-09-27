@@ -29,6 +29,7 @@ from typing import Any
 
 import httpx
 
+from marianne.core.config.instruments import validate_openai_response_format
 from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger
 from marianne.execution.base import Backend, ExecutionResult, HttpxClientMixin
@@ -62,6 +63,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         temperature: float = 0.7,
         timeout_seconds: float = 300.0,
         endpoint: str = "/chat/completions",
+        response_format: dict[str, Any] | None = None,
     ) -> None:
         """Initialize a profile-selected OpenAI-compatible transport.
 
@@ -73,6 +75,10 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             temperature: Sampling temperature (0.0-2.0).
             timeout_seconds: Maximum time for API request.
             endpoint: Profile-selected OpenAI chat-completions endpoint.
+            response_format: Opt-in structured-output object from the
+                instrument profile (None = omit the key; the legacy
+                payload). Validated here; per-sheet overrides come through
+                set_response_format().
         """
         if not model:
             raise ValueError("model must be a non-empty string")
@@ -87,6 +93,12 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         self.temperature = temperature
         self.timeout_seconds = timeout_seconds
         self.endpoint = endpoint
+        self._default_response_format: dict[str, Any] | None = (
+            validate_openai_response_format(response_format)
+            if response_format is not None
+            else None
+        )
+        self._response_format: dict[str, Any] | None = self._default_response_format
         self._working_directory: Path | None = None
 
         # Read API key from environment (may be None — checked at execute time)
@@ -153,6 +165,11 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
 
     def clear_overrides(self) -> None:
         """Restore original backend parameters after per-sheet execution."""
+        # Per-sheet response_format never survives release into the shared
+        # HTTP singleton (same carryover class as F-150's model override):
+        # always restore the profile default, even when no other override
+        # was applied.
+        self._response_format = self._default_response_format
         if not self._has_overrides:
             return
         self.model = self._saved_model  # type: ignore[assignment]
@@ -166,6 +183,24 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
     def set_preamble(self, preamble: str | None) -> None:
         """Set the dynamic preamble for the next execution."""
         self._preamble = preamble
+
+    def set_response_format(
+        self, response_format: dict[str, Any] | None
+    ) -> None:
+        """Set an opt-in structured-output response_format for this sheet.
+
+        Applied per dispatch from the sheet's merged instrument_config
+        (an explicit ``None`` opts out of the profile default; an absent
+        key never reaches this setter). The value is validated by the
+        shared wire-contract validator — invalid shapes raise ValueError
+        and must surface as a dispatch failure, never a silent drop.
+        ``clear_overrides()`` restores the profile default at release.
+        """
+        self._response_format = (
+            validate_openai_response_format(response_format)
+            if response_format is not None
+            else None
+        )
 
     def set_prompt_extensions(self, extensions: list[str]) -> None:
         """Set prompt extensions for the next execution."""
@@ -285,6 +320,11 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,
         }
+        # Opt-in structured output: forwarded exactly as validated — the
+        # provider, not this transport, owns the object's semantics. Absent
+        # configuration keeps the legacy four-key payload byte-identical.
+        if self._response_format is not None:
+            payload["response_format"] = self._response_format
 
         try:
             client = await self._get_client()

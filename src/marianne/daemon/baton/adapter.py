@@ -2808,6 +2808,32 @@ class BatonAdapter:
             if sheets_set is not None:
                 sheets_set.discard(sheet_num)
 
+        # Opt-in structured output: forward this sheet's merged
+        # instrument_config.response_format to backends that carry the
+        # generic OpenAI-compatible contract (feature-detected like
+        # set_mcp_config below). An explicit null opts out of a profile
+        # default; an absent key inherits it. set_response_format
+        # validates loudly — a ValueError here surfaces as a structured
+        # dispatch failure, never a silent drop.
+        _icfg_rf = (
+            sheet.instrument_config
+            if isinstance(sheet.instrument_config, dict)
+            else {}
+        )
+        if "response_format" in _icfg_rf:
+            if hasattr(backend, "set_response_format"):
+                backend.set_response_format(_icfg_rf["response_format"])
+            else:
+                _logger.warning(
+                    "adapter.dispatch.response_format_unsupported",
+                    extra={
+                        "job_id": job_id,
+                        "sheet_num": sheet_num,
+                        "instrument": effective_instrument,
+                        "backend_type": type(backend).__name__,
+                    },
+                )
+
         mode = AttemptMode.NORMAL
         completion_suffix: str | None = None
         if state.completion_attempts > 0 and state.can_complete:

@@ -213,6 +213,7 @@ def _build_openai_family_backend(
         timeout_seconds=profile.default_timeout_seconds,
         base_url=profile.http.base_url,
         endpoint=profile.http.endpoint,
+        response_format=profile.http.response_format,
     )
     # Inject API key from keyring if provided.
     if api_key is not None:

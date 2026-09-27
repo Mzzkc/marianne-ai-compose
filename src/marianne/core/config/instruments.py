@@ -20,8 +20,9 @@ v1.1+: HTTP backends, code-mode techniques.
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -616,6 +617,68 @@ class CliProfile(BaseModel):
 # --- HTTP Profile ---
 
 
+def validate_openai_response_format(value: object) -> dict[str, Any]:
+    """Validate an OpenAI-compatible ``response_format`` object.
+
+    Single source of truth for the structured-output wire contract, shared
+    by the ``HttpProfile`` config validator (profile YAML) and the generic
+    backend setter (per-sheet ``instrument_config``). Accepts exactly the
+    two structured-output shapes OpenAI-compatible servers support:
+
+    - ``{"type": "json_object"}``
+    - ``{"type": "json_schema", "json_schema": {"name": str, "schema": dict,
+      "strict": bool (optional)}}``
+
+    Unknown keys at either level are allowed (provider extensions) and are
+    forwarded unchanged — validation catches authoring mistakes, it does
+    not rewrite the object. Returns a deep copy so later mutation of the
+    source config can never alias into a request payload.
+
+    Raises:
+        ValueError: with a message naming ``response_format`` for any
+            invalid shape. Callers must surface, never swallow, this.
+    """
+    if not isinstance(value, dict):
+        raise ValueError(
+            "response_format must be a mapping (dict) with a 'type' key, "
+            f"got {type(value).__name__}"
+        )
+    fmt_type = value.get("type")
+    if fmt_type not in ("json_object", "json_schema"):
+        raise ValueError(
+            "response_format.type must be 'json_object' or 'json_schema' "
+            f"(OpenAI-compatible structured output), got {fmt_type!r}"
+        )
+    if fmt_type == "json_schema":
+        inner = value.get("json_schema")
+        if not isinstance(inner, dict):
+            raise ValueError(
+                "response_format of type json_schema requires a "
+                "'json_schema' mapping with 'name' and 'schema', got "
+                f"{type(inner).__name__}"
+            )
+        name = inner.get("name")
+        if not isinstance(name, str) or not name:
+            raise ValueError(
+                "response_format.json_schema.name must be a non-empty "
+                f"string, got {name!r}"
+            )
+        schema = inner.get("schema")
+        if not isinstance(schema, dict):
+            raise ValueError(
+                "response_format.json_schema.schema must be a mapping "
+                "(a JSON Schema document), got "
+                f"{type(schema).__name__}"
+            )
+        strict = inner.get("strict")
+        if strict is not None and not isinstance(strict, bool):
+            raise ValueError(
+                "response_format.json_schema.strict must be a boolean "
+                f"when present, got {strict!r}"
+            )
+    return copy.deepcopy(value)
+
+
 class HttpProfile(BaseModel):
     """Configuration for the shared OpenAI-compatible HTTP executor."""
 
@@ -635,6 +698,26 @@ class HttpProfile(BaseModel):
         default=None,
         description="Environment variable containing the API key",
     )
+    response_format: dict[str, Any] | None = Field(
+        default=None,
+        description="Opt-in structured output: an OpenAI-compatible "
+        "response_format object ({type: json_object} or {type: json_schema, "
+        "json_schema: {name, schema}}). Validated at profile load and "
+        "forwarded unchanged in every request payload. None (the default) "
+        "omits the key entirely — the legacy four-key payload. Per-sheet "
+        "instrument_config.response_format overrides this for that sheet "
+        "(explicit null opts out).",
+    )
+
+    @field_validator("response_format")
+    @classmethod
+    def _validate_response_format(
+        cls, v: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        """Reject invalid structured-output shapes at config-load time."""
+        if v is None:
+            return None
+        return validate_openai_response_format(v)
 
 
 # --- Top-Level InstrumentProfile ---
