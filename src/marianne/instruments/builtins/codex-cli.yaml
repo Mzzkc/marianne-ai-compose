@@ -25,7 +25,26 @@ capabilities:
 default_timeout_seconds: 1800
 
 models:
-  # ── GPT-6 family (current flagship, checked 2026-09-20) ───────────────
+  # ── GPT-6 family (current flagship, checked 2026-09-20; Sol/Luna added
+  #    by the 2026-09-26 model-profile refresh) ───────────────────────────
+  # OpenAI recommends Astra, Sol, and Luna for hard, balanced, and
+  # high-volume work respectively. API context is 1,050,000 tokens; the
+  # non-[1m] rows follow the 272000 client-facing convention below
+  # (prompts over 272K input bill at higher rates).
+  # Sol: balanced reasoning tier ($2 / $10 per 1M).
+  - name: gpt-6-sol
+    context_window: 272000
+    cost_per_1k_input: 0.002
+    cost_per_1k_output: 0.01
+    max_output_tokens: 128000
+    max_concurrent: 6
+  # Luna: fast, affordable, high-volume tier ($0.1 / $0.5 per 1M).
+  - name: gpt-6-luna
+    context_window: 272000
+    cost_per_1k_input: 0.0001
+    cost_per_1k_output: 0.0005
+    max_output_tokens: 128000
+    max_concurrent: 8
   # Astra: flagship tier — 1,050,000-token API context (922,000 max input);
   # follows the 272000 client-facing convention of the non-[1m] rows below.
   - name: gpt-6-astra

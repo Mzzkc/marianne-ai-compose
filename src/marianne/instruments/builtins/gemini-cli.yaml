@@ -67,6 +67,15 @@ default_timeout_seconds: 1800
 
 models:
   # ── Current stable generation ──
+  # gemini-3.8-flash added 2026-09-26 model-profile refresh (official model
+  # page + gemini-cli models.ts mapping); default_model intentionally
+  # remains gemini-3.7-flash per the refresh's default-preservation rule.
+  - name: gemini-3.8-flash
+    context_window: 1048576
+    cost_per_1k_input: 0.00075   # $0.75/1M through 2026-12-31, then $1.50
+    cost_per_1k_output: 0.00375  # $3.75/1M through 2026-12-31, then $7.50
+    max_output_tokens: 65536
+    max_concurrent: 8
   - name: gemini-3.7-flash
     context_window: 1048576
     cost_per_1k_input: 0.00075

@@ -40,6 +40,15 @@ default_timeout_seconds: 1800
 # a version has a much larger context window that changes cost profile).
 # Tier rationale: Haiku (cheap, fast) → 8, Sonnet (mid) → 6, Opus (expensive) → 4.
 models:
+  # ── Claude 5.5 generation (added 2026-09-26 model-profile refresh) ──
+  # Opus 5.5: current Opus-line release — 1M context, 128K output.
+  - name: claude-opus-5-5
+    context_window: 1000000
+    cost_per_1k_input: 0.004
+    cost_per_1k_output: 0.02
+    max_output_tokens: 128000
+    max_concurrent: 4
+
   # ── Gateway-routed models (Anthropic-compatible Claude Code gateway) ──
   - name: "glm-5.3[1m]"
     context_window: 1000000
