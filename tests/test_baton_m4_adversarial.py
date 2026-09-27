@@ -784,7 +784,11 @@ class TestSheetTaskAdversarial:
         backend.execute.assert_called_once()
         actual_prompt = backend.execute.call_args[0][0]
         assert actual_prompt == pre_rendered
-        backend.set_preamble.assert_called_once_with("Test preamble")
+        # W-F3: the preamble travels request-locally (SheetRequestState),
+        # never through the mutable set_preamble() slot on a pooled backend.
+        request = backend.execute.call_args.kwargs["request"]
+        assert request.preamble == "Test preamble"
+        backend.set_preamble.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_rendered_prompt_without_preamble(self) -> None:

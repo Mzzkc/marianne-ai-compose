@@ -387,6 +387,54 @@ async def test_wf3_concurrent_preambles_stay_per_request() -> None:
 
 
 # ------------------------------------------------- sequential compatibility
+async def test_ten_concurrent_sheets_mixed_tri_states_one_instrument() -> None:
+    """The default 10-sheet daemon shape: ten concurrent dispatches on ONE
+    HTTP instrument with mixed tri-states (per-sheet schemas, explicit
+    nulls, absent keys) — every payload must carry exactly its own
+    resolution, concurrently, no holds."""
+    pool = _pool(_profile(response_format={"type": "json_object"}))
+    cap = Capture()
+    await _seed_singleton(pool, cap.client())
+
+    def fmt_for(i: int) -> dict[str, Any]:
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": f"schema_{i}",
+                "schema": {"type": "object"},
+            },
+        }
+
+    # Even sheets: per-sheet schema. Sheets ≡ 3 mod 5: explicit null.
+    # The rest: absent key (must inherit the json_object profile default).
+    sheets = {
+        f"job-{i}": _sheet(
+            {"response_format": fmt_for(i)} if i % 2 == 0
+            else ({"response_format": None} if i % 5 == 3
+                  else {}),
+            f"prompt-{i}",
+        )
+        for i in range(10)
+    }
+    adapter = _adapter_with(pool, sheets)
+    for job, sheet in sheets.items():
+        state = SheetExecutionState(sheet_num=1, instrument_name=INSTRUMENT)
+        await adapter._dispatch_callback(job, 1, state)
+    await _drain(adapter, tuple((job, 1) for job in sheets))
+
+    for i in range(10):
+        payload = cap.payload_with(f"prompt-{i}")
+        assert payload is not None, f"sheet {i} executed"
+        rf = payload.get("response_format")
+        if i % 2 == 0:
+            assert rf is not None and rf["json_schema"]["name"] == f"schema_{i}", i
+        elif i % 5 == 3:
+            assert rf is None, f"explicit null defeated for sheet {i}: {rf}"
+        else:
+            assert rf == {"type": "json_object"}, f"sheet {i}: {rf}"
+    await pool.close_all()
+
+
 async def test_sequential_tri_state_over_reuse_after_repair() -> None:
     """Sequential reuse keeps the exact documented semantics: per-sheet
     schema, explicit null, absent key inheriting the profile default."""
