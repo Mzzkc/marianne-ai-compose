@@ -345,6 +345,14 @@ class RecurrenceController:
                     job_id=child_id,
                     schedule_id=record.schedule_id,
                     scheduled_due_at=due_at,
+                    # Launch-side pin authority: the child re-admits bytes
+                    # from the path at its own parse time, so the pinned
+                    # digest must travel with the request. Every pinned
+                    # admission in the manager reads once, digests those
+                    # exact bytes, refuses on mismatch before any execution,
+                    # and parses only from the verified bytes — closing the
+                    # check→parse window (W13).
+                    expected_source_digest=record.pinned_source_digest,
                     fresh=True,
                 )
             )

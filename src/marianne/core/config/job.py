@@ -1009,6 +1009,39 @@ class JobConfig(BaseModel):
         return config
 
     @classmethod
+    def from_yaml_bytes(
+        cls, data: bytes, *, source_path: Path | str
+    ) -> JobConfig:
+        """Load job configuration from exact bytes, attributed to ``source_path``.
+
+        Semantics match :meth:`from_yaml` (workspace pre-resolution relative
+        to the score file's parent, default workspace for omitted workspace,
+        ``source_path`` attribution), but the parsed YAML comes from the
+        provided bytes rather than a fresh read of the path. Used by the
+        daemon's pinned-schedule admission so the config a job executes is
+        derived from exactly the bytes whose digest was verified against the
+        daemon-owned pin.
+        """
+        path = Path(source_path)
+        parsed = yaml.safe_load(data.decode("utf-8"))
+        if not isinstance(parsed, dict):
+            raise ValueError(
+                "The score file is empty or invalid. "
+                "A Marianne score requires at minimum: name, sheet, and prompt sections. "
+                "See 'mzt validate --help' or the score writing guide for examples."
+            )
+        ws_val = parsed.get("workspace")
+        if ws_val:
+            ws = Path(str(ws_val)).expanduser()
+            if not ws.is_absolute():
+                parsed["workspace"] = str((path.resolve().parent / ws).resolve())
+        else:
+            _apply_default_workspace(parsed)
+        config = cls.model_validate(parsed)
+        config.source_path = path.resolve()
+        return config
+
+    @classmethod
     def from_yaml_string(cls, yaml_str: str) -> JobConfig:
         """Load job configuration from a YAML string."""
         data = yaml.safe_load(yaml_str)

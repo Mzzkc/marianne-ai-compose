@@ -7,6 +7,7 @@ routes IPC requests to JobService, and cancels all tasks on shutdown.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -1659,10 +1660,65 @@ class JobManager:
                 message=f"Config file not found: {request.config_path}",
             )
 
+        # Pinned-schedule admission: the recurrence tick bound the daemon-
+        # owned pin digest into this request. Read the source bytes once,
+        # refuse any drift BEFORE fleet routing, parsing, or registration,
+        # and parse only from the verified bytes — the submitted child must
+        # consume exactly the bytes the pin admitted (W13 check→parse race).
+        verified_source_bytes: bytes | None = None
+        if request.expected_source_digest is not None:
+            try:
+                verified_source_bytes = request.config_path.read_bytes()
+            except OSError as exc:
+                return JobResponse(
+                    job_id=job_id,
+                    status="rejected",
+                    message=(
+                        f"Pinned schedule source could not be read: "
+                        f"{request.config_path} ({exc})."
+                    ),
+                )
+            actual_digest = hashlib.sha256(verified_source_bytes).hexdigest()
+            if actual_digest != request.expected_source_digest:
+                _logger.error(
+                    "manager.pinned_source_drift_refused",
+                    job_id=job_id,
+                    config_path=str(request.config_path),
+                    expected_digest=request.expected_source_digest,
+                    actual_digest=actual_digest,
+                )
+                return JobResponse(
+                    job_id=job_id,
+                    status="rejected",
+                    message=(
+                        f"Pinned schedule source drift: the bytes at "
+                        f"{request.config_path} do not match the "
+                        f"daemon-pinned digest for job '{job_id}'. "
+                        "Refused before execution; re-register the "
+                        "schedule to amend the pin."
+                    ),
+                )
+
         # Fleet detection: route fleet configs to the fleet manager
         from marianne.daemon.fleet import is_fleet_config, submit_fleet
 
-        if is_fleet_config(request.config_path):
+        if verified_source_bytes is not None:
+            # Route from the verified bytes only — never re-open the path,
+            # or a swap between the digest check and this routing decision
+            # could redirect a pinned child into hostile fleet bytes. A
+            # pinned registration is always a plain score (the tick parsed
+            # it as JobConfig), so fleet-shaped verified bytes refuse.
+            fleet_raw = yaml.safe_load(verified_source_bytes)
+            if isinstance(fleet_raw, dict) and fleet_raw.get("type") == "fleet":
+                return JobResponse(
+                    job_id=job_id,
+                    status="rejected",
+                    message=(
+                        f"Pinned schedule source must be a plain score, "
+                        f"not a fleet config: {request.config_path}."
+                    ),
+                )
+        elif is_fleet_config(request.config_path):
             from marianne.core.config.fleet import FleetConfig
 
             try:
@@ -1683,7 +1739,32 @@ class JobManager:
         from marianne.core.config import JobConfig
 
         parsed_config: JobConfig | None = None
-        if request.workspace:
+        if verified_source_bytes is not None:
+            # Parse the verified bytes themselves: between this parse and
+            # the digest check above the path may change again, and the
+            # hooks/workspace admitted here must come from the pinned bytes.
+            try:
+                parsed_config = JobConfig.from_yaml_bytes(
+                    verified_source_bytes,
+                    source_path=request.config_path,
+                )
+                workspace = parsed_config.workspace
+            except (ValueError, OSError, KeyError, yaml.YAMLError) as exc:
+                _logger.error(
+                    "manager.pinned_config_parse_failed",
+                    job_id=job_id,
+                    config_path=str(request.config_path),
+                    exc_info=True,
+                )
+                return JobResponse(
+                    job_id=job_id,
+                    status="rejected",
+                    message=(
+                        f"Failed to parse pinned config file: "
+                        f"{request.config_path} ({exc})."
+                    ),
+                )
+        elif request.workspace:
             workspace = request.workspace
             try:
                 parsed_config = JobConfig.from_yaml(request.config_path)
@@ -5083,7 +5164,42 @@ class JobManager:
         async def _execute() -> DaemonJobStatus:
             from marianne.core.config import JobConfig
 
-            config = JobConfig.from_yaml(request.config_path)
+            expected_digest = request.expected_source_digest
+            if expected_digest is not None:
+                # Execution admission for a pinned schedule: read the bytes
+                # once, refuse any drift BEFORE building or running a single
+                # sheet, and execute only a config derived from the verified
+                # bytes. A swap that wins the submission→execution window
+                # fails the child here instead of running unpinned bytes.
+                try:
+                    source_bytes = request.config_path.read_bytes()
+                except OSError as exc:
+                    raise ValueError(
+                        f"Pinned schedule source could not be read for job "
+                        f"'{job_id}': {request.config_path} ({exc})."
+                    ) from exc
+                actual_digest = hashlib.sha256(source_bytes).hexdigest()
+                if actual_digest != expected_digest:
+                    _logger.error(
+                        "manager.pinned_source_drift_execution_refused",
+                        job_id=job_id,
+                        config_path=str(request.config_path),
+                        expected_digest=expected_digest,
+                        actual_digest=actual_digest,
+                    )
+                    raise ValueError(
+                        f"Pinned schedule source drift at execution: the "
+                        f"bytes at {request.config_path} do not match the "
+                        f"daemon-pinned digest for job '{job_id}'. Refused "
+                        f"before any sheet executed; re-register the "
+                        f"schedule to amend the pin."
+                    )
+                config = JobConfig.from_yaml_bytes(
+                    source_bytes,
+                    source_path=request.config_path,
+                )
+            else:
+                config = JobConfig.from_yaml(request.config_path)
             if request.workspace:
                 config = config.model_copy(
                     update={"workspace": request.workspace},

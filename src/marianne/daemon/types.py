@@ -85,6 +85,17 @@ class JobRequest(BaseModel):
         default=None,
         description="Exact durable due identity that produced a scheduled child",
     )
+    expected_source_digest: str | None = Field(
+        default=None,
+        description="Daemon-owned source authority for pinned recurring "
+        "schedules. Set only by the recurrence controller for a pinned "
+        "tick: the manager refuses the submission (and any later execution "
+        "admission) unless the bytes it reads at that moment hash to this "
+        "digest, and parses only from those verified bytes — so the child "
+        "consumes exactly the bytes the daemon-owned pin admitted. Manual "
+        "submissions leave it None (ordinary semantics; the registration "
+        "channel is the amendment authority).",
+    )
     workspace: Path | None = Field(
         default=None,
         description="Override workspace directory. "
