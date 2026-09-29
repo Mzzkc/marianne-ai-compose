@@ -522,12 +522,18 @@ class BackendPool:
         name = profile.name
 
         if profile.kind == "http":
-            # HTTP: return existing singleton or create one
+            if not profile.default_model and not model:
+                raise ValueError(
+                    f"HTTP instrument '{name}' requires a model override or "
+                    "a profile default_model."
+                )
+            # HTTP: the singleton holds profile defaults only. Per-sheet model
+            # overrides travel request-locally, including concurrent calls.
             if name not in self._http_singletons:
                 backend = _create_backend_for_profile(
                     profile,
                     working_directory=working_directory,
-                    model=model,
+                    model=None if profile.default_model else model,
                     api_key=api_key,
                 )
                 self._http_singletons[name] = backend

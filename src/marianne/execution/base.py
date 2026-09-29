@@ -60,6 +60,11 @@ class SheetRequestState:
     """
 
     response_format: ResponseFormatResolution = RESPONSE_FORMAT_UNSET
+    model: str | None = None
+    max_tokens: int | None = None
+    temperature: float | None = None
+    http_timeout_seconds: float | None = None
+    http_timeout_resolved: bool = False
     preamble: str | None = None
     prompt_extensions: tuple[str, ...] = ()
 

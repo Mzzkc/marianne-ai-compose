@@ -2823,11 +2823,19 @@ class BatonAdapter:
         # wire-contract validator raises ValueError here — surfacing as a
         # structured dispatch failure with a real pool release, never a
         # silent drop.
-        _icfg_rf = (
-            sheet.instrument_config
-            if isinstance(sheet.instrument_config, dict)
-            else {}
-        )
+        if state.current_instrument_index == 0:
+            _icfg_rf = (
+                sheet.instrument_config
+                if isinstance(sheet.instrument_config, dict) else {}
+            )
+        else:
+            fallback_idx = state.current_instrument_index - 1
+            _icfg_rf = (
+                state.fallback_configs[fallback_idx]
+                if fallback_idx < len(state.fallback_configs)
+                and isinstance(state.fallback_configs[fallback_idx], dict)
+                else {}
+            )
         sheet_response_format: ResponseFormatResolution = RESPONSE_FORMAT_UNSET
         if "response_format" in _icfg_rf:
             if hasattr(backend, "set_response_format"):
@@ -2869,6 +2877,19 @@ class BatonAdapter:
                 prior_failure if mode != AttemptMode.COMPLETION else None
             ),
             response_format=sheet_response_format,
+            model=state.model,
+            max_tokens=(
+                int(_icfg_rf["max_tokens"])
+                if _icfg_rf.get("max_tokens") is not None else None
+            ),
+            temperature=(
+                float(_icfg_rf["temperature"])
+                if _icfg_rf.get("temperature") is not None else None
+            ),
+            http_timeout_seconds=(
+                float(_icfg_rf["timeout_seconds"])
+                if _icfg_rf.get("timeout_seconds") is not None else None
+            ),
         )
         if mcp_config_path is not None and hasattr(backend, "set_mcp_config"):
             backend.set_mcp_config(mcp_config_path)

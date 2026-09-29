@@ -120,6 +120,21 @@ async def test_absent_config_sends_exact_legacy_payload() -> None:
     assert captured["raw"] == _legacy_body_bytes()
 
 
+async def test_sheet_timeout_is_passed_to_http_request() -> None:
+    """A score's per-sheet timeout must bound the real HTTP call."""
+    backend, _ = _capturing_backend()
+    original_post = backend._client.post
+    backend._client.post = AsyncMock(wraps=original_post)
+
+    result = await backend.execute("hi", timeout_seconds=1.5)
+
+    assert result.success is True
+    timeout = backend._client.post.await_args.kwargs["timeout"]
+    assert isinstance(timeout, httpx.Timeout)
+    assert timeout.read == 1.5
+    assert timeout.connect == 1.5
+
+
 async def test_profile_json_object_forwarded_unchanged() -> None:
     """A profile-level json_object lands in the payload verbatim."""
     backend, captured = _capturing_backend(

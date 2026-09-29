@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import pytest
 
 from marianne.core.config.instruments import HttpProfile, InstrumentProfile
 from marianne.core.sheet import Sheet
@@ -83,7 +84,10 @@ class Capture:
         self.requests: list[dict[str, Any]] = []
 
     def note(self, request: httpx.Request) -> None:
-        self.requests.append({"payload": json.loads(request.content)})
+        self.requests.append({
+            "payload": json.loads(request.content),
+            "timeout": request.extensions.get("timeout"),
+        })
 
     def payload_with(self, marker: str) -> dict[str, Any] | None:
         return next(
@@ -94,6 +98,12 @@ class Capture:
             ),
             None,
         )
+
+    def timeout_with(self, marker: str) -> dict[str, float] | None:
+        return next((
+            r["timeout"] for r in self.requests
+            if marker in r["payload"]["messages"][0]["content"]
+        ), None)
 
     def client(self) -> httpx.AsyncClient:
         cap = self
@@ -135,12 +145,17 @@ class Capture:
         )
 
 
-def _profile(response_format: dict[str, Any] | None = None) -> InstrumentProfile:
+def _profile(
+    response_format: dict[str, Any] | None = None,
+    *,
+    default_model: str | None = "isolation-fictional-model",
+) -> InstrumentProfile:
     return InstrumentProfile(
         name=INSTRUMENT,
         display_name="Isolation Offline HTTP",
         kind="http",
-        default_model="isolation-fictional-model",
+        default_model=default_model,
+        default_timeout_seconds=300,
         http=HttpProfile(
             base_url="http://isolation-offline.invalid/v1",
             endpoint="/chat/completions",
@@ -171,10 +186,10 @@ def _sheet(icfg: dict[str, Any], prompt: str) -> Sheet:
 
 
 async def _seed_singleton(
-    pool: BackendPool, client: httpx.AsyncClient
+    pool: BackendPool, client: httpx.AsyncClient, *, model: str | None = None
 ) -> OpenAICompatibleBackend:
     """Create the shared HTTP singleton and pin the offline client on it."""
-    backend = await pool.acquire(INSTRUMENT)
+    backend = await pool.acquire(INSTRUMENT, model=model)
     backend._client = client
     await pool.release(INSTRUMENT, backend)
     return backend
@@ -193,6 +208,106 @@ async def _drain(adapter: BatonAdapter, keys: tuple[tuple[str, int], ...]) -> No
         task = adapter._active_tasks.get(key)
         if task is not None:
             await asyncio.wait_for(asyncio.shield(task), timeout=10)
+
+
+async def test_http_model_overrides_are_request_local_across_reuse_and_overlap() -> None:
+    """Different score models on one HTTP profile must reach their own payloads."""
+    pool = _pool()
+    cap = Capture()
+    a_seen = asyncio.Event()
+    a_release = asyncio.Event()
+    await _seed_singleton(
+        pool, cap.holding_client("model-A", a_release, a_seen),
+        model="fictional-model-a",
+    )
+    adapter = _adapter_with(pool, {
+        "model-A": _sheet({
+            "model": "fictional-model-a", "max_tokens": 101,
+            "temperature": 0, "timeout_seconds": 4,
+        }, "model-A"),
+        "model-B": _sheet({
+            "model": "fictional-model-b", "max_tokens": 202,
+            "temperature": 1.2, "timeout_seconds": 5,
+        }, "model-B"),
+        "model-default": _sheet({}, "model-default"),
+    })
+
+    def state(model: str | None) -> SheetExecutionState:
+        return SheetExecutionState(
+            sheet_num=1, instrument_name=INSTRUMENT, model=model,
+        )
+
+    a_task = asyncio.create_task(adapter._dispatch_callback(
+        "model-A", 1, state("fictional-model-a")
+    ))
+    await asyncio.wait_for(a_seen.wait(), timeout=10)
+    await adapter._dispatch_callback("model-B", 1, state("fictional-model-b"))
+    await _drain(adapter, (("model-B", 1),))
+    a_release.set()
+    await asyncio.wait_for(a_task, timeout=10)
+    await _drain(adapter, (("model-A", 1),))
+
+    await adapter._dispatch_callback("model-default", 1, state(None))
+    await _drain(adapter, (("model-default", 1),))
+
+    assert cap.payload_with("model-A")["model"] == "fictional-model-a"
+    assert cap.payload_with("model-B")["model"] == "fictional-model-b"
+    assert cap.payload_with("model-default")["model"] == "isolation-fictional-model"
+    assert cap.payload_with("model-A")["max_tokens"] == 101
+    assert cap.payload_with("model-A")["temperature"] == 0
+    assert cap.payload_with("model-B")["max_tokens"] == 202
+    assert cap.payload_with("model-B")["temperature"] == 1.2
+    assert cap.payload_with("model-default")["max_tokens"] == 16384
+    assert cap.payload_with("model-default")["temperature"] == 0.7
+    assert cap.timeout_with("model-A")["read"] == 4
+    assert cap.timeout_with("model-B")["read"] == 5
+    assert cap.timeout_with("model-default")["read"] == 300
+    await pool.close_all()
+
+
+async def test_http_fallback_uses_alias_generation_config_not_primary() -> None:
+    pool = _pool()
+    cap = Capture()
+    await _seed_singleton(pool, cap.client())
+    fallback_config = {
+        "model": "fictional-fallback", "max_tokens": 202,
+        "temperature": 1.2, "timeout_seconds": 2,
+    }
+    sheet = _sheet({
+        "model": "fictional-primary", "max_tokens": 101,
+        "temperature": 0, "timeout_seconds": 10,
+        "response_format": JOB_A_SCHEMA,
+    }, "fallback-job")
+    sheet = sheet.model_copy(update={
+        "instrument_fallbacks": [INSTRUMENT],
+        "instrument_fallback_configs": [fallback_config],
+    })
+    adapter = _adapter_with(pool, {"fallback-job": sheet})
+    state = SheetExecutionState(
+        sheet_num=1, instrument_name=INSTRUMENT,
+        model="fictional-fallback", current_instrument_index=1,
+        fallback_chain=[INSTRUMENT], fallback_configs=[fallback_config],
+    )
+    await adapter._dispatch_callback("fallback-job", 1, state)
+    await _drain(adapter, (("fallback-job", 1),))
+
+    payload = cap.payload_with("fallback-job")
+    assert payload["model"] == "fictional-fallback"
+    assert payload["max_tokens"] == 202
+    assert payload["temperature"] == 1.2
+    assert "response_format" not in payload
+    assert cap.timeout_with("fallback-job")["read"] == 2
+    await pool.close_all()
+
+
+async def test_http_profile_without_default_rejects_modeless_reuse() -> None:
+    pool = _pool(_profile(default_model=None))
+    backend = await pool.acquire(INSTRUMENT, model="fictional-first")
+    await pool.release(INSTRUMENT, backend)
+
+    with pytest.raises(ValueError, match="requires a model override"):
+        await pool.acquire(INSTRUMENT)
+    await pool.close_all()
 
 
 # --------------------------------------------------------------------- W-F1

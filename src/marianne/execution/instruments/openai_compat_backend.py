@@ -321,22 +321,40 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         Returns:
             ExecutionResult with API response and metadata.
         """
-        if timeout_seconds is not None:
-            _logger.debug(
-                "timeout_override_ignored",
-                backend="openai-compatible",
-                requested=timeout_seconds,
-                actual=self.timeout_seconds,
+        if request is not None and request.http_timeout_resolved:
+            request_timeout = (
+                request.http_timeout_seconds
+                if request.http_timeout_seconds is not None
+                else self.timeout_seconds
             )
+        else:
+            request_timeout = (
+                timeout_seconds if timeout_seconds is not None
+                else self.timeout_seconds
+            )
+        http_timeout = httpx.Timeout(
+            request_timeout, connect=min(10.0, request_timeout)
+        )
 
         start_time = time.monotonic()
         started_at = utc_now()
+        requested_model = (
+            request.model if request is not None and request.model else self.model
+        )
+        requested_max_tokens = (
+            request.max_tokens if request is not None and request.max_tokens is not None
+            else self.max_tokens
+        )
+        requested_temperature = (
+            request.temperature if request is not None and request.temperature is not None
+            else self.temperature
+        )
 
         _logger.debug(
             "openai_compatible_execute_start",
-            model=self.model,
+            model=requested_model,
             prompt_length=len(prompt),
-            max_tokens=self.max_tokens,
+            max_tokens=requested_max_tokens,
         )
 
         # Check API key before making request
@@ -360,7 +378,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
                 started_at=started_at,
                 error_type="configuration",
                 error_message=msg,
-                model=self.model,
+                model=requested_model,
             )
 
         # Request-local per-sheet state (W-F1/W-F2/W-F3): the pooled HTTP
@@ -389,10 +407,10 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         )
 
         payload: dict[str, Any] = {
-            "model": self.model,
+            "model": requested_model,
             "messages": [{"role": "user", "content": assembled_prompt}],
-            "max_tokens": self.max_tokens,
-            "temperature": self.temperature,
+            "max_tokens": requested_max_tokens,
+            "temperature": requested_temperature,
         }
         # Opt-in structured output: forwarded exactly as validated — the
         # provider, not this transport, owns the object's semantics. Absent
@@ -406,21 +424,22 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             response = await client.post(
                 self.endpoint,
                 json=payload,
+                timeout=http_timeout,
             )
 
             duration = time.monotonic() - start_time
 
             # Handle rate limiting via HTTP status
             if response.status_code == 429:
-                return self._handle_rate_limit(response, duration, started_at)
+                return self._handle_rate_limit(response, duration, started_at, requested_model)
 
             # Handle other HTTP errors
             if response.status_code >= 400:
-                return self._handle_http_error(response, duration, started_at)
+                return self._handle_http_error(response, duration, started_at, requested_model)
 
             # Parse successful response
             data = response.json()
-            return self._parse_success_response(data, duration, started_at)
+            return self._parse_success_response(data, duration, started_at, requested_model)
 
         except httpx.ConnectError as e:
             duration = time.monotonic() - start_time
@@ -435,14 +454,14 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
                 started_at=started_at,
                 error_type="connection",
                 error_message=str(e),
-                model=self.model,
+                model=requested_model,
             )
 
         except httpx.TimeoutException as e:
             duration = time.monotonic() - start_time
             _logger.error(
                 "openai_compatible_timeout",
-                timeout_seconds=self.timeout_seconds,
+                timeout_seconds=request_timeout,
                 error=str(e),
             )
             self._write_log_file(self._stderr_log_path, str(e))
@@ -450,20 +469,20 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
                 success=False,
                 exit_code=408,
                 stdout="",
-                stderr=f"Timeout after {self.timeout_seconds}s: {e}",
+                stderr=f"Timeout after {request_timeout}s: {e}",
                 duration_seconds=duration,
                 started_at=started_at,
                 exit_reason="timeout",
                 error_type="timeout",
-                error_message=f"API timeout after {self.timeout_seconds}s: {e}",
-                model=self.model,
+                error_message=f"API timeout after {request_timeout}s: {e}",
+                model=requested_model,
             )
 
         except Exception as e:
             duration = time.monotonic() - start_time
             _logger.exception(
                 "openai_compatible_execute_error",
-                model=self.model,
+                model=requested_model,
                 error=str(e),
             )
             self._write_log_file(self._stderr_log_path, str(e))
@@ -474,6 +493,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         response: httpx.Response,
         duration: float,
         started_at: Any,
+        requested_model: str,
     ) -> ExecutionResult:
         """Handle HTTP 429 rate limit response.
 
@@ -504,7 +524,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
 
         _logger.warning(
             "openai_compatible_rate_limited",
-            model=self.model,
+            model=requested_model,
             retry_after_header=retry_after,
             parsed_wait_seconds=wait_seconds,
             response_length=len(body_text),
@@ -522,7 +542,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             rate_limit_wait_seconds=wait_seconds,
             error_type="rate_limit",
             error_message=f"Rate limited: {body_text[:200]}",
-            model=self.model,
+            model=requested_model,
         )
 
     def _handle_http_error(
@@ -530,6 +550,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         response: httpx.Response,
         duration: float,
         started_at: Any,
+        requested_model: str,
     ) -> ExecutionResult:
         """Handle non-429 HTTP error responses.
 
@@ -559,7 +580,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             error_type = "bad_request"
             _logger.error(
                 "openai_compatible_bad_request",
-                model=self.model,
+                model=requested_model,
                 status_code=status,
                 response_length=len(body_text),
             )
@@ -567,21 +588,21 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             error_type = "insufficient_credits"
             _logger.error(
                 "openai_compatible_insufficient_credits",
-                model=self.model,
+                model=requested_model,
                 status_code=status,
             )
         elif status == 503:
             error_type = "service_unavailable"
             _logger.error(
                 "openai_compatible_service_unavailable",
-                model=self.model,
+                model=requested_model,
                 status_code=status,
             )
         else:
             error_type = "api_error"
             _logger.error(
                 "openai_compatible_http_error",
-                model=self.model,
+                model=requested_model,
                 status_code=status,
                 response_length=len(body_text),
             )
@@ -597,7 +618,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             started_at=started_at,
             error_type=error_type,
             error_message=f"HTTP {status}: {body_text[:200]}",
-            model=self.model,
+            model=requested_model,
         )
 
     def _parse_success_response(
@@ -605,6 +626,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         data: dict[str, Any],
         duration: float,
         started_at: Any,
+        requested_model: str,
     ) -> ExecutionResult:
         """Parse a successful OpenAI-compatible API response.
 
@@ -635,7 +657,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             tokens_used = input_tokens + output_tokens
 
         # The model actually used may differ from what was requested
-        actual_model = data.get("model", self.model)
+        actual_model = data.get("model", requested_model)
 
         _logger.info(
             "openai_compatible_execute_complete",

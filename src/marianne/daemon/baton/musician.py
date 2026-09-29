@@ -181,6 +181,11 @@ async def sheet_task(
         # attributes another dispatch may have written or may write.
         request_state = SheetRequestState(
             response_format=attempt_context.response_format,
+            model=attempt_context.model,
+            max_tokens=attempt_context.max_tokens,
+            temperature=attempt_context.temperature,
+            http_timeout_seconds=attempt_context.http_timeout_seconds,
+            http_timeout_resolved=True,
             preamble=preamble,
         )
         exec_result = await _execute(

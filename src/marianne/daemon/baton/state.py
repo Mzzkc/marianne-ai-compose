@@ -155,6 +155,11 @@ class AttemptContext:
     rides the shared pooled backend as mutable attribute state.
     """
 
+    model: str | None = None
+    max_tokens: int | None = None
+    temperature: float | None = None
+    http_timeout_seconds: float | None = None
+
 
 # =============================================================================
 # SheetExecutionState — Phase 2 type alias
