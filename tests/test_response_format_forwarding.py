@@ -426,8 +426,14 @@ async def test_absent_sheet_config_leaves_backend_untouched() -> None:
     assert request.response_format is RESPONSE_FORMAT_UNSET
 
 
-async def test_backend_without_support_skips_with_warning() -> None:
-    """A backend lacking set_response_format (CLI family) still dispatches."""
+async def test_backend_without_support_refuses_loudly() -> None:
+    """A backend that cannot enforce response_format fails dispatch.
+
+    2026-09-29 (runtime-cli-schema-20260929): the historical log-and-drop
+    ("response_format_unsupported" warning, sheet proceeds unschematized)
+    is retired — a configured schema that the seat cannot enforce is a
+    dispatch failure, never a silent unschematized run.
+    """
     adapter, pool = _adapter_with_registered_sheet(
         {"response_format": {"type": "json_object"}}
     )
@@ -435,12 +441,17 @@ async def test_backend_without_support_skips_with_warning() -> None:
     backend = MagicMock(spec=["execute", "clear_overrides", "apply_overrides"])
     backend.execute = AsyncMock(return_value=_success_result())
     pool.acquire.return_value = backend
+    adapter._send_dispatch_failure = MagicMock()  # type: ignore[method-assign]
 
     state = SheetExecutionState(sheet_num=1, instrument_name="offline-json")
     await adapter._dispatch_callback("test-job", 1, state)
 
-    assert len(adapter._active_tasks) > 0
-    await asyncio.gather(*adapter._active_tasks.values(), return_exceptions=True)
+    assert len(adapter._active_tasks) == 0  # no musician spawned
+    adapter._send_dispatch_failure.assert_called_once()
+    failure_msg = adapter._send_dispatch_failure.call_args.args[3]
+    assert "response_format" in failure_msg
+    # The backend was released back to the pool, not leaked.
+    pool.release.assert_awaited_once()
 
 
 async def test_invalid_sheet_response_format_becomes_dispatch_failure() -> None:

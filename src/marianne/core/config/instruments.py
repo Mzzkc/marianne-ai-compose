@@ -215,6 +215,20 @@ class CliCommand(BaseModel):
         default=None,
         description="Flag for per-execution timeout",
     )
+    json_schema_flag: str | None = Field(
+        default=None,
+        description=(
+            "Flag for enforcing a JSON schema on structured output, e.g. "
+            "Claude Code's '--json-schema' (takes the compact schema JSON "
+            "as a single argument). Declared = the backend honors a sheet's "
+            "instrument_config.response_format (type json_schema) by "
+            "appending flag + schema, and the terminal JSON's top-level "
+            "'structured_output' object becomes the sheet result. None = "
+            "the instrument cannot enforce a schema; a configured "
+            "response_format then fails dispatch loudly rather than "
+            "running unschematized. Requires output format 'json'."
+        ),
+    )
     working_dir_flag: str | None = Field(
         default=None,
         description="Flag for working directory. None = use subprocess cwd.",

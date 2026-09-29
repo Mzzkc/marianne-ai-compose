@@ -2846,14 +2846,17 @@ class BatonAdapter:
                     else None
                 )
             else:
-                _logger.warning(
-                    "adapter.dispatch.response_format_unsupported",
-                    extra={
-                        "job_id": job_id,
-                        "sheet_num": sheet_num,
-                        "instrument": effective_instrument,
-                        "backend_type": type(backend).__name__,
-                    },
+                # Loud refusal (2026-09-29, runtime-cli-schema-20260929):
+                # a configured schema the seat cannot enforce fails
+                # dispatch — never the retired log-and-ignore that ran
+                # the sheet unschematized. The enclosing post-acquisition
+                # handler converts this into a structured dispatch
+                # failure with a real pool release.
+                raise ValueError(
+                    f"instrument '{effective_instrument}' backend "
+                    f"{type(backend).__name__} cannot enforce "
+                    "instrument_config.response_format — refusing to "
+                    "dispatch the sheet without its schema guarantee"
                 )
 
         mode = AttemptMode.NORMAL

@@ -28,12 +28,17 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from marianne.core.config.instruments import InstrumentProfile
+from marianne.core.config.instruments import (
+    InstrumentProfile,
+    validate_openai_response_format,
+)
 from marianne.core.logging import get_logger
 from marianne.execution.base import (
+    RESPONSE_FORMAT_UNSET,
     Backend,
     ExecutionResult,
     ExitReason,
+    ResponseFormatResolution,
     SheetRequestState,
 )
 from marianne.utils.json_path import extract_json_path
@@ -252,6 +257,12 @@ class PluginCliBackend(Backend):
         # workspace-local config file.
         self._mcp_config_path: Path | None = None
 
+        # Opt-in structured-output schema (CLI seat). CLI profiles have no
+        # profile-level default, so this slot is the direct-use setter's
+        # value only; the dispatch path threads the per-sheet value
+        # request-locally through SheetRequestState.
+        self._response_format: dict[str, Any] | None = None
+
         _logger.debug(
             "plugin_cli_backend_initialized",
             instrument=profile.name,
@@ -292,6 +303,7 @@ class PluginCliBackend(Backend):
         # request-locally or via the setters, never a previous sheet's.
         self._preamble = None
         self._prompt_extensions = []
+        self._response_format = None
 
     def set_preamble(self, preamble: str | None) -> None:
         """Set preamble to prepend to the next prompt.
@@ -309,6 +321,25 @@ class PluginCliBackend(Backend):
         ``clear_overrides()`` resets them at release.
         """
         self._prompt_extensions = list(extensions)
+
+    def set_response_format(
+        self, response_format: dict[str, Any] | None
+    ) -> None:
+        """Set an opt-in structured-output schema for the next execution.
+
+        Direct-use contract: the dispatch path carries the per-sheet
+        response_format request-locally (``SheetRequestState``) — see
+        ``Backend.set_response_format``. ``clear_overrides()`` resets it
+        at release. The value must satisfy the shared wire-contract
+        validator (``validate_openai_response_format``); at execution a
+        ``json_schema`` request additionally requires the profile's
+        ``cli.command.json_schema_flag`` (refused loudly otherwise).
+        """
+        self._response_format = (
+            validate_openai_response_format(response_format)
+            if response_format is not None
+            else None
+        )
 
     def set_output_callback(
         self, callback: Callable[[str, bytes], None] | None
@@ -466,6 +497,46 @@ class PluginCliBackend(Backend):
             parts.extend(prompt_extensions)
         return "\n\n".join(parts)
 
+    def _require_schema_capable_profile(
+        self, response_format: dict[str, Any]
+    ) -> None:
+        """Refuse LOUDLY when this profile cannot enforce a schema.
+
+        Called before any subprocess spawn. A configured response_format
+        that the seat cannot enforce must fail the sheet — never a
+        logged warning followed by an unschematized run (the
+        log-and-ignore behavior was retired 2026-09-29).
+
+        Raises:
+            ValueError: When the request type is not ``json_schema``, the
+                profile declares no ``json_schema_flag``, or the profile's
+                output format is not JSON (the result rides the terminal
+                JSON's top-level ``structured_output``).
+        """
+        rf_type = response_format.get("type")
+        if rf_type != "json_schema":
+            raise ValueError(
+                f"instrument '{self._profile.name}': CLI schema "
+                "enforcement supports response_format.type 'json_schema' "
+                f"only, got {rf_type!r} — a CLI flag cannot enforce a "
+                "bare json_object; refusing to dispatch unschematized"
+            )
+        if not self._cli.command.json_schema_flag:
+            raise ValueError(
+                f"instrument '{self._profile.name}' cannot enforce a JSON "
+                "schema: the profile declares no "
+                "cli.command.json_schema_flag. Refusing to run the sheet "
+                "unschematized — declare the flag in the instrument "
+                "profile or remove response_format from the sheet"
+            )
+        if self._cli.output.format != "json":
+            raise ValueError(
+                f"instrument '{self._profile.name}': schema mode requires "
+                "output format 'json' (the result is the terminal JSON's "
+                "top-level 'structured_output'); profile declares "
+                f"{self._cli.output.format!r}"
+            )
+
     def _build_command(
         self,
         prompt: str,
@@ -474,6 +545,7 @@ class PluginCliBackend(Backend):
         force_stdin: bool = False,
         preamble: str | None = None,
         prompt_extensions: tuple[str, ...] | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> list[str]:
         """Build the CLI command from the profile configuration.
 
@@ -489,12 +561,19 @@ class PluginCliBackend(Backend):
                 profile uses positional delivery. Caller handles stdin.
             preamble: Request-local preamble threaded from ``execute`` (W-F3).
             prompt_extensions: Request-local extensions (same contract).
+            response_format: Request-local structured-output schema
+                (``json_schema`` type). When given, validated against the
+                profile's capability first and appended as
+                ``json_schema_flag`` + one compact-JSON argument.
 
         Returns:
             List of command arguments for subprocess.
         """
         cmd = self._cli.command
         args: list[str] = [cmd.executable]
+
+        if response_format is not None:
+            self._require_schema_capable_profile(response_format)
 
         # Subcommand
         if cmd.subcommand:
@@ -560,6 +639,14 @@ class PluginCliBackend(Backend):
                 args.extend(cmd.mcp_disable_args)
         elif cmd.mcp_disable_args:
             args.extend(cmd.mcp_disable_args)
+
+        # Opt-in structured output (probe evidence, 2026-09-29): the CLI
+        # enforces the schema itself — the flag takes the compact schema
+        # JSON as ONE argument (e.g. Claude Code's --json-schema).
+        if response_format is not None:
+            schema_obj = response_format["json_schema"]["schema"]
+            args.append(cmd.json_schema_flag)
+            args.append(json.dumps(schema_obj, separators=(",", ":")))
 
         # Extra flags (always last)
         args.extend(cmd.extra_flags)
@@ -631,6 +718,7 @@ class PluginCliBackend(Backend):
         stderr: str,
         *,
         exit_code: int | None,
+        response_format: dict[str, Any] | None = None,
     ) -> ExecutionResult:
         """Parse CLI output into an ExecutionResult.
 
@@ -639,10 +727,18 @@ class PluginCliBackend(Backend):
         - json: parse JSON, extract via dot-paths
         - jsonl: find completion event, extract from it
 
+        Schema mode (``response_format`` given) supersedes the format
+        branches: the sheet result is the terminal JSON's top-level
+        ``structured_output`` object (serialized compactly); a missing or
+        non-object ``structured_output`` fails the sheet with a
+        content-free error — candidate output is never surfaced or logged
+        on refusal.
+
         Args:
             stdout: Standard output from the process.
             stderr: Standard error from the process.
             exit_code: Process exit code (None if killed by signal).
+            response_format: Request-local schema resolved by ``execute``.
 
         Returns:
             ExecutionResult with parsed fields.
@@ -665,7 +761,44 @@ class PluginCliBackend(Backend):
         input_tokens: int | None = None
         output_tokens: int | None = None
 
-        if output.format == "json" and stdout.strip():
+        if response_format is not None:
+            # Schema mode — never fall through to plain result parsing:
+            # a schema-requested sheet must not silently return the
+            # unschematized `result` text.
+            result_text = ""
+            data: Any = None
+            if stdout.strip():
+                try:
+                    data = json.loads(stdout)
+                except json.JSONDecodeError:
+                    data = None
+            structured = (
+                data.get("structured_output")
+                if isinstance(data, dict) else None
+            )
+            if isinstance(structured, dict):
+                result_text = json.dumps(structured)
+            elif is_success:
+                is_success = False
+                error_type = error_type or "schema_output"
+                error_message = (
+                    "schema mode: CLI terminal JSON lacks an object "
+                    "'structured_output' — refusing unschematized result"
+                )
+            if not is_success and error_message is None:
+                # Surface the CLI's own error path if configured; nothing
+                # in this branch logs or returns candidate content.
+                extracted_err = None
+                if output.error_path and isinstance(data, dict):
+                    extracted_err = extract_json_path(data, output.error_path)
+                if extracted_err is None and not stdout.strip():
+                    error_message = (
+                        "schema mode: execution failed before structured "
+                        "output"
+                    )
+                elif extracted_err is not None:
+                    error_message = str(extracted_err)
+        elif output.format == "json" and stdout.strip():
             try:
                 data = json.loads(stdout)
 
@@ -951,6 +1084,21 @@ class PluginCliBackend(Backend):
             req_preamble = None
             req_extensions = None
 
+        # Opt-in structured output (CLI seat), same tri-state contract as
+        # the OpenAI-compatible backend: the dispatch-resolved request
+        # value wins unless UNSET; explicit None opts out of the
+        # direct-setter default. The resolved value is request-local —
+        # the shared pooled singleton's mutable slot is never read when a
+        # request is in hand, so no concurrent sheet's schema can leak.
+        if request is not None:
+            response_format: dict[str, Any] | None = (
+                request.response_format
+                if request.response_format is not RESPONSE_FORMAT_UNSET
+                else self._response_format
+            )
+        else:
+            response_format = self._response_format
+
         # GH#188: Force stdin delivery when the assembled prompt is large.
         # CLI tools crash when receiving 100KB+ prompts as positional
         # arguments. Marianne prompts routinely exceed this with
@@ -986,6 +1134,7 @@ class PluginCliBackend(Backend):
             force_stdin=use_stdin and not self._cli.command.prompt_via_stdin,
             preamble=req_preamble,
             prompt_extensions=req_extensions,
+            response_format=response_format,
         )
         env = self._build_env()
 
@@ -1222,6 +1371,7 @@ class PluginCliBackend(Backend):
         # Parse the output
         result = self._parse_output(
             stdout_data, stderr_data, exit_code=exit_code,
+            response_format=response_format,
         )
 
         # Override fields that _parse_output doesn't set
