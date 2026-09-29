@@ -28,18 +28,20 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+from jsonschema.exceptions import SchemaError
+from jsonschema.validators import validator_for
+
 from marianne.core.config.instruments import (
     InstrumentProfile,
     validate_openai_response_format,
 )
 from marianne.core.logging import get_logger
 from marianne.execution.base import (
-    RESPONSE_FORMAT_UNSET,
     Backend,
     ExecutionResult,
     ExitReason,
-    ResponseFormatResolution,
     SheetRequestState,
+    _ResponseFormatUnset,
 )
 from marianne.utils.json_path import extract_json_path
 from marianne.utils.process import safe_killpg as _safe_killpg
@@ -499,13 +501,20 @@ class PluginCliBackend(Backend):
 
     def _require_schema_capable_profile(
         self, response_format: dict[str, Any]
-    ) -> None:
+    ) -> str:
         """Refuse LOUDLY when this profile cannot enforce a schema.
 
         Called before any subprocess spawn. A configured response_format
         that the seat cannot enforce must fail the sheet — never a
         logged warning followed by an unschematized run (the
         log-and-ignore behavior was retired 2026-09-29).
+
+        Args:
+            response_format: Request-local structured-output schema.
+
+        Returns:
+            The profile's validated ``json_schema_flag`` (never ``None``
+            on return).
 
         Raises:
             ValueError: When the request type is not ``json_schema``, the
@@ -521,7 +530,8 @@ class PluginCliBackend(Backend):
                 f"only, got {rf_type!r} — a CLI flag cannot enforce a "
                 "bare json_object; refusing to dispatch unschematized"
             )
-        if not self._cli.command.json_schema_flag:
+        json_schema_flag = self._cli.command.json_schema_flag
+        if not json_schema_flag:
             raise ValueError(
                 f"instrument '{self._profile.name}' cannot enforce a JSON "
                 "schema: the profile declares no "
@@ -536,6 +546,7 @@ class PluginCliBackend(Backend):
                 "top-level 'structured_output'); profile declares "
                 f"{self._cli.output.format!r}"
             )
+        return json_schema_flag
 
     def _build_command(
         self,
@@ -572,8 +583,11 @@ class PluginCliBackend(Backend):
         cmd = self._cli.command
         args: list[str] = [cmd.executable]
 
+        validated_schema_flag: str | None = None
         if response_format is not None:
-            self._require_schema_capable_profile(response_format)
+            validated_schema_flag = (
+                self._require_schema_capable_profile(response_format)
+            )
 
         # Subcommand
         if cmd.subcommand:
@@ -644,8 +658,14 @@ class PluginCliBackend(Backend):
         # enforces the schema itself — the flag takes the compact schema
         # JSON as ONE argument (e.g. Claude Code's --json-schema).
         if response_format is not None:
+            if validated_schema_flag is None:
+                # Unreachable: _require_schema_capable_profile ran above
+                # under the same gate and always returns a non-empty flag.
+                raise ValueError(
+                    "schema request lost its validated json_schema_flag"
+                )
             schema_obj = response_format["json_schema"]["schema"]
-            args.append(cmd.json_schema_flag)
+            args.append(validated_schema_flag)
             args.append(json.dumps(schema_obj, separators=(",", ":")))
 
         # Extra flags (always last)
@@ -712,6 +732,58 @@ class PluginCliBackend(Backend):
 
         return env
 
+    def _schema_conformance_refusal(
+        self,
+        structured: dict[str, Any],
+        response_format: dict[str, Any],
+    ) -> str | None:
+        """Return a content-free refusal when ``structured`` violates the
+        request's JSON Schema; ``None`` when it conforms.
+
+        Full-schema validation via the ``jsonschema`` library — the
+        validator class is selected from the schema's ``$schema``
+        dialect (``validator_for``), the schema itself is
+        metaschema-checked, and every declared keyword applies. Formats
+        remain annotations-only (no format checker is installed; the
+        declared dependency set carries no format-validation extras).
+        The returned text names only schema-side facts (keyword, schema
+        path, expected value) — candidate output is never surfaced or
+        logged on refusal.
+        """
+        schema = response_format.get("json_schema", {}).get("schema")
+        if not isinstance(schema, dict):
+            return (
+                "schema mode: request carries no JSON Schema object — "
+                "cannot prove conformance"
+            )
+        validator_cls = validator_for(schema)
+        try:
+            validator_cls.check_schema(schema)
+        except SchemaError:
+            return (
+                "schema mode: requested schema is not valid JSON Schema "
+                "(metaschema check failed) — cannot prove conformance"
+            )
+        validator = validator_cls(schema)
+        errors = sorted(
+            validator.iter_errors(structured),
+            key=lambda e: str(e.schema_path),
+        )
+        if not errors:
+            return None
+        first = errors[0]
+        expected = (
+            f", expected {first.validator_value!r}"
+            if first.validator_value is not None
+            else ""
+        )
+        return (
+            "schema mode: CLI terminal JSON 'structured_output' does "
+            f"not conform to the requested schema — {len(errors)} "
+            f"violation(s), first: {first.validator!r} at schema path "
+            f"'{'/'.join(str(p) for p in first.schema_path)}'{expected}"
+        )
+
     def _parse_output(
         self,
         stdout: str,
@@ -777,7 +849,15 @@ class PluginCliBackend(Backend):
                 if isinstance(data, dict) else None
             )
             if isinstance(structured, dict):
-                result_text = json.dumps(structured)
+                conformance_refusal = self._schema_conformance_refusal(
+                    structured, response_format
+                )
+                if conformance_refusal is None:
+                    result_text = json.dumps(structured)
+                elif is_success:
+                    is_success = False
+                    error_type = error_type or "schema_conformance"
+                    error_message = conformance_refusal
             elif is_success:
                 is_success = False
                 error_type = error_type or "schema_output"
@@ -1090,12 +1170,13 @@ class PluginCliBackend(Backend):
         # direct-setter default. The resolved value is request-local —
         # the shared pooled singleton's mutable slot is never read when a
         # request is in hand, so no concurrent sheet's schema can leak.
+        response_format: dict[str, Any] | None
         if request is not None:
-            response_format: dict[str, Any] | None = (
-                request.response_format
-                if request.response_format is not RESPONSE_FORMAT_UNSET
-                else self._response_format
-            )
+            requested = request.response_format
+            if isinstance(requested, _ResponseFormatUnset):
+                response_format = self._response_format
+            else:
+                response_format = requested
         else:
             response_format = self._response_format
 

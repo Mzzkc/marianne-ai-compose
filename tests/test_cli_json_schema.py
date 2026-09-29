@@ -34,6 +34,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# Import provenance self-check: this suite must bind to THIS tree's
+# marianne (the repo .venv may carry a non-relocatable editable .pth
+# pointing at another checkout — see run report 2026-09-29).
+import marianne.core.config.instruments as _prov
 from marianne.core.config.instruments import (
     CliCommand,
     CliErrorConfig,
@@ -43,12 +47,6 @@ from marianne.core.config.instruments import (
 )
 from marianne.execution.base import SheetRequestState
 from marianne.execution.instruments.cli_backend import PluginCliBackend
-
-
-# Import provenance self-check: this suite must bind to THIS tree's
-# marianne (the repo .venv may carry a non-relocatable editable .pth
-# pointing at another checkout — see run report 2026-09-29).
-import marianne.core.config.instruments as _prov
 
 assert Path(_prov.__file__).resolve().is_relative_to(
     Path(__file__).resolve().parents[1] / "src"
@@ -245,6 +243,83 @@ async def test_non_object_structured_output_fails_loudly() -> None:
 
 
 # =========================================================================
+# Parser boundary: schema CONFORMANCE of structured_output (continuation)
+# =========================================================================
+
+
+async def test_nonconforming_structured_output_fails_loudly() -> None:
+    """Exit 0 + structurally present object that VIOLATES the schema
+    must fail the sheet — not return the nonconforming payload as the
+    result (RED 2026-09-29: any dict in structured_output was accepted;
+    the requested schema was never applied at the result boundary)."""
+    backend = _make_backend()
+    result, commands = await _execute_captured(
+        backend,
+        _claude_terminal_output({"wrong": "shape"}),
+        request=SheetRequestState(response_format=JSON_SCHEMA_RF),
+    )
+    assert "--json-schema" in commands[0]  # the refusal is post-spawn
+    assert result.success is False
+    assert "conform" in (result.error_message or "").lower()
+    # Content-free refusal: the nonconforming payload never surfaces as
+    # the sheet result or in the error text.
+    assert result.stdout != json.dumps({"wrong": "shape"})
+    assert '"wrong"' not in (result.stdout or "")
+    assert "wrong" not in (result.error_message or "")
+
+
+async def test_type_violation_fails_loudly_and_content_free() -> None:
+    """``acts`` present but not an array → refuse on the type keyword,
+    with the candidate value absent from the error text."""
+    backend = _make_backend()
+    result, _ = await _execute_captured(
+        backend,
+        _claude_terminal_output({"acts": "not-an-array"}),
+        request=SheetRequestState(response_format=JSON_SCHEMA_RF),
+    )
+    assert result.success is False
+    assert "type" in (result.error_message or "")
+    assert "not-an-array" not in (result.error_message or "")
+    assert "not-an-array" not in (result.stdout or "")
+
+
+async def test_conforming_structured_output_still_succeeds() -> None:
+    """Anti-over-refusal control: a payload that satisfies the schema
+    must still pass (no false reject from the conformance check)."""
+    backend = _make_backend()
+    result, _ = await _execute_captured(
+        backend,
+        _claude_terminal_output(STRUCTURED),
+        request=SheetRequestState(response_format=JSON_SCHEMA_RF),
+    )
+    assert result.success is True
+    assert json.loads(result.stdout) == STRUCTURED
+
+
+async def test_metaschema_invalid_request_schema_refuses() -> None:
+    """A requested schema that is not valid JSON Schema cannot prove
+    conformance — the sheet must refuse, never silently weaken."""
+    backend = _make_backend()
+    bad_rf = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "bad",
+            # 'required' must be an array — metaschema-invalid.
+            "schema": {"required": "acts"},
+        },
+    }
+    result, _ = await _execute_captured(
+        backend,
+        _claude_terminal_output(STRUCTURED),
+        request=SheetRequestState(response_format=bad_rf),
+    )
+    assert result.success is False
+    assert "schema" in (result.error_message or "").lower()
+    # Content-free: even the conforming payload's keys must not surface.
+    assert "acts" not in (result.error_message or "")
+
+
+# =========================================================================
 # Loud capability refusals (ValueError before spawn)
 # =========================================================================
 
@@ -258,13 +333,15 @@ async def test_unsupported_profile_refuses_loudly() -> None:
         commands.append(list(args))
         return _fake_proc(b"{}")
 
-    with patch("asyncio.create_subprocess_exec", side_effect=_spawn):
-        with pytest.raises(ValueError, match="json_schema_flag"):
-            await backend.execute(
-                "prompt", request=SheetRequestState(
-                    response_format=JSON_SCHEMA_RF
-                )
+    with (
+        patch("asyncio.create_subprocess_exec", side_effect=_spawn),
+        pytest.raises(ValueError, match="json_schema_flag"),
+    ):
+        await backend.execute(
+            "prompt", request=SheetRequestState(
+                response_format=JSON_SCHEMA_RF
             )
+        )
     assert commands == []  # refused before any subprocess
 
 
