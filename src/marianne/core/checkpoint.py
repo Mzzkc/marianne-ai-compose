@@ -267,9 +267,6 @@ ErrorRecord = CheckpointErrorRecord
 class SheetState(BaseModel):
     """State for a single sheet."""
 
-    expected_route: InstrumentRouteBinding | None = Field(
-        default=None, description="Durable reviewed route for this sheet's guarded HTTP requests",
-    )
     sheet_num: int = Field(ge=1)
     status: SheetStatus = SheetStatus.PENDING
     started_at: datetime | None = None
@@ -320,15 +317,6 @@ class SheetState(BaseModel):
     execution_duration_seconds: float | None = Field(
         default=None,
         description="How long the sheet execution took in seconds",
-    )
-    model_echo_status: Literal["observed", "absent", "malformed", "empty"] | None = Field(
-        default=None, description="HTTP model echo provenance; legacy absence is unverified",
-    )
-    model_observed: str | None = Field(
-        default=None, description="Verbatim nonempty HTTP response model, never a fallback",
-    )
-    model_requested: str | None = Field(
-        default=None, description="Exact model sent in this attempt's HTTP request",
     )
 
     # Partial completion tracking
@@ -679,6 +667,20 @@ class SheetState(BaseModel):
             "Extracted from agent output via feedback_pattern regex. "
             "Typically includes keys like 'confidence', 'blockers', 'notes'."
         ),
+    )
+
+    # Additive fields follow existing fields to preserve schema-registry order.
+    expected_route: InstrumentRouteBinding | None = Field(
+        default=None, description="Durable reviewed route for this sheet's guarded HTTP requests",
+    )
+    model_echo_status: Literal["observed", "absent", "malformed", "empty"] | None = Field(
+        default=None, description="HTTP model echo provenance; legacy absence is unverified",
+    )
+    model_observed: str | None = Field(
+        default=None, description="Verbatim nonempty HTTP response model, never a fallback",
+    )
+    model_requested: str | None = Field(
+        default=None, description="Exact model sent in this attempt's HTTP request",
     )
 
     @model_validator(mode="before")
@@ -1107,9 +1109,6 @@ class CheckpointState(BaseModel):
         - Debugging (know which worktree was used)
     """
 
-    expected_route: InstrumentRouteBinding | None = Field(
-        default=None, description="Reviewed route retained for execution and resume admission",
-    )
     # Job identification
     job_id: str = Field(description="Unique ID for this job run")
     job_name: str = Field(description="Name from job config")
@@ -1297,6 +1296,10 @@ class CheckpointState(BaseModel):
     circuit_breaker_history: list[dict[str, Any]] = Field(
         default_factory=list,
         description="History of circuit breaker state transitions for post-mortem diagnostics",
+    )
+
+    expected_route: InstrumentRouteBinding | None = Field(
+        default=None, description="Reviewed route retained for execution and resume admission",
     )
 
     @model_validator(mode="before")

@@ -21,12 +21,38 @@ Usage:
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import create_autospec
 
 import hypothesis.strategies as st
 import pytest
 from hypothesis import HealthCheck, settings
+
+
+def instrument_route_binding_strategy() -> st.SearchStrategy[dict[str, Any]]:
+    """Declared route strings remain exact, including whitespace and Unicode."""
+    nonempty = st.text(min_size=1, max_size=30)
+    return st.fixed_dictionaries({
+        "arm": st.sampled_from(["local", "remote"]),
+        "instrument": nonempty, "kind": nonempty,
+        "profile_origin": st.sampled_from([None, "venue", "organization"]),
+        "profile_file_sha256": st.one_of(
+            st.none(), st.text("0123456789abcdef", min_size=64, max_size=64),
+        ),
+        "effective_model": nonempty,
+        "effective_provider": st.one_of(st.none(), nonempty),
+        "model_source": st.sampled_from([None, "score_override", "profile"]),
+        "provider_source": st.sampled_from([None, "score_override", "profile"]),
+        "transport_scheme": st.sampled_from([None, "http", "https"]),
+        "transport_host": st.one_of(st.none(), nonempty),
+        "transport_port": st.one_of(st.none(), st.integers(min_value=1, max_value=65535)),
+        "transport_endpoint": st.one_of(st.none(), nonempty),
+        "resolved_at": st.datetimes(
+            min_value=datetime(2000, 1, 1), max_value=datetime(2030, 1, 1),
+            timezones=st.just(UTC),
+        ),
+    })
 
 # ---------------------------------------------------------------------------
 # 1. Hypothesis Profiles

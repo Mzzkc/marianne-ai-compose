@@ -65,6 +65,7 @@ from marianne.core.config.instruments import (
     CodeModeInterface,
     HttpProfile,
     InstrumentProfile,
+    InstrumentRouteBinding,
     InteractiveCliConfig,
     InteractiveGate,
     ModelCapacity,
@@ -231,6 +232,7 @@ ALL_CONFIG_MODELS: list[type[BaseModel]] = [
     CliProfile,
     HttpProfile,
     InstrumentProfile,
+    InstrumentRouteBinding,
 ]
 
 # ScheduleConfig has defaults for individual fields but requires one timing

@@ -4,8 +4,24 @@ import hashlib
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from hypothesis import given
 
 from marianne.core.config import instruments
+from tests.conftest_adversarial import instrument_route_binding_strategy
+
+
+@given(fields=instrument_route_binding_strategy())
+def test_instrument_route_binding_roundtrip_and_time_projection(fields):
+    from marianne.instruments.loader import route_identity
+
+    binding = instruments.InstrumentRouteBinding.model_validate(fields)
+    restored = instruments.InstrumentRouteBinding.model_validate_json(binding.model_dump_json())
+    assert restored == binding
+    assert restored.model_dump() == fields
+    later = restored.model_copy(update={"resolved_at": restored.resolved_at + timedelta(seconds=1)})
+    assert later != restored
+    assert route_identity(later) == route_identity(restored)
+    assert len(route_identity(restored)) == 13
 
 
 def _binding(**updates):
