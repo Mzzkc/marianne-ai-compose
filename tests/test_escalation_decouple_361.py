@@ -68,6 +68,7 @@ def _make_mock_manager() -> MagicMock:
     manager._archive_workspace_on_fresh = JobManager._archive_workspace_on_fresh
 
     manager._registry = MagicMock()
+    manager._checkpoint_writer = None
     manager._registry.update_status = AsyncMock()
     manager._registry.save_checkpoint = AsyncMock()
     return manager
@@ -94,17 +95,11 @@ def _make_mock_config() -> MagicMock:
 
 def _make_mock_request(
     *, escalation: bool = False, self_healing: bool = False
-) -> MagicMock:
-    request = MagicMock()
-    request.expected_route = None
-    request.workspace = None
-    request.fresh = False
-    request.start_sheet = None
-    request.escalation = escalation
-    request.self_healing = self_healing
-    request.self_healing_auto_confirm = False
-    request.dry_run = False
-    return request
+) -> JobRequest:
+    return JobRequest(
+        config_path=Path("/tmp/test.yaml"), escalation=escalation,
+        self_healing=self_healing,
+    )
 
 
 def _meta(job_id: str) -> object:
@@ -118,7 +113,7 @@ def _meta(job_id: str) -> object:
     )
 
 
-async def _run_submit(manager: MagicMock, request: MagicMock) -> None:
+async def _run_submit(manager: MagicMock, request: JobRequest) -> None:
     adapter = manager._baton_adapter
     adapter.wait_for_completion = AsyncMock(return_value=True)
     adapter.register_job = MagicMock()

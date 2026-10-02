@@ -13,11 +13,13 @@ TDD: Tests define the contract. Implementation fulfills it.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from marianne.core.config.spec import SpecCorpusConfig
 from marianne.daemon.manager import JobManager
+from marianne.daemon.types import JobRequest
 
 
 def _make_manager_with_baton() -> JobManager:
@@ -39,6 +41,7 @@ def _make_manager_with_baton() -> JobManager:
     config.learning = MagicMock()
     config.learning.backend = MagicMock()
     manager = JobManager(config)
+    manager._registry.save_checkpoint = AsyncMock()
     return manager
 
 
@@ -73,15 +76,7 @@ class TestBatonLiveStatesPopulation:
         config.spec = SpecCorpusConfig(spec_dir="")  # #204: load no-ops
         config.sheet.spec_tags = {}
 
-        request = MagicMock()
-        request.expected_route = None
-        request.fresh = False
-        request.self_healing = False
-        request.workspace = "/tmp/test-ws"
-        request.config_path = "/tmp/test.yaml"
-        request.start_sheet = None
-        request.self_healing_auto_confirm = False
-        request.dry_run = False
+        request = JobRequest(config_path=Path("/tmp/test.yaml"), workspace=Path("/tmp/test-ws"))
 
         job_id = "test-job-123"
 
@@ -154,15 +149,7 @@ class TestBatonLiveStatesPopulation:
         config.spec = SpecCorpusConfig(spec_dir="")  # #204: load no-ops
         config.sheet.spec_tags = {}
 
-        request = MagicMock()
-        request.expected_route = None
-        request.fresh = False
-        request.self_healing = False
-        request.workspace = "/tmp/test-ws"
-        request.config_path = "/tmp/test.yaml"
-        request.start_sheet = None
-        request.self_healing_auto_confirm = False
-        request.dry_run = False
+        request = JobRequest(config_path=Path("/tmp/test.yaml"), workspace=Path("/tmp/test-ws"))
 
         mock_sheets = []
         for i in range(1, 6):

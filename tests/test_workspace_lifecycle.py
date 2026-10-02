@@ -485,6 +485,7 @@ class TestFreshSubmitArchivesWorkspace:
         from marianne.core.sheet import Sheet
         from marianne.daemon.baton.adapter import BatonAdapter
         from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
+        from marianne.daemon.types import JobRequest
 
         ws = tmp_path / "ws"
         ws.mkdir()
@@ -513,6 +514,7 @@ class TestFreshSubmitArchivesWorkspace:
         manager._registry = MagicMock()
         manager._registry.update_status = AsyncMock()
         manager._registry.save_checkpoint = AsyncMock()
+        manager._checkpoint_writer = None
         manager._job_meta["fresh-archive-test"] = JobMeta(
             job_id="fresh-archive-test",
             config_path=tmp_path / "score.yaml",
@@ -527,14 +529,7 @@ class TestFreshSubmitArchivesWorkspace:
         adapter.has_completed_sheets = MagicMock(return_value=True)
         adapter.deregister_job = MagicMock()
 
-        request = MagicMock()
-        request.expected_route = None
-        request.workspace = None
-        request.fresh = True
-        request.start_sheet = None
-        request.escalation = False
-        request.self_healing = False
-        request.dry_run = False
+        request = JobRequest(config_path=tmp_path / "score.yaml", fresh=True)
 
         sheet = Sheet(
             num=1,

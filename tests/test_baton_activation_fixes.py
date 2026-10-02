@@ -29,6 +29,7 @@ from marianne.core.config import JobConfig
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.state import BatonSheetStatus
+from marianne.daemon.types import JobRequest
 
 # =========================================================================
 # Fixtures
@@ -860,14 +861,6 @@ def _make_completion_config(max_completion_attempts: int) -> JobConfig:
     )
 
 
-def _make_mock_request() -> MagicMock:
-    """Create a mock JobRequest for testing."""
-    request = MagicMock()
-    request.expected_route = None
-    request.workspace = None
-    request.fresh = False
-    request.start_sheet = None
-    request.self_healing = False
-    request.self_healing_auto_confirm = False
-    request.dry_run = False
-    return request
+def _make_mock_request() -> JobRequest:
+    """Use the real request DTO and its nullable native identity defaults."""
+    return JobRequest(config_path=Path("/tmp/test.yaml"))

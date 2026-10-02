@@ -26,6 +26,7 @@ from marianne.core.checkpoint import (
     SheetState,
     SheetStatus,
 )
+from marianne.daemon.types import JobRequest
 
 
 class TestBatonLiveStatesPopulation:
@@ -64,10 +65,10 @@ class TestBatonLiveStatesPopulation:
         mock_config.parallel.enabled = False
         mock_config.cross_sheet = None
 
-        mock_request = MagicMock()
-        mock_request.expected_route = None
-        mock_request.self_healing = False
-        mock_request.start_sheet = None
+        mock_request = JobRequest(config_path=Path("test-score.yaml"))
+        manager._checkpoint_writer = None
+        manager._registry = MagicMock()
+        manager._registry.save_checkpoint = AsyncMock()
 
         mock_config.pause_between_sheets_seconds = 0
 
@@ -120,10 +121,10 @@ class TestBatonLiveStatesPopulation:
         mock_config.parallel.enabled = False
         mock_config.cross_sheet = None
 
-        mock_request = MagicMock()
-        mock_request.expected_route = None
-        mock_request.self_healing = False
-        mock_request.start_sheet = None
+        mock_request = JobRequest(config_path=Path("test-score.yaml"))
+        manager._checkpoint_writer = None
+        manager._registry = MagicMock()
+        manager._registry.save_checkpoint = AsyncMock()
 
         mock_config.pause_between_sheets_seconds = 0
 
@@ -180,10 +181,10 @@ class TestBatonLiveStatesPopulation:
         mock_config.parallel.enabled = False
         mock_config.cross_sheet = None
 
-        mock_request = MagicMock()
-        mock_request.expected_route = None
-        mock_request.self_healing = False
-        mock_request.start_sheet = None
+        mock_request = JobRequest(config_path=Path("test-score.yaml"))
+        manager._checkpoint_writer = None
+        manager._registry = MagicMock()
+        manager._registry.save_checkpoint = AsyncMock()
 
         mock_config.pause_between_sheets_seconds = 0
 
