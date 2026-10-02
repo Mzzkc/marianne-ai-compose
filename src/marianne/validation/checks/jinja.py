@@ -171,6 +171,7 @@ class JinjaUndefinedVariableCheck:
         "stakes",
         "thinking_method",
         "instrument_name",
+        "native_execution",
         # Fan-out variables — old terminology (kept forever)
         "stage",
         "instance",

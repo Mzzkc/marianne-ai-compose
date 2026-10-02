@@ -1301,6 +1301,14 @@ class CheckpointState(BaseModel):
     expected_route: InstrumentRouteBinding | None = Field(
         default=None, description="Reviewed route retained for execution and resume admission",
     )
+    schedule_id: str | None = Field(
+        default=None,
+        description="Original native schedule lineage; absent when unknown or unassociated",
+    )
+    scheduled_due_at: float | None = Field(
+        default=None,
+        description="Original native child due time (Unix seconds), never recomputed on resume",
+    )
 
     @model_validator(mode="before")
     @classmethod

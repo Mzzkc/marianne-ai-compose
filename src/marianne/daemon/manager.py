@@ -5432,6 +5432,8 @@ class JobManager:
                 config.parallel.stagger_delay_ms if config.parallel.enabled else 0
             ),
             runtime_variables=dict(request.runtime_variables),  # #359 durable
+            schedule_id=request.schedule_id,
+            scheduled_due_at=request.scheduled_due_at,
             expected_route=request.expected_route,
             max_wall_seconds=meta.max_wall_seconds if meta is not None else None,
             wall_deadline_at=meta.wall_deadline_at if meta is not None else None,
@@ -5482,6 +5484,13 @@ class JobManager:
         # rendered prompts with preamble, injections, and validations.
         # Phase 2: pass the SheetState objects from _live_states so the
         # baton writes directly to them. No sync layer needed.
+        # Persist original native execution identity before any sheet can dispatch.
+        # Reuse the existing ordered writer; no second identity store or clock.
+        initial_json = initial_state.model_dump_json()
+        if self._checkpoint_writer is not None:
+            await self._checkpoint_writer.write_and_wait(job_id, initial_json)
+        else:
+            await self._registry.save_checkpoint(job_id, initial_json)
         adapter.register_job(
             job_id,
             sheets,
@@ -5501,6 +5510,8 @@ class JobManager:
             cross_sheet=config.cross_sheet,  # F-210
             pacing_seconds=float(config.pause_between_sheets_seconds),
             live_sheets=initial_state.sheets,
+            schedule_id=initial_state.schedule_id,
+            scheduled_due_at=initial_state.scheduled_due_at,
             techniques=config.techniques or None,
             stale_detection=config.stale_detection,
             spec_config=spec_config,  # #204

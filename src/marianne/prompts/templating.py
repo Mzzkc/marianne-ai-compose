@@ -112,6 +112,8 @@ class SheetContext:
     """Resolved content from 'tool' category injections."""
     delivery_manifest: list[dict[str, Any]] = field(default_factory=list)
     """Hash-only provenance for bytes assembled into this sheet's prompt."""
+    native_execution: dict[str, str | float | None] | None = None
+    """Conductor execution facts, not authorization or an authenticated credential."""
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for template rendering.
@@ -336,6 +338,10 @@ class PromptBuilder:
         # ``dict[instance]`` where ``instance`` is an integer, so string-keyed
         # dicts cause UndefinedError. Restore integer keys where possible.
         normalized_vars = _normalize_variable_keys(self.config.variables)
+        if context.native_execution is not None:
+            # Runtime facts cannot be replaced by score/sheet/runtime variables.
+            normalized_vars.pop("native_execution", None)
+            template_context["native_execution"] = dict(context.native_execution)
         template_context.update(normalized_vars)
 
         # Add stakes and thinking method

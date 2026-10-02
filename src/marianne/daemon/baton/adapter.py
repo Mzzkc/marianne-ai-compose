@@ -750,6 +750,8 @@ class BatonAdapter:
         code_execution: CodeExecutionConfig | None = None,
         agent_card: AgentCard | None = None,
         cleanup_generation: str | None = None,
+        schedule_id: str | None = None,
+        scheduled_due_at: float | None = None,
     ) -> None:
         """Register a job with the baton for event-driven execution.
 
@@ -823,6 +825,9 @@ class BatonAdapter:
                 total_sheets=total_sheets,
                 total_stages=total_stages,
                 parallel_enabled=bool(parallel_enabled),
+                job_id=job_id,
+                schedule_id=schedule_id,
+                scheduled_due_at=scheduled_due_at,
             )
 
         # Create completion event for this job
@@ -1561,6 +1566,9 @@ class BatonAdapter:
                 total_sheets=total_sheets,
                 total_stages=total_stages,
                 parallel_enabled=bool(parallel_enabled),
+                job_id=checkpoint.job_id,
+                schedule_id=checkpoint.schedule_id,
+                scheduled_due_at=checkpoint.scheduled_due_at,
             )
 
         # Create completion event

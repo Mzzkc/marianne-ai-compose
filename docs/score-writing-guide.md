@@ -445,6 +445,28 @@ These are always available in every template:
 | `workspace` | str | Absolute path to the workspace directory. |
 | `instrument_name` | str | Name of the instrument executing this sheet (e.g., `claude-code`). |
 
+### Native Execution Context
+
+Conductor-managed sheet templates, including raw CLI templates, can read
+`native_execution.job_id`, `native_execution.schedule_id`, and
+`native_execution.scheduled_due_at`. The latter is the original native child
+due time in Unix seconds, not the current time. These facts are checkpointed
+before sheet registration and reused on resume; retries do not mint a new child.
+No clock-based reconstruction is performed for old checkpoints.
+
+The job ID is the actual registered child ID. Schedule fields are nullable:
+legacy checkpoints have neither, and an ordinary manual job has no scheduled
+due time (it may still belong to a registered schedule). Check for `none` before
+treating a run as a scheduled tick. Direct standalone renderers without a job
+context leave this namespace absent. Existing templates that do not use it keep
+their output unchanged.
+
+While native context is supplied, `prompt.variables`, sheet variables and
+runtime `--var` values cannot replace the `native_execution` namespace. This
+is execution metadata, **not authorization, a signature, or an exactly-once
+side-effect guarantee**. Trusted CLI scores must still quote arguments safely;
+these values do not create a shell sandbox or a provider trust boundary.
+
 ### Fan-Out Variables
 
 Available when `fan_out` is configured. When no fan-out is used, these default

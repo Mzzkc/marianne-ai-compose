@@ -98,11 +98,19 @@ class PromptRenderer:
         total_sheets: int,
         total_stages: int,
         parallel_enabled: bool,
+        *,
+        job_id: str | None = None,
+        schedule_id: str | None = None,
+        scheduled_due_at: float | None = None,
     ) -> None:
         self._prompt_config = prompt_config
         self._total_sheets = total_sheets
         self._total_stages = total_stages
         self._parallel_enabled = parallel_enabled
+        self._native_execution = (
+            {"job_id": job_id, "schedule_id": schedule_id, "scheduled_due_at": scheduled_due_at}
+            if job_id is not None else None
+        )
 
     def render(
         self,
@@ -259,6 +267,7 @@ class PromptRenderer:
             start_item=start_item,
             end_item=end_item,
             workspace=sheet.workspace,
+            native_execution=self._native_execution,
             score_dir=(
                 str(sheet.score_path.parent) if sheet.score_path is not None else ""
             ),
