@@ -41,6 +41,7 @@ MAX_FALLBACK_HISTORY: int = 50
 # Since RUNNING was never assigned to any sheet (DISPATCHED is the
 # de facto running state), the rename has no behavioral impact.
 from marianne.core.checkpoint import SheetStatus
+from marianne.core.config.instruments import InstrumentRouteBinding
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.execution.base import RESPONSE_FORMAT_UNSET, ResponseFormatResolution
 
@@ -159,6 +160,9 @@ class AttemptContext:
     max_tokens: int | None = None
     temperature: float | None = None
     http_timeout_seconds: float | None = None
+    expected_route: InstrumentRouteBinding | None = None
+    route_model_override: str | None = None
+    route_provider_override: str | None = None
 
 
 # =============================================================================

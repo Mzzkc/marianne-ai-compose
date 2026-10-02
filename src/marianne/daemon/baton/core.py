@@ -1592,6 +1592,20 @@ class BatonCore:
         # normal_attempts for non-rate-limited results).
         sheet.record_attempt(event)
 
+        # A reviewed guarded request is one bounded attempt. Neither an HTTP
+        # failure nor partial validation may silently spend another attempt,
+        # enter healing, or borrow the instrument's rate-limit retry path.
+        if sheet.expected_route is not None and not (
+            event.execution_success
+            and (event.validations_total == 0 or event.validation_pass_rate >= 100.0)
+        ):
+            sheet.status = BatonSheetStatus.FAILED
+            sheet.clear_dispatch_block()
+            self._state_dirty = True
+            self._propagate_failure_to_dependents(event.job_id, event.sheet_num)
+            self._check_job_cost_limit(event.job_id)
+            return
+
         if event.rate_limited and not event.execution_success:
             # Rate limit AND failed — genuine rate limit that prevented
             # execution. Handle as rate limit: wait and retry.

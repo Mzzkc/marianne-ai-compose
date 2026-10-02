@@ -92,6 +92,7 @@ class TestBatonPathInstrumentPopulation:
         mock_config.cross_sheet = None
 
         mock_request = MagicMock()
+        mock_request.expected_route = None
         mock_request.self_healing = False
         mock_request.start_sheet = None
 
@@ -144,6 +145,7 @@ class TestBatonPathInstrumentPopulation:
         mock_config.cross_sheet = None
 
         mock_request = MagicMock()
+        mock_request.expected_route = None
         mock_request.self_healing = False
         mock_request.start_sheet = None
 

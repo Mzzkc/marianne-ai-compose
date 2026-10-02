@@ -186,6 +186,9 @@ async def sheet_task(
             temperature=attempt_context.temperature,
             http_timeout_seconds=attempt_context.http_timeout_seconds,
             http_timeout_resolved=True,
+            expected_route=attempt_context.expected_route,
+            route_model_override=attempt_context.route_model_override,
+            route_provider_override=attempt_context.route_provider_override,
             preamble=preamble,
             prompt_extensions=(
                 context_delivery.prompt_extensions
@@ -328,6 +331,9 @@ async def sheet_task(
             input_tokens=exec_result.input_tokens or 0,
             output_tokens=exec_result.output_tokens or 0,
             model_used=exec_result.model,
+            model_echo_status=exec_result.model_echo_status,
+            model_observed=exec_result.model_observed,
+            model_requested=exec_result.model_requested,
             stdout_tail=stdout_tail,
             stderr_tail=stderr_tail,
             output_kind=output_kind_value,
@@ -1205,6 +1211,11 @@ def _classify_error(exec_result: ExecutionResult) -> _ErrorClassification:
     """
     if exec_result.success:
         return _ErrorClassification(None, None, None)
+
+    if exec_result.error_type == "attempt_route_drift":
+        # Backend-origin route preflight refusal; retain the established
+        # configuration bucket rather than misclassifying exit 1 as transient.
+        return _ErrorClassification("EXECUTION_ERROR", exec_result.error_message, "E301")
 
     # Rate limits are NOT errors — handled upstream (the baton's rate-limit
     # timer / rate_limit_wait_seconds). Short-circuit BEFORE the classifier so

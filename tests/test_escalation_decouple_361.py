@@ -96,6 +96,7 @@ def _make_mock_request(
     *, escalation: bool = False, self_healing: bool = False
 ) -> MagicMock:
     request = MagicMock()
+    request.expected_route = None
     request.workspace = None
     request.fresh = False
     request.start_sheet = None
@@ -224,6 +225,7 @@ def _resume_manager_with_checkpoint(
     manager._job_meta["resume-job"] = _meta("resume-job")
 
     checkpoint = MagicMock()
+    checkpoint.expected_route = None
     checkpoint.sheets = {}
     checkpoint.escalation_enabled = escalation_enabled
     checkpoint.self_healing_enabled = self_healing_enabled

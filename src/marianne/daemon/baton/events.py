@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from marianne.core.constants import VALIDATION_PASS_RATE_KEY
 from marianne.daemon.types import ObserverEvent
@@ -137,6 +137,10 @@ class SheetAttemptResult:
 
     # Timestamp of when the attempt completed
     timestamp: float = field(default_factory=time.time)
+
+    model_echo_status: Literal["observed", "absent", "malformed", "empty"] | None = None
+    model_observed: str | None = None
+    model_requested: str | None = None
 
 
 @dataclass(frozen=True)
@@ -670,6 +674,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "data": {
                     "instrument": event.instrument_name,
                     "model": event.model_used,
+                    "model_echo_status": event.model_echo_status,
                     "attempt": event.attempt,
                     "event_generation": event.event_generation,
                     "success": event.execution_success,

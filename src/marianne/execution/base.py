@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal, Union
 if TYPE_CHECKING:
     import httpx
 
+from marianne.core.config.instruments import InstrumentRouteBinding
 from marianne.core.errors import ErrorCategory, ErrorClassifier
 from marianne.utils.time import utc_now
 
@@ -67,6 +68,9 @@ class SheetRequestState:
     http_timeout_resolved: bool = False
     preamble: str | None = None
     prompt_extensions: tuple[str, ...] = ()
+    expected_route: InstrumentRouteBinding | None = None
+    route_model_override: str | None = None
+    route_provider_override: str | None = None
 
 
 @dataclass
@@ -150,6 +154,13 @@ class ExecutionResult:
 
     output_tokens: int | None = None
     """Output tokens consumed (completion tokens). None if not available from backend."""
+
+    model_echo_status: Literal["observed", "absent", "malformed", "empty"] | None = None
+    """HTTP model-field provenance; None means no transport evidence is available."""
+    model_observed: str | None = None
+    """Nonempty server response model, verbatim; never a request fallback."""
+    model_requested: str | None = None
+    """Exact model sent in the corresponding HTTP request."""
 
     def __post_init__(self) -> None:
         """Validate invariant: success=True requires exit_code 0 or None."""

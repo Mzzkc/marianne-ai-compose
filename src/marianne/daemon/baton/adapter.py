@@ -2837,6 +2837,12 @@ class BatonAdapter:
                 else {}
             )
         sheet_response_format: ResponseFormatResolution = RESPONSE_FORMAT_UNSET
+        if state.expected_route is not None:
+            from marianne.execution.instruments.openai_compat_backend import OpenAICompatibleBackend
+
+            if not isinstance(backend, OpenAICompatibleBackend):
+                raise ValueError("attempt_route_drift: backend cannot verify guarded HTTP route")
+
         if "response_format" in _icfg_rf:
             if hasattr(backend, "set_response_format"):
                 _raw_rf = _icfg_rf["response_format"]
@@ -2880,6 +2886,9 @@ class BatonAdapter:
                 prior_failure if mode != AttemptMode.COMPLETION else None
             ),
             response_format=sheet_response_format,
+            expected_route=state.expected_route,
+            route_model_override=_icfg_rf.get("model"),
+            route_provider_override=_icfg_rf.get("provider"),
             model=state.model,
             max_tokens=(
                 int(_icfg_rf["max_tokens"])

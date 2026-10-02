@@ -528,6 +528,7 @@ class TestFreshSubmitArchivesWorkspace:
         adapter.deregister_job = MagicMock()
 
         request = MagicMock()
+        request.expected_route = None
         request.workspace = None
         request.fresh = True
         request.start_sheet = None

@@ -22,14 +22,15 @@ uses SENSITIVE_PATTERNS to automatically redact fields containing
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Final, Literal
 
 import httpx
 
-from marianne.core.config.instruments import validate_openai_response_format
+from marianne.core.config.instruments import InstrumentProfile, validate_openai_response_format
 from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger
 from marianne.execution.base import (
@@ -39,9 +40,12 @@ from marianne.execution.base import (
     HttpxClientMixin,
     SheetRequestState,
 )
+from marianne.instruments.loader import capture_resolved_instrument_route, route_identity
 from marianne.utils.time import utc_now
 
 _logger = get_logger("execution.openai_compat")
+
+ROUTE_DISPATCH_MAX_LEAD_SECONDS: Final[float] = 60.0
 
 class OpenAICompatibleBackend(HttpxClientMixin, Backend):
     """Run prompts through a profile-selected OpenAI-compatible API.
@@ -70,6 +74,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         timeout_seconds: float = 300.0,
         endpoint: str = "/chat/completions",
         response_format: dict[str, Any] | None = None,
+        loaded_profile: InstrumentProfile | None = None,
     ) -> None:
         """Initialize a profile-selected OpenAI-compatible transport.
 
@@ -99,6 +104,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         self.temperature = temperature
         self.timeout_seconds = timeout_seconds
         self.endpoint = endpoint
+        self._loaded_profile = loaded_profile.model_copy(deep=True) if loaded_profile else None
         self._default_response_format: dict[str, Any] | None = (
             validate_openai_response_format(response_format)
             if response_format is not None
@@ -420,8 +426,52 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         if response_format is not None:
             payload["response_format"] = response_format
 
+        guarded_client: httpx.AsyncClient | None = None
+        expected = request.expected_route if request is not None else None
         try:
-            client = await self._get_client()
+            if expected is not None:
+                try:
+                    if expected.arm != "local" or self._loaded_profile is None:
+                        raise ValueError(
+                            "guarded dispatch requires an observable local HTTP profile"
+                        )
+                    if self._loaded_profile.http is None or (
+                        self._httpx_base_url != self._loaded_profile.http.base_url.rstrip("/")
+                        or self.endpoint != self._loaded_profile.http.endpoint
+                    ):
+                        raise ValueError("executor transport differs from its loaded profile")
+                    assert request is not None
+                    fresh = await asyncio.to_thread(
+                        capture_resolved_instrument_route,
+                        self._loaded_profile.name,
+                        {"model": request.route_model_override,
+                         "provider": request.route_provider_override},
+                        now=utc_now(), loaded_profile=self._loaded_profile,
+                    )
+                    if route_identity(fresh) != route_identity(expected):
+                        raise ValueError("reviewed route differs from current resolved route")
+                    if requested_model != fresh.effective_model:
+                        raise ValueError("outbound model differs from resolved route")
+                    guarded_client = httpx.AsyncClient(
+                        base_url=self._httpx_base_url,
+                        timeout=self._httpx_timeout,
+                        headers=self._httpx_headers if self._httpx_headers else None,
+                        trust_env=False,
+                        follow_redirects=False,
+                        transport=httpx.AsyncHTTPTransport(retries=0),
+                    )
+                    client = guarded_client
+                    started_at = utc_now()
+                    if not 0 <= (started_at - fresh.resolved_at).total_seconds() <= (
+                        ROUTE_DISPATCH_MAX_LEAD_SECONDS
+                    ):
+                        raise ValueError(
+                            "daemon route capture is out of the 60-second start window"
+                        )
+                except (OSError, ValueError) as exc:
+                    return self._route_refusal(str(exc), start_time, started_at, requested_model)
+            else:
+                client = await self._get_client()
 
             response = await client.post(
                 self.endpoint,
@@ -430,6 +480,16 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             )
 
             duration = time.monotonic() - start_time
+            if expected is not None:
+                if utc_now() < started_at:
+                    return self._route_refusal(
+                        "completion clock precedes request start",
+                        start_time, started_at, requested_model,
+                    )
+                if 300 <= response.status_code < 400:
+                    return self._route_refusal(
+                        "guarded HTTP redirect refused", start_time, started_at, requested_model,
+                    )
 
             # Handle rate limiting via HTTP status
             if response.status_code == 429:
@@ -489,6 +549,21 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             )
             self._write_log_file(self._stderr_log_path, str(e))
             raise
+        finally:
+            if guarded_client is not None:
+                await guarded_client.aclose()
+
+    @staticmethod
+    def _route_refusal(
+        reason: str, start_time: float, started_at: Any, model: str,
+    ) -> ExecutionResult:
+        """A failed preflight, never a transport or server-model observation."""
+        message = f"attempt_route_drift: {reason}"
+        return ExecutionResult(
+            success=False, exit_code=1, stdout="", stderr=message,
+            duration_seconds=time.monotonic() - start_time, started_at=started_at,
+            error_type="attempt_route_drift", error_message=message, model=model,
+        )
 
     def _handle_rate_limit(
         self,
@@ -661,6 +736,20 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         # The model actually used may differ from what was requested
         actual_model = data.get("model", requested_model)
 
+        # Keep legacy fallback metadata intact, but never confuse it with
+        # evidence that the HTTP response actually contained a model echo.
+        model_observed = None
+        model_echo_status: Literal["observed", "absent", "malformed", "empty"]
+        if "model" not in data:
+            model_echo_status = "absent"
+        elif not isinstance(data["model"], str):
+            model_echo_status = "malformed"
+        elif not data["model"].strip():
+            model_echo_status = "empty"
+        else:
+            model_echo_status = "observed"
+            model_observed = data["model"]
+
         _logger.info(
             "openai_compatible_execute_complete",
             model=actual_model,
@@ -682,6 +771,9 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             started_at=started_at,
             model=actual_model,
             tokens_used=tokens_used,
+            model_echo_status=model_echo_status,
+            model_observed=model_observed,
+            model_requested=requested_model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
         )

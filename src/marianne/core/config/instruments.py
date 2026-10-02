@@ -24,7 +24,45 @@ import copy
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+)
+
+
+class InstrumentRouteBinding(BaseModel):
+    """Reviewed declared route, not proof of a service's loaded model weights."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    arm: Literal["remote", "local"] = Field(description="Disclosed transport arm")
+    instrument: str = Field(min_length=1, description="Exact score-visible instrument name")
+    kind: str = Field(min_length=1, description="Resolved profile executor kind")
+    profile_origin: Literal["organization", "venue"] | None = Field(
+        description="Observable winning profile registry, or None for an unobserved origin",
+    )
+    profile_file_sha256: str | None = Field(
+        pattern=r"^[0-9a-f]{64}$",
+        description="Digest of the winning profile bytes, not their body",
+    )
+    effective_model: str = Field(min_length=1, description="Exact requested model after overrides")
+    effective_provider: str | None = Field(description="Declared provider, absent if undeclared")
+    model_source: Literal["score_override", "profile"] | None = Field(
+        description="Source of the effective model declaration",
+    )
+    provider_source: Literal["score_override", "profile"] | None = Field(
+        description="Source of the provider declaration, absent if undeclared",
+    )
+    transport_scheme: Literal["http", "https"] | None = Field(description="Declared HTTP scheme")
+    transport_host: str | None = Field(description="Declared HTTP hostname")
+    transport_port: int | None = Field(ge=1, le=65535, description="Declared HTTP port")
+    transport_endpoint: str | None = Field(description="Declared relative HTTP endpoint")
+    resolved_at: AwareDatetime = Field(description="Capture time, excluded from route identity")
 
 # --- Sub-models (leaf types first, composed types after) ---
 
@@ -754,6 +792,11 @@ class InstrumentProfile(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
+
+    # Loader-owned metadata from the same bytes parsed into this profile.
+    # Not score fields, not included in serialization, and never a settings body.
+    _source_path: Path | None = PrivateAttr(default=None)
+    _source_sha256: str | None = PrivateAttr(default=None)
 
     # Identity
     name: str = Field(

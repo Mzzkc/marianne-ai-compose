@@ -5312,6 +5312,11 @@ class JobManager:
         from marianne.core.sheet import build_sheets
         from marianne.daemon.baton.adapter import extract_dependencies
 
+        if request.expected_route is not None:
+            from marianne.instruments.loader import verify_single_route
+
+            verify_single_route(config.model_dump(), request.expected_route.instrument)
+
         assert self._baton_adapter is not None  # Caller checks this
         adapter = self._baton_adapter
 
@@ -5372,6 +5377,7 @@ class JobManager:
                 sheet_num=sheet.num,
                 instrument_name=sheet.instrument_name,  # F-151
                 instrument_model=model if isinstance(model, str) else None,
+                expected_route=request.expected_route,
             )
         # #361: escalation decoupled from healing — either flag enables
         # FERMATA-on-exhaustion; healing keeps it as its designed end state.
@@ -5400,6 +5406,7 @@ class JobManager:
                 config.parallel.stagger_delay_ms if config.parallel.enabled else 0
             ),
             runtime_variables=dict(request.runtime_variables),  # #359 durable
+            expected_route=request.expected_route,
             max_wall_seconds=meta.max_wall_seconds if meta is not None else None,
             wall_deadline_at=meta.wall_deadline_at if meta is not None else None,
             terminal_reason=meta.terminal_reason if meta is not None else None,
@@ -5666,6 +5673,13 @@ class JobManager:
         config = _merge_runtime_variables(
             config, dict(checkpoint.runtime_variables)
         )
+        if checkpoint.expected_route is not None:
+            from marianne.instruments.loader import verify_single_route
+
+            verify_single_route(config.model_dump(), checkpoint.expected_route.instrument)
+            for saved_sheet in checkpoint.sheets.values():
+                if saved_sheet.expected_route != checkpoint.expected_route:
+                    raise ValueError("attempt_route_drift: checkpoint sheet route differs from job")
 
         # Build sheets and dependencies
         sheets = build_sheets(config)

@@ -30,18 +30,37 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
+import ipaddress
+import socket
+from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import yaml
 
-from marianne.core.config.instruments import InstrumentProfile
+from marianne.core.config.instruments import InstrumentProfile, InstrumentRouteBinding
 from marianne.core.logging import get_logger
 
 _logger = get_logger("instruments.loader")
 
 # File extensions the loader recognizes as instrument profiles.
 _YAML_EXTENSIONS = frozenset({".yaml", ".yml"})
+
+
+def route_identity(binding: InstrumentRouteBinding) -> tuple[str | int | None, ...]:
+    """Exact route projection; observation time is not route identity.
+
+    No normalization or optional-field wildcarding is permitted. A fresh
+    capture can have a later timestamp while retaining the identical route.
+    """
+    return (
+        binding.arm, binding.instrument, binding.kind, binding.profile_origin,
+        binding.profile_file_sha256, binding.effective_model, binding.effective_provider,
+        binding.model_source, binding.provider_source, binding.transport_scheme,
+        binding.transport_host, binding.transport_port, binding.transport_endpoint,
+    )
 
 
 class InstrumentProfileLoader:
@@ -155,7 +174,8 @@ class InstrumentProfileLoader:
         unexpected structure. All errors are logged.
         """
         try:
-            raw_text = path.read_text(encoding="utf-8")
+            raw_bytes = path.read_bytes()
+            raw_text = raw_bytes.decode("utf-8")
         except (OSError, UnicodeDecodeError) as e:
             _logger.warning(
                 "instrument_file_read_error",
@@ -202,10 +222,14 @@ class InstrumentProfileLoader:
             file=str(path),
         )
 
+        profile._source_path = path.resolve()
+        profile._source_sha256 = hashlib.sha256(raw_bytes).hexdigest()
         return profile
 
 
-def load_all_profiles() -> dict[str, InstrumentProfile]:
+def load_all_profiles(
+    *, organization_dir: Path | None = None, venue_dir: Path | None = None,
+) -> dict[str, InstrumentProfile]:
     """Load all instrument profiles from all standard sources.
 
     Convenience function that encapsulates the standard loading order:
@@ -221,8 +245,11 @@ def load_all_profiles() -> dict[str, InstrumentProfile]:
     profiles: dict[str, InstrumentProfile] = {}
 
     builtins_dir = Path(__file__).resolve().parent / "builtins"
-    org_dir = Path.home() / ".marianne" / "instruments"
-    venue_dir = Path(".marianne") / "instruments"
+    org_dir = (
+        organization_dir if organization_dir is not None
+        else Path.home() / ".marianne" / "instruments"
+    )
+    venue_dir = venue_dir if venue_dir is not None else Path(".marianne") / "instruments"
 
     yaml_profiles = InstrumentProfileLoader.load_directories(
         [builtins_dir, org_dir, venue_dir]
@@ -230,3 +257,133 @@ def load_all_profiles() -> dict[str, InstrumentProfile]:
 
     profiles.update(yaml_profiles)
     return profiles
+
+
+def verify_single_route(document: dict[str, Any], instrument: str) -> None:
+    """Verify the deliberately bounded single-route score shape, not arbitrary scores."""
+    if document.get("instrument") != instrument:
+        raise ValueError("LOCAL_TRANSPORT_ROUTE_MISMATCH: score instrument differs")
+    if document.get("movements"):
+        raise ValueError("LOCAL_TRANSPORT_MOVEMENT_ARM: bound route has movements")
+    if document.get("instrument_fallbacks"):
+        raise ValueError("LOCAL_TRANSPORT_FALLBACK_ARM: bound route has fallbacks")
+    for block in (document, document.get("sheet", {})):
+        if not isinstance(block, dict):
+            raise ValueError("LOCAL_TRANSPORT_UNVERIFIED: invalid sheet configuration")
+        for key in ("per_sheet_instruments", "per_sheet_fallbacks", "instrument_map"):
+            if block.get(key):
+                raise ValueError("LOCAL_TRANSPORT_PER_SHEET_ARM: bound route has alternatives")
+
+
+def _is_loopback_host(host: str) -> bool:
+    if host == "localhost":
+        try:
+            addresses = socket.getaddrinfo(host, None)
+            return bool(addresses) and all(
+                ipaddress.ip_address(address[4][0]).is_loopback for address in addresses
+            )
+        except (OSError, ValueError):
+            return False
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def capture_resolved_instrument_route(
+    instrument: str,
+    instrument_config: dict[str, Any],
+    *,
+    now: datetime,
+    arm: Literal["local", "remote"] = "local",
+    organization_dir: Path | None = None,
+    venue_dir: Path | None = None,
+    loaded_profile: InstrumentProfile | None = None,
+) -> InstrumentRouteBinding:
+    """Capture the winning loader profile and exact declared request overrides.
+
+    A loaded executor can supply its original profile to refuse stale cached
+    configuration. Synchronous file/DNS work belongs in ``asyncio.to_thread``
+    when called from the execution path. No profile body enters the binding.
+    """
+    org = (
+        organization_dir if organization_dir is not None
+        else Path.home() / ".marianne" / "instruments"
+    )
+    venue = venue_dir if venue_dir is not None else Path(".marianne") / "instruments"
+    profile = load_all_profiles(organization_dir=org, venue_dir=venue).get(instrument)
+    if profile is None or profile._source_path is None:
+        raise ValueError("LOCAL_TRANSPORT_UNVERIFIED: instrument profile is not observable")
+    origin: Literal["organization", "venue"] | None = None
+    if profile._source_path.parent == venue.resolve():
+        origin = "venue"
+    elif profile._source_path.parent == org.resolve():
+        origin = "organization"
+    if arm == "local" and origin is None:
+        raise ValueError("LOCAL_TRANSPORT_UNVERIFIED: local profile must be registry-visible")
+    if loaded_profile is not None and (
+        loaded_profile.model_dump() != profile.model_dump()
+        or loaded_profile._source_path != profile._source_path
+        or loaded_profile._source_sha256 != profile._source_sha256
+    ):
+        raise ValueError("attempt_route_drift: loaded instrument differs from captured profile")
+    model = instrument_config.get("model") or profile.default_model
+    if not isinstance(model, str) or not model:
+        raise ValueError("route_model_undeclared: no effective model declaration")
+    provider = instrument_config.get("provider")
+    if provider is not None and (not isinstance(provider, str) or not provider):
+        raise ValueError("LOCAL_TRANSPORT_UNVERIFIED: invalid provider declaration")
+    scheme: Literal["http", "https"] | None = None
+    host, port, endpoint = None, None, None
+    if profile.http is not None:
+        url = urlsplit(profile.http.base_url)
+        if url.username is not None or url.password is not None:
+            raise ValueError("LOCAL_TRANSPORT_URL_CREDENTIALS: credentials in transport URL")
+        if url.scheme not in {"http", "https"}:
+            raise ValueError("LOCAL_TRANSPORT_UNVERIFIED: unsupported transport scheme")
+        scheme = "https" if url.scheme == "https" else "http"
+        host, port, endpoint = url.hostname, url.port, profile.http.endpoint
+        if arm == "local" and (
+            not host or not _is_loopback_host(host)
+            or "://" in endpoint or endpoint.startswith("//")
+        ):
+            raise ValueError("LOCAL_TRANSPORT_REMOTE_HTTP_URL: route is not loopback-relative")
+    if arm == "local" and (profile.kind != "http" or profile.http is None):
+        raise ValueError("LOCAL_TRANSPORT_UNVERIFIED: local route requires an HTTP profile")
+    return InstrumentRouteBinding(
+        arm=arm, instrument=instrument, kind=profile.kind,
+        profile_origin=origin, profile_file_sha256=profile._source_sha256,
+        effective_model=model, effective_provider=provider,
+        model_source="score_override" if instrument_config.get("model") else "profile",
+        provider_source="score_override" if provider is not None else None,
+        transport_scheme=scheme, transport_host=host, transport_port=port,
+        transport_endpoint=endpoint, resolved_at=now,
+    )
+
+
+def capture_instrument_route_binding(
+    score_path: Path,
+    instrument: str,
+    score_digest: str,
+    *,
+    now: datetime,
+    arm: Literal["local", "remote"] = "local",
+    organization_dir: Path | None = None,
+    venue_dir: Path | None = None,
+) -> InstrumentRouteBinding:
+    """Capture one reviewed score using the same resolver as the conductor."""
+    data = score_path.read_bytes()
+    document = yaml.safe_load(data)
+    if not isinstance(document, dict):
+        raise ValueError("LOCAL_TRANSPORT_UNVERIFIED: score is not a mapping")
+    verify_single_route(document, instrument)
+    overrides = document.get("instrument_config", {})
+    if not isinstance(overrides, dict):
+        raise ValueError("LOCAL_TRANSPORT_UNVERIFIED: invalid instrument configuration")
+    binding = capture_resolved_instrument_route(
+        instrument, overrides, now=now, arm=arm,
+        organization_dir=organization_dir, venue_dir=venue_dir,
+    )
+    if not score_digest or hashlib.sha256(data).hexdigest() != score_digest:
+        raise ValueError("LOCAL_TRANSPORT_SCORE_CHANGED: score bytes do not match reviewed digest")
+    return binding

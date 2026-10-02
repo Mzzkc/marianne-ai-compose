@@ -16,6 +16,8 @@ from typing_extensions import (  # noqa: UP035  (pydantic needs typing_extension
     TypedDict,
 )
 
+from marianne.core.config.instruments import InstrumentRouteBinding
+
 # ─── IPC Handler Parameter TypedDicts ─────────────────────────────
 # These define the expected parameter shapes for each daemon IPC method.
 # Used by _register_methods() in process.py for type-safe parameter access.
@@ -69,6 +71,11 @@ class JobRequest(BaseModel):
     The daemon validates the config and either accepts or rejects.
     """
 
+    expected_route: InstrumentRouteBinding | None = Field(
+        default=None,
+        description="Optional reviewed local HTTP route, reverified before each POST. "
+        "Guarded failures are terminal; absent preserves legacy dispatch and retry behavior.",
+    )
     config_path: Path = Field(
         description="Path to the job configuration YAML file",
     )

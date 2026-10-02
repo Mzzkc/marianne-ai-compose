@@ -14,6 +14,7 @@ from typing import Any, Literal, Required, cast
 from pydantic import BaseModel, Field, model_validator
 from typing_extensions import TypedDict
 
+from marianne.core.config.instruments import InstrumentRouteBinding
 from marianne.core.errors.codes import ErrorCategory, ExitReason
 from marianne.core.logging import get_logger
 from marianne.utils.time import utc_now
@@ -266,6 +267,9 @@ ErrorRecord = CheckpointErrorRecord
 class SheetState(BaseModel):
     """State for a single sheet."""
 
+    expected_route: InstrumentRouteBinding | None = Field(
+        default=None, description="Durable reviewed route for this sheet's guarded HTTP requests",
+    )
     sheet_num: int = Field(ge=1)
     status: SheetStatus = SheetStatus.PENDING
     started_at: datetime | None = None
@@ -316,6 +320,15 @@ class SheetState(BaseModel):
     execution_duration_seconds: float | None = Field(
         default=None,
         description="How long the sheet execution took in seconds",
+    )
+    model_echo_status: Literal["observed", "absent", "malformed", "empty"] | None = Field(
+        default=None, description="HTTP model echo provenance; legacy absence is unverified",
+    )
+    model_observed: str | None = Field(
+        default=None, description="Verbatim nonempty HTTP response model, never a fallback",
+    )
+    model_requested: str | None = Field(
+        default=None, description="Exact model sent in this attempt's HTTP request",
     )
 
     # Partial completion tracking
@@ -748,6 +761,11 @@ class SheetState(BaseModel):
                 self.preflight_warnings.append(warning)
         self.total_duration_seconds += result.duration_seconds
         self.execution_duration_seconds = result.duration_seconds
+        # Each attempt replaces evidence, including unverified legacy/failure
+        # results. An earlier successful echo must not survive a later attempt.
+        self.model_echo_status = getattr(result, "model_echo_status", None)
+        self.model_observed = getattr(result, "model_observed", None)
+        self.model_requested = getattr(result, "model_requested", None)
         self.exit_code = getattr(result, "exit_code", None)
         self.error_message = getattr(result, "error_message", None)
         self.error_code = getattr(result, "error_code", None)
@@ -1089,6 +1107,9 @@ class CheckpointState(BaseModel):
         - Debugging (know which worktree was used)
     """
 
+    expected_route: InstrumentRouteBinding | None = Field(
+        default=None, description="Reviewed route retained for execution and resume admission",
+    )
     # Job identification
     job_id: str = Field(description="Unique ID for this job run")
     job_name: str = Field(description="Name from job config")

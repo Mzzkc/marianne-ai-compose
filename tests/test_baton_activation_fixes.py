@@ -334,6 +334,7 @@ class TestF145CompletedNewWork:
         manager._job_meta["resume-job"] = meta
 
         mock_checkpoint = MagicMock()
+        mock_checkpoint.expected_route = None
         mock_checkpoint.sheets = {}
         manager._load_checkpoint = AsyncMock(return_value=mock_checkpoint)
 
@@ -484,6 +485,7 @@ class TestF158PromptConfigWiring:
         manager._job_meta["resume-job"] = meta
 
         mock_checkpoint = MagicMock()
+        mock_checkpoint.expected_route = None
         mock_checkpoint.sheets = {}
         manager._load_checkpoint = AsyncMock(return_value=mock_checkpoint)
 
@@ -526,6 +528,7 @@ class TestF158PromptConfigWiring:
             status=DaemonJobStatus.RUNNING,
         )
         checkpoint = MagicMock()
+        checkpoint.expected_route = None
         checkpoint.sheets = {}
         manager._load_checkpoint = AsyncMock(return_value=checkpoint)
         config = _make_mock_config(parallel=False)
@@ -858,6 +861,7 @@ def _make_completion_config(max_completion_attempts: int) -> JobConfig:
 def _make_mock_request() -> MagicMock:
     """Create a mock JobRequest for testing."""
     request = MagicMock()
+    request.expected_route = None
     request.workspace = None
     request.fresh = False
     request.start_sheet = None

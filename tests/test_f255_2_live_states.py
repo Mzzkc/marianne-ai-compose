@@ -74,6 +74,7 @@ class TestBatonLiveStatesPopulation:
         config.sheet.spec_tags = {}
 
         request = MagicMock()
+        request.expected_route = None
         request.fresh = False
         request.self_healing = False
         request.workspace = "/tmp/test-ws"
@@ -154,6 +155,7 @@ class TestBatonLiveStatesPopulation:
         config.sheet.spec_tags = {}
 
         request = MagicMock()
+        request.expected_route = None
         request.fresh = False
         request.self_healing = False
         request.workspace = "/tmp/test-ws"

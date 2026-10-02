@@ -285,14 +285,14 @@ budget uses a conservative default.
 
 At conductor startup:
 
-1. **Native instruments** are registered first (4 built-in Python backends)
-2. **Built-in YAML profiles** are loaded from Marianne's bundled instruments directory
-3. **Organization profiles** from `~/.marianne/instruments/` override built-ins
-4. **Venue profiles** from `.marianne/instruments/` override everything
+1. **Built-in YAML profiles** are loaded from Marianne's bundled instruments directory
+2. **Organization profiles** from `~/.marianne/instruments/` override built-ins
+3. **Venue profiles** from `.marianne/instruments/` override everything
 
 The result is a single `InstrumentRegistry` mapping names to profiles. When a
 score references `instrument: gemini-cli`, the conductor looks up that name
-in the registry and creates a `PluginCliBackend` configured from the profile.
+in the registry and selects the CLI or OpenAI-compatible HTTP executor from
+the profile's `kind` and protocol settings.
 
 ### Score Resolution
 
@@ -303,6 +303,55 @@ When a score is submitted, the instrument is resolved:
 
 The resolved profile produces a shared execution-contract instance that the
 conductor uses to execute sheets.
+
+### Optional reviewed local HTTP routes
+
+Embedding clients may submit `JobRequest.expected_route`, a frozen
+`InstrumentRouteBinding`. It is not a score field and grants no permission to
+send data. Absence retains ordinary dispatch and retry behavior. The current
+guarded arm supports observable organization/venue HTTP profiles on loopback,
+without movement, instrument-map, per-sheet instrument or fallback alternatives.
+
+`marianne.instruments.loader.capture_instrument_route_binding` accepts the
+score path, instrument, reviewed score SHA-256, and an aware `now` timestamp.
+It uses the conductor's profile loader and hashes the winning raw profile
+bytes. Callers outside the conductor's directory must supply the matching
+`organization_dir` and `venue_dir`; no registry context is guessed. Model
+precedence is score `instrument_config.model`, then profile `default_model`.
+Provider is a declaration only; an undeclared provider stays `None`.
+
+`route_identity` compares exactly thirteen declared fields: arm, instrument,
+kind, profile origin/digest, effective model/provider, their declaration
+sources, and HTTP scheme/host/port/endpoint. `None` is a value, not a wildcard.
+Only `resolved_at` is excluded. The immutable expectation persists through
+job/sheet checkpoints and is rechecked on resume. Immediately before POST,
+the backend captures current resolver state off the event loop, compares it
+to both the expectation and its loaded profile, and verifies the actual
+outbound model and endpoint. Capture must precede request start by at most
+60 seconds; completion must not precede start. Drift refuses the attempt.
+
+Guarded requests use a fresh HTTP client with environment proxies disabled,
+redirect following disabled, and transport retries zero. The client is closed
+in `finally` and never enters the ordinary shared pool. Failed or partially
+validated guarded attempts are terminal, including rate limits; they do not
+automatically retry, heal, or fall back. Unguarded requests retain their
+existing pooled-client and retry behavior.
+
+### HTTP model-echo evidence
+
+The legacy `model` value may fall back to the requested model; it is not proof
+that the service echoed a model. HTTP results now separately retain
+`model_requested`, `model_observed`, and `model_echo_status` through the
+musician into the authoritative sheet checkpoint. Status is `observed` for a
+nonempty response string (preserved verbatim), `absent` for a missing key,
+`malformed` for a non-string, or `empty` for an empty/whitespace-only string.
+Old checkpoints and non-HTTP results default all three fields to `None`.
+Observer events expose the status only, not the observed/requested strings.
+
+Consumers requiring model provenance must read the completed job's retained
+sheet metadata, not model-written content, logs, or the legacy model field.
+Missing metadata is unverified. A response model identifier is a server
+assertion; it does not attest the service's loaded weights.
 
 ### Command Construction
 
