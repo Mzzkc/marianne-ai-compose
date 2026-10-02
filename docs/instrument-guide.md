@@ -320,6 +320,11 @@ bytes. Callers outside the conductor's directory must supply the matching
 precedence is score `instrument_config.model`, then profile `default_model`.
 Provider is a declaration only; an undeclared provider stays `None`.
 
+The score digest verifies the bytes read by this capture helper only. The
+route binding does not carry that digest and does not atomically pin a later
+submission's score bytes. Callers must not treat route equality as score or
+prompt custody, consent, or a reservation of model work.
+
 `route_identity` compares exactly thirteen declared fields: arm, instrument,
 kind, profile origin/digest, effective model/provider, their declaration
 sources, and HTTP scheme/host/port/endpoint. `None` is a value, not a wildcard.
@@ -352,6 +357,18 @@ Consumers requiring model provenance must read the completed job's retained
 sheet metadata, not model-written content, logs, or the legacy model field.
 Missing metadata is unverified. A response model identifier is a server
 assertion; it does not attest the service's loaded weights.
+
+The daemon records an absent or mismatched echo; it does not reject an
+otherwise successful response solely for that reason. Consumers that require
+an exact echo must compare the retained observed identifier with their
+expected effective model before accepting the response. Their review,
+authorization, and reservation checks remain outside this transport guard.
+
+On the initial and resumed baton completion paths, the final checkpoint
+(including the completion timestamp and last-attempt evidence) is acknowledged
+by the existing ordered writer before completed/failed registry status and
+the completion event are published. Other lifecycle transitions and exception
+paths are not covered by this terminal-publication guarantee.
 
 ### Command Construction
 
