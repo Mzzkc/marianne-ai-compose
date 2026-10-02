@@ -308,8 +308,10 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
 
         Args:
             prompt: The prompt to send.
-            timeout_seconds: Per-call timeout override. Logged but not
-                enforced (httpx client timeout from __init__ is used).
+            timeout_seconds: Per-call HTTP timeout override for direct calls.
+                A resolved sheet request uses its own HTTP timeout, falling
+                back to the profile default when unset. Connect timeout is
+                capped at ten seconds within that per-request timeout.
             request: Per-sheet state resolved once at dispatch. When
                 provided, EVERY payload field it carries is request-local
                 (W-F1/W-F2/W-F3): ``response_format`` applies its tri-state

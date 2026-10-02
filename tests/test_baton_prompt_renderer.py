@@ -37,6 +37,7 @@ def _make_sheet(
     instrument_name: str = "claude-code",
     prelude: list[InjectionItem] | None = None,
     cadenza: list[InjectionItem] | None = None,
+    prompt_extensions: list[str] | None = None,
     validations: list[ValidationRule] | None = None,
     timeout_seconds: float = 300.0,
 ) -> Sheet:
@@ -53,6 +54,7 @@ def _make_sheet(
         variables=variables or {},
         prelude=prelude or [],
         cadenza=cadenza or [],
+        prompt_extensions=prompt_extensions or [],
         validations=validations or [],
         timeout_seconds=timeout_seconds,
     )
@@ -107,6 +109,43 @@ class TestBasicRendering:
 
         assert isinstance(result, RenderedPrompt)
         assert "Work in /tmp/test-workspace" in result.prompt
+
+    def test_prompt_extensions_reach_request_local_final_assembly_once(self) -> None:
+        """Extensions remain literal, unique, and isolated to their sheet."""
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
+
+        renderer = PromptRenderer(
+            prompt_config=_make_prompt_config(),
+            total_sheets=2,
+            total_stages=2,
+            parallel_enabled=False,
+        )
+        extension_a = "Directive A {{ phase_name }}"
+        extension_b = "Directive B"
+        first = renderer.render(
+            _make_sheet(num=1, prompt_extensions=[extension_a]), _make_context()
+        )
+        second = renderer.render(
+            _make_sheet(num=2, prompt_extensions=[extension_b]), _make_context()
+        )
+
+        # Without extensions the pre-existing final prompt bytes are unchanged.
+        baseline = renderer.render(_make_sheet(num=1), _make_context())
+        backend = PluginCliBackend.__new__(PluginCliBackend)
+        base_final = backend._build_prompt(baseline.prompt, baseline.preamble, ())
+        first_final = backend._build_prompt(
+            first.prompt, first.preamble, first.prompt_extensions
+        )
+        second_final = backend._build_prompt(
+            second.prompt, second.preamble, second.prompt_extensions
+        )
+
+        assert first_final == f"{base_final}\n\n{extension_a}"
+        assert first_final.count(extension_a) == 1
+        second_base = backend._build_prompt(second.prompt, second.preamble, ())
+        assert second_final == f"{second_base}\n\n{extension_b}"
+        assert extension_a not in second_final
+        assert extension_b not in first_final
 
     def test_renders_sheet_variables(self) -> None:
         """Sheet-level variables are available in the template."""

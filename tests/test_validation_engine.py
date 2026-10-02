@@ -85,6 +85,42 @@ class TestInit:
 class TestExpandPath:
     """Tests for path template expansion and traversal blocking."""
 
+    async def test_file_exists_expands_home_after_template_substitution(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        home = tmp_path / "home"
+        artifact = home / "Projects" / "AGENTS" / "journey" / "debt.yaml"
+        artifact.parent.mkdir(parents=True)
+        artifact.write_text("debts: []\n")
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.chdir(cwd)
+        engine = _make_engine(tmp_path / "workspace", {"agent": "journey"})
+
+        result = await engine.run_validations([
+            _rule_no_retry(
+                type="file_exists", path="~/Projects/AGENTS/{agent}/debt.yaml",
+            ),
+        ])
+
+        assert result.all_passed is True
+        assert engine.expand_path("~/Projects/AGENTS/{agent}/debt.yaml") == artifact
+
+    def test_relative_path_keeps_cwd_and_resolves_symlink(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        target = tmp_path / "target.txt"
+        target.write_text("retained")
+        (cwd / "link.txt").symlink_to(target)
+        monkeypatch.chdir(cwd)
+        engine = _make_engine(tmp_path / "workspace")
+
+        assert engine.expand_path("link.txt") == target
+        assert engine.expand_path("missing.txt") == cwd / "missing.txt"
+
     def test_expands_sheet_num(self, temp_workspace: Path) -> None:
         """Template {sheet_num} is expanded correctly."""
         engine = _make_engine(temp_workspace, {"sheet_num": 3})

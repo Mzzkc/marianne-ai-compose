@@ -17,10 +17,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from marianne.core.config.execution import ValidationRule
-from marianne.core.config.job import InjectionCategory, InjectionItem
+from marianne.core.config.job import InjectionCategory, InjectionItem, PromptConfig
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.musician import _build_prompt, sheet_task
+from marianne.daemon.baton.prompt import PromptRenderer
 from marianne.daemon.baton.state import AttemptContext, AttemptMode
 
 
@@ -357,8 +358,15 @@ class TestSheetTaskIntegration:
         sheet = _make_sheet(
             num=1,
             prompt_template="Build feature {{ sheet_num }}",
+            prompt_extensions=["Directive {{ phase_name }}"],
         )
         context = _make_context()
+        rendered = PromptRenderer(
+            prompt_config=PromptConfig(),
+            total_sheets=1,
+            total_stages=1,
+            parallel_enabled=False,
+        ).render(sheet, context)
 
         mock_backend = AsyncMock()
         mock_backend.execute.return_value = MagicMock(
@@ -384,6 +392,9 @@ class TestSheetTaskIntegration:
             inbox=inbox,
             total_sheets=1,
             total_movements=1,
+            rendered_prompt=rendered.prompt,
+            preamble=rendered.preamble,
+            context_delivery=rendered,
         )
 
         # Verify backend was called with rendered prompt
@@ -394,6 +405,8 @@ class TestSheetTaskIntegration:
         assert "Build feature 1" in prompt_arg, (
             f"Expected rendered template in prompt, got: {prompt_arg[:200]}"
         )
+        request = call_args.kwargs["request"]
+        assert request.prompt_extensions == ("Directive {{ phase_name }}",)
 
         # Verify result was reported
         result = inbox.get_nowait()

@@ -1774,12 +1774,15 @@ These three features serve different purposes:
 |---------|-------|---------------|-----------------|
 | `prelude` / `cadenzas` | All sheets / per-sheet | File contents (read at execution time) | Category-dependent (context/skill/tool) |
 | `cross_sheet` | Automatic from previous sheets | stdout + captured files | Template variables (`previous_outputs`, `previous_files`) |
-| `prompt_extensions` | Score-level or per-sheet | Inline text or file paths | Backend-level injection (via `set_prompt_extensions()`) |
+| `prompt_extensions` | Score-level or per-sheet | Literal inline strings | Appended by the executor through request-local sheet state; omitted in raw prompt mode |
 
 Use **prelude/cadenzas** when you have specific files to inject with
 category-aware placement. Use **cross_sheet** when you want automatic
 capture of previous sheet outputs. Use **prompt_extensions** for inline
 directives that apply across the score.
+
+Extension strings are not Jinja-rendered or interpreted as file paths. Attach
+a file through `prelude` or `cadenzas` when its contents should be injected.
 
 ### Validation
 

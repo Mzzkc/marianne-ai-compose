@@ -67,6 +67,9 @@ class RenderedPrompt:
     preamble: str
     """Dynamic preamble with positional identity and retry status."""
 
+    prompt_extensions: tuple[str, ...] = ()
+    """Request-local additional directives appended by the backend."""
+
     context_manifest: tuple[dict[str, object], ...] = ()
     """Hash-only manifest of context and technique bytes in ``prompt``."""
 
@@ -218,6 +221,7 @@ class PromptRenderer:
         return RenderedPrompt(
             prompt=prompt,
             preamble=preamble,
+            prompt_extensions=tuple(sheet.prompt_extensions),
             context_manifest=tuple(context.delivery_manifest),
         )
 

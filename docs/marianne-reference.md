@@ -319,7 +319,10 @@ Each YAML profile defines:
 - **Capabilities:** Set of strings (`tool_use`, `file_editing`, `shell_access`, `vision`, `mcp`, `structured_output`, `streaming`, `thinking`, `session_resume`, `code_mode`)
 - **Models:** List with context window, cost per 1K tokens, max output tokens, max concurrent
 - **CLI specifics:** executable, subcommand, prompt delivery (flag or stdin), output parsing (text/json/jsonl), error detection patterns, environment variable filtering, process isolation
-- **HTTP specifics:** endpoint, auth scheme (designed, not yet implemented)
+- **HTTP specifics:** base URL, endpoint, optional bearer authentication and
+  `response_format`; the current executor supports `schema_family: openai`
+  (OpenAI-compatible chat completions). Profile validation rejects other
+  schema families; executor construction also guards this boundary.
 
 ### Per-Sheet Instrument Assignment
 
@@ -392,6 +395,16 @@ The baton's `BackendPool` manages backend instances:
 - **HTTP instruments:** Singleton per instrument (connection pooling internal)
 - Lazy creation on first acquire
 - Tracks in-flight instances for concurrency enforcement
+
+Per-attempt `SheetRequestState` carries resolved model/generation settings,
+structured-output configuration, preamble and prompt extensions. Pooled HTTP
+requests do not use the mutable direct-call setters for these values. CLI
+instances clear temporary prompt/schema overrides before reuse.
+
+Diagnostic output is not a complete response artifact: the musician currently
+retains the last 500 characters of each stream, then redacts credentials before
+reporting the attempt. The separate `SheetState.capture_output()` helper has a
+50 KiB byte limit; that constant does not enlarge the musician's earlier tail.
 
 ---
 

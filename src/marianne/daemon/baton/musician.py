@@ -187,6 +187,11 @@ async def sheet_task(
             http_timeout_seconds=attempt_context.http_timeout_seconds,
             http_timeout_resolved=True,
             preamble=preamble,
+            prompt_extensions=(
+                context_delivery.prompt_extensions
+                if context_delivery is not None
+                else tuple(sheet.prompt_extensions)
+            ),
         )
         exec_result = await _execute(
             backend, prompt, sheet.timeout_seconds, request_state

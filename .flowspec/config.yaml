@@ -54,19 +54,17 @@ analysis:
   entry_points:
     - "src/marianne/cli/__init__.py::main"
     - "src/marianne/daemon/manager.py::JobManager"
-    - "src/marianne/execution/runner/__init__.py::JobRunner"
     - "src/marianne/daemon/baton/adapter.py::BatonAdapter"
     - "src/marianne/daemon/baton/core.py::BatonCore"
     - "src/marianne/daemon/baton/backend_pool.py::BackendPool"
     - "src/marianne/daemon/baton/dispatch.py::dispatch_ready"
-    - "src/marianne/execution/runner/sheet.py::SheetExecutionMixin"
-    - "src/marianne/execution/runner/lifecycle.py::LifecycleMixin"
-    - "src/marianne/execution/runner/base.py::JobRunnerBase"
+    - "src/marianne/daemon/baton/musician.py::sheet_task"
+    - "src/marianne/daemon/recurrence.py::RecurrenceController"
     - "src/marianne/core/checkpoint.py::CheckpointState"
     - "src/marianne/core/config/job.py::JobConfig"
     - "src/marianne/state/sqlite_backend.py::SqliteStateBackend"
     - "src/marianne/learning/store/manager.py::LearningStoreManager"
-    - "src/marianne/backends/base.py::Backend"
+    - "src/marianne/execution/base.py::Backend"
     - "src/marianne/dashboard/app.py::create_app"
   max_call_depth: 20
   max_type_chain: 10

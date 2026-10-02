@@ -65,7 +65,7 @@ and constraints are extracted directly from the Pydantic v2 config models in
 | `description` | `str \| None` | `None` | Human-readable description |
 | `workspace` | `Path` | `./workspace` | Output directory. Resolved to absolute path at construction time. |
 | `instrument` | `str \| None` | `None` | Named instrument to use (e.g., `claude-code`, `gemini-cli`). Run `mzt instruments list` to see available instruments. If unset, defaults to `claude-code`. |
-| `instrument_config` | `dict` | `{}` | Per-score overrides for the named instrument's defaults. Functional keys: `model`, `timeout_seconds`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`. Unknown keys are ignored. |
+| `instrument_config` | `dict` | `{}` | Per-score overrides for the named instrument's defaults. Keys include `model`, `timeout_seconds`, HTTP `max_tokens` and `temperature`, `response_format`, `interactive`, `interactive_max_nudges`, and `interactive_nudge_message`. Support depends on the executor; see below. |
 | `instruments` | `dict[str, InstrumentDef]` | `{}` | Named instrument definitions local to this score. Declares reusable aliases referencing registered instrument profiles with optional overrides. Referenced by name in per-sheet or per-movement `instrument:` fields. See [instruments](#instruments). |
 | `movements` | `dict[int, MovementDef]` | `{}` | Movement declarations. Map of movement number to MovementDef. Each movement can specify a name, instrument, instrument config, and voice count. See [movements](#movements). |
 | `instrument_fallbacks` | `list[str]` | `[]` | Score-level default fallback instrument chain. Tried in order when the primary instrument is unavailable or rate-limited to exhaustion. Each entry is an instrument name (profile or score alias). See [Instrument Fallbacks](#instrument-fallbacks). |
@@ -82,6 +82,24 @@ instrument_config:
 > [migration table](score-writing-guide.md#migrating-from-backend-to-instrument)
 > in the Score Writing Guide for the field-by-field conversion. If no
 > `instrument:` is specified, Marianne defaults to `claude-code`.
+
+Per-sheet configuration is resolved for each attempt, including fallback
+configuration. HTTP instruments share a pooled executor, but the model,
+generation limits, HTTP timeout, schema, preamble and prompt extensions travel
+with the request; they do not mutate another in-flight sheet's settings.
+
+`response_format` is opt-in. For OpenAI-compatible HTTP profiles, an omitted
+key inherits `http.response_format`, an explicit `null` disables it for that
+sheet, and an object overrides it. Marianne validates the format declaration
+and forwards it to the server; HTTP transport does not independently validate
+the returned content against the JSON Schema. Server support is required.
+
+For headless CLI profiles, schema mode requires `type: json_schema` and a
+profile-declared `cli.command.json_schema_flag`. Marianne passes the schema to
+that flag and validates the returned structured JSON against it. An unsupported
+profile or format fails explicitly. Interactive CLI execution does not provide
+this schema contract. These are different carriers for structured output, not
+interchangeable provider flags.
 
 ---
 
@@ -485,7 +503,7 @@ receive all fragments.
 | `variables` | `dict[str, Any]` | `{}` | | Static variables available in template |
 | `stakes` | `str \| None` | `None` | | Motivational stakes section appended to prompt |
 | `thinking_method` | `str \| None` | `None` | | Thinking methodology injected into prompt |
-| `prompt_extensions` | `list[str]` | `[]` | | Additional directives injected after the Marianne default preamble for all sheets. Each entry is inline text or a file path (.md/.txt). |
+| `prompt_extensions` | `list[str]` | `[]` | | Additional directives appended after the rendered task for all sheets. Entries are literal strings, not file loads or Jinja templates. Use prelude/cadenza attachments for file contents. Per-sheet extensions are appended after score-level extensions. Raw prompt mode omits extensions. |
 
 For template variable reference, see the [Score Writing Guide](score-writing-guide.md#template-variables-reference).
 
@@ -1328,6 +1346,7 @@ schedule:
   misfire: latest              # skip (default) or latest, never a replay storm
   overlap: skip                # safe default; active lineage drops the due child
   jitter_seconds: 0
+  pin_source_digest: false     # opt in to refusing source changes until re-registration
 max_wall_seconds: 14400        # optional score cap; stricter of score/daemon caps
 ```
 
@@ -1335,7 +1354,13 @@ Intervals advance from their scheduled anchor rather than completion time.
 Cron uses the declared IANA timezone (including DST), or UTC when omitted; it
 never uses the host locale.
 Before each due action Marianne re-reads the YAML; deletion disables/removes
-the schedule, and a changed source declaration replaces its projection.
+the schedule, and a changed unpinned source declaration replaces its projection.
+With `pin_source_digest: true`, registration stores the source digest in the
+daemon registry. A changed digest, score identity or removed schedule declaration
+refuses the tick with `source_drift_refused`; it does not silently update the pin.
+Conscious re-registration through `mzt run` amends the pin. The digest also
+travels through child admission so a source change between tick checking and
+submission is refused.
 `max_wall_seconds` is an absolute deadline from first admission, so pause,
 resume, pending admission, and restart do not reset it. Status diagnostics
 include the schedule's last due/run/outcome, next due, and deadline evidence.

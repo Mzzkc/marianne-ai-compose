@@ -1001,7 +1001,7 @@ class SheetState(BaseModel):
         Args:
             stdout: Full stdout string from execution.
             stderr: Full stderr string from execution.
-            max_bytes: Maximum bytes to capture per stream (default 10KB).
+            max_bytes: Maximum bytes to capture per stream (default 50 KiB).
         """
         from marianne.utils.credential_scanner import redact_credentials
 

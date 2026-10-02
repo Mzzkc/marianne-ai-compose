@@ -42,13 +42,10 @@ REQUIRED_WORKSPACE_DIRS = {
 }
 
 REQUIRED_ACTIVE_FILES = {
-    "00-cadenza-coordination.md",
     "01-task-board.md",
-    "02-agent-status.md",
-    "03-findings.md",
-    "04-decision-log.md",
-    "05-directives.md",
-    "06-handoff-index.md",
+    "02-status.md",
+    "03-urgent-directives.md",
+    "04-handoffs.md",
 }
 
 
@@ -82,13 +79,13 @@ def test_generic_fleet_seeded_active_cadenza_renders(tmp_path: Path) -> None:
 
     assert not preview.render_errors
     rendered = "\n\n".join(sheet.rendered_prompt or "" for sheet in preview.sheets)
-    assert "Cadenza Coordination Contract" in rendered
     assert "Task Board" in rendered
-    assert "Agent Status" in rendered
+    assert "Cohort Status" in rendered
+    assert "Urgent Conductor Directives" in rendered
+    assert "Handoffs" in rendered
     assert "owner-scoped row once" in rendered
     assert "COORDINATION UPDATE BLOCKED:" in rendered
-    assert "date -u +%Y-%m-%dT%H:%MZ" in rendered
-    assert "never append `Z` to local time" in rendered
+    assert "Never append `Z` to local time" in rendered
     assert "canyon-specialist" in rendered
     assert "{agent}-T-001" in rendered
     assert "canyon-T-001" not in rendered
@@ -118,10 +115,6 @@ def test_generic_fleet_workspace_seed_contract(tmp_path: Path) -> None:
     assert "Concurrent Write Safety" in active_text
     assert "owner-scoped row once" in active_text
     assert "{agent}-T-001" in active_text
-    assert "{agent}-F-001" in active_text
-    assert "{agent}-D-001" in active_text
-    assert "{source}-DIR-001" in active_text
-    assert "{agent}-H-001" in active_text
     assert "canyon-T-001" not in active_text
     assert "sentinel-F-001" not in active_text
     assert "north-D-001" not in active_text
@@ -155,6 +148,7 @@ def test_generic_fleet_scores_wire_coordination_and_specialists(
             assert {
                 "directory": "{{workspace}}/shared/active",
                 "as": "context",
+                "required": True,
             } in cadenza_by_sheet[sheet_num]
 
         specialist = f"{name}-specialist"
@@ -192,17 +186,14 @@ def test_generic_fleet_preset_is_generic_and_uses_portable_self_chain(
     assert "flowspec" not in str(canyon).lower()
     assert "llama-4-maverick" not in str(canyon).lower()
     assert "kimi" not in str(canyon).lower()
-    assert "claude-code--glm-5.3-1m" in canyon["instruments"]
-    assert "antigravity--gemini-3.7-flash-medium" in canyon["instruments"]
-    assert "antigravity--gemini-3.7-flash-low" in canyon["instruments"]
-    assert "antigravity--gemini-3.5-flash-medium" not in canyon["instruments"]
-    assert "antigravity--gemini-3.5-flash-low" not in canyon["instruments"]
-    assert "antigravity--gemini-3.5-flash" not in canyon["instruments"]
-    assert "antigravity--gemini-3.5-flash-lite" not in canyon["instruments"]
-    assert "gemini-cli--gemini-3.5-flash" not in canyon["instruments"]
-    assert canyon["sheet"]["per_sheet_instruments"][5] == "claude-code--glm-5-turbo"
-    assert canyon["instruments"]["claude-code--glm-5-turbo"]["config"] == {
-        "model": "glm-5-Turbo",
+    # The shipped preset names portable families; venue model bindings are
+    # supplied separately. Compile and validate the actual default routes.
+    JobConfig.model_validate(canyon)
+    assert "instruments" not in canyon
+    assert canyon["sheet"]["per_sheet_instruments"] == {
+        1: "antigravity", 2: "antigravity", 3: "claude-code", 4: "cli",
+        5: "claude-code", 6: "opencode", 7: "codex-cli", 8: "antigravity",
+        9: "antigravity", 10: "claude-code", 11: "cli", 12: "claude-code",
     }
 
     codex_fallback_sheets = {
@@ -210,8 +201,9 @@ def test_generic_fleet_preset_is_generic_and_uses_portable_self_chain(
         for sheet, fallbacks in canyon["sheet"]["per_sheet_fallbacks"].items()
         if "codex-cli" in fallbacks
     }
-    assert codex_fallback_sheets == {3, 5, 6, 7}
-    assert "codex-cli" not in canyon["sheet"]["per_sheet_instruments"].values()
+    assert codex_fallback_sheets == {1, 2, 3, 5, 6, 8, 9, 10, 12}
+    assert canyon["sheet"]["per_sheet_fallbacks"][4] == []
+    assert canyon["sheet"]["per_sheet_fallbacks"][11] == []
     assert canyon["on_success"][0]["job_path"] == "{workspace}/scores/canyon.yaml"
 
     cadenza_validation_descriptions = [
@@ -320,11 +312,11 @@ async def test_generic_fleet_recon_score_count_claim_validation(
     engine = ValidationEngine(workspace=workspace, sheet_context={"stage": 1})
     result = await engine.run_validations(rules)
     assert result.all_passed is False
-    assert "disagree with disk count 32" in (result.results[0].error_message or "")
+    assert "disagree with disk count 33" in (result.results[0].error_message or "")
 
     recon.write_text(
         "# Bedrock Recon\n\n"
-        "OBSERVED:\nThirty-two agent scores seeded under `scores/`.\n\n"
+        "OBSERVED:\nThirty-three agent scores seeded under `scores/`.\n\n"
         "CHANGED:\nNo change.\n\n"
         "CANDIDATES:\nNone.\n\n"
         "RISKS:\nNone.\n\n"
@@ -337,7 +329,21 @@ async def test_generic_fleet_recon_score_count_claim_validation(
 async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
     tmp_path: Path,
 ) -> None:
-    """Generated sheets may not pass with stale claimed cadenza rows."""
+    """Generated sheets may not pass with stale claimed cadenza rows.
+
+    Fixtures and assertions follow the pinned compiler's current canonical
+    cadenza contract: ``shared/active/02-status.md`` as free text that must
+    bind the agent and phase to the phase artifact's evidence. The retired
+    ``02-agent-status.md`` table contract and its ``missing complete
+    agent-status row`` refusal are gone. The former future-timestamp
+    executable control is also retired: the pinned cadenza-completion
+    validation performs no timestamp validation, so the future-instant beat
+    below pins that shipped absence — a reintroduced time check must
+    update this contract test deliberately. Still refused: a stale claimed
+    row without a done task-board row, a status entry without evidence
+    binding, duplicate concrete cadenza ids, global numeric ids, and the
+    ``COORDINATION UPDATE BLOCKED:`` artifact-marker fallback.
+    """
     _config, workspace, output_dir, _agents_dir = _compile_generic_fleet(
         tmp_path,
         output_in_workspace=True,
@@ -367,13 +373,12 @@ async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
         "| bedrock-T-002 | bedrock | claimed | Write cycle plan. | "
         "`cycle-state/bedrock-plan.md` |\n"
     )
-    status_board = workspace / "shared" / "active" / "02-agent-status.md"
-    current_utc = datetime.now(UTC).strftime("%Y-%m-%dT%H:%MZ")
+    status_board = workspace / "shared" / "active" / "02-status.md"
+    current_utc = datetime.now(UTC).isoformat(timespec="minutes")
     status_board.write_text(
-        "# Agent Status\n\n"
-        "| agent | phase | state | current work | next handoff | updated |\n"
-        "| --- | --- | --- | --- | --- | --- |\n"
-        f"| bedrock | plan | claimed | Write cycle plan. | | {current_utc} |\n"
+        "# Cohort Status\n\n"
+        "- bedrock: plan phase still claimed for this cycle; no evidence"
+        " recorded yet.\n"
     )
 
     engine = ValidationEngine(workspace=workspace, sheet_context={"stage": 2})
@@ -381,7 +386,7 @@ async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
     assert result.all_passed is False
     error = result.results[0].error_message or ""
     assert "missing done task-board row" in error
-    assert "missing complete agent-status row" in error
+    assert "02-status.md does not bind bedrock plan" in error
 
     task_board.write_text(
         "# Task Board\n\n"
@@ -390,10 +395,9 @@ async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
         "| bedrock-T-002 | bedrock | done | Write cycle plan. | `cycle-state/bedrock-plan.md` |\n"
     )
     status_board.write_text(
-        "# Agent Status\n\n"
-        "| agent | phase | state | current work | next handoff | updated |\n"
-        "| --- | --- | --- | --- | --- | --- |\n"
-        f"| bedrock | plan | complete | Write cycle plan. | | {current_utc} |\n"
+        "# Cohort Status\n\n"
+        f"- {current_utc} bedrock: plan complete for this cycle. Report:\n"
+        "  `cycle-state/bedrock-plan.md`.\n"
     )
 
     result = await engine.run_validations(rules)
@@ -429,27 +433,23 @@ async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
         "| bedrock-T-002 | bedrock | done | Write cycle plan. | `cycle-state/bedrock-plan.md` |\n"
     )
 
-    future_local_as_z = (datetime.now(UTC) + timedelta(hours=2)).strftime(
-        "%Y-%m-%dT%H:%MZ"
+    future_offset = (datetime.now(UTC) + timedelta(hours=2)).isoformat(
+        timespec="minutes"
     )
     status_board.write_text(
-        "# Agent Status\n\n"
-        "| agent | phase | state | current work | next handoff | updated |\n"
-        "| --- | --- | --- | --- | --- | --- |\n"
-        f"| bedrock | plan | complete | Write cycle plan. | | {future_local_as_z} |\n"
+        "# Cohort Status\n\n"
+        f"- {future_offset} bedrock: plan complete for this cycle. Report:\n"
+        "  `cycle-state/bedrock-plan.md`.\n"
     )
     result = await engine.run_validations(rules)
-    assert result.all_passed is False
-    error = result.results[0].error_message or ""
-    assert "agent-status timestamp for bedrock plan is in the future" in error
-    assert "date -u +%Y-%m-%dT%H:%MZ" in error
+    assert result.all_passed is True
 
     task_board.write_text("# Task Board\n\n")
-    status_board.write_text("# Agent Status\n\n")
+    status_board.write_text("# Cohort Status\n\n")
     plan.write_text(
         plan.read_text()
         + "\nCOORDINATION UPDATE BLOCKED: shared/active/01-task-board.md and "
-        "shared/active/02-agent-status.md changed twice while applying the "
+        "shared/active/02-status.md changed twice while applying the "
         "owner-scoped rows.\n"
     )
     result = await engine.run_validations(rules)

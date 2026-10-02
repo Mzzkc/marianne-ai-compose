@@ -200,7 +200,7 @@ class ValidationEngine:
                 f"Invalid path template '{path_template}': {exc}. "
                 "Use named placeholders like {{workspace}}, not bare {{}}."
             ) from exc
-        return Path(expanded).resolve()
+        return Path(expanded).expanduser().resolve()
 
     def expand_scoped_path(self, path_template: str) -> Path:
         """Expand a path for scope checks, resolving relatives under workspace."""

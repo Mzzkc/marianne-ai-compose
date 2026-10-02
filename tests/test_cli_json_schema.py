@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -428,18 +429,18 @@ async def test_concurrent_schema_a_b_no_cross_leak() -> None:
         commands.append(list(args))
         return _fake_proc(queue.pop(0))
 
-    async def _run(prompt: str, request: SheetRequestState) -> Any:
-        with patch("asyncio.create_subprocess_exec", side_effect=_spawn):
-            return await backend.execute(prompt, request=request)
-
     schema_req = SheetRequestState(response_format=JSON_SCHEMA_RF)
     plain_req = SheetRequestState()
     # Plain dispatches FIRST but resolves LAST (flight overlap).
     queue.extend([outputs["plain"], outputs["schema"]])
-    plain_task = asyncio.create_task(_run("plain", plain_req))
-    await asyncio.sleep(0)  # let the plain sheet start and read its slot
-    schema_result = await _run("schema", schema_req)
-    plain_result = await plain_task
+    # One patch owns the whole flight. Per-task patches can exit out of
+    # nesting order and restore another task's mock into the global module.
+    with patch("asyncio.create_subprocess_exec", side_effect=_spawn):
+        async with asyncio.TaskGroup() as tasks:
+            plain_task = tasks.create_task(backend.execute("plain", request=plain_req))
+            await asyncio.sleep(0)  # let the plain sheet start and read its slot
+            schema_result = await backend.execute("schema", request=schema_req)
+        plain_result = plain_task.result()
 
     assert json.loads(schema_result.stdout) == STRUCTURED
     assert plain_result.stdout == "plain text result"
@@ -449,3 +450,12 @@ async def test_concurrent_schema_a_b_no_cross_leak() -> None:
     ]
     assert len(schema_flags) == 1
     assert len(plain_flags) == 0
+
+    # A real child after concurrent dispatch must not inherit this test's mock.
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, "-c", "print('subprocess restored')",
+        stdout=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await proc.communicate()
+    assert proc.returncode == 0
+    assert stdout == b"subprocess restored\n"
