@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.daemon.types import JobRequest
 
 
 class TestLegacyRunnerInstrumentPopulation:
@@ -91,10 +92,10 @@ class TestBatonPathInstrumentPopulation:
         mock_config.parallel.enabled = False
         mock_config.cross_sheet = None
 
-        mock_request = MagicMock()
-        mock_request.expected_route = None
-        mock_request.self_healing = False
-        mock_request.start_sheet = None
+        mock_request = JobRequest(config_path=Path("test-score.yaml"))
+        manager._checkpoint_writer = None
+        manager._registry = MagicMock()
+        manager._registry.save_checkpoint = AsyncMock()
 
         mock_config.pause_between_sheets_seconds = 0
 
@@ -144,10 +145,10 @@ class TestBatonPathInstrumentPopulation:
         mock_config.parallel.enabled = False
         mock_config.cross_sheet = None
 
-        mock_request = MagicMock()
-        mock_request.expected_route = None
-        mock_request.self_healing = False
-        mock_request.start_sheet = None
+        mock_request = JobRequest(config_path=Path("test-score.yaml"))
+        manager._checkpoint_writer = None
+        manager._registry = MagicMock()
+        manager._registry.save_checkpoint = AsyncMock()
 
         mock_config.pause_between_sheets_seconds = 0
 

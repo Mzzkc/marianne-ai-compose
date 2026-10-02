@@ -97,11 +97,12 @@ def _make_checkpoint_sheet(
     )
 
 
-def _make_checkpoint(sheets: dict[int, SheetState] | None = None) -> MagicMock:
-    """Create a mock CheckpointState with given sheets."""
-    cp = MagicMock(spec=CheckpointState)
-    cp.sheets = sheets or {}
-    return cp
+def _make_checkpoint(sheets: dict[int, SheetState] | None = None) -> CheckpointState:
+    """Use the real persisted DTO, including native identity defaults."""
+    return CheckpointState(
+        job_id="j1", job_name="test", total_sheets=len(sheets or {}),
+        sheets=sheets or {},
+    )
 
 
 # =========================================================================
