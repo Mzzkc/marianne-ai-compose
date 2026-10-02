@@ -5290,6 +5290,32 @@ class JobManager:
         fragments = await asyncio.to_thread(_load)
         return spec.model_copy(update={"fragments": fragments})
 
+    async def _publish_baton_terminal(
+        self, job_id: str, status: DaemonJobStatus,
+    ) -> None:
+        """Acknowledge the final snapshot before exposing terminal registry status.
+
+        Terminal status reads prefer the registry checkpoint, not live state.
+        Publishing the status column first exposes an older running snapshot
+        with no completion timestamp or last-attempt evidence. Use the existing
+        ordered writer so a previously queued snapshot cannot win afterward.
+        """
+        live = self._live_states.get(job_id)
+        if live is not None:
+            previous_completed_at = live.completed_at
+            live.completed_at = utc_now()
+            final = live.model_copy(update={"status": _DAEMON_TO_CHECKPOINT_STATUS[status]})
+            try:
+                writer = self._checkpoint_writer
+                if writer is not None and writer.running:
+                    await writer.write_and_wait(job_id, final.model_dump_json())
+                else:
+                    await self._registry.save_checkpoint(job_id, final.model_dump_json())
+            except BaseException:
+                live.completed_at = previous_completed_at
+                raise
+        await self._set_job_status(job_id, status)
+
     async def _run_via_baton(
         self,
         job_id: str,
@@ -5515,11 +5541,7 @@ class JobManager:
             # Update job-level status in the live CheckpointState so
             # Update job-level status so mzt status agrees with mzt list.
             baton_final = DaemonJobStatus.COMPLETED if all_success else DaemonJobStatus.FAILED
-            await self._set_job_status(job_id, baton_final)
-            # Set completion timestamp on live state
-            live = self._live_states.get(job_id)
-            if live is not None:
-                live.completed_at = utc_now()
+            await self._publish_baton_terminal(job_id, baton_final)
 
             # Publish completion event
             await adapter.publish_job_event(
@@ -5842,10 +5864,7 @@ class JobManager:
 
             # Update job-level status across all three stores.
             resume_final = DaemonJobStatus.COMPLETED if all_success else DaemonJobStatus.FAILED
-            await self._set_job_status(job_id, resume_final)
-            live = self._live_states.get(job_id)
-            if live is not None:
-                live.completed_at = utc_now()
+            await self._publish_baton_terminal(job_id, resume_final)
 
             await self._baton_adapter.publish_job_event(
                 job_id,

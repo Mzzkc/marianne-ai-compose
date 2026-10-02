@@ -175,7 +175,8 @@ async def test_actual_manager_retains_binding_and_registry_status_retains_echo(t
     adapter.publish_job_event = AsyncMock()
     adapter.wait_for_completion = AsyncMock(return_value=True)
     manager._baton_adapter = adapter
-    manager._set_job_status = AsyncMock()
+    await manager._registry.open()
+    await manager._registry.register_job("guard", tmp_path / "score.yaml", tmp_path / "ws")
     await manager._run_via_baton(
         "guard", config, JobRequest(config_path="score.yaml", expected_route=binding)
     )
@@ -187,9 +188,7 @@ async def test_actual_manager_retains_binding_and_registry_status_retains_echo(t
     state.sheets[1].model_echo_status = "observed"
     state.sheets[1].model_requested = "requested"
     state.sheets[1].model_observed = "requested"
-    await manager._registry.open()
     try:
-        await manager._registry.register_job("guard", tmp_path / "score.yaml", tmp_path / "ws")
         await manager._registry.save_checkpoint("guard", state.model_dump_json())
         await manager._registry.update_status("guard", "completed")
         manager._live_states.clear()
