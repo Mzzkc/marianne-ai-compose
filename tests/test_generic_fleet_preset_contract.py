@@ -365,15 +365,22 @@ async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
         "RISKS:\nStale cadenza state.\n\n"
         "VALIDATION:\nRun the generated cadenza validation.\n"
     )
-    task_board = workspace / "shared" / "active" / "01-task-board.md"
+    # The compiled validator reads the agent's canonical personal active
+    # cadenza, not the cohort's shared board. Keep all existing rivals, but
+    # populate the exact authority the unchanged generated command consumes.
+    active = _agents_dir / "bedrock" / "cadenzas" / "personal" / "active"
+    active.mkdir(parents=True, exist_ok=True)
+    for filename in REQUIRED_ACTIVE_FILES:
+        (active / filename).write_bytes((workspace / "shared" / "active" / filename).read_bytes())
+    task_board = active / "01-task-board.md"
     task_board.write_text(
         "# Task Board\n\n"
         "| id | owner | status | task | evidence |\n"
-        "| --- | --- | --- | --- | --- |\n"
+        "| --- | --- | --- | --- |\n"
         "| bedrock-T-002 | bedrock | claimed | Write cycle plan. | "
         "`cycle-state/bedrock-plan.md` |\n"
     )
-    status_board = workspace / "shared" / "active" / "02-status.md"
+    status_board = active / "02-status.md"
     current_utc = datetime.now(UTC).isoformat(timespec="minutes")
     status_board.write_text(
         "# Cohort Status\n\n"

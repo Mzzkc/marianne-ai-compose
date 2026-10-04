@@ -21,11 +21,17 @@ def guarded_cli(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
     venue = tmp_path / ".marianne" / "instruments"
     venue.mkdir(parents=True)
+    # A CLI positive must consume its prompt. echo can exit before the
+    # backend writes stdin, yielding a connection-loss race unrelated to
+    # the reviewed route; retain an actual harmless subprocess instead.
+    stub = tmp_path / "fiction-cli"
+    stub.write_text("#!/usr/bin/env python3\nimport sys\nsys.stdin.read()\nprint('PUBLIC FICTION')\n")
+    stub.chmod(0o700)
     file = venue / "fiction.yaml"
     file.write_text(
         "name: fiction-cli\ndisplay_name: Fiction CLI\nkind: cli\n"
         "default_model: fiction-model\ncli:\n  command:\n"
-        "    executable: echo\n    model_flag: --model\n"
+        f"    executable: {stub}\n    model_flag: --model\n"
         "  output:\n    format: text\n"
     )
     profile = load_all_profiles()["fiction-cli"]
