@@ -81,6 +81,75 @@ async def test_guarded_client_is_request_local_closed_and_echo_is_transport_orig
     assert backend._client is None
 
 
+async def test_separately_reviewed_remote_https_route_uses_same_guard(tmp_path, monkeypatch):
+    """A remote arm is not local consent; its exact HTTPS profile and provider
+    are independently bound before any request leaves the process.
+    """
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    venue = tmp_path / ".marianne" / "instruments"
+    venue.mkdir(parents=True)
+    profile_file = venue / "remote.yaml"
+    profile_file.write_text(
+        "name: remote-fiction\ndisplay_name: Remote Fiction\nkind: http\n"
+        "default_model: requested\nhttp:\n"
+        "  base_url: https://api.example.invalid/v1\n"
+        "  endpoint: /chat/completions\n  schema_family: openai\n"
+    )
+    profile = load_all_profiles()["remote-fiction"]
+    backend = _create_backend_for_profile(profile)
+    binding = capture_resolved_instrument_route(
+        "remote-fiction", {"provider": "Example Provider"},
+        now=datetime.now(UTC), arm="remote",
+    )
+    clients, calls, options, _ = _client_spy(monkeypatch)
+    request = SheetRequestState(
+        expected_route=binding, route_provider_override="Example Provider",
+    )
+    result = await backend.execute("PUBLIC FICTION", request=request)
+    assert result.success and result.model_echo_status == "observed"
+    assert len(calls) == 1 and clients[0].is_closed
+    assert options[0]["trust_env"] is False and options[0]["follow_redirects"] is False
+    profile_file.write_text(profile_file.read_text() + "# altered profile bytes\n")
+    refused = await backend.execute("PUBLIC FICTION", request=request)
+    assert not refused.success and refused.error_type == "attempt_route_drift"
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("change", ["provider", "arm", "scheme", "profile_origin"])
+async def test_remote_reviewed_route_rivals_refuse_before_network(tmp_path, monkeypatch, change):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    venue = tmp_path / ".marianne" / "instruments"
+    venue.mkdir(parents=True)
+    (venue / "remote.yaml").write_text(
+        "name: remote-fiction\ndisplay_name: Remote Fiction\nkind: http\n"
+        "default_model: requested\nhttp:\n"
+        "  base_url: https://api.example.invalid/v1\n"
+        "  endpoint: /chat/completions\n  schema_family: openai\n"
+    )
+    backend = _create_backend_for_profile(load_all_profiles()["remote-fiction"])
+    binding = capture_resolved_instrument_route(
+        "remote-fiction", {"provider": "Example Provider"},
+        now=datetime.now(UTC), arm="remote",
+    )
+    field, value = {
+        "provider": ("effective_provider", "Rival Provider"),
+        "arm": ("arm", "local"),
+        "scheme": ("transport_scheme", "http"),
+        "profile_origin": ("profile_origin", None),
+    }[change]
+    binding = binding.model_copy(update={field: value})
+    clients, calls, _, _ = _client_spy(monkeypatch)
+    result = await backend.execute(
+        "PUBLIC FICTION", request=SheetRequestState(
+            expected_route=binding, route_provider_override="Example Provider"
+        ),
+    )
+    assert not result.success and result.error_type == "attempt_route_drift"
+    assert clients == calls == []
+
+
 @pytest.mark.parametrize(
     "change", ["profile", "model", "endpoint", "port", "host", "scheme", "arm", "missing_pin"]
 )

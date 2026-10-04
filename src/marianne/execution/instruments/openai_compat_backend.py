@@ -431,9 +431,17 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         try:
             if expected is not None:
                 try:
-                    if expected.arm != "local" or self._loaded_profile is None:
+                    if expected.arm not in {"local", "remote"} or self._loaded_profile is None:
                         raise ValueError(
-                            "guarded dispatch requires an observable local HTTP profile"
+                            "guarded dispatch requires an observable HTTP profile"
+                        )
+                    if expected.arm == "remote" and (
+                        expected.transport_scheme != "https"
+                        or not expected.effective_provider
+                        or expected.profile_origin is None
+                    ):
+                        raise ValueError(
+                            "remote guarded dispatch requires a reviewed HTTPS provider profile"
                         )
                     if self._loaded_profile.http is None or (
                         self._httpx_base_url != self._loaded_profile.http.base_url.rstrip("/")
@@ -446,7 +454,8 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
                         self._loaded_profile.name,
                         {"model": request.route_model_override,
                          "provider": request.route_provider_override},
-                        now=utc_now(), loaded_profile=self._loaded_profile,
+                        now=utc_now(), arm=expected.arm,
+                        loaded_profile=self._loaded_profile,
                     )
                     if route_identity(fresh) != route_identity(expected):
                         raise ValueError("reviewed route differs from current resolved route")

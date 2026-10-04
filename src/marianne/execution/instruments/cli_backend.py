@@ -45,6 +45,7 @@ from marianne.execution.base import (
 )
 from marianne.utils.json_path import extract_json_path
 from marianne.utils.process import safe_killpg as _safe_killpg
+from marianne.utils.time import utc_now
 
 _logger = get_logger("backend.plugin_cli")
 
@@ -1150,6 +1151,46 @@ class PluginCliBackend(Backend):
         Returns:
             ExecutionResult with parsed output and metadata.
         """
+        guarded_binding = request.expected_route if request is not None else None
+        if guarded_binding is not None:
+            # A CLI cannot supply the HTTP backend's server model echo. Bind
+            # its observable, loaded command profile and requested model
+            # before launching any subprocess; downstream must retain the
+            # distinction between configured execution and server attestation.
+            try:
+                from marianne.instruments.loader import (
+                    capture_resolved_instrument_route, route_identity,
+                )
+
+                if (guarded_binding.arm != "remote"
+                        or guarded_binding.kind != "cli"
+                        or self._profile._source_path is None
+                        or self._profile.cli is None
+                        or not self._profile.cli.command.model_flag
+                        or not guarded_binding.effective_provider):
+                    raise ValueError("reviewed CLI route is incomplete")
+                fresh = await asyncio.to_thread(
+                    capture_resolved_instrument_route,
+                    self._profile.name,
+                    {"model": request.route_model_override,
+                     "provider": request.route_provider_override},
+                    now=utc_now(), arm="remote", loaded_profile=self._profile,
+                )
+                if (route_identity(fresh) != route_identity(guarded_binding)
+                        or self._model != fresh.effective_model):
+                    raise ValueError("reviewed CLI route differs from current command")
+                age = (utc_now() - guarded_binding.resolved_at).total_seconds()
+                if not 0 <= age <= 60:
+                    raise ValueError("reviewed CLI route is outside the start window")
+            except (OSError, ValueError) as exc:
+                message = f"attempt_route_drift: {exc}"
+                return ExecutionResult(
+                    success=False, stdout="", stderr=message,
+                    duration_seconds=0.0, exit_code=1,
+                    error_type="attempt_route_drift", error_message=message,
+                    model=self._model,
+                )
+
         effective_timeout = timeout_seconds or self._profile.default_timeout_seconds
 
         # Request-local per-sheet prompt state (W-F3): when a dispatch
@@ -1217,6 +1258,19 @@ class PluginCliBackend(Backend):
             prompt_extensions=req_extensions,
             response_format=response_format,
         )
+        if guarded_binding is not None:
+            model_flag = self._cli.command.model_flag
+            assert model_flag is not None
+            positions = [i for i, item in enumerate(cmd) if item == model_flag]
+            if (len(positions) != 1 or positions[0] + 1 >= len(cmd)
+                    or cmd[positions[0] + 1] != guarded_binding.effective_model):
+                message = "attempt_route_drift: CLI command does not select reviewed model"
+                return ExecutionResult(
+                    success=False, stdout="", stderr=message,
+                    duration_seconds=0.0, exit_code=1,
+                    error_type="attempt_route_drift", error_message=message,
+                    model=self._model,
+                )
         env = self._build_env()
 
         _logger.info(
@@ -1454,6 +1508,8 @@ class PluginCliBackend(Backend):
             stdout_data, stderr_data, exit_code=exit_code,
             response_format=response_format,
         )
+        if guarded_binding is not None:
+            result.model_requested = guarded_binding.effective_model
 
         # Override fields that _parse_output doesn't set
         result.duration_seconds = duration
