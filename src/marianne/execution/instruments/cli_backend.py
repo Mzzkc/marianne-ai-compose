@@ -1152,11 +1152,15 @@ class PluginCliBackend(Backend):
             ExecutionResult with parsed output and metadata.
         """
         guarded_binding = request.expected_route if request is not None else None
-        if guarded_binding is not None:
+
+        async def reviewed_route_refusal() -> ExecutionResult | None:
+            if guarded_binding is None:
+                return None
             # A CLI cannot supply the HTTP backend's server model echo. Bind
             # its observable, loaded command profile and requested model
             # before launching any subprocess; downstream must retain the
             # distinction between configured execution and server attestation.
+            assert request is not None
             try:
                 from marianne.instruments.loader import (
                     capture_resolved_instrument_route, route_identity,
@@ -1190,6 +1194,11 @@ class PluginCliBackend(Backend):
                     error_type="attempt_route_drift", error_message=message,
                     model=self._model,
                 )
+            return None
+
+        refusal = await reviewed_route_refusal()
+        if refusal is not None:
+            return refusal
 
         effective_timeout = timeout_seconds or self._profile.default_timeout_seconds
 
@@ -1332,6 +1341,13 @@ class PluginCliBackend(Backend):
                 workspace_mcp_restore = self._materialize_workspace_mcp_config(
                     workspace_mcp_target,
                 )
+
+            # Preparation includes an awaited workspace lock. Re-resolve the
+            # exact reviewed profile and start window after that work, at the
+            # actual spawn boundary rather than only at execute() entry.
+            refusal = await reviewed_route_refusal()
+            if refusal is not None:
+                return refusal
 
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
