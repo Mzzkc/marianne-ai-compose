@@ -4,9 +4,8 @@ This module is used by CLI commands to auto-detect a running Marianne
 conductor and route operations through it. When no conductor is detected,
 the caller falls back to direct execution (existing behavior).
 
-SAFETY: Every public function catches ALL exceptions and returns a
-"not routed" result. This ensures that conductor bugs never break the CLI.
-The CLI wiring wraps calls in try/except as a second layer.
+Access denial is not absence: it propagates to the CLI, which must stop
+without inferring the conductor's running state or attempting fallback.
 """
 
 from __future__ import annotations
@@ -17,6 +16,7 @@ from typing import Any
 
 from marianne.core.logging import get_logger
 from marianne.daemon.config import LEGACY_SOCKET_PATH
+from marianne.daemon.exceptions import DaemonAccessDeniedError
 
 _logger = get_logger("daemon.detect")
 
@@ -51,19 +51,23 @@ def _resolve_socket_path(socket_path: Path | None) -> Path:
         return resolve_clone_paths(clone_name).socket
 
     default = _default_socket_path()
-    if not default.exists() and LEGACY_SOCKET_PATH.exists():
+    from marianne.daemon.ipc.client import _socket_exists
+
+    if not _socket_exists(default) and _socket_exists(LEGACY_SOCKET_PATH):
         return LEGACY_SOCKET_PATH
     return default
 
 
 async def is_daemon_available(socket_path: Path | None = None) -> bool:
-    """Check if the Marianne conductor is running. Safe: returns False on any error."""
+    """Check availability; access denial raises instead of implying absence."""
     resolved = _resolve_socket_path(socket_path)
     try:
         from marianne.daemon.ipc.client import DaemonClient
 
         client = DaemonClient(resolved)
         return await client.is_daemon_running()
+    except DaemonAccessDeniedError:
+        raise
     except (OSError, ConnectionError) as e:
         # Connection/socket errors — conductor not reachable.
         level = "info" if resolved.exists() else "debug"
@@ -105,7 +109,8 @@ async def try_daemon_route(
             a running conductor are re-raised so callers can handle them
             (e.g., "job not found" is different from "daemon not running").
 
-    Connection-level errors never raise — they return (False, None).
+    Access denial raises ``DaemonAccessDeniedError``; other connection-level
+    errors retain the existing (False, None) behavior.
     Response-level timeouts (daemon confirmed running but slow to respond)
     raise ``DaemonError`` so callers can show an accurate message instead
     of the misleading "conductor not running."
@@ -123,6 +128,8 @@ async def try_daemon_route(
         daemon_confirmed_running = True
         result = await client.call(method, params)
         return True, result
+    except DaemonAccessDeniedError:
+        raise
     except TimeoutError:
         if daemon_confirmed_running:
             # Daemon IS running but didn't respond in time — raise so

@@ -14,6 +14,7 @@ Plus typed convenience methods (``status``, ``submit_job``, etc.) that wrap
 from __future__ import annotations
 
 import asyncio
+import errno
 import json
 import time
 from collections.abc import AsyncIterator
@@ -23,7 +24,7 @@ from typing import Any, cast
 
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
-from marianne.daemon.exceptions import DaemonNotRunningError
+from marianne.daemon.exceptions import DaemonAccessDeniedError, DaemonNotRunningError
 from marianne.daemon.ipc.errors import rpc_error_to_exception
 from marianne.daemon.ipc.protocol import JsonRpcRequest
 from marianne.daemon.types import DaemonStatus, JobRequest, JobResponse
@@ -42,6 +43,16 @@ _RETRYABLE_IO_ERRORS = (BrokenPipeError, ConnectionResetError, OSError)
 _DEFAULT_POOL_SIZE = 8
 _DEFAULT_MAX_IDLE_SECONDS = 60.0
 _DEFAULT_CONNECT_TIMEOUT = 5.0
+
+
+def _socket_exists(path: Path) -> bool:
+    """Do not mistake inaccessible socket metadata for an absent conductor."""
+    try:
+        return path.exists()
+    except OSError as exc:
+        if isinstance(exc, PermissionError) or exc.errno in (errno.EACCES, errno.EPERM):
+            raise DaemonAccessDeniedError() from exc
+        raise
 
 
 class ConnectionPool:
@@ -189,7 +200,12 @@ class ConnectionPool:
         self,
     ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         """Open a new Unix socket connection."""
-        if not self._socket_path.exists():
+        try:
+            exists = _socket_exists(self._socket_path)
+        except DaemonAccessDeniedError:
+            self._semaphore.release()
+            raise
+        if not exists:
             self._semaphore.release()
             raise DaemonNotRunningError(
                 f"Daemon socket not found: {self._socket_path}"
@@ -209,6 +225,8 @@ class ConnectionPool:
             ) from exc
         except (ConnectionRefusedError, FileNotFoundError, OSError) as exc:
             self._semaphore.release()
+            if isinstance(exc, PermissionError) or exc.errno in (errno.EACCES, errno.EPERM):
+                raise DaemonAccessDeniedError() from exc
             raise DaemonNotRunningError(
                 f"Cannot connect to daemon at {self._socket_path}: {exc}"
             ) from exc
@@ -307,7 +325,7 @@ class DaemonClient:
         Raises ``DaemonNotRunningError`` if the socket doesn't exist or
         the connection is refused.
         """
-        if not self._socket_path.exists():
+        if not _socket_exists(self._socket_path):
             raise DaemonNotRunningError(
                 f"Daemon socket not found: {self._socket_path}"
             )
@@ -324,6 +342,8 @@ class DaemonClient:
                 f"Timeout connecting to daemon at {self._socket_path}"
             ) from exc
         except (ConnectionRefusedError, FileNotFoundError, OSError) as exc:
+            if isinstance(exc, PermissionError) or exc.errno in (errno.EACCES, errno.EPERM):
+                raise DaemonAccessDeniedError() from exc
             raise DaemonNotRunningError(
                 f"Cannot connect to daemon at {self._socket_path}: {exc}"
             ) from exc
@@ -478,11 +498,13 @@ class DaemonClient:
         Short-circuits immediately if the socket path doesn't exist,
         consistent with ``_connect()``'s guard.
         """
-        if not self._socket_path.exists():
+        if not _socket_exists(self._socket_path):
             return False
         try:
             await self.call("daemon.health")
             return True
+        except DaemonAccessDeniedError:
+            raise
         except (ConnectionRefusedError, FileNotFoundError, TimeoutError, OSError):
             return False
         except Exception:

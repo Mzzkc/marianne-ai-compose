@@ -270,9 +270,12 @@ async def _try_daemon_submit(
     """Submit a job to the running conductor.
 
     Returns True if the daemon accepted the submission, False if the
-    daemon is not reachable or rejected the job.  Never raises — all
-    errors return False so the caller can emit an appropriate error.
+    daemon is not reachable or rejected the job. Access denial emits an
+    unknown-running-state diagnostic and exits without falling back.
     """
+    from marianne.cli.helpers import report_daemon_access_denied
+    from marianne.daemon.exceptions import DaemonAccessDeniedError
+
     try:
         from marianne.daemon.detect import is_daemon_available, try_daemon_route
 
@@ -358,6 +361,8 @@ async def _try_daemon_submit(
             )
 
         return True
+    except DaemonAccessDeniedError as exc:
+        report_daemon_access_denied(exc, json_output=json_output)
     except (OSError, ConnectionError, TimeoutError) as exc:
         _logger.warning("daemon_submit_failed", error=str(exc), exc_info=True)
         return False

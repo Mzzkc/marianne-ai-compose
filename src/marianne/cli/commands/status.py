@@ -49,11 +49,13 @@ from marianne.core.checkpoint import (
 )
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
+from marianne.daemon.exceptions import DaemonAccessDeniedError
 from marianne.daemon.types import ScheduleStatus
 
 from ..helpers import (
     ErrorMessages,
     get_last_activity_time,
+    report_daemon_access_denied,
     require_conductor,
 )
 from ..helpers import (
@@ -508,6 +510,8 @@ async def _status_overview(json_output: bool) -> None:
     # Check conductor
     try:
         routed, result = await try_daemon_route("daemon.health", {})
+    except DaemonAccessDeniedError as exc:
+        report_daemon_access_denied(exc, json_output=json_output)
     except Exception:
         routed = False
         result = None
@@ -523,6 +527,8 @@ async def _status_overview(json_output: bool) -> None:
     # Get job list
     try:
         _, jobs_data = await try_daemon_route("job.list", {})
+    except DaemonAccessDeniedError as exc:
+        report_daemon_access_denied(exc, json_output=json_output)
     except Exception:
         jobs_data = []
 
@@ -663,7 +669,10 @@ async def _list_jobs(
 
     _ = workspace  # Reserved for future per-workspace filtering
 
-    routed, result = await try_daemon_route("job.list", {})
+    try:
+        routed, result = await try_daemon_route("job.list", {})
+    except DaemonAccessDeniedError as exc:
+        report_daemon_access_denied(exc, json_output=json_output)
     if not routed:
         output_error(
             "Marianne conductor is not running.",

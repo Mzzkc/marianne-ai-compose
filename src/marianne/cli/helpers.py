@@ -32,6 +32,20 @@ if TYPE_CHECKING:
 _logger = get_logger("cli")
 
 
+def report_daemon_access_denied(exc: Exception, *, json_output: bool) -> None:
+    """Stop the requested operation without inferring absence or fallback."""
+    from marianne.cli.output import output_error
+
+    output_error(
+        str(exc),
+        hints=["Check whether your current user is permitted to access the conductor socket."],
+        json_output=json_output,
+        error_type="DaemonAccessDeniedError",
+        running_state="unknown",
+    )
+    raise typer.Exit(1) from None
+
+
 class ErrorMessages:
     """Constants for CLI error messages.
 

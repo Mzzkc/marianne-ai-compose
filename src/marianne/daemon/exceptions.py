@@ -20,6 +20,13 @@ class DaemonNotRunningError(DaemonError):
     """
 
 
+class DaemonAccessDeniedError(DaemonError):
+    """Local IPC access was denied; the conductor's running state is unknown."""
+
+    def __init__(self) -> None:
+        super().__init__("Marianne conductor access denied; running state is unknown.")
+
+
 class DaemonAlreadyRunningError(DaemonError):
     """Raised when starting a daemon while another instance is already running.
 
