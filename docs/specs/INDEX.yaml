@@ -72,3 +72,8 @@ files:
     status: audit
     added: 2026-06-21
     related: [validation-gaps-addendum.md, 2026-06-21-generic-fleet-cadenza-coordination.md]
+  - name: 2026-10-07-recursive-directory-cadenzas-design.md
+    purpose: "Recursive directory cadenzas — opt-in recursive/max_depth/include/exclude/max_total_bytes on InjectionItem; default stays immediate-files only and byte-identical; enforced aggregate byte cap; relative-path receipts with skip reasons; one shared selection function for baton and validate preview. First improvement for Nannerl to conduct."
+    status: draft
+    added: 2026-10-07
+    related: [2026-06-21-generic-fleet-cadenza-coordination.md, 2026-04-17-baton-primitives-and-marianne-mozart-design.md]
