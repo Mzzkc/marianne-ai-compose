@@ -1,0 +1,2972 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  THE PRECEDENT BENCH — proof score for The Precedent Bench pattern           ║
+# ║        sheet 4 of 8 · composed against 03-architecture.md (§7 binds)          ║
+# ║        REVISED sheet 8 of 8 after three adversarial reviews: every            ║
+# ║        run-killing plumbing defect they fired empirically is fixed            ║
+# ║        (pandoc eliminated, binary-name liveness probes, gh-pages               ║
+# ║        deploy, enforce_admins + a genuinely DIVERGENT force-push              ║
+# ║        fixture, jq -s on every JSONL read, balanced case-17 filter),          ║
+# ║        every counterfeit control they exposed is repaired (structural         ║
+# ║        typecheck dispatch — the production motion rides the SAME path         ║
+# ║        as the fixture; ancestry-based rewrite detection replaces the          ║
+# ║        log-count tautology; the reader battery gains inversion                ║
+# ║        questions a page-parrot cannot pass), and every overclaim is           ║
+# ║        corrected in place (adjudication is HISTORICAL RE-ENACTMENT;           ║
+# ║        family receipts are named for what they mechanically prove).           ║
+# ║                                                                               ║
+# ║  PRIMARY PATTERN : The Precedent Bench (concert-level, iteration 6) —         ║
+# ║                    a long campaign accumulates decisions the way a court     ║
+# ║                    accumulates cases: holdings bind until explicitly          ║
+# ║                    overruled, dicta persuade, and the overruled               ║
+# ║                    precedent stays on the books, VISIBLY superseded.          ║
+# ║                    The five-stage skeleton — cite-check (CLI) →               ║
+# ║                    brief (AI) → bench (ONE named authority) → enroll          ║
+# ║                    (CLI serialized writer, atomic append, one git             ║
+# ║                    commit) → notify (CLI supersession flags) — runs           ║
+# ║                    for TWO terms so accumulation and supersession             ║
+# ║                    are DEMONSTRATED, not asserted. Proven on real             ║
+# ║                    stare decisis: Miller (1976) → Smith (1979) →              ║
+# ║                    Jones (2012) → Carpenter (2018), the Fourth                ║
+# ║                    Amendment third-party-doctrine line whose                 ║
+# ║                    genuine scoped-supersession event (Carpenter               ║
+# ║                    declining to extend Smith to CSLI) is re-enacted           ║
+# ║                    as the proof's own term-1 typed motion.                    ║
+# ║                                                                               ║
+# ║  COMPOSING       : Typed Force (foundational law — every row carries          ║
+# ║                    {force, assigned_by} at creation; cite-join,               ║
+# ║                    enroll and notify JOIN on the type and never               ║
+# ║                    judge it; the distinguish/overrule asymmetry is            ║
+# ║                    encoded in the type itself — an overrule with no           ║
+# ║                    named factor is structurally unenrollable),                ║
+# ║                    The Errata Ledger (the contrast arm: an erratum            ║
+# ║                    commits the atomic canon+ledger pair, hash-joined —        ║
+# ║                    bytes change and history records it — while a              ║
+# ║                    supersession changes NO old byte and records an            ║
+# ║                    edge; both transition types run on the same               ║
+# ║                    corpus with observably different mechanics),               ║
+# ║                    Fork-Evident History (the substrate: rows and edges        ║
+# ║                    are APPEND-ONLY records in a git repo whose                ║
+# ║                    enrollment branch is protected at publication;             ║
+# ║                    retroactive edits are detectable by construction           ║
+# ║                    and a force-push fixture is rejected and recorded).        ║
+# ║                    Uncounted support, per architecture §3: The Etiquette      ║
+# ║                    Law (every deterministic check is a CLI exit code          ║
+# ║                    with an EMPTY fallback chain; evidence asserts on          ║
+# ║                    response BODIES, not exit codes — the crush lesson),       ║
+# ║                    Dormancy Gate (movement 1's token canary: the             ║
+# ║                    authenticated citation-lookup must return HTTP 200         ║
+# ║                    with parsed JSON before any sheet spends a                 ║
+# ║                    reasoning token; the unauthenticated 401 body is           ║
+# ║                    regenerated live as the canary's negative control),        ║
+# ║                    The Freeze (the row/motion/ruling/errata contracts         ║
+# ║                    are authored BEFORE any finisher builds against            ║
+# ║                    them; the jq-GENERATED field map is the authority          ║
+# ║                    on what the API actually exposes, and every                ║
+# ║                    enrolled doctrine row's archive_path must JOIN             ║
+# ║                    that generated map — the five provenance keys are          ║
+# ║                    frozen score constants, mechanically tied to the           ║
+# ║                    observed payload coverage, never free-typed                ║
+# ║                    metadata),                                                 ║
+# ║                    Condorcet's Premise (the bench seat is codex-cli;          ║
+# ║                    movement 1 probes each seat's actual BINARY and            ║
+# ║                    version output and records them in                         ║
+# ║                    run/seat-matrix.json — the inequality gate joins on        ║
+# ║                    declared family AND on mechanically probed binary +        ║
+# ║                    version output, never on the score's say-so alone;         ║
+# ║                    the reader's model is read from its instrument             ║
+# ║                    profile on disk),                                          ║
+# ║                    First Article Characterization (term 1 is the              ║
+# ║                    first article; term 2 runs the characterized cycle         ║
+# ║                    again to demonstrate accumulation AND a denial),           ║
+# ║                    The Gas-Free Certificate (the live recompute gate          ║
+# ║                    runs against the DEPLOYED public URL, not local            ║
+# ║                    files; a tampered local copy fails it),                    ║
+# ║                    The Unprimed Falsifier (movement 18: a fresh-eyes          ║
+# ║                    reader from a third vendor family answers the              ║
+# ║                    CSLI question from the published page alone).              ║
+# ║                                                                               ║
+# ║  PROBLEM SOLVED  : No proof in the corpus takes a concert-level               ║
+# ║                    decision-governance pattern, no proof has ever             ║
+# ║                    touched a foundational law, and none has touched the       ║
+# ║                    legal domain despite CourtListener sitting in the          ║
+# ║                    instrument inventory. This proof maintains a               ║
+# ║                    typed-force precedent index over a REAL doctrinal          ║
+# ║                    line whose supersession history is genuine, then           ║
+# ║                    runs the campaign's own load-bearing decisions             ║
+# ║                    through the same bench — the orchestration binds           ║
+# ║                    itself. The demonstration a lone context window            ║
+# ║                    cannot produce: the campaign refuses its own later         ║
+# ║                    self, and the refusal is checkable by a stranger           ║
+# ║                    from published bytes.                                      ║
+# ║                                                                               ║
+# ║  PRODUCES       : <auto-workspace>/precedent-bench/ → evidence/               ║
+# ║                    authenticated/ (four archived 200 bodies + cluster         ║
+# ║                    and opinion samples + jq-generated field-map.json          ║
+# ║                    + SHA256SUMS), schema/*.json (the frozen contracts),       ║
+# ║                    scripts/ (six gates + movement-gate + render +             ║
+# ║                    site build, all commissioned with every designed           ║
+# ║                    failure OBSERVED FIRING in run/commissioning-log.json),    ║
+# ║                    fixtures/ (the negative controls), precedent/              ║
+# ║                    (index.jsonl + edges.jsonl — append-only, the git          ║
+# ║                    chain is the journal), motions/term-{1,2}/,                ║
+# ║                    briefs/term-{1,2}/, rulings/term-{1,2}/, memo/             ║
+# ║                    (the argued research memo + its derived HTML),             ║
+# ║                    errata/ledger.jsonl (the contrast arm), site/ +            ║
+# ║                    site/data/consumers.json (notify flags), run/              ║
+# ║                    (seat-matrix, commissioning log, controls, reader          ║
+# ║                    page + transcript, deployment) — plus the LIVE             ║
+# ║                    GitHub Pages site that IS the bench: force-badged          ║
+# ║                    index, scoped-supersession graph, the memo, the            ║
+# ║                    errata-vs-precedent contrast section, the                  ║
+# ║                    verify-it-yourself panel (query URLs + digests),           ║
+# ║                    and the published negative-control results table.          ║
+# ║                    A law student or journalist can answer "is Smith           ║
+# ║                    still good law for CSLI, and why, visibly?" from           ║
+# ║                    the page alone.                                            ║
+# ║                                                                               ║
+# ║  INSTRUMENTS     : 9 of 18 movements are instrument:cli with EMPTY            ║
+# ║                    fallback chains (1, 4, 7, 8, 11, 14, 15, 16, 17) —         ║
+# ║                    counted from the movements block, not estimated.           ║
+# ║                    AI holds six judgment seats, none of                       ║
+# ║                    them a gate: claude-code (GLM family) seeds the            ║
+# ║                    bench (2), drafts motions (3, 10), and takes              ║
+# ║                    errata intake (9); claude-code PINNED-EMPTY as the         ║
+# ║                    brief emitter (5, 12 — its family is load-bearing          ║
+# ║                    evidence for the Condorcet gate); codex-cli (GPT           ║
+# ║                    family) PINNED-EMPTY holds the bench seat (6, 13)         ║
+# ║                    — family ALTERNATES from every brief emitter;             ║
+# ║                    opencode-gemma (GEMMA-LOCAL via ollama, third              ║
+# ║                    family) is the unprimed reader (18). The bench             ║
+# ║                    dispositions are PINNED to the historical record           ║
+# ║                    (term 1 grants because Carpenter actually                  ║
+# ║                    declined to extend Smith; term 2's second motion           ║
+# ║                    is denied on the merits): this is RE-ENACTMENT —           ║
+# ║                    what the proof exercises is the bar's MECHANICS            ║
+# ║                    (refusals, enrollments, edges), never bench                ║
+# ║                    judgment; the reasons on the record are the seat's         ║
+# ║                    own. The LLM is coordinator and advocate, never            ║
+# ║                    the gate.                                                  ║
+# ║                                                                               ║
+# ║  PREREQUISITES   : CL_TOKEN env var — a free CourtListener API token          ║
+# ║                    (register at accounts.courtlistener.com and               ║
+# ║                    `export CL_TOKEN=<token>` BEFORE launch — this is          ║
+# ║                    an interactive composer step; the movement-1              ║
+# ║                    canary refuses loudly without it and there is             ║
+# ║                    NO offline/mock mode by design: a substitute               ║
+# ║                    source would gut the provenance story);                    ║
+# ║                    network (courtlistener.com, github.com); gh                ║
+# ║                    authenticated AS github_owner (probed: gh api             ║
+# ║                    user must equal the configured owner); git, jq,           ║
+# ║                    python3, sha256sum, curl (pandoc is NOT required —         ║
+# ║                    the score renders markdown and strips HTML with           ║
+# ║                    its own commissioned stdlib scripts); codex +              ║
+# ║                    OPENAI_API_KEY (the bench seat); claude (briefs,          ║
+# ║                    drafting); ollama daemon serving the reader model;         ║
+# ║                    and an `opencode-gemma` instrument profile — a            ║
+# ║            third-family reader profile the host must provide (a              ║
+# ║            personal opencode profile backed by local ollama works;           ║
+# ║            the score deliberately does not write into                        ║
+# ║            ~/.marianne/ — it probes for the profile and records its          ║
+# ║            model from disk, failing loud with instructions if it is          ║
+# ║            absent). site_url is DERIVED from github_owner/repo_name          ║
+# ║            and movement 1 refuses a mismatched independent value —           ║
+# ║            the cross-tenant trap cannot be configured by accident.           ║
+# ║            Retargeting the CASE LINE is deliberately NOT a --var             ║
+# ║            knob: the doctrinal line is the experiment, and the               ║
+# ║            motions' expected shapes are bound to it. Duration ≈ 2–4 h;        ║
+# ║                    rough cost ≈ $1–4. Unattended risk: fail_fast +           ║
+# ║                    max_retries 1 — every gate fails loudly rather            ║
+# ║                    than falling back.                                        ║
+# ║                                                                               ║
+# ║  EXECUTION MAP   : (18 movements, strictly serial — the bench pattern's       ║
+# ║                    dependency block is linear BY DESIGN; fan-out is           ║
+# ║                    deliberately absent at runtime: concurrent writers         ║
+# ║                    are the adversary the fcntl fixture disproves, not        ║
+# ║                    a resource to exploit)                                     ║
+# ║                                                                               ║
+# ║      1  Commission + Capture   tools probed (gh OWNER match, ollama, [CLI]   ║
+# ║         |  (M0)                codex/claude/opencode), CL_TOKEN              ║
+# ║         |                     canary: 401-negative-control THEN four         ║
+# ║         |                     authenticated 200s asserted from BODIES;        ║
+# ║         |                     clusters/opinions sampled; jq-generated        ║
+# ║         |                     field-map.json; the six gate scripts +          ║
+# ║         |                     movement-gate + renderer + site builder        ║
+# ║         |                     heredoc-authored and COMMISSIONED (every        ║
+# ║         |                     designed failure observed firing); git         ║
+# ║         |                     init the bench repo                            ║
+# ║      2  Seed the Bench         doctrine rows (Miller, Smith, Jones      [AI]  ║
+# ║         |  (M1)                majority + BOTH concurrences typed            ║
+# ║         |                     persuasive, Carpenter) from ARCHIVED bytes      ║
+# ║         |                     only (the drafting sheet does not fetch)        ║
+# ║         |                     + four campaign holdings; force-               ║
+# ║         |                     typecheck + digest-verify + enroll admit;       ║
+# ║         |                     precedent/INDEX.md emitted (cadenza            ║
+# ║         |                     source — delivered to brief and bench,          ║
+# ║         |                     NEVER to cite-check, per Review 1)              ║
+# ║      3  Term-1 Motions         the Carpenter move re-enacted as a       [AI]  ║
+# ║         |  (M2)                typed motion: DISTINGUISH Smith as            ║
+# ║         |                     applied to CSLI, factor changed-               ║
+# ║         |                     circumstances                                 ║
+# ║      4  Cite-Check             join citations against the index;       [CLI]  ║
+# ║         |  (M3)                a dangling fixture must DIE here, in          ║
+# ║         |                     the same movement, before any                  ║
+# ║         |                     reasoning is paid for                          ║
+# ║      5  Brief                  argue the motion; live index by        [AI]    ║
+# ║         |  (M4)                REQUIRED cadenza INDEX.md; cites only         ║
+# ║         |                     admitted rows                                 ║
+# ║      6  Bench                  ONE named authority (codex-cli,       [AI]    ║
+# ║         |  (M5)                GPT family) grants or denies; ruling          ║
+# ║         |                     carries disposition/force/assigned_by;         ║
+# ║         |                     family ≠ brief family, from disk               ║
+# ║      7  Enroll                 THE serialized writer: fcntl lock,     [CLI]  ║
+# ║         |  (M6)                atomic append of the scoped edge, ONE         ║
+# ║         |                     commit; refuses factor-less overrule;          ║
+# ║         |                     both rows remain readable                      ║
+# ║      8  Notify                 supersession flags across consumer     [CLI]  ║
+# ║         |  (M7)                manifests                                    ║
+# ║      9  Errata Arm             the argued research memo drafted;      [AI+CLI]║
+# ║         |  (M8)                a disclosed wrong parallel citation           ║
+# ║         |                     seeded in the derived HTML; the atomic         ║
+# ║         |                     canon+ledger pair committed hash-joined;       ║
+# ║         |                     derived copies regenerate; watermark           ║
+# ║         |                     advances — the contrast arm on the same        ║
+# ║         |                     corpus                                        ║
+# ║     10  Term-2 Motions         TWO motions against the campaign's      [AI]  ║
+# ║         |  (M2')               own holdings: re-pin the citation             ║
+# ║         |                     vintage (overrule, factor changed-             ║
+# ║         |                     circumstances, fresh capture via the           ║
+# ║         |                     deterministic recapture helper) AND the        ║
+# ║         |                     jurisdiction-expansion motion that will        ║
+# ║         |                     be DENIED on the merits — the bar is           ║
+# ║         |                     demonstrably real                              ║
+# ║     11  Cite-Check t2          same gate, term-2 packets + the       [CLI]   ║
+# ║         |  (M3')               dangling fixture again                        ║
+# ║     12  Brief t2               same advocacy, pinned family          [AI]    ║
+# ║         |  (M4')                                                            ║
+# ║     13  Bench t2               one grant AND one denial on the       [AI]    ║
+# ║         |  (M5')               record, with reasons                          ║
+# ║     14  Enroll t2              the granted vintage re-pin enrolls     [CLI]  ║
+# ║         |  (M6')               a NEW holding + edge; the DENIED              ║
+# ║         |                     motion enrolls NOTHING (refused by             ║
+# ║         |                     design); exactly one commit                    ║
+# ║     15  Notify t2              flags for the vintage edge           [CLI]    ║
+# ║         |  (M7')                                                            ║
+# ║  16  Publish + Live Gate    site built (force badges, scoped      [CLI]    ║
+# ║  |  (M9)                supersession graph, memo, verify-it-               ║
+# ║                       yourself panel with FULL digests); gh                ║
+# ║                       repo + branch protection WITH                        ║
+# ║                       enforce_admins, then a GENUINELY                     ║
+# ║                       DIVERGENT force-push fixture (amend ->               ║
+# ║                       force -> REJECTED -> restore: an                     ║
+# ║                       up-to-date force push exits 0 and                    ║
+# ║                       proves nothing); Pages deploy via an                 ║
+# ║                       ORPHAN gh-pages branch at / (the only                ║
+# ║                       source path the REST API accepts),                   ║
+# ║                       propagation poll, then the LIVE                      ║
+# ║                       recompute gate against the PUBLIC                    ║
+# ║                       URL: extract query URLs + digests from               ║
+# ║                       the served page, re-run the queries,                 ║
+# ║                       re-compute sha256 over NORMALIZED bytes,             ║
+# ║                       compare; a tampered local copy fails                 ║
+# ║  17  Controls Published    every negative control re-run           [CLI]   ║
+# ║  |  (M10a)              end-to-end against the live system                 ║
+# ║                       (including the tampered-page fixture);               ║
+# ║                       results table republished with per-                  ║
+# ║                       control verdicts; rewrite detection by               ║
+# ║                       ANCESTRY (local == origin AND every                  ║
+# ║                       journaled enrollment sha still an                    ║
+# ║                       ancestor of HEAD — the log-count                     ║
+# ║                       tautology is gone); the reader page                  ║
+# ║                       fetched to text by the score's own                   ║
+# ║                       html-to-text script (no pandoc)                      ║
+# ║  18  Unprimed Reader        a third-family instrument that never  [AI]     ║
+# ║         (M10b)              saw the build answers the CSLI                 ║
+# ║                             status/why/verify questions from the           ║
+# ║                             published page alone, by REQUIRED              ║
+# ║                             cadenza — prose answers PLUS a                 ║
+# ║                             structured block scored deterministically      ║
+# ║                             against INVERSION questions (is Smith          ║
+# ║                             still CITABLE outside CSLI?) that              ║
+# ║                             page-parroting cannot pass; below              ║
+# ║                             threshold FAILS LOUD. Recorded limit:          ║
+# ║                             one reader, one seat — the battery             ║
+# ║                             defeats lexical echo, not workspace            ║
+# ║                             exploration; confinement is the                ║
+# ║                             host profile's, not the score's.               ║
+# ║                                                                               ║
+# ║  APPEND-ONLY    : rows are IMMUTABLE records in precedent/index.jsonl;        ║
+# ║  DISCIPLINE       supersession lives in precedent/edges.jsonl (append-only    ║
+# ║                    edge records carrying from/to/scope/motion/enrolled_by).  ║
+# ║                    The renderer materializes superseded_by at display time.  ║
+# ║                    Nothing in this score rewrites a byte of an enrolled      ║
+# ║                    record; enroll.py is the ONLY appender (fcntl), and the   ║
+# ║                    concurrent-enrollment fixture proves exactly one          ║
+# ║                    enrollment of a given ruling can ever land.               ║
+# ║                                                                               ║
+# ║  VALIDATION     : every movement carries the generic outcome gate            ║
+# ║  SHAPE            (bash scripts/movement-gate.sh {sheet_num} — one           ║
+# ║                    enforcement point dispatching per movement, the           ║
+# ║                    macro at the validation layer) PLUS movement-specific     ║
+# ║                    command_succeeds rules with per-movement conditions,      ║
+# ║                    staged 1→3 fail-fast (Commissioning Cascade: receipt      ║
+# ║                    before structure before join). Evidence asserts on        ║
+# ║                    bodies, digests and joins — never on exit codes alone,    ║
+# ║                    never file_exists alone.                                  ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+name: precedent-bench
+description: "The Precedent Bench proof — a typed-force precedent index over the real Fourth Amendment third-party-doctrine line (Miller 1976, Smith 1979, Jones 2012, Carpenter 2018), every doctrine row admitted with CourtListener provenance captured live (exact citation-lookup query bytes with sha256 over normalized bytes, plus best-effort cluster and opinion samples recorded either way; jq-generated field map; bench dispositions pinned to the historical record — re-enactment, with the refusal and enrollment mechanics as the claim), seeded alongside the campaign's own first holdings so the orchestration binds itself; two full motion terms run the five-stage skeleton (CLI cite-check that refuses dangling citations before any reasoning is paid for → pinned-family AI brief → one named bench authority whose binary and version output were probed at commissioning → fcntl-serialized enroll that refuses factor-less overrules and denied motions, verifies referential integrity, and appends immutable rows plus scoped supersession edges in exactly one journaled git commit → CLI notify flags acknowledged by every consumer manifest), demonstrating scoped supersession (Smith superseded FOR CSLI by Carpenter, both rows still readable), an errata-vs-precedent contrast arm on the same corpus (hash-joined canon+ledger pair with a monotonic watermark vs. no-old-byte-changes edge), a denial on the record, and a vintage re-pin of the campaign's own holding — published as the live GitHub Pages bench itself (force badges, supersession graph, argued memo, verify-it-yourself panel with full digests, published negative-control table with per-control verdicts) on a protected main branch with a genuinely divergent rejected force-push on the record, whose served bytes are proven against re-run queries by the live recompute gate, whose history is rewrite-checked by journaled-commit ancestry, and which is read back correctly by an unprimed third-family reader scored on inversion questions page-parroting cannot pass."
+
+# workspace: intentionally omitted — auto-managed at <workspace-root>/precedent-bench.
+# The score is GENERIC: workspace path is the only project-specific input. The
+# case line, deployment target, seat matrix and family table are prompt
+# variables; movement 1 writes them to run/bench-config.json and every script
+# reads DISK (never a hardcoded case list). Override with --var github_owner=…
+
+instrument: claude-code            # score default; every deterministic movement
+instrument_config:                 # overrides to cli / codex-cli below
+  timeout_seconds: 2400
+
+# Judgment movements whose vendor identity is NOT load-bearing may fall back
+# across vendors (seeding, motions drafting, errata intake). The brief emitter
+# (5, 12) and the bench seat (6, 13) pin EMPTY chains — their families are the
+# Condorcet gate's evidence, and a fallback that silently swapped families
+# would counterfeit the independence the proof exists to demonstrate.
+instrument_fallbacks: [codex-cli]
+
+movements:
+  # ── M0 · Commission + authenticated capture (Dormancy Gate / Etiquette Law) ──
+  1:
+    name: "Commission + Capture (M0)"
+    instrument: cli            # the ENTIRE deterministic substrate is heredoc-
+    instrument_fallbacks: []   # authored here at run time; the CL_TOKEN canary
+    instrument_config:         # asserts HTTP 200 FROM THE BODY (a 401 with a
+      timeout_seconds: 2700    # curl exit 0 is NOT evidence — the live-
+                               # regenerated 401 fixture proves the canary
+                               # cannot be fooled); the field map is GENERATED
+                               # by jq from the payloads, never typed; every
+                               # gate script is commissioned with its designed
+                               # failure OBSERVED FIRING before anything trusts it
+  # ── M1 · Seed the bench (Typed Force emit + typecheck + digest + enroll) ──────
+  2:
+    name: "Seed the Bench (M1)"
+    instrument: claude-code    # drafting holding_text and campaign holdings is
+    instrument_fallbacks: [codex-cli]   # semantic legal judgment; ADMISSION is
+    instrument_config:         # mechanical — force-typecheck, digest-verify
+      timeout_seconds: 3000    # and enroll admit or refuse. The drafting
+                               # sheet does NOT fetch: it reads ARCHIVED bytes
+  # ── M2 · Term-1 typed motion packets (the Carpenter move re-enacted) ──────────
+  3:
+    name: "Term-1 Motion (M2)"
+    instrument: claude-code    # motion argument scaffolding is semantic; the
+    instrument_fallbacks: [codex-cli]   # packet SCHEMA is a frozen contract
+    instrument_config:
+      timeout_seconds: 1800
+  # ── M3 · Cite-check, term 1 (bench stage 1; Graduate & Filter) ────────────────
+  4:
+    name: "Cite-Check t1 (M3)"
+    instrument: cli            # a join is jq's job; an LLM cite-check would
+    instrument_fallbacks: []   # hallucinate joins — The Etiquette Law's exact
+    instrument_config:         # case. The dangling fixture dies HERE, in the
+      timeout_seconds: 600     # same movement, before reasoning is paid for
+  # ── M4 · Brief, term 1 (bench stage 2 — the semantic advocacy seat) ───────────
+  5:
+    name: "Brief t1 (M4)"
+    instrument: claude-code    # the brief is legal argument — the one movement
+    instrument_fallbacks: []   # that IS advocacy; family GLM is load-bearing
+    instrument_config:         # for the Condorcet gate, so the chain is EMPTY;
+      timeout_seconds: 2700    # live index arrives by REQUIRED cadenza
+  # ── M5 · Bench, term 1 (bench stage 3 — ONE named authority) ──────────────────
+  6:
+    name: "Bench t1 (M5)"
+    instrument: codex-cli      # adjudication is judgment, and family
+    instrument_fallbacks: []   # independence from every brief emitter is the
+    instrument_config:         # point (GLM briefs, GPT bench — probed at M0,
+      timeout_seconds: 2400    # recorded in run/seat-matrix.json); the seat
+                               # never argues a motion — it rules on the record
+  # ── M6 · Enroll, term 1 (bench stage 4 — THE serialized writer) ───────────────
+  7:
+    name: "Enroll t1 (M6)"
+    instrument: cli            # fcntl-locked, atomic append, ONE commit; an
+    instrument_fallbacks: []   # LLM writer would make the serialized-writer
+    instrument_config:         # claim theater; refuses a factor-less overrule
+      timeout_seconds: 900     # and any motion whose ruling is not a GRANT
+  # ── M7 · Notify, term 1 (bench stage 5 — supersession flags) ──────────────────
+  8:
+    name: "Notify t1 (M7)"
+    instrument: cli            # flag propagation is mechanical; consumers
+    instrument_fallbacks: []   # learn a holding moved through FLAGS, never
+    instrument_config:         # by re-reading prose
+      timeout_seconds: 600
+  # ── M8 · Errata contrast arm (+ the argued research memo) ─────────────────────
+  9:
+    name: "Errata Arm (M8)"
+    instrument: claude-code    # the memo and the erratum intake are semantic;
+    instrument_fallbacks: [codex-cli]   # the atomic canon+ledger pair commit
+    instrument_config:         # is the serialized CLI (errata-commit.py),
+      timeout_seconds: 2700    # hash-joined and verified by validation
+  # ── M2' · Term-2 motions (against the campaign's OWN holdings) ────────────────
+  10:
+    name: "Term-2 Motions (M2')"
+    instrument: claude-code    # two packets: the vintage re-pin (overrule +
+    instrument_fallbacks: [codex-cli]   # factor, fresh bytes via the
+    instrument_config:         # deterministic recapture helper) and the
+      timeout_seconds: 2400    # jurisdiction expansion that will be DENIED
+  # ── M3' · Cite-check, term 2 ──────────────────────────────────────────────────
+  11:
+    name: "Cite-Check t2 (M3')"
+    instrument: cli
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 600
+  # ── M4' · Brief, term 2 (pinned family — the Condorcet fact must hold) ────────
+  12:
+    name: "Brief t2 (M4')"
+    instrument: claude-code
+    instrument_fallbacks: []   # family GLM, pinned: the bench's inequality
+    instrument_config:         # gate reads this from disk at movement 13
+      timeout_seconds: 2700
+  # ── M5' · Bench, term 2 (one grant AND one denial on the record) ──────────────
+  13:
+    name: "Bench t2 (M5')"
+    instrument: codex-cli      # the same named seat rules both motions; the
+    instrument_fallbacks: []   # DENIAL with reasons is the demonstration that
+    instrument_config:         # the bar is real
+      timeout_seconds: 2400
+  # ── M6' · Enroll, term 2 (granted motion enrolls; denied enrolls NOTHING) ─────
+  14:
+    name: "Enroll t2 (M6')"
+    instrument: cli
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 900
+  # ── M7' · Notify, term 2 ──────────────────────────────────────────────────────
+  15:
+    name: "Notify t2 (M7')"
+    instrument: cli
+    instrument_fallbacks: []
+    instrument_config:
+      timeout_seconds: 600
+  # ── M9 · Publish + live recompute gate (Gas-Free Certificate) ─────────────────
+  16:
+    name: "Publish + Live Gate (M9)"
+    instrument: cli            # build, fenced gh deploy with Pages-propagation
+    instrument_fallbacks: []   # poll, branch protection + REJECTED force-push
+    instrument_config:         # fixture recorded, then the live gate against
+      timeout_seconds: 3600    # the PUBLIC URL: extract query URLs + digests
+                               # from the SERVED page, re-run, re-hash
+                               # normalized bytes, compare; a tampered local
+                               # copy must FAIL the gate
+  # ── M10a · Negative controls end-to-end, published ────────────────────────────
+  17:
+    name: "Controls Published (M10a)"
+    instrument: cli            # every fixture re-run against the live system;
+    instrument_fallbacks: []   # git history checked for zero rewrites; the
+    instrument_config:         # results table republished; the reader page
+      timeout_seconds: 1800    # fetched for the unprimed reader
+  # ── M10b · The unprimed reader (The Unprimed Falsifier) ───────────────────────
+  18:
+    name: "Unprimed Reader (M10b)"
+    instrument: opencode-gemma # a THIRD family (GEMMA-LOCAL via ollama) that
+    instrument_fallbacks: []   # never saw the build reads the published page
+    instrument_config:         # by REQUIRED cadenza and answers the CSLI
+      timeout_seconds: 2400    # battery; below threshold FAILS LOUD — the
+                               # page is rebuilt by a human, never silently
+
+sheet:
+  size: 1
+  total_items: 18          # movements = sheets (no fan-out: the runtime is
+                           # strictly serial BY DESIGN — see header)
+  dependencies:            # each movement's validation is the next movement's
+    2: [1]                 # precondition (architecture §4 dependency spine)
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+    7: [6]
+    8: [7]
+    9: [8]
+    10: [9]
+    11: [10]
+    12: [11]
+    13: [12]
+    14: [13]
+    15: [14]
+    16: [15]
+    17: [16]
+    18: [17]
+
+  # Cadenza placement — the pattern's Review-1 narrowing, enforced: the LIVE
+  # index (precedent/INDEX.md, re-rendered after every enrollment) injects as
+  # REQUIRED context into the BRIEF and BENCH sheets ONLY. Cite-check joins
+  # mechanically and receives NO rendering it does not need. The unprimed
+  # reader receives the published page and NOTHING else — no score-level
+  # prelude exists, so priming has no path in.
+  cadenzas:
+    5:
+      - file: "{{ workspace }}/precedent/INDEX.md"
+        as: context
+        required: true
+    6:
+      - file: "{{ workspace }}/precedent/INDEX.md"
+        as: context
+        required: true
+    12:
+      - file: "{{ workspace }}/precedent/INDEX.md"
+        as: context
+        required: true
+    13:
+      - file: "{{ workspace }}/precedent/INDEX.md"
+        as: context
+        required: true
+    18:
+      - file: "{{ workspace }}/run/reader-page.md"
+        as: context
+        required: true
+
+parallel:
+  enabled: true            # the linear dependency block renders this serial in
+  max_concurrent: 3        # effect; declared for the engine, honored by the DAG
+  fail_fast: true
+
+# cross_sheet: deliberately ABSENT — the workspace IS the shared memory (corpus
+# precedent), and the brief/bench must receive the index through the CADENZA
+# contract (required:true — a missing index fails the sheet BEFORE execution),
+# not through stdout soup. The reader must receive ONLY the published page.
+
+retry:
+  max_retries: 1           # gates fail loudly for diagnosis, not blind retry:
+  base_delay_seconds: 30   # a typed refusal is this design's failure semantics
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800   # CLI movements run silent jq/git/curl fans
+
+workspace_lifecycle:
+  archive_on_fresh: true   # a fresh re-run ARCHIVES the old bench — the chain's
+  max_archives: 5          # history is never silently destroyed
+
+prompt:
+  variables:
+    # ── Deployment inputs (overridable via --var; movement 1 writes them to    ──
+    #    run/bench-config.json, which is what scripts and validations read —
+    #    never an unexpandable placeholder). Movement 1 refuses to start unless
+    #    gh is authenticated AS github_owner: the authorization failure that
+    #    would otherwise surface at movement 16 surfaces before any token spend.
+    github_owner: "Mzzkc"
+    repo_name: "precedent-bench"
+    site_url: "https://mzzkc.github.io/precedent-bench/"
+    # ── The doctrinal line (the ONLY case data in the score; movement 1 writes  ──
+    #    run/case-order.txt and every script reads THAT). Carpenter is queried
+    #    by its parallel cite — 138 S. Ct. 2206 — which resolves reliably while
+    #    the U.S. Reports slip cite was unbound; display keeps the slip form.
+    cases:
+      1: {slug: miller,    cite: "425 U.S. 435",    display: "425 U.S. 435 (1976)",              name: "United States v. Miller"}
+      2: {slug: smith,     cite: "442 U.S. 735",    display: "442 U.S. 735 (1979)",              name: "Smith v. Maryland"}
+      3: {slug: jones,     cite: "565 U.S. 400",    display: "565 U.S. 400 (2012)",              name: "United States v. Jones"}
+      4: {slug: carpenter, cite: "138 S. Ct. 2206", display: "585 U.S. ___ (2018) (parallel cite 138 S. Ct. 2206)", name: "Carpenter v. United States"}
+    # ── The pinned scope (a campaign holding — contradicting it takes a motion)──
+    jurisdiction_pin: "U.S. federal, Fourth Amendment third-party doctrine, one doctrinal line, four cases"
+    # ── Vendor-family table (Condorcet's Premise). run/seat-matrix.json maps   ──
+    #    the seats through THIS table plus probed binary liveness; inequality of
+    #    bench vs. every brief emitter is the gate at movements 6 and 13.
+    families:
+      claude-code: "GLM"
+      codex-cli: "GPT"
+      opencode-gemma: "GEMMA-LOCAL"
+      cli: "DETERMINISTIC"
+    bench_seat: "codex-cli"        # the ONE named adjudication authority
+    brief_seat: "claude-code"      # the advocate of record at the bench
+    reader_seat: "opencode-gemma"  # the unprimed third-family reader
+    reader_model: "gemma4:26b"     # the ollama model movement 1 requires present
+    # ── Corpus shape (validated, not assumed) ────────────────────────────────────
+    min_doctrine_rows: 6           # Miller, Smith, Jones majority, 2 concurrences, Carpenter
+    min_campaign_rows: 4           # jurisdiction pin, vintage pin, seat assignment, no-fallback rule
+    api_vintage: "courtlistener-rest-v4"
+  template: |
+    {# ══════════ Macros: the house style, defined once ════════════════════════ #}
+    {% macro strict() %}set -euo pipefail
+    cd "{{ workspace }}"{% endmacro %}
+
+    {% macro ai_ground_rules() %}
+    ## Ground Rules (non-negotiable)
+    - Fabrication wears completion's clothes: never write a placeholder where a
+      real artifact is owed, and never claim a command ran without running it.
+    - The deterministic gates are the coordination. If a gate fails against your
+      work, fix the work — never the gate, never the record.
+    - You are an advocate or a drafter, never a gate: every admission decision
+      belongs to the CLI instruments, and they refuse, not advise.
+    - Every file you author is evidence in a published legal-research artifact:
+      exact labels and exact field names, no loose prose where a parser expects
+      a field.
+    {% endmacro %}
+
+    {% macro force_discipline() %}
+    ## Typed Force discipline (the frozen contract, schema/precedent-row.json)
+    - Every row carries `force` (binding|persuasive) and `assigned_by` (a named
+      authority string) AT CREATION. A row without both is refused by
+      force-typecheck.py — persuasive suggestions and binding holdings never
+      enter the index undifferentiated.
+    - `necessary_to_outcome: true` marks holdings (they bind later sheets);
+      `false` marks dicta (they persuade). The Jones concurrences are dicta —
+      type them honestly.
+    - You never retype an enrolled row. Supersession is an EDGE appended by
+      enroll.py, never an edit to a byte that already entered the index.
+    {% endmacro %}
+
+    {% macro motion_packet_spec(term) %}
+    ## Motion packet contract (schema/motion.json, frozen)
+    Write `motions/term-{{ term }}/MOT-T{{ term }}-NNN.json`:
+    ```json
+    {"motion_id": "MOT-T{{ term }}-NNN", "type": "distinguish|overrule|follow",
+     "cites": ["<enrolled row ids, every one must join>"],
+     "target": "<row id this motion operates on>",
+     "successor": "<row id that supersedes target, for grant-enrollment>",
+     "scope": "<the precise scope of supersession, e.g. 'CSLI'>",
+     "factors": ["changed-circumstances|reliance|workability"],
+     "argument_ref": "motions/term-{{ term }}/MOT-T{{ term }}-NNN.md",
+     "proposed_row": {"<full precedent-row JSON, campaign layer only, when the motion enrolls a new holding>"}}
+    ```
+    - An OVERRULE motion MUST name at least one factor from
+      {reliance, workability, changed-circumstances} — enroll.py refuses an
+      empty factor list structurally; the overrule bar is higher than the
+      distinguish bar BY TYPE, not by exhortation.
+    - A DISTINGUISH motion carries its scope honestly: "Smith, as applied to
+      cell-site location information" — not "Smith".
+    - Write the argued motion to the `argument_ref` markdown file: facts,
+      the enrolled rows it stands on (cite row ids), the factor argument, the
+      precise disposition requested.
+    {% endmacro %}
+
+    {% macro brief_spec(term) %}
+    ## Brief contract (bench stage 2 — you are the advocate of record)
+    Write `briefs/term-{{ term }}/brief.md` — an argued appellate brief, register
+    and all, that:
+    - cites ONLY enrolled rows (their ids, e.g. `[P-002]`); cite-join re-runs
+      over every `[P-###]`/`[H-###]` token in your brief and a dangling token
+      fails the movement;
+    - argues the motion on the record before the bench (the cadenza-injected
+      live index IS the record — if it contradicts your draft, the index wins);
+    - names and argues the factor for any overrule-type motion from
+      {reliance, workability, changed-circumstances};
+    - ends with a literal `## Disposition Requested` section.
+    {% endmacro %}
+
+    {% macro bench_oath(term) %}
+    ## Bench contract (bench stage 3 — ONE named authority; you never argue)
+    You hold the adjudication seat. The brief sheet argued; you rule on the
+    record. You do NOT advocate for either disposition, and you do not rewrite
+    the motion: adjudicate what was filed.
+    Write `rulings/term-{{ term }}/ruling.json`:
+    ```json
+    {"motion_id": "...", "term": "{{ term }}", "motion_file": "motions/term-{{ term }}/MOT-T{{ term }}-NNN.json",
+     "disposition": "grant|deny", "force": "binding|persuasive",
+     "assigned_by": "{{ bench_seat }} ({{ term }} seat)",
+     "seat_id": "{{ bench_seat }}", "seat_family": "<from run/seat-matrix.json>",
+     "reasons": "<2-6 sentences, on the record>", "enroll": {"authorized": true|false}}
+    ```
+    `enroll.authorized` is true ONLY for grants — enroll.py independently
+    refuses anything else, so a slip here is caught structurally.
+    Also write `rulings/term-{{ term }}/ruling.md` — the argued bench memo,
+    ending with a literal `## Disposition` section and a literal
+    `## Reasons` section. A DENIAL states its reasons on the record: the bar
+    must be visibly real.
+    {% endmacro %}
+
+    {% macro cite_check_block(term) %}
+    {{ strict() }}
+    # ══ Cite-check, term {{ term }} (bench stage 1 — Graduate & Filter) ══
+    # A dangling citation dies HERE, before any reasoning is paid for. The
+    # dangling fixture re-fires in this same movement: a gate trusted in this
+    # movement is proven able to refuse in this movement.
+    {
+      for M in motions/term-{{ term }}/*.json; do
+        bash scripts/cite-join.sh "$M" || exit 1
+      done
+      if bash scripts/cite-join.sh fixtures/dangling-motion.json 2>/dev/null; then
+        echo "CITE-CHECK LEAK: the dangling fixture JOINED — the gate cannot refuse"; exit 1
+      fi
+      echo "cite-join term {{ term }}: every citation joins; the dangling fixture still refuses"
+    } 2>&1 | tee run/cite-check-term-{{ term }}.txt
+    grep -q "every citation joins" run/cite-check-term-{{ term }}.txt
+    python3 scripts/render-index.py   # refresh the cadenza source after any draft touched packets
+    {% endmacro %}
+
+    {% macro enroll_block(term) %}
+    {{ strict() }}
+    # ══ Enroll, term {{ term }} (bench stage 4 — THE serialized writer) ══
+    # Only GRANTED motions enroll. Denied motions enroll NOTHING — that is the
+    # demonstration, not a gap. Notify is movement {{ term == 1 and 8 or 15 }}'s own identity:
+    # enrollment appends; propagation flags. enroll.py makes THE enrollment
+    # commit (checked, journaled); this block only renders and commits the
+    # index refresh — never a second enrollment commit, never '|| true'.
+    {% if term == 1 %}
+    python3 scripts/enroll.py rulings/term-1/ruling.json
+    {% else %}
+    python3 scripts/enroll.py rulings/term-2/ruling-grant.json
+    if python3 scripts/enroll.py rulings/term-2/ruling-deny.json 2>run/deny-refusal.txt; then
+      echo "ENROLL LEAK: a DENIED motion enrolled"; cat run/deny-refusal.txt; exit 1
+    fi
+    grep -q "disposition" run/deny-refusal.txt || { echo "the deny-refusal reason is missing"; exit 1; }
+    {% endif %}
+    python3 scripts/render-index.py
+    git add -A
+    git diff --cached --quiet || git commit -qm "M6: term {{ term }} — render the live index after enrollment"
+    git log --oneline | head -5
+    {% endmacro %}
+
+    {% macro notify_block(term) %}
+    {{ strict() }}
+    # ══ Notify, term {{ term }} (bench stage 5 — supersession flags, ACKED) ══
+    python3 scripts/notify.py
+    python3 scripts/consumer-ack.py
+    python3 scripts/render-index.py
+    # Propagation is a BIJECTION with receipts: every enrolled edge flagged
+    # exactly once, every flag acknowledged by every consumer manifest with a
+    # digest over the edge bytes — flags nobody acked are not propagation.
+    python3 - <<'PYEOF'
+    import json, sys
+    edges = [json.loads(l) for l in open("precedent/edges.jsonl") if l.strip()]
+    flags = json.load(open("site/data/consumers.json"))
+    seen = [f["edge_id"] for f in flags["flags"]]
+    missing = [e["id"] for e in edges if e["id"] not in seen]
+    dupes = {e for e in seen if seen.count(e) > 1}
+    unacked = [f["edge_id"] for f in flags["flags"] if not f.get("acknowledged") or "receipt_sha256" not in f]
+    if missing or dupes or unacked:
+        print(f"NOTIFY FAIL: missing={missing} duplicate={sorted(dupes)} unacked={unacked}", file=sys.stderr)
+        sys.exit(1)
+    print(f"notify term {{ term }}: {len(edges)} edge(s) flagged 1:1 and acknowledged across consumers")
+    PYEOF
+    git add -A
+    git diff --cached --quiet || git commit -qm "M7: term {{ term }} notify — supersession flags acked with receipts"
+    {% endmacro %}
+
+    {% if stage == 1 %}
+    {{ strict() }}
+    # ══ Movement 1 · Commission + Capture (M0) — Dormancy Gate / Etiquette Law ══
+    # The ENTIRE deterministic substrate is heredoc-authored here, by CLI, at
+    # run time: the score is GENERIC and self-contained — a fresh workspace plus
+    # CL_TOKEN plus gh-as-owner is the complete input. Probes fail LOUDLY before
+    # any expensive token is spent. The authenticated field map is GENERATED by
+    # code from the payloads, never typed — dead-field-name insurance.
+    mkdir -p scripts fixtures precedent motions/term-1 motions/term-2 \
+             briefs/term-1 briefs/term-2 rulings/term-1 rulings/term-2 \
+             memo errata evidence/authenticated site/data run reader schema
+
+    # ── Probes (Gate on Environmental Readiness — refusal is the mechanism) ─────
+    # pandoc is deliberately NOT probed and NOT used: the score renders markdown
+    # and strips HTML with its own stdlib scripts (md-to-html.py, html-to-text.py),
+    # commissioned below — a missing host binary must never again be a silent
+    # prerequisite discovered at movement 9 (review-1 finding).
+    for tool in python3 git gh jq sha256sum curl; do
+      command -v "$tool" >/dev/null 2>&1 \
+        || { echo "PROBE FAIL: $tool missing"; exit 1; }
+    done
+    gh auth status >/dev/null 2>&1 || { echo "PROBE FAIL: gh not authenticated"; exit 1; }
+    GH_LOGIN=$(gh api user --jq .login 2>/dev/null) \
+      || { echo "PROBE FAIL: gh api user refused"; exit 1; }
+    [ "$GH_LOGIN" = "{{ github_owner }}" ] \
+      || { echo "PROBE FAIL: gh is authenticated as $GH_LOGIN but github_owner={{ github_owner }} — rerun with --var github_owner=\$GH_LOGIN (site_url is DERIVED from owner/repo; never pass it independently)"; exit 1; }
+    # the reader's third-family instrument profile: the score never writes into
+    # ~/.marianne/ — it probes and records, failing loud with instructions
+    if [ ! -f "$HOME/.marianne/instruments/{{ reader_seat }}.yaml" ]; then
+      echo "PROBE NOTE: no ~/.marianne/instruments/{{ reader_seat }}.yaml on disk — the conductor must resolve this instrument another way; recorded in run/seat-matrix.json either way"
+    fi
+    command -v codex >/dev/null 2>&1 || { echo "PROBE FAIL: codex missing (the bench seat needs it)"; exit 1; }
+    test -n "${OPENAI_API_KEY:-}" || { echo "PROBE FAIL: OPENAI_API_KEY not set (codex-cli needs it)"; exit 1; }
+    command -v claude >/dev/null 2>&1 || { echo "PROBE FAIL: claude missing (the brief seat needs it)"; exit 1; }
+    command -v opencode >/dev/null 2>&1 || { echo "PROBE FAIL: opencode missing (the reader needs it)"; exit 1; }
+    curl -fsS --max-time 10 http://localhost:11434/api/tags >/dev/null 2>&1 \
+      || { echo "PROBE FAIL: ollama daemon not reachable (opencode-gemma needs it)"; exit 1; }
+    curl -fsS --max-time 10 http://localhost:11434/api/tags 2>/dev/null | grep -q "{{ reader_model }}" \
+      || { echo "PROBE FAIL: ollama is not serving {{ reader_model }} (pull it first)"; exit 1; }
+    test -n "${CL_TOKEN:-}" \
+      || { echo "PROBE FAIL: CL_TOKEN not set — register the free CourtListener token at accounts.courtlistener.com and export CL_TOKEN=<token>. There is NO fallback by design: a substitute source would gut the provenance story."; exit 1; }
+
+    if [ -f .commissioned ]; then
+      echo "bench already commissioned — probes re-run above, substrate stands"
+    else
+
+    # ── The Dormancy-Gate canary: unauthenticated MUST 401 (the live-regenerated
+    #    negative control — a curl exit 0 carrying a 401 body is NOT success) ────
+    CODE=$(curl -s -o fixtures/unauth-401.json -w '%{http_code}' \
+      'https://www.courtlistener.com/api/rest/v4/citation-lookup/?citations=442+U.S.+735')
+    [ "$CODE" = "401" ] \
+      || { echo "CANARY FAIL: unauthenticated lookup returned HTTP $CODE, expected 401 — API behavior changed; investigate, do not proceed"; exit 1; }
+    jq -e 'has("detail")' fixtures/unauth-401.json >/dev/null \
+      || { echo "CANARY FAIL: the 401 body shape is unexpected"; exit 1; }
+
+    # ── Authenticated capture: four citations, HTTP asserted from -w, payload
+    #    shape asserted from the BODY (Etiquette Law: never the exit code alone)─
+    : > run/capture-log.jsonl
+    {% for c in cases.values() %}
+    CODE=$(curl -s -o "evidence/authenticated/cite-{{ c.slug }}.json" -w '%{http_code}' \
+      -H "Authorization: Token $CL_TOKEN" \
+      'https://www.courtlistener.com/api/rest/v4/citation-lookup/?citations={{ c.cite | replace(' ', '+') }}')
+    [ "$CODE" = "200" ] \
+      || { echo "CANARY FAIL: authenticated lookup for {{ c.slug }} returned HTTP $CODE — token refused or endpoint moved"; exit 1; }
+    jq -e 'if type == "object" and has("detail") then false else true end' "evidence/authenticated/cite-{{ c.slug }}.json" >/dev/null \
+      || { echo "CANARY FAIL: {{ c.slug }} body carries an error envelope"; exit 1; }
+    echo "{\"slug\": \"{{ c.slug }}\", \"cite\": \"{{ c.cite }}\", \"http\": $CODE}" >> run/capture-log.jsonl
+    # cluster/opinion sample: BEST-EFFORT, RECORDED EITHER WAY — the jq-generated
+    # field map (never a guess) is the authority on what the payload exposes
+    CLUSTER_ID=$(jq -r '[.. | objects | select(has("cluster_id")) | .cluster_id][0] // empty' \
+      "evidence/authenticated/cite-{{ c.slug }}.json" 2>/dev/null || true)
+    if [ -n "$CLUSTER_ID" ]; then
+      curl -sf -H "Authorization: Token $CL_TOKEN" \
+        "https://www.courtlistener.com/api/rest/v4/clusters/$CLUSTER_ID/" \
+        -o "evidence/authenticated/cluster-{{ c.slug }}.json" \
+        && echo "{\"slug\": \"{{ c.slug }}\", \"sample\": \"cluster\", \"id\": \"$CLUSTER_ID\"}" >> run/capture-log.jsonl \
+        || echo "{\"slug\": \"{{ c.slug }}\", \"sample\": \"cluster\", \"id\": \"$CLUSTER_ID\", \"note\": \"capture refused, recorded\"}" >> run/capture-log.jsonl
+    else
+      echo "{\"slug\": \"{{ c.slug }}\", \"sample\": \"cluster\", \"note\": \"no cluster_id exposed at top of payload — field map is the authority\"}" >> run/capture-log.jsonl
+    fi
+    {% endfor %}
+
+    # one opinion sample off the first cluster that exposed an id (same rule)
+    FIRST_CLUSTER=$(jq -r 'select(.sample == "cluster" and has("id")) | .id' run/capture-log.jsonl | head -1 || true)
+    if [ -n "$FIRST_CLUSTER" ]; then
+      OP_ID=$(curl -sf -H "Authorization: Token $CL_TOKEN" \
+        "https://www.courtlistener.com/api/rest/v4/clusters/$FIRST_CLUSTER/" \
+        | jq -r '[.. | objects | select(has("id")) | .id][0] // empty' || true)
+      if [ -n "$OP_ID" ]; then
+        curl -sf -H "Authorization: Token $CL_TOKEN" \
+          "https://www.courtlistener.com/api/rest/v4/opinions/$OP_ID/" \
+          -o evidence/authenticated/sample-opinion.json \
+          && echo "{\"sample\": \"opinion\", \"id\": \"$OP_ID\"}" >> run/capture-log.jsonl || true
+      fi
+    fi
+
+    # ── The jq/python-GENERATED field map + digests (The Freeze's precondition:
+    #    the provenance sub-schema derives from THIS file, never from typing) ───
+    python3 - <<'PYEOF' > run/field-map.json
+    import json, glob, hashlib, pathlib, datetime
+    def norm(obj):
+        return json.dumps(obj, sort_keys=True, separators=(",", ":"))
+    def keys(o, prefix=""):
+        ks = set()
+        if isinstance(o, dict):
+            for k, v in o.items():
+                ks.add(prefix + k); ks |= keys(v, prefix + k + ".")
+        elif isinstance(o, list) and o:
+            ks |= keys(o[0], prefix + "[].")
+        return ks
+    fm = {"generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+          "api_vintage": "{{ api_vintage }}", "files": {}}
+    for p in sorted(glob.glob("evidence/authenticated/*.json")):
+        body = json.loads(pathlib.Path(p).read_text())
+        fm["files"][pathlib.Path(p).name] = {
+            "top_level_keys": sorted(body.keys()) if isinstance(body, dict) else ["<" + type(body).__name__ + ">"],
+            "observed_keys": sorted(keys(body)),
+            "normalized_sha256": hashlib.sha256(norm(body).encode()).hexdigest(),
+        }
+    print(json.dumps(fm, indent=2))
+    PYEOF
+    jq -e '.files | to_entries | map(select(.key | startswith("cite-")) | .key) | length >= 4' \
+      run/field-map.json >/dev/null \
+      || { echo "CANARY FAIL: the field map did not cover four citation bodies"; exit 1; }
+    ( cd evidence/authenticated && sha256sum *.json > SHA256SUMS.txt )
+
+    # ── Bench config + case order (scripts and validations read DISK from here;
+    #    the score's variables are seeds, the disk file is the source) ──────────
+    # site_url is DERIVED from owner/repo and an independently-passed mismatched
+    # value is REFUSED: the cross-tenant trap (your repo, the author's gate) is
+    # a configuration error this movement catches before any token is spent
+    # (review-3 finding). Each case also gets its exact query URL computed HERE,
+    # by code — movement 2 COPIES it from disk and the movement-2 gate verifies
+    # the copy byte-for-byte, so no LLM ever hand-types a provenance URL.
+    python3 - <<'PYEOF'
+    import json
+    owner, repo = "{{ github_owner }}", "{{ repo_name }}"
+    derived = "https://%s.github.io/%s/" % (owner.lower(), repo)
+    declared = "{{ site_url }}"
+    assert declared == derived, (
+        "site_url %r != derived %r — site_url is DERIVED from github_owner/repo_name; "
+        "rerun with --var github_owner=<login> --var repo_name=<repo> and let the "
+        "derived URL rule (passing site_url independently is the cross-tenant trap)" % (declared, derived))
+    cfg = {
+        "github_owner": owner, "repo_name": repo,
+        "site_url": derived, "site_url_source": "derived",
+        "jurisdiction_pin": "{{ jurisdiction_pin }}",
+        "seats": {"bench": "{{ bench_seat }}", "brief": "{{ brief_seat }}", "reader": "{{ reader_seat }}"},
+        "families": {{ families | tojson }},
+        "min_doctrine_rows": {{ min_doctrine_rows }}, "min_campaign_rows": {{ min_campaign_rows }},
+        "api_vintage": "{{ api_vintage }}",
+    }
+    json.dump(cfg, open("run/bench-config.json", "w"), indent=2)
+    cases = {{ cases | tojson }}
+    order = {}
+    for c in cases.values():
+        c = dict(c)
+        c["url"] = ("https://www.courtlistener.com/api/rest/v4/citation-lookup/?citations="
+                    + c["cite"].replace(" ", "+"))
+        order[c["slug"]] = c
+    json.dump(order, open("run/case-order.json", "w"), indent=2)
+    PYEOF
+    : > run/case-order.txt
+    {% for c in cases.values() %}echo '{{ c.slug }}' >> run/case-order.txt
+    {% endfor %}
+
+    # ── Seat matrix: BINARY probes, not profile-name probes (Condorcet wired) ───
+    # Review-1 fatal bug: the original probed the MARianne PROFILE NAMES
+    # (codex-cli/claude-code/opencode-gemma) as if they were executables — every
+    # seat died with FileNotFoundError. The probe now maps profile → binary and
+    # records WHAT IT MECHANICALLY OBSERVED: binary name + first line of version
+    # output. The family LABELS remain the score's declared table (an honest
+    # limit, recorded as family_source) — but the inequality gate joins on the
+    # MECHANICAL facts too (different binaries, different version strings), so
+    # the receipts prove diverse dispatchers even where family labels are
+    # declared. The reader's model is additionally read from its instrument
+    # profile ON DISK — disk over say-so wherever the fact lives on disk.
+    python3 - <<'PYEOF'
+    import json, pathlib, subprocess
+    cfg = json.load(open("run/bench-config.json"))
+    BIN = {"claude-code": "claude", "codex-cli": "codex",
+           "opencode-gemma": "opencode", "cli": "bash"}
+    def probe(instr):
+        b = BIN.get(instr, instr)
+        try:
+            v = subprocess.run([b, "--version"], capture_output=True, text=True, timeout=60)
+            out = ((v.stdout or "") + (v.stderr or "")).strip().splitlines()
+            return {"instrument": instr, "binary": b, "live": v.returncode == 0,
+                    "version_probe": out[0][:80] if out else "(no version output)"}
+        except Exception as e:
+            return {"instrument": instr, "binary": b, "live": False, "version_probe": str(e)[:80]}
+    seats = {role: {**probe(t), "family": cfg["families"][t],
+                    "family_source": "score-declared table (binary + version output probed mechanically)"}
+             for role, t in cfg["seats"].items()}
+    prof = pathlib.Path.home() / ".marianne" / "instruments" / (cfg["seats"]["reader"] + ".yaml")
+    reader_profile = {"path": str(prof), "exists": prof.exists()}
+    if prof.exists():
+        for line in prof.read_text().splitlines():
+            ls = line.strip()
+            if ls.startswith("model:"):
+                reader_profile["model"] = ls.split(":", 1)[1].strip().strip("'\"")
+    sm = {"seats": seats,
+          "bench_family": seats["bench"]["family"], "brief_family": seats["brief"]["family"],
+          "family_inequality": seats["bench"]["family"] != seats["brief"]["family"],
+          "binary_inequality": (seats["bench"]["binary"] != seats["brief"]["binary"]
+                                and seats["bench"]["version_probe"] != seats["brief"]["version_probe"]),
+          "reader_family": seats["reader"]["family"],
+          "reader_third_family": seats["reader"]["family"] not in
+                                 (seats["bench"]["family"], seats["brief"]["family"]),
+          "reader_binary_third": seats["reader"]["binary"] not in
+                                 (seats["bench"]["binary"], seats["brief"]["binary"]),
+          "reader_profile": reader_profile}
+    json.dump(sm, open("run/seat-matrix.json", "w"), indent=2)
+    assert all(s["live"] for s in seats.values()), "a seat BINARY failed its liveness probe (see binary/version_probe fields)"
+    assert sm["family_inequality"] and sm["binary_inequality"], \
+        "bench and brief seats share a family OR mechanically indistinguishable dispatchers — Condorcet violation"
+    assert sm["reader_third_family"] and sm["reader_binary_third"], \
+        "the reader shares a family or binary with bench or brief — priming risk"
+    PYEOF
+
+    # ── The Freeze: the contracts every downstream sheet builds against ─────────
+    cat > schema/precedent-row.json <<'JSONEOF'
+    {
+      "$comment": "FROZEN (The Freeze) — post-freeze changes are visible amendments only. Typed Force: {force, assigned_by} at creation; gates join on the type and never judge it. Supersession lives in edges.jsonl (append-only); the renderer materializes superseded_by at display time — an enrolled row byte never changes.",
+      "required": ["id", "layer", "case_name", "cite", "holding_text", "necessary_to_outcome", "force", "assigned_by", "provenance"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[PH]-[0-9]{3}[a-z]?$"},
+        "layer": {"enum": ["doctrine", "campaign"]},
+        "force": {"enum": ["binding", "persuasive"]},
+        "assigned_by": {"type": "string", "minLength": 1},
+        "necessary_to_outcome": {"type": "boolean"},
+        "provenance": {
+          "type": "object",
+          "required": ["query_url", "captured_at", "response_sha256", "api_vintage", "archive_path"],
+          "$comment": "doctrine rows bind to the authenticated capture (digests over NORMALIZED bytes); campaign rows cite the composition act: query_url='score:04-proof-score.yaml', archive_path='score'"
+        }
+      }
+    }
+    JSONEOF
+    cat > schema/motion.json <<'JSONEOF'
+    {
+      "$comment": "FROZEN — the typed motion packet. The distinguish/overrule asymmetry is IN THE TYPE: enroll.py refuses an overrule with an empty factors list; a distinguish needs no factor (conditions differ is cheap); an overrule must name one of {reliance, workability, changed-circumstances}.",
+      "required": ["motion_id", "type", "cites", "target", "scope", "factors", "argument_ref"],
+      "properties": {
+        "motion_id": {"type": "string"},
+        "type": {"enum": ["follow", "distinguish", "overrule"]},
+        "cites": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "factors": {"type": "array", "items": {"enum": ["reliance", "workability", "changed-circumstances"]}},
+        "scope": {"type": "string", "minLength": 2}
+      }
+    }
+    JSONEOF
+    cat > schema/ruling.json <<'JSONEOF'
+    {
+      "$comment": "FROZEN — the bench seat's ruling. force/assigned_by are Typed-Force fields the gates join on. enroll.authorized is advisory: enroll.py independently refuses any disposition that is not grant.",
+      "required": ["motion_id", "term", "motion_file", "disposition", "force", "assigned_by", "seat_id", "seat_family", "reasons"],
+      "properties": {
+        "disposition": {"enum": ["grant", "deny"]},
+        "force": {"enum": ["binding", "persuasive"]},
+        "seat_family": {"type": "string"}
+      }
+    }
+    JSONEOF
+    cat > schema/edge.json <<'JSONEOF'
+    {
+      "$comment": "FROZEN — the append-only supersession edge. The overruled precedent stays on the books, VISIBLY superseded; scope is the Carpenter nuance (superseded FOR CSLI, still good law otherwise).",
+      "required": ["id", "from", "to", "scope", "motion_id", "enrolled_by", "enrolled_at"],
+      "properties": {"scope": {"type": "string", "minLength": 2}}
+    }
+    JSONEOF
+    cat > schema/erratum.json <<'JSONEOF'
+    {
+      "$comment": "FROZEN — The Errata Ledger contrast arm. An erratum commits the ATOMIC PAIR: corrected canon + ledger row, hash-joined (new_hash == sha256 of the corrected canon). Bytes change and history records it — observably different from supersession, which changes no old byte.",
+      "required": ["id", "claim_id", "prior_hash", "new_hash", "date", "note"]
+    }
+    JSONEOF
+    for S in schema/*.json; do python3 -m json.tool "$S" >/dev/null || { echo "FREEZE FAIL: $S does not parse"; exit 1; }; done
+
+    # ══ The six gate scripts (The Tool Chain; every one commissioned below) ═════
+
+    cat > scripts/cite-join.sh <<'GATEEOF'
+    #!/usr/bin/env bash
+    # cite-join.sh — bench stage 1 (Graduate & Filter). Joins EVERY referential
+    # claim in a motion packet against precedent/index.jsonl: each cited row id,
+    # the target (which must also be CITED — you operate on a record you put on
+    # the table), and the successor (which must be enrolled or be the packet's
+    # own proposed_row.id). REFUSES with a named error BEFORE any reasoning is
+    # paid for. This is a join — jq's job, never an LLM's.
+    set -euo pipefail
+    WS="$(cd "$(dirname "$0")/.." && pwd)"
+    INDEX="$WS/precedent/index.jsonl"
+    [ -s "$INDEX" ] || { echo "CITE-JOIN REFUSED: index missing or empty: $INDEX" >&2; exit 2; }
+    has_row() { jq -e --arg c "$1" 'select(.id == $c)' "$INDEX" >/dev/null 2>&1; }
+    FAIL=0
+    for MOTION in "$@"; do
+      [ -s "$MOTION" ] || { echo "CITE-JOIN REFUSED: motion file missing: $MOTION" >&2; exit 2; }
+      MID=$(jq -r '.motion_id // "unnamed"' "$MOTION")
+      while IFS= read -r CITE; do
+        [ -n "$CITE" ] || continue
+        if ! has_row "$CITE"; then
+          echo "CITE-JOIN REFUSED: motion $MID cites dangling row id: $CITE — file a motion against an ENROLLED row, or enroll it first" >&2
+          FAIL=1
+        fi
+      done < <(jq -r '.cites[]' "$MOTION")
+      TARGET=$(jq -r '.target // empty' "$MOTION")
+      if [ -n "$TARGET" ]; then
+        has_row "$TARGET" || { echo "CITE-JOIN REFUSED: motion $MID targets $TARGET, which is not enrolled" >&2; FAIL=1; }
+        jq -e --arg t "$TARGET" '(.cites // []) | index($t) != null' "$MOTION" >/dev/null 2>&1 \
+          || { echo "CITE-JOIN REFUSED: motion $MID targets $TARGET without citing it — the record it operates on must be on the table" >&2; FAIL=1; }
+      fi
+      SUCC=$(jq -r '.successor // empty' "$MOTION")
+      if [ -n "$SUCC" ]; then
+        PROP=$(jq -r '.proposed_row.id // empty' "$MOTION")
+        if [ "$SUCC" != "$PROP" ] && ! has_row "$SUCC"; then
+          echo "CITE-JOIN REFUSED: motion $MID names successor $SUCC, which is neither enrolled nor the motion's own proposed_row.id ($PROP) — referential integrity starts HERE, not at enrollment" >&2
+          FAIL=1
+        fi
+      fi
+    done
+    [ "$FAIL" -eq 0 ] || exit 1
+    echo "cite-join: OK ($# motion packet(s), every citation joins; every target and successor joins too)"
+    GATEEOF
+
+    cat > scripts/force-typecheck.py <<'GATEEOF'
+    #!/usr/bin/env python3
+    """force-typecheck.py — the Typed Force gate. Joins on the type; never
+    judges it. A row missing {force, assigned_by} at creation is REFUSED:
+    binding holdings and persuasive dicta never enter the index
+    undifferentiated. Also lints motion packets (the overrule/factor bar).
+
+    Dispatch is STRUCTURAL, never by filename: a JSON object carrying
+    {motion_id, type} rides the motion path; JSONL rows ride the row path.
+    The stage-4 version dispatched on 'motion' appearing in the FILENAME —
+    the production packet MOT-T1-001.json contains no such substring, so the
+    real motion would have been typechecked as rows and refused, while the
+    conveniently-named fixture exercised the motion path: a counterfeit
+    control (review-2 finding). Both now ride the same structural dispatch."""
+    import json, pathlib, sys
+
+    FORCES = {"binding", "persuasive"}
+    FACTORS = {"reliance", "workability", "changed-circumstances"}
+    TYPES = {"follow", "distinguish", "overrule"}
+    PROV_KEYS = {"query_url", "captured_at", "response_sha256", "api_vintage", "archive_path"}
+
+    def refuse(msg):
+        print(f"FORCE-TYPECHECK REFUSED: {msg}", file=sys.stderr)
+        return 1
+
+    def strip_fences(text):
+        lines = text.splitlines()
+        if lines and lines[0].lstrip().startswith("```"):
+            lines = lines[1:]
+            while lines and lines[-1].strip() == "":
+                lines = lines[:-1]
+            if lines and lines[-1].lstrip().startswith("```"):
+                lines = lines[:-1]
+        return "\n".join(lines)
+
+    def check_rows(path):
+        bad = 0
+        seen_ids = set()
+        lines = [l for l in strip_fences(pathlib.Path(path).read_text()).splitlines() if l.strip()]
+        for n, line in enumerate(lines, 1):
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError as e:
+                bad += refuse(f"{path}:{n} is not JSON ({e})"); continue
+            rid = r.get("id", f"{path}:{n}")
+            if rid in seen_ids:
+                bad += refuse(f"row {rid} appears twice in {path} — enrolled ids are unique")
+            seen_ids.add(rid)
+            missing = {"force", "assigned_by", "layer", "necessary_to_outcome"} - r.keys()
+            if missing:
+                bad += refuse(f"row {rid} missing {sorted(missing)}"); continue
+            if r["force"] not in FORCES:
+                bad += refuse(f"row {rid} force {r['force']!r} not in {sorted(FORCES)}")
+            if not isinstance(r["assigned_by"], str) or not r["assigned_by"].strip():
+                bad += refuse(f"row {rid} carries no assigned_by authority")
+            if r["layer"] not in {"doctrine", "campaign"}:
+                bad += refuse(f"row {rid} layer {r['layer']!r} unknown")
+            if not isinstance(r["necessary_to_outcome"], bool):
+                bad += refuse(f"row {rid} necessary_to_outcome must be boolean (holding vs. dictum), got {r['necessary_to_outcome']!r}")
+            for f in ("case_name", "cite", "holding_text"):
+                if not isinstance(r.get(f), str) or not r[f].strip():
+                    bad += refuse(f"row {rid} carries no {f}")
+            prov = r.get("provenance") or {}
+            if not PROV_KEYS <= prov.keys():
+                bad += refuse(f"row {rid} ({r['layer']}) provenance incomplete (needs {sorted(PROV_KEYS)})")
+        return bad
+
+    def check_motion(path):
+        m = json.loads(strip_fences(pathlib.Path(path).read_text()))
+        bad = 0
+        mid = m.get("motion_id", path)
+        if m.get("type") not in TYPES:
+            bad += refuse(f"motion {mid} type {m.get('type')!r} not in {sorted(TYPES)}")
+        if m.get("type") == "overrule" and not m.get("factors"):
+            bad += refuse(f"overrule motion {mid} names NO factor — the overrule bar is structurally higher than the distinguish bar")
+        for f in m.get("factors", []):
+            if f not in FACTORS:
+                bad += refuse(f"motion {mid} factor {f!r} not in {sorted(FACTORS)}")
+        if not m.get("cites"):
+            bad += refuse(f"motion {mid} cites nothing — a motion stands on enrolled rows")
+        if not isinstance(m.get("target"), str) or not m["target"].strip():
+            bad += refuse(f"motion {mid} names no target row")
+        if not isinstance(m.get("scope"), str) or len(m["scope"].strip()) < 2:
+            bad += refuse(f"motion {mid} carries no scope")
+        return bad
+
+    if __name__ == "__main__":
+        bad = 0
+        for p in sys.argv[1:]:
+            text = strip_fences(pathlib.Path(p).read_text())
+            try:
+                obj = json.loads(text)
+            except json.JSONDecodeError:
+                obj = None
+            if isinstance(obj, dict) and "motion_id" in obj and "type" in obj:
+                bad += check_motion(p)
+            else:
+                bad += check_rows(p)
+        sys.exit(1 if bad else 0)
+    GATEEOF
+
+    cat > scripts/enroll.py <<'GATEEOF'
+    #!/usr/bin/env python3
+    """enroll.py — bench stage 4. THE single serialized writer of the index:
+    fcntl-locked, per-file atomic (temp + fsync + rename) with BOTH ledgers
+    written under one lock, exactly one CHECKED git commit per enrollment, and
+    every commit journaled to run/commit-journal.jsonl so rewrite detection has
+    ancestry to test (history-check.sh). Appends IMMUTABLE rows to
+    precedent/index.jsonl and append-only supersession edges to
+    precedent/edges.jsonl — it never rewrites an enrolled byte. Honest
+    atomicity (review-2 finding): a crash BETWEEN the two renames can leave
+    row-without-edge (additive, reconcilable) — the reverse, edge-without-row,
+    is what corrupts meaning, and the NEXT writer DETECTS both directions on
+    load and refuses (fail-closed recovery, damage visible in the git chain).
+    Refuses: a ruling whose disposition is not GRANT; an overrule with an empty
+    factors list; a target or successor that does not resolve (referential
+    integrity starts at cite-check and is RE-verified here); a ruling already
+    enrolled (the concurrency property: exactly one enrollment can ever land)."""
+    import fcntl, json, os, pathlib, subprocess, sys, tempfile, datetime
+
+    def refuse(msg):
+        print(f"ENROLL REFUSED: {msg}", file=sys.stderr)
+        sys.exit(1)
+
+    def ws_default():
+        return pathlib.Path(__file__).resolve().parent.parent
+
+    def git_commit(root, msg):
+        """Checked commit — never '|| true'. Returns the new sha, or None when
+        nothing was staged (callers treat that as an error for enrollments)."""
+        try:
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True, capture_output=True, text=True)
+            st = subprocess.run(["git", "status", "--porcelain"], cwd=root, capture_output=True, text=True)
+            if not st.stdout.strip():
+                return None
+            subprocess.run(["git", "commit", "-qm", msg], cwd=root, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            refuse(f"git commit refused: {(e.stderr or e.stdout or '').strip()[:200]} — custody is part of the write, not an afterthought")
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True).stdout.strip()
+
+    def journal(root, entry):
+        jf = root / "run" / "commit-journal.jsonl"
+        jf.parent.mkdir(parents=True, exist_ok=True)
+        with open(jf, "a") as f:
+            f.write(json.dumps(entry, sort_keys=True) + "\n")
+            f.flush(); os.fsync(f.fileno())
+
+    def load_state(idx_dir, rows_f, edges_f):
+        rows = [json.loads(l) for l in rows_f.read_text().splitlines() if l.strip()] if rows_f.exists() else []
+        edges = [json.loads(l) for l in edges_f.read_text().splitlines() if l.strip()] if edges_f.exists() else []
+        ids = [r.get("id") for r in rows]
+        if len(set(ids)) != len(ids):
+            refuse("index.jsonl carries duplicate row ids — the append-only ledger is inconsistent; inspect the git chain")
+        eids = [e.get("id") for e in edges]
+        if len(set(eids)) != len(eids):
+            refuse("edges.jsonl carries duplicate edge ids — the append-only ledger is inconsistent; inspect the git chain")
+        have = set(ids)
+        for e in edges:
+            if e.get("from") not in have or e.get("to") not in have:
+                refuse(f"edge {e.get('id')} references an unenrolled row ({e.get('from')} -> {e.get('to')}) — "
+                       "half-enrollment or tampering detected; refuse and reconcile from the git chain")
+        return rows, edges
+
+    def resolve_motion(ref):
+        base = ws_default()
+        cands = [base / ref]
+        if not ref.startswith("/"):
+            cands += [base / "motions" / ref,
+                      base / "motions" / pathlib.Path(ref).name,
+                      base / pathlib.Path(ref).name]
+        for c in cands:
+            if c.is_file():
+                return c
+        refuse(f"ruling's motion_file {ref!r} resolves under no known spelling of {base} "
+               "(workspace-relative, basename and motions/ variants all tried)")
+
+    def append_locked(idx_dir, path, records):
+        tmp = tempfile.NamedTemporaryFile("w", dir=idx_dir, delete=False)
+        for r in records:
+            tmp.write(json.dumps(r, sort_keys=True) + "\n")
+        tmp.flush(); os.fsync(tmp.fileno()); tmp.close()
+        os.replace(tmp.name, path)
+
+    def seed(seed_file, root):
+        """--seed mode: the composition-act admission path (movement 2). The
+        score itself is the recorded human-authorized act — assigned_by reads
+        'composer-registration'. Same lock, same atomicity, same journal."""
+        chk = subprocess.run(["python3", str(pathlib.Path(__file__).parent / "force-typecheck.py"), str(seed_file)],
+                             capture_output=True, text=True)
+        if chk.returncode != 0:
+            refuse(f"seed file refused by force-typecheck:\n{chk.stderr}")
+        rows_in = [json.loads(l) for l in pathlib.Path(seed_file).read_text().splitlines() if l.strip()]
+        idx_dir = root / "precedent"; idx_dir.mkdir(parents=True, exist_ok=True)
+        rows_f = idx_dir / "index.jsonl"
+        with open(idx_dir / ".enroll.lock", "w") as lk:
+            fcntl.flock(lk, fcntl.LOCK_EX)
+            rows, _ = load_state(idx_dir, rows_f, idx_dir / "edges.jsonl")
+            have = {r["id"] for r in rows}
+            for r in rows_in:
+                if r["id"] in have:
+                    refuse(f"seed row {r['id']} already enrolled — the serialized writer is idempotent by refusal")
+            append_locked(idx_dir, rows_f, rows + rows_in)
+            sha = None
+            if os.environ.get("BENCH_ENROLL_GIT") != "0" and (root / ".git").exists():
+                sha = git_commit(root, f"seed: {len(rows_in)} row(s) enrolled — the composition act")
+                if sha is None:
+                    refuse("seed committed nothing — the rows did not land in the tree")
+                journal(root, {"sha": sha, "kind": "seed", "rows": len(rows_in),
+                               "at": datetime.datetime.now(datetime.timezone.utc).isoformat()})
+        print(f"seed: {len(rows_in)} row(s) enrolled under the serialized writer")
+
+    def main():
+        args = [a for a in sys.argv[1:] if not a.startswith("--")]
+        root = ws_default()
+        for a in sys.argv[1:]:
+            if a.startswith("--root="):
+                root = pathlib.Path(a.split("=", 1)[1])
+            elif a.startswith("--seed="):
+                return seed(a.split("=", 1)[1], root)
+        if not args:
+            refuse("usage: enroll.py [--root=DIR] [--seed=rows.jsonl] <ruling.json>")
+        ruling_path = pathlib.Path(args[0])
+        ruling = json.loads(ruling_path.read_text())
+        if ruling.get("disposition") != "grant":
+            refuse(f"motion {ruling.get('motion_id')} disposition is {ruling.get('disposition')!r} — only GRANTED motions enroll; a denial enrolls NOTHING")
+        motion = json.loads(resolve_motion(ruling.get("motion_file", "")).read_text())
+        if motion.get("type") == "overrule" and not motion.get("factors"):
+            refuse("overrule motion carries no named factor ({reliance, workability, changed-circumstances})")
+        idx_dir = root / "precedent"
+        idx_dir.mkdir(parents=True, exist_ok=True)
+        lock = idx_dir / ".enroll.lock"
+        rows_f, edges_f = idx_dir / "index.jsonl", idx_dir / "edges.jsonl"
+        new_rows, new_edges = [], []
+        with open(lock, "w") as lk:
+            fcntl.flock(lk, fcntl.LOCK_EX)
+            rows, edges = load_state(idx_dir, rows_f, edges_f)
+            have = {r["id"] for r in rows}
+            if any(e.get("motion_id") == ruling["motion_id"] for e in edges) or \
+               any(r.get("enrolled_motion") == ruling["motion_id"] for r in rows):
+                refuse(f"motion {ruling['motion_id']} is ALREADY enrolled — the serialized writer is idempotent by refusal")
+            if motion.get("target") and motion["target"] not in have:
+                refuse(f"motion target {motion['target']} is not enrolled — referential integrity re-verified at the writer")
+            prop = motion.get("proposed_row")
+            if motion.get("successor"):
+                if prop and motion["successor"] == prop.get("id"):
+                    pass  # the successor is the row this enrollment appends
+                elif motion["successor"] not in have:
+                    refuse(f"motion successor {motion['successor']} is neither enrolled nor the proposed row's id")
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            if prop:
+                if prop["id"] in have:
+                    refuse(f"proposed row {prop['id']} already exists")
+                rec = dict(prop)
+                rec["enrolled_motion"] = ruling["motion_id"]
+                rec["enrolled_at"] = now
+                new_rows.append(rec)
+            if motion.get("target") and motion.get("successor"):
+                new_edges.append({
+                    "id": f"E-{len(edges) + 1:03d}",
+                    "from": motion["target"], "to": motion["successor"],
+                    "scope": motion.get("scope", "unscoped"),
+                    "motion_id": ruling["motion_id"], "enrolled_by": ruling["assigned_by"],
+                    "enrolled_at": now})
+            append_locked(idx_dir, rows_f, rows + new_rows)
+            append_locked(idx_dir, edges_f, edges + new_edges)
+            sha = None
+            if os.environ.get("BENCH_ENROLL_GIT") != "0" and (root / ".git").exists():
+                sha = git_commit(root, f"enroll: {ruling['motion_id']} ({ruling['disposition']}) — append-only rows + scoped edge")
+                if sha is None:
+                    refuse("enrollment committed nothing — the append did not land in the tree")
+                journal(root, {"sha": sha, "kind": "enroll", "motion": ruling["motion_id"],
+                               "rows": len(new_rows), "edges": len(new_edges),
+                               "at": datetime.datetime.now(datetime.timezone.utc).isoformat()})
+        print(f"enroll: {ruling['motion_id']} — {len(new_rows)} row(s), {len(new_edges)} edge(s), one journaled commit")
+
+    if __name__ == "__main__":
+        main()
+    GATEEOF
+
+    cat > scripts/notify.py <<'GATEEOF'
+    #!/usr/bin/env python3
+    """notify.py — bench stage 5. Propagates supersession flags to every
+    consumer manifest. Consumers learn an overruled holding moved through
+    FLAGS, never by re-reading prose."""
+    import json, pathlib, sys
+
+    WS = pathlib.Path(__file__).resolve().parent.parent
+    edges_f = WS / "precedent" / "edges.jsonl"
+    cons_f = WS / "site" / "data" / "consumers.json"
+    edges = [json.loads(l) for l in edges_f.read_text().splitlines() if l.strip()] if edges_f.exists() else []
+    cons_f.parent.mkdir(parents=True, exist_ok=True)
+    m = json.loads(cons_f.read_text()) if cons_f.exists() else {"consumers": ["site/data/consumer-render.json"], "flags": []}
+    known = {f.get("edge_id") for f in m.get("flags", [])}
+    for e in edges:
+        if e["id"] not in known:
+            m["flags"].append({"edge_id": e["id"], "from": e["from"], "to": e["to"],
+                               "scope": e.get("scope"), "acknowledged": False})
+    cons_f.write_text(json.dumps(m, indent=2) + "\n")
+    for c in m.get("consumers", []):
+        p = WS / c
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"supersession_flags": m["flags"]}, indent=2) + "\n")
+    print(f"notify: {len(m['flags'])} supersession flag(s) visible across {len(m.get('consumers', []))} consumer manifest(s)")
+    GATEEOF
+
+    cat > scripts/consumer-ack.py <<'GATEEOF'
+    #!/usr/bin/env python3
+    """consumer-ack.py — the consumption half of notify (bench stage 5b). Flags
+    existing is not propagation: each consumer manifest READS its flags and
+    acknowledges them with a receipt digest over the edge bytes. A flag nobody
+    acked means a holding moved and no consumer can prove it saw the move —
+    notify gates refuse that state (review-2 finding: 'nonempty flags presented
+    as consumer notification')."""
+    import datetime, hashlib, json, pathlib, sys
+
+    WS = pathlib.Path(__file__).resolve().parent.parent
+    cons_f = WS / "site" / "data" / "consumers.json"
+    m = json.loads(cons_f.read_text())
+    edges = {json.loads(l)["id"]: json.loads(l)
+             for l in (WS / "precedent" / "edges.jsonl").read_text().splitlines() if l.strip()} \
+        if (WS / "precedent" / "edges.jsonl").exists() else {}
+    acked = 0
+    for f in m.get("flags", []):
+        if f.get("acknowledged"):
+            continue
+        e = edges.get(f["edge_id"])
+        if e is None:
+            print(f"CONSUMER-ACK REFUSED: flag {f['edge_id']} matches no enrolled edge", file=sys.stderr)
+            sys.exit(1)
+        f["acknowledged"] = True
+        f["acked_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        f["receipt_sha256"] = hashlib.sha256(json.dumps(e, sort_keys=True).encode()).hexdigest()
+        acked += 1
+    cons_f.write_text(json.dumps(m, indent=2) + "\n")
+    for c in m.get("consumers", []):
+        p = WS / c
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"supersession_flags": m["flags"]}, indent=2) + "\n")
+    print(f"consumer-ack: {acked} flag(s) acknowledged with receipt digests; "
+          f"{len(m.get('consumers', []))} consumer manifest(s) refreshed")
+    GATEEOF
+
+    cat > scripts/digest-verify.py <<'GATEEOF'
+    #!/usr/bin/env python3
+    """digest-verify.py — every doctrine row's provenance digest must recompute
+    against the archived body (normalized: sorted keys, compact — drift in key
+    order is upstream noise, drift in CONTENT is not). --live re-runs the query
+    against the API and compares LIVE normalized bytes: the Gas-Free discipline
+    — the certificate holds at the moment of live verification."""
+    import hashlib, json, os, pathlib, subprocess, sys
+
+    def norm_digest(path_or_bytes):
+        raw = path_or_bytes.read_bytes() if isinstance(path_or_bytes, pathlib.Path) else path_or_bytes
+        return hashlib.sha256(json.dumps(json.loads(raw), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+    def main():
+        argv = sys.argv[1:]
+        live = "--live" in argv
+        if live and not os.environ.get("CL_TOKEN"):
+            print("DIGEST-VERIFY LIVE REFUSED: CL_TOKEN is not exported — a live check re-verifies its own preconditions", file=sys.stderr)
+            sys.exit(1)
+        idx = pathlib.Path(argv[argv.index("--index") + 1]) if "--index" in argv else \
+              pathlib.Path(__file__).resolve().parent.parent / "precedent" / "index.jsonl"
+        rows = [json.loads(l) for l in idx.read_text().splitlines() if l.strip()]
+        bad = 0
+        for r in rows:
+            if r.get("layer") != "doctrine":
+                continue
+            prov = r["provenance"]
+            arch = idx.parent.parent / prov["archive_path"]
+            if not arch.exists():
+                print(f"DIGEST-VERIFY REFUSED: row {r['id']} archive missing: {arch}", file=sys.stderr); bad += 1; continue
+            if norm_digest(arch) != prov["response_sha256"]:
+                print(f"DIGEST-VERIFY REFUSED: row {r['id']} digest mismatch vs {prov['archive_path']}", file=sys.stderr); bad += 1
+            if live:
+                out = subprocess.run(["curl", "-sf", "-H", f"Authorization: Token {os.environ['CL_TOKEN']}",
+                                      prov["query_url"]], capture_output=True)
+                if out.returncode != 0:
+                    print(f"DIGEST-VERIFY LIVE REFUSED: row {r['id']} query failed: {prov['query_url']}", file=sys.stderr); bad += 1
+                elif norm_digest(out.stdout) != prov["response_sha256"]:
+                    print(f"DIGEST-VERIFY LIVE REFUSED: row {r['id']} — upstream bytes moved since capture ({prov['query_url']}); the vintage pin is stale: file a re-pin motion", file=sys.stderr); bad += 1
+        print(f"digest-verify{' --live' if live else ''}: {sum(1 for r in rows if r.get('layer') == 'doctrine')} doctrine row(s) verified")
+        sys.exit(1 if bad else 0)
+
+    if __name__ == "__main__":
+        main()
+    GATEEOF
+
+    cat > scripts/errata-commit.py <<'GATEEOF'
+    #!/usr/bin/env python3
+    """errata-commit.py — The Errata Ledger arm. An erratum commits the PAIR:
+    corrected canon + ledger row, hash-joined (ledger new_hash == sha256 of the
+    corrected canon), fsynced, committed with a CHECKED git commit under an
+    errata lock, and journaled with a MONOTONIC watermark (seq 1..N, verified
+    contiguous — the watermark the architecture promised, now implemented). A
+    half-written pair is refused on verify. The DEFAULT canon is memo/memo.html
+    — the file the movement actually corrects (the stage-4 default hashed
+    memo.md while the ledger recorded the HTML: two validators disagreeing,
+    review-2 finding). Contrast with supersession: an erratum CHANGES bytes
+    and records it; an overrule changes no old byte and records an edge."""
+    import datetime, fcntl, hashlib, json, os, pathlib, subprocess, sys
+
+    def sha(s): return hashlib.sha256(s.encode()).hexdigest()
+
+    def load(ledger):
+        return [json.loads(l) for l in ledger.read_text().splitlines() if l.strip()] if ledger.exists() else []
+
+    def check_watermark(rows):
+        seqs = sorted(r["seq"] for r in rows)
+        if seqs != list(range(1, len(rows) + 1)):
+            print(f"ERRATA VERIFY REFUSED: watermark is not contiguous 1..{len(rows)} — got {seqs}", file=sys.stderr)
+            sys.exit(1)
+
+    def main():
+        WS = pathlib.Path(__file__).resolve().parent.parent
+        argv = sys.argv[1:]
+        if "--verify-join" in argv:
+            ledger = pathlib.Path(argv[argv.index("--ledger") + 1]) if "--ledger" in argv else WS / "errata" / "ledger.jsonl"
+            canon = pathlib.Path(argv[argv.index("--canon") + 1]) if "--canon" in argv else WS / "memo" / "memo.html"
+            rows = load(ledger)
+            if not rows:
+                print("ERRATA VERIFY REFUSED: the ledger is empty — nothing to join", file=sys.stderr); sys.exit(1)
+            check_watermark(rows)
+            last = {}
+            for r in rows:
+                last[r["claim_id"]] = r
+            bad = 0
+            for cid, r in last.items():
+                if sha(canon.read_text()) != r["new_hash"]:
+                    print(f"ERRATA VERIFY REFUSED: claim {cid} new_hash does not join the corrected canon {canon} — half-written pair", file=sys.stderr); bad += 1
+            if bad:
+                sys.exit(1)
+            print(f"errata verify-join: {len(last)} claim(s) joined against {canon.name}; watermark 1..{len(rows)} contiguous")
+            return
+        if not argv:
+            print("usage: errata-commit.py <entry.json> | --verify-join [--ledger F] [--canon F]", file=sys.stderr); sys.exit(2)
+        entry = json.loads(pathlib.Path(argv[0]).read_text())
+        canon = WS / entry["canon_path"]
+        text = canon.read_text()
+        if sha(text) == entry["prior_hash"]:
+            print("ERRATA COMMIT REFUSED: the canon bytes did not change — there is nothing to correct", file=sys.stderr); sys.exit(1)
+        ledger = WS / "errata" / "ledger.jsonl"
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        lockf = ledger.parent / ".errata.lock"
+        with open(lockf, "w") as lk:
+            fcntl.flock(lk, fcntl.LOCK_EX)
+            rows = load(ledger)
+            check_watermark(rows)
+            prior_seq = max((r["seq"] for r in rows), default=0)
+            row = {"id": f"ER-{entry['claim_id']}-{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}",
+                   "seq": prior_seq + 1,
+                   "claim_id": entry["claim_id"], "prior_hash": entry["prior_hash"],
+                   "new_hash": sha(text), "date": datetime.date.today().isoformat(), "note": entry["note"]}
+            with open(ledger, "a") as f:
+                f.write(json.dumps(row, sort_keys=True) + "\n")
+                f.flush(); os.fsync(f.fileno())
+            if os.environ.get("BENCH_ENROLL_GIT") != "0" and (WS / ".git").exists():
+                try:
+                    subprocess.run(["git", "add", "-A"], cwd=WS, check=True, capture_output=True, text=True)
+                    subprocess.run(["git", "commit", "-qm",
+                                    f"erratum: {row['claim_id']} — canon+ledger pair, hash-joined, watermark {row['seq']}"],
+                                   cwd=WS, check=True, capture_output=True, text=True)
+                    sha_out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=WS, capture_output=True, text=True).stdout.strip()
+                    jf = WS / "run" / "commit-journal.jsonl"
+                    with open(jf, "a") as f:
+                        f.write(json.dumps({"sha": sha_out, "kind": "erratum", "claim": row["claim_id"],
+                                            "at": datetime.datetime.now(datetime.timezone.utc).isoformat()}, sort_keys=True) + "\n")
+                        f.flush(); os.fsync(f.fileno())
+                except subprocess.CalledProcessError as e:
+                    print(f"ERRATA COMMIT REFUSED: git refused: {(e.stderr or e.stdout or '').strip()[:200]}", file=sys.stderr)
+                    sys.exit(1)
+        print(f"erratum committed: {row['id']} (prior {row['prior_hash'][:12]}… → new {row['new_hash'][:12]}…, watermark {row['seq']})")
+
+    if __name__ == "__main__":
+        main()
+    GATEEOF
+
+    cat > scripts/render-index.py <<'GATEEOF'
+    #!/usr/bin/env python3
+    """render-index.py — one accumulating state, many consumers (Monitor Mix):
+    renders precedent/index.jsonl + edges.jsonl into precedent/INDEX.md, the
+    cadenza source ONLY the brief and bench sheets receive. Cite-check joins
+    mechanically and gets no rendering it does not need."""
+    import json, pathlib
+
+    WS = pathlib.Path(__file__).resolve().parent.parent
+    rows = [json.loads(l) for l in (WS / "precedent" / "index.jsonl").read_text().splitlines() if l.strip()] \
+        if (WS / "precedent" / "index.jsonl").exists() else []
+    edges = [json.loads(l) for l in (WS / "precedent" / "edges.jsonl").read_text().splitlines() if l.strip()] \
+        if (WS / "precedent" / "edges.jsonl").exists() else []
+    by_id = {r["id"]: r for r in rows}
+    lines = ["# The Precedent Bench — live index", "",
+             f"{len(rows)} enrolled row(s); {len(edges)} supersession edge(s).",
+             "Rows are immutable; supersession is append-only.", "",
+             "| id | layer | force | necessary | case | assigned_by |",
+             "|---|---|---|---|---|---|"]
+    for r in rows:
+        lines.append(f"| {r['id']} | {r['layer']} | {r['force']} | {'holding' if r['necessary_to_outcome'] else 'dictum'} "
+                     f"| {r.get('case_name', '')} ({r.get('cite', '')}) | {r['assigned_by']} |")
+    if edges:
+        lines += ["", "## Supersession edges", ""]
+        for e in edges:
+            f, t = by_id.get(e["from"], {"case_name": e["from"]}), by_id.get(e["to"], {"case_name": e["to"]})
+            lines.append(f"- **{f.get('case_name', e['from'])}** ({e['from']}) — superseded **for {e['scope']}** by "
+                         f"**{t.get('case_name', e['to'])}** ({e['to']}); enrolled by {e['enrolled_by']} on motion {e['motion_id']}. "
+                         f"The overruled row remains on the books, citable outside the scope.")
+    out = WS / "precedent" / "INDEX.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines) + "\n")
+    print(f"render-index: {len(rows)} rows, {len(edges)} edges → {out}")
+    GATEEOF
+
+    # ({% raw %}: the site builder's f-string CSS doubles braces for PYTHON —
+    # Jinja must not parse them)
+    {% raw %}
+    cat > scripts/build-site.py <<'GATEEOF'
+    #!/usr/bin/env python3
+    """build-site.py — Proof-Carrying Artifact: the site IS the bench. Renders
+    the force-badged index, the scoped-supersession graph, the memo, the
+    errata-vs-precedent contrast, the verify-it-yourself panel (query URLs +
+    normalized digests — a stranger re-derives every row) and the
+    negative-control table. Pure stdlib + pandoc for the memo."""
+    import json, pathlib, subprocess, html
+
+    WS = pathlib.Path(__file__).resolve().parent.parent
+    cfg = json.loads((WS / "run" / "bench-config.json").read_text())
+    rows = [json.loads(l) for l in (WS / "precedent" / "index.jsonl").read_text().splitlines() if l.strip()]
+    edges = [json.loads(l) for l in (WS / "precedent" / "edges.jsonl").read_text().splitlines() if l.strip()] \
+        if (WS / "precedent" / "edges.jsonl").exists() else []
+    by_id = {r["id"]: r for r in rows}
+    esc = lambda s: html.escape(str(s), quote=True)
+
+    # verify panel data — the live gate consumes THIS from the deployed URL
+    verify = [{"slug": r["id"], "row": r["id"], "case": r.get("case_name", ""),
+               "query_url": r["provenance"]["query_url"],
+               "normalized_sha256": r["provenance"]["response_sha256"],
+               "captured_at": r["provenance"]["captured_at"]}
+              for r in rows if r.get("layer") == "doctrine"]
+    (WS / "site" / "data").mkdir(parents=True, exist_ok=True)
+    (WS / "site" / "data" / "verify.json").write_text(json.dumps(verify, indent=2) + "\n")
+
+    def badge(force): return f'<span class="badge {"b" if force == "binding" else "p"}">{esc(force)}</span>'
+
+    trs = []
+    for r in rows:
+        sup = [e for e in edges if e["from"] == r["id"]]
+        flags = " ".join(f'<span class="flag">superseded for {esc(e["scope"])} by {esc(e["to"])} — still citable otherwise</span>' for e in sup)
+        prov = r.get("provenance", {})
+        # build the provenance cell OUTSIDE f-strings: a backslash inside an
+        # f-string expression is a SyntaxError before Python 3.12, and the
+        # stage-4 version carried exactly that — un-executed, it survived three
+        # reviews; movement 1's own py_compile loop would have killed the run
+        if prov.get("query_url", "").startswith("http"):
+            prov_cell = '<a href="' + esc(prov.get("query_url", "#")) + '">query</a>'
+        else:
+            prov_cell = "composition act"
+        prov_cell += '<br><small><code>' + esc(prov.get("response_sha256", "")) + "</code></small>"
+        trs.append("<tr>"
+                   f"<td><code>{esc(r['id'])}</code></td><td>{esc(r.get('case_name',''))}</td>"
+                   f"<td>{esc(r.get('cite',''))}</td><td>{badge(r['force'])}</td>"
+                   f"<td>{'holding' if r['necessary_to_outcome'] else 'dictum'}</td>"
+                   f"<td>{esc(r['assigned_by'])}</td>"
+                   f"<td>{flags or '—'}</td>"
+                   f"<td>{prov_cell}</td>"
+                   "</tr>")
+    graph = []
+    if edges:
+        graph.append("<ul class='graph'>")
+        for e in edges:
+            graph.append(f"<li>{esc(by_id.get(e['from'],{}).get('case_name', e['from']))} "
+                         f"→ <strong>superseded for {esc(e['scope'])}</strong> → "
+                         f"{esc(by_id.get(e['to'],{}).get('case_name', e['to']))}</li>")
+        graph.append("</ul>")
+
+    controls = []
+    clog = WS / "run" / "controls.json"
+    if clog.exists():
+        for c in json.loads(clog.read_text()):
+            if c["expect"] == "nonzero":
+                verdict = "✓ refused" if c["exit"] != 0 else "✗ LEAKED"
+            else:  # observed / exactly-one: exit 0 is SUCCESS, never a leak
+                verdict = "✓ observed" if c["exit"] == 0 else "✗ FAILED"
+            controls.append(f"<tr><td>{esc(c['control'])}</td><td>{esc(c['expect'])}</td>"
+                            f"<td><code>exit {c['exit']}</code></td><td>{verdict}</td></tr>")
+
+    memo_html = ""
+    memo_html_f = WS / "memo" / "memo.html"
+    if not memo_html_f.exists():
+        memo_md = WS / "memo" / "memo.md"
+        if memo_md.exists():
+            subprocess.run(["python3", str(WS / "scripts" / "md-to-html.py"), str(memo_md), str(memo_html_f)],
+                           check=True, capture_output=True, text=True)
+    if memo_html_f.exists():
+        inner = memo_html_f.read_text()
+        memo_html = inner.split("<body>", 1)[-1].split("</body>", 1)[0] if "<body>" in inner else inner
+
+    doc = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The Precedent Bench — {esc(cfg['jurisdiction_pin'])}</title>
+    <style>
+    body{{font-family:Georgia,serif;max-width:60rem;margin:2rem auto;padding:0 1rem;line-height:1.5}}
+    table{{border-collapse:collapse;width:100%;font-size:.9rem}}td,th{{border:1px solid #999;padding:.35rem .5rem;text-align:left;vertical-align:top}}
+    .badge{{font-family:monospace;font-weight:700;padding:.05rem .4rem;border-radius:.3rem}}
+    .b{{background:#1a3d1a;color:#fff}}.p{{background:#4a3d10;color:#fff}}
+    .flag{{display:inline-block;background:#7a1f1f;color:#fff;padding:.05rem .4rem;border-radius:.3rem;font-size:.8rem;margin:.05rem}}
+    .graph{{list-style:none;padding-left:0}}.graph li{{margin:.4rem 0;padding:.4rem .6rem;background:#f4efe4;border-left:4px solid #7a1f1f}}
+    .warn{{background:#fff8e0;border:1px solid #c8a800;padding:.6rem 1rem}}
+    footer{{margin-top:2rem;font-size:.8rem;color:#555;border-top:1px solid #999;padding-top:.6rem}}
+    </style></head><body>
+    <h1>The Precedent Bench</h1>
+    <p class="warn">Scope: {esc(cfg['jurisdiction_pin'])}. Every row is verifiable from the
+    verify-it-yourself panel: re-run the query, normalize the JSON (sorted keys, compact),
+    re-compute sha256, compare. Trust nothing on this page that you cannot re-derive.</p>
+    <h2 id="index">Precedent index</h2>
+    <table><tr><th>id</th><th>case</th><th>cite</th><th>force</th><th>weight</th><th>assigned_by</th><th>supersession</th><th>provenance</th></tr>
+    {''.join(trs)}</table>
+    <h2 id="graph">Supersession graph</h2>
+    {''.join(graph) or '<p>No supersession edges (yet).</p>'}
+    <p>The overruled precedent stays on the books, visibly superseded — that is the point.</p>
+    <h2 id="memo">Research memo</h2>
+    {memo_html}
+    <h2 id="contrast">Errata vs. precedent — two transition types, one corpus</h2>
+    <p>An <strong>erratum</strong> commits the atomic canon+ledger pair (hash-joined): bytes
+    <em>change</em>, and the ledger records the change. A <strong>supersession</strong> appends
+    an edge: <em>no old byte changes</em>, and the record shows what yielded, and why.</p>
+    <h2 id="verify">Verify it yourself</h2>
+    <p>For each doctrine row: <code>curl -H 'Authorization: Token $CL_TOKEN' '&lt;query_url&gt;'</code>,
+    normalize with <code>jq -jSc .</code> (joined output — no trailing newline, matching the published
+    digests), hash with <code>sha256sum</code>, compare. The machine-readable
+    panel — full query URLs and full normalized digests for every doctrine row — is published at
+    <a href="data/verify.json"><code>data/verify.json</code></a>; the live gate consumes exactly what
+    this page serves. Smith v. Maryland is <strong>still citable outside CSLI</strong>: the supersession
+    edge is scoped, and the overruled row remains on the books.</p>
+    <table><tr><th>control</th><th>expect</th><th>observed</th><th>verdict</th></tr>{''.join(controls)}</table>
+    <h2 id="controls">Negative controls (published results)</h2>
+    <p>A gate that has not been observed failing is not yet a gate. Every control below
+    fired nonzero, end-to-end, against the live system.</p>
+    <footer>The bench: a proof of The Precedent Bench pattern — typed force, motion practice,
+    visible supersession. {esc(cfg['site_url'])}</footer>
+    </body></html>"""
+    (WS / "site" / "index.html").write_text(doc)
+    print(f"build-site: {len(rows)} rows, {len(edges)} edges, {len(controls)} controls → site/index.html")
+    GATEEOF
+    {% endraw %}
+
+    # pandoc's replacements: the score renders its own markdown and strips its
+    # own HTML, stdlib-only, commissioned below (review-1 finding: pandoc was a
+    # silent host prerequisite that killed movements 1, 9 and 17)
+    cat > scripts/md-to-html.py <<'GATEEOF'
+    #!/usr/bin/env python3
+    """md-to-html.py — markdown → HTML for the bench, stdlib only. Covers the
+    memo's actual shape: ATX headings, paragraphs, bold/italic/code, links,
+    unordered lists, blockquotes, horizontal rules."""
+    import html, pathlib, re, sys
+
+    def inline(s):
+        s = html.escape(s, quote=False)
+        s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
+        s = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", s)
+        s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+        s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', s)
+        return s
+
+    def render(md):
+        out, in_list = [], False
+        for line in md.splitlines():
+            m = re.match(r"^(#{1,6})\s+(.*)$", line)
+            if m:
+                if in_list:
+                    out.append("</ul>"); in_list = False
+                level = len(m.group(1))
+                out.append("<h" + str(level) + ">" + inline(m.group(2)) + "</h" + str(level) + ">")
+                continue
+            if re.match(r"^\s*[-*]\s+", line):
+                if not in_list:
+                    out.append("<ul>"); in_list = True
+                item = re.sub(r"^\s*[-*]\s+", "", line)
+                out.append("<li>" + inline(item) + "</li>")
+                continue
+            if in_list:
+                out.append("</ul>"); in_list = False
+            if line.startswith(">"):
+                out.append("<blockquote>" + inline(line.lstrip("> ").strip()) + "</blockquote>")
+                continue
+            if re.match(r"^\s*---+\s*$", line):
+                out.append("<hr>")
+                continue
+            if not line.strip():
+                continue
+            out.append("<p>" + inline(line.strip()) + "</p>")
+        if in_list:
+            out.append("</ul>")
+        return "\n".join(out)
+
+    if __name__ == "__main__":
+        if len(sys.argv) != 3:
+            print("usage: md-to-html.py <src.md> <dst.html>", file=sys.stderr); sys.exit(2)
+        body = render(pathlib.Path(sys.argv[1]).read_text())
+        doc = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+               "<title>memo</title></head><body>\n" + body + "\n</body></html>\n")
+        pathlib.Path(sys.argv[2]).write_text(doc)
+        print("md-to-html: " + sys.argv[1] + " -> " + sys.argv[2] + " (" + str(len(body.splitlines())) + " block(s))")
+    GATEEOF
+
+    cat > scripts/html-to-text.py <<'GATEEOF'
+    #!/usr/bin/env python3
+    """html-to-text.py — HTML → plain text for the reader page, stdlib only
+    (html.parser). Block elements break lines so the reader's cadenza reads
+    like a page, not a blob; script/style content is dropped."""
+    import pathlib, re, sys
+    from html.parser import HTMLParser
+
+    class PageText(HTMLParser):
+        BLOCK = {"p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "tr",
+                 "br", "hr", "table", "ul", "ol", "blockquote", "footer", "title"}
+        def __init__(self):
+            super().__init__()
+            self.out = []
+            self.skip = 0
+        def handle_starttag(self, tag, attrs):
+            if tag in ("script", "style"):
+                self.skip += 1
+            if tag in self.BLOCK:
+                self.out.append("\n")
+            if tag == "td":
+                self.out.append(" | ")
+        def handle_endtag(self, tag):
+            if tag in ("script", "style") and self.skip:
+                self.skip -= 1
+            if tag in self.BLOCK:
+                self.out.append("\n")
+        def handle_data(self, data):
+            if not self.skip:
+                self.out.append(data)
+
+    if __name__ == "__main__":
+        if len(sys.argv) != 3:
+            print("usage: html-to-text.py <src.html> <dst.txt>", file=sys.stderr); sys.exit(2)
+        p = PageText()
+        p.feed(pathlib.Path(sys.argv[1]).read_text())
+        text = "".join(p.out)
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n\s*\n+", "\n\n", text).strip()
+        pathlib.Path(sys.argv[2]).write_text(text + "\n")
+        print("html-to-text: " + sys.argv[1] + " -> " + sys.argv[2] + " (" + str(len(text.split())) + " words)")
+    GATEEOF
+
+    cat > scripts/recapture.sh <<'GATEEOF'
+    #!/usr/bin/env bash
+    # recapture.sh — the DETERMINISTIC fetch helper. Term-2's vintage re-pin
+    # motion must cite fresh bytes; the drafting sheet does not fetch — it runs
+    # THIS (curl + body-asserted HTTP + digests generated from the payloads)
+    # and reads the output. Run from the workspace root.
+    set -euo pipefail
+    WS="$(cd "$(dirname "$0")/.." && pwd)"; cd "$WS"
+    mkdir -p evidence/recapture
+    : > evidence/recapture/recapture-log.jsonl
+    jq -cr 'to_entries[] | "\(.value.slug)|\(.value.cite)"' run/case-order.json | while IFS='|' read -r SLUG CITE; do
+      Q=$(echo "$CITE" | tr ' ' '+')
+      CODE=$(curl -s -o "evidence/recapture/cite-$SLUG.json" -w '%{http_code}' \
+        -H "Authorization: Token $CL_TOKEN" \
+        "https://www.courtlistener.com/api/rest/v4/citation-lookup/?citations=$Q")
+      [ "$CODE" = "200" ] || { echo "RECAPTURE REFUSED: $SLUG returned HTTP $CODE" >&2; exit 1; }
+      jq -e 'if type == "object" and has("detail") then false else true end' "evidence/recapture/cite-$SLUG.json" >/dev/null \
+        || { echo "RECAPTURE REFUSED: $SLUG body carries an error envelope" >&2; exit 1; }
+      echo "{\"slug\": \"$SLUG\", \"http\": $CODE}" >> evidence/recapture/recapture-log.jsonl
+    done
+    python3 - <<'PYEOF' > evidence/recapture/recapture-field-map.json
+    import json, glob, hashlib, pathlib, datetime
+    def norm(o): return json.dumps(o, sort_keys=True, separators=(",", ":"))
+    fm = {"generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+          "files": {pathlib.Path(p).name: {"normalized_sha256": hashlib.sha256(norm(json.loads(pathlib.Path(p).read_text())).encode()).hexdigest()}
+                    for p in sorted(glob.glob("evidence/recapture/cite-*.json"))}}
+    print(json.dumps(fm, indent=2))
+    PYEOF
+    echo "recapture: fresh bytes + generated digests in evidence/recapture/"
+    GATEEOF
+
+    cat > scripts/live-gate.sh <<'GATEEOF'
+    #!/usr/bin/env bash
+    # live-gate.sh — the Gas-Free Certificate. Runs against the DEPLOYED public
+    # URL (default) or a local copy (--file): extracts query URLs + normalized
+    # digests from the SERVED verify panel, re-runs the queries, re-hashes
+    # normalized bytes, compares. A tampered copy must FAIL. The certificate is
+    # gas-free only at the moment of live verification.
+    set -euo pipefail
+    WS="$(cd "$(dirname "$0")/.." && pwd)"
+    # fail LOUD with a named refusal, never bash's anonymous "unbound variable"
+    : "${CL_TOKEN:?LIVE GATE REFUSED: CL_TOKEN is not exported — movement 1 probed it once; a gate re-verifies its own preconditions (Etiquette Law: fail loud, never default)}"
+    BASE="$(python3 -c "import json;print(json.load(open('$WS/run/bench-config.json'))['site_url'])")"
+    MODE="url"; FILE=""
+    for a in "$@"; do
+      case "$a" in --file=*) MODE="file"; FILE="${a#--file=}";; --url=*) BASE="${a#--url=}";; esac
+    done
+    TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+    if [ "$MODE" = "url" ]; then
+      echo "live-gate: fetching the deployed verify panel from $BASE ..."
+      for _ in $(seq 1 60); do
+        CODE=$(curl -sL -o "$TMP/verify.json" -w '%{http_code}' "$BASE/data/verify.json" || echo 000)
+        [ "$CODE" = "200" ] && jq -e 'type == "array"' "$TMP/verify.json" >/dev/null 2>&1 && break
+        echo "  pages propagation: HTTP $CODE — waiting 20s"; sleep 20
+      done
+      [ -s "$TMP/verify.json" ] && jq -e 'type == "array" and length >= 4' "$TMP/verify.json" >/dev/null \
+        || { echo "LIVE GATE REFUSED: the deployed verify panel never served >= 4 rows"; exit 1; }
+    else
+      jq -e 'type == "array" and length >= 4' "$FILE" >/dev/null \
+        || { echo "LIVE GATE REFUSED: local verify panel malformed"; exit 1; }
+      cp "$FILE" "$TMP/verify.json"
+    fi
+    jq -c '.[]' "$TMP/verify.json" | while IFS= read -r ROW; do
+      URL=$(echo "$ROW" | jq -r '.query_url')
+      WANT=$(echo "$ROW" | jq -r '.normalized_sha256')
+      RID=$(echo "$ROW" | jq -r '.row')
+      CODE=$(curl -s -o "$TMP/body.json" -w '%{http_code}' -H "Authorization: Token $CL_TOKEN" "$URL")
+      [ "$CODE" = "200" ] || { echo "LIVE GATE REFUSED: row $RID query returned HTTP $CODE"; exit 1; }
+      # -j (joined): NO trailing newline — jq -Sc alone appends one, which
+      # changes the sha256 and made the stage-4 gate compare two DIFFERENT
+      # normalizations of identical bytes; it could never pass (caught by
+      # sheet-8 commissioning, missed by three reviews)
+      GOT=$(jq -jSc . "$TMP/body.json" | sha256sum | cut -d' ' -f1)
+      [ "$GOT" = "$WANT" ] || { echo "LIVE GATE REFUSED: row $RID — served digest $WANT, live recompute $GOT"; exit 1; }
+      echo "  row $RID: served digest == live recompute ✓"
+    done
+    echo "live-gate: every served digest recomputes from live queries — the certificate is gas-free NOW"
+    GATEEOF
+
+    cat > scripts/publish-site.sh <<'GATEEOF'
+    #!/usr/bin/env bash
+    # publish-site.sh — the gh-pages face of the bench. main is the evidence
+    # repo; an ORPHAN gh-pages branch carries ONLY the rendered site, and Pages
+    # serves its ROOT — the only source paths GitHub's REST API accepts are "/"
+    # and "/docs" (the stage-4 score sent source[path]=/site and every call was
+    # rejected 422 — review-1/review-2 finding). Force-push is legitimate HERE
+    # and only here: gh-pages is a rendered projection rebuilt from main on
+    # every publish; the evidence branch (main) is protected and never moves
+    # but fast-forward. Precedent: the-economic-injury-line proof score.
+    set -euo pipefail
+    WS="$(cd "$(dirname "$0")/.." && pwd)"; cd "$WS"
+    OWNER=$(python3 -c "import json;print(json.load(open('run/bench-config.json'))['github_owner'])")
+    REPO=$(python3 -c "import json;print(json.load(open('run/bench-config.json'))['repo_name'])")
+    SITE=$(python3 -c "import json;print(json.load(open('run/bench-config.json'))['site_url'])")
+    python3 scripts/build-site.py
+    TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+    git clone -q --no-hardlinks "$WS" "$TMP/wt"
+    ( cd "$TMP/wt"
+      git checkout -q --orphan gh-pages
+      git rm -rqf --ignore-unmatch . >/dev/null 2>&1 || true
+      git remote set-url origin "https://github.com/$OWNER/$REPO.git"
+      mkdir -p data
+      cp "$WS/site/index.html" index.html
+      cp "$WS/site/data/verify.json" data/verify.json
+      [ -f "$WS/site/data/consumers.json" ] && cp "$WS/site/data/consumers.json" data/consumers.json
+      git add -A
+      git commit -qm "bench site: rendered from main $(git -C "$WS" rev-parse --short HEAD)"
+      git push -qf origin gh-pages
+    ) || { echo "PUBLISH REFUSED: the gh-pages orphan publish failed"; exit 1; }
+    gh api -X POST "repos/$OWNER/$REPO/pages" -f "source[branch]=gh-pages" -f "source[path]=/" >/dev/null 2>&1 \
+      || gh api -X PUT "repos/$OWNER/$REPO/pages" -f "source[branch]=gh-pages" -f "source[path]=/" >/dev/null 2>&1 \
+      || { echo "PUBLISH REFUSED: GitHub Pages could not be configured to gh-pages at /"; exit 1; }
+    echo "publish-site: gh-pages updated from main; Pages serves $SITE"
+    GATEEOF
+
+    cat > scripts/force-push-fixture.sh <<'GATEEOF'
+    #!/usr/bin/env bash
+    # force-push-fixture.sh — proves main's protection rejects a GENUINE
+    # non-fast-forward force push. Stage 4 pushed an up-to-date ref:
+    # `git push --force` prints "Everything up-to-date" and EXITS 0, so the
+    # fixture declared a leak it never observed and movement 16 could not pass
+    # (review-3 empirical finding, confirmed by review 1). The fixture now
+    # DIVERGES first (amend -> sibling commit with a different sha), force-
+    # pushes EXPECTING rejection, records the rejection bytes, and restores the
+    # pre-experiment commit. If the push is ACCEPTED (leak), it restores local
+    # AND remote from the saved sha before exiting 1 — the fixture never
+    # endangers the evidence branch. Runs only after protection exists
+    # (movements 16 and 17 share this one script: unify, never fork).
+    set -uo pipefail
+    WS="$(cd "$(dirname "$0")/.." && pwd)"; cd "$WS"
+    REJ="$WS/run/force-push-rejection.txt"
+    SAVED=$(git rev-parse HEAD)
+    git commit -q --amend -m "FIXTURE: divergent sibling history for the protection probe (never lands)" --no-edit
+    if git push --force origin main >/dev/null 2>"$REJ"; then
+      echo "FIXTURE LEAK: the divergent force push to protected main was ACCEPTED" >&2
+      git reset -q --hard "$SAVED"
+      git push -qf origin "$SAVED":refs/heads/main || echo "LEAK RECOVERY WARNING: remote restore failed — reconcile $SAVED manually" >&2
+      exit 1
+    fi
+    grep -q . "$REJ" || { echo "the rejection left no stderr record" >&2; git reset -q --hard "$SAVED"; exit 1; }
+    git reset -q --hard "$SAVED"
+    echo "force-push fixture: divergent push rejected and recorded ($(head -c 80 "$REJ" | tr '\n' ' ')); history restored at $(git rev-parse --short HEAD)"
+    GATEEOF
+
+    cat > scripts/history-check.sh <<'GATEEOF'
+    #!/usr/bin/env bash
+    # history-check.sh — fork-evidence that is NOT a tautology. Stage 4
+    # compared `git log | wc -l` to `git rev-list --count HEAD` — two counts of
+    # the SAME reachable set; the check could never fail (review-3 finding).
+    # Three independent facts replace it: (1) local main == origin/main after a
+    # fetch — nothing diverged and nothing was left unpushed; (2) every commit
+    # sha journaled by the serialized writers (run/commit-journal.jsonl) is
+    # still an ANCESTOR of HEAD — an amended/rewritten history orphans exactly
+    # these shas; (3) fsck finds no damage.
+    set -euo pipefail
+    WS="$(cd "$(dirname "$0")/.." && pwd)"; cd "$WS"
+    git fetch -q origin main
+    L=$(git rev-parse main)
+    R=$(git rev-parse origin/main)
+    [ "$L" = "$R" ] || { echo "HISTORY CHECK REFUSED: local main ($L) != origin/main ($R) — diverged or unpushed state"; exit 1; }
+    python3 - <<'PYEOF'
+    import json, pathlib, subprocess, sys
+    jf = pathlib.Path("run/commit-journal.jsonl")
+    shas = [json.loads(l)["sha"] for l in jf.read_text().splitlines() if l.strip()] if jf.exists() else []
+    bad = [s for s in set(shas)
+           if subprocess.run(["git", "merge-base", "--is-ancestor", s, "HEAD"], capture_output=True).returncode != 0]
+    if bad:
+        print(f"HISTORY CHECK REFUSED: journaled commit(s) no longer ancestors of HEAD — history was rewritten: {sorted(bad)}", file=sys.stderr)
+        sys.exit(1)
+    print(f"history-check: local == origin; {len(set(shas))} journaled writer commit(s) all reachable — no rewrites")
+    PYEOF
+    git fsck --no-progress >/dev/null 2>&1 || { echo "HISTORY CHECK REFUSED: fsck found damage"; exit 1; }
+    GATEEOF
+
+    cat > scripts/concurrent-fixture.sh <<'GATEEOF'
+    #!/usr/bin/env bash
+    # concurrent-fixture.sh — the serialized-writer property, tested: two
+    # enrollments of the SAME granted ruling race; fcntl + duplicate-refusal
+    # must leave EXACTLY ONE appended row. The fixture index is SEEDED with the
+    # target row first: with referential integrity enforced at the writer
+    # (review-2 finding — the fixture's own successor once pointed at a row
+    # that never existed), an unseeded race would refuse for the right reason
+    # and the wrong demonstration.
+    set -u
+    WS="$(cd "$(dirname "$0")/.." && pwd)"
+    IDX="$WS/fixtures/idx/precedent"; mkdir -p "$IDX"
+    [ -s "$IDX/index.jsonl" ] || printf '%s\n' '{"id": "H-001", "layer": "campaign", "case_name": "Fixture Target Holding", "cite": "—", "holding_text": "the row the racing motion targets", "necessary_to_outcome": true, "force": "binding", "assigned_by": "commissioning-fixture", "provenance": {"query_url": "score:04-proof-score.yaml", "captured_at": "2026-09-04T00:00:00+00:00", "response_sha256": "fixture", "api_vintage": "score", "archive_path": "score"}}' > "$IDX/index.jsonl"
+    [ -s "$IDX/edges.jsonl" ] || : > "$IDX/edges.jsonl"
+    BENCH_ENROLL_GIT=0 python3 "$WS/scripts/enroll.py" --root="$WS/fixtures/idx" "$WS/fixtures/concurrent-ruling.json" &
+    P1=$!
+    BENCH_ENROLL_GIT=0 python3 "$WS/scripts/enroll.py" --root="$WS/fixtures/idx" "$WS/fixtures/concurrent-ruling.json" &
+    P2=$!
+    wait "$P1"; R1=$?
+    wait "$P2"; R2=$?
+    N=$(grep -c '"id": "H-901"' "$IDX/index.jsonl" 2>/dev/null || true)
+    [ -n "$N" ] || N=0
+    echo "concurrent fixture: racer exits $R1/$R2, appended H-901 rows: $N"
+    [ "$N" -eq 1 ] || exit 1
+    GATEEOF
+
+    # ── movement-gate.sh: the ONE enforcement point every validation calls ──────
+    cat > scripts/movement-gate.sh <<'GATEEOF'
+    #!/usr/bin/env bash
+    # movement-gate.sh <N> — per-movement outcome gate. The single enforcement
+    # point the generic validation rule dispatches through (the macro at the
+    # validation layer): receipt → structure → join, staged fail-fast.
+    # Revision notes: every JSONL read uses jq -s (map on a raw JSONL stream
+    # exits 5 — review-1 finding); the case-17 filter is balanced; URLs and
+    # site_url are READ FROM DISK (run/bench-config.json / run/case-order.json),
+    # never baked in; the movement-7 commit check counts EXACTLY one enrollment
+    # commit; notify gates demand acknowledged bijection; movement 16/17 use
+    # the shared divergent force-push fixture and ancestry-based
+    # history-check.sh.
+    set -euo pipefail
+    WS="$(cd "$(dirname "$0")/.." && pwd)"
+    cd "$WS"
+    M="${1:?usage: movement-gate.sh <movement-number>}"
+    case "$M" in
+      1)  jq -e '.controls | length >= 8 and (map(select(.expect == "nonzero")) | all(.[]; .exit != 0)) and (map(select(.expect == "observed")) | all(.[]; .exit == 0)) and (map(select(.control == "concurrent-enroll-single-writer")) | .[0].exit == 0)' run/commissioning-log.json >/dev/null
+          test -s run/field-map.json -a -s run/seat-matrix.json -a -s run/capture-log.jsonl
+          jq -e '.family_inequality and .binary_inequality and .reader_third_family and .reader_binary_third' run/seat-matrix.json >/dev/null
+          test -d .git && git rev-parse --verify HEAD >/dev/null ;;
+      2)  python3 scripts/force-typecheck.py precedent/index.jsonl
+          python3 scripts/digest-verify.py
+          python3 - <<'PYEOF'
+    import json, pathlib, sys
+    rows = [json.loads(l) for l in pathlib.Path("precedent/index.jsonl").read_text().splitlines() if l.strip()]
+    order = json.load(open("run/case-order.json"))
+    fm = json.load(open("run/field-map.json"))
+    expected = {c["url"] for c in order.values()}
+    doc = [r for r in rows if r.get("layer") == "doctrine"]
+    urls = {r["provenance"]["query_url"] for r in doc}
+    bad = expected - urls
+    assert not bad, f"doctrine rows missing the exact captured query URLs (LLM-retyped URL drift): {sorted(bad)}"
+    mapped = {pathlib.Path(f).name for f in fm["files"]}
+    unmapped = {a for a in (r["provenance"]["archive_path"] for r in doc)
+                if pathlib.Path(a).name not in mapped}
+    assert not unmapped, f"archive_path values not covered by the GENERATED field map: {sorted(unmapped)}"
+    print(f"seed join: {len(doc)} doctrine rows; URLs byte-equal to movement 1's; archives covered by the generated field map")
+    PYEOF
+          test -s precedent/INDEX.md
+          test "$(jq -s 'map(select(.layer == "doctrine")) | length' precedent/index.jsonl)" -ge "$(python3 -c 'import json;print(json.load(open("run/bench-config.json"))["min_doctrine_rows"])')"
+          test "$(jq -s 'map(select(.layer == "campaign")) | length' precedent/index.jsonl)" -ge "$(python3 -c 'import json;print(json.load(open("run/bench-config.json"))["min_campaign_rows"])')" ;;
+      3)  for F in motions/term-1/*.json; do python3 scripts/force-typecheck.py "$F"; done
+          bash scripts/cite-join.sh motions/term-1/*.json
+          jq -e '.type == "distinguish" and (.factors | index("changed-circumstances"))' motions/term-1/MOT-T1-001.json >/dev/null ;;
+      4)  test -s run/cite-check-term-1.txt && grep -q "every citation joins" run/cite-check-term-1.txt ;;
+      5)  test -s briefs/term-1/brief.md
+          grep -q "## Disposition Requested" briefs/term-1/brief.md
+          grep -qE 'changed-circumstances' briefs/term-1/brief.md
+          for TOK in $(grep -oE '\b[PH]-[0-9]{3}[a-z]?\b' briefs/term-1/brief.md | sort -u); do
+            jq -e --arg c "$TOK" 'select(.id == $c)' precedent/index.jsonl >/dev/null \
+              || { echo "movement-gate 5: brief cites dangling row $TOK"; exit 1; }
+          done ;;
+      6)  jq -e '.disposition == "grant" and .force and .assigned_by and .seat_family' rulings/term-1/ruling.json >/dev/null
+          grep -q "## Disposition" rulings/term-1/ruling.md && grep -q "## Reasons" rulings/term-1/ruling.md
+          jq -e --arg bf "$(jq -r .brief_family run/seat-matrix.json)" '.seat_family != $bf' rulings/term-1/ruling.json >/dev/null ;;
+      7)  jq -s -e 'map(select(.motion_id == "MOT-T1-001")) | length == 1' precedent/edges.jsonl >/dev/null
+          jq -s -e 'map(select(.id == "P-002")) | length == 1' precedent/index.jsonl >/dev/null
+          jq -s -e 'map(select(.motion_id == "MOT-T1-001"))[0] | .scope == "CSLI" and .from == "P-002" and .to == "P-006"' precedent/edges.jsonl >/dev/null
+          test "$(git log --oneline --grep '^enroll: MOT-T1-001' | wc -l)" -eq 1 ;;
+      8)  jq -e '.flags | length >= 1 and all(.[]; .acknowledged == true and has("receipt_sha256"))' site/data/consumers.json >/dev/null
+          jq -e '.supersession_flags | length >= 1 and all(.[]; .acknowledged == true)' site/data/consumer-render.json >/dev/null ;;
+      9)  test -s memo/memo.md && grep -q "## Conclusion" memo/memo.md
+          python3 scripts/errata-commit.py --verify-join
+          test -s errata/ledger.jsonl && jq -s -e 'length >= 1 and (map(.seq) == [range(1; length + 1)])' errata/ledger.jsonl >/dev/null ;;
+      10) bash scripts/cite-join.sh motions/term-2/*.json
+          for F in motions/term-2/*.json; do python3 scripts/force-typecheck.py "$F"; done
+          jq -e '.type == "overrule" and (.factors | length >= 1)' motions/term-2/MOT-T2-001.json >/dev/null
+          test -s evidence/recapture/recapture-field-map.json ;;
+      11) test -s run/cite-check-term-2.txt && grep -q "every citation joins" run/cite-check-term-2.txt ;;
+      12) test -s briefs/term-2/brief.md && grep -q "## Disposition Requested" briefs/term-2/brief.md
+          for TOK in $(grep -oE '\b[PH]-[0-9]{3}[a-z]?\b' briefs/term-2/brief.md | sort -u); do
+            jq -e --arg c "$TOK" 'select(.id == $c)' precedent/index.jsonl >/dev/null \
+              || { echo "movement-gate 12: brief cites dangling row $TOK"; exit 1; }
+          done ;;
+      13) jq -e '.disposition == "grant"' rulings/term-2/ruling-grant.json >/dev/null
+          jq -e '.disposition == "deny" and (.reasons | length >= 80)' rulings/term-2/ruling-deny.json >/dev/null
+          BF="$(jq -r .brief_family run/seat-matrix.json)"
+          jq -e --arg bf "$BF" '.seat_family != $bf' rulings/term-2/ruling-grant.json >/dev/null
+          jq -e --arg bf "$BF" '.seat_family != $bf' rulings/term-2/ruling-deny.json >/dev/null ;;
+      14) jq -s -e 'map(select(.motion_id == "MOT-T2-001")) | length == 1' precedent/edges.jsonl >/dev/null
+          jq -s -e 'map(select(.motion_id == "MOT-T2-002")) | length == 0' precedent/edges.jsonl >/dev/null
+          test "$(git log --oneline --grep '^enroll: MOT-T2-001' | wc -l)" -eq 1
+          test "$(jq -s 'length' precedent/index.jsonl)" -ge "$(( $(python3 -c 'import json;c=json.load(open("run/bench-config.json"));print(c["min_doctrine_rows"]+c["min_campaign_rows"])') + 1 ))" ;;
+      15) jq -e '.flags | length >= 2 and all(.[]; .acknowledged == true and has("receipt_sha256"))' site/data/consumers.json >/dev/null
+          jq -e '.supersession_flags | length >= 2 and all(.[]; .acknowledged == true)' site/data/consumer-render.json >/dev/null ;;
+      16) test -s site/index.html
+          grep -q "superseded for CSLI" site/index.html
+          test -s run/deployment.json && jq -e '.url and .source_branch == "gh-pages" and .source_path == "/"' run/deployment.json >/dev/null
+          bash scripts/live-gate.sh
+          if bash scripts/live-gate.sh --file=fixtures/tampered-verify.json 2>/dev/null; then
+            echo "movement-gate 16: the tampered copy PASSED the live gate — the gate cannot detect tampering"; exit 1
+          fi ;;
+      17) jq -e 'length >= 9 and (map(select(.expect == "nonzero")) | all(.[]; .exit != 0)) and ((map(select(.expect == "observed")) + map(select(.expect == "exactly-one"))) | all(.[]; .exit == 0))' run/controls.json >/dev/null
+          bash scripts/history-check.sh
+          SITE="$(python3 -c "import json;print(json.load(open('run/bench-config.json'))['site_url'])")"
+          curl -fsSL "$SITE" -o run/reader-page.html
+          python3 scripts/html-to-text.py run/reader-page.html run/reader-page.md
+          grep -q "superseded for CSLI" run/reader-page.md
+          test -s run/reader-page.md ;;
+      18) test -s reader/answers.md
+          grep -q "## Q1" reader/answers.md && grep -q "## Q2" reader/answers.md && grep -q "## Q3" reader/answers.md && grep -q "## Q4" reader/answers.md ;;
+      *) echo "movement-gate: unknown movement $M"; exit 2 ;;
+    esac
+    echo "movement-gate $M: PASS"
+    GATEEOF
+
+    chmod +x scripts/*.sh scripts/*.py
+    for P in scripts/*.py; do python3 -m py_compile "$P" || { echo "COMPILE FAIL: $P"; exit 1; }; done
+    for S in scripts/*.sh; do bash -n "$S" || { echo "SYNTAX FAIL: $S"; exit 1; }; done
+
+    # ── Fixtures: the negative controls (a gate unobserved failing is not a gate)─
+    cat > fixtures/dangling-motion.json <<'JSONEOF'
+    {"motion_id": "FIX-DANGLING", "term": "fixtures", "type": "distinguish",
+     "cites": ["P-999"], "target": "P-999", "scope": "fixture",
+     "factors": [], "argument_ref": "fixtures/"}
+    JSONEOF
+    printf '%s\n' '{"id": "P-900", "layer": "doctrine", "case_name": "Fixture v. Gate", "cite": "000 U.S. 000", "holding_text": "a row missing its typed force and authority", "necessary_to_outcome": true, "provenance": {}}' > fixtures/untyped-row.jsonl
+    cat > fixtures/factorless-motion.json <<'JSONEOF'
+    {"motion_id": "FIX-FACTORLESS", "term": "fixtures", "type": "overrule",
+     "cites": ["P-001"], "target": "P-001", "successor": "P-006", "scope": "fixture",
+     "factors": [], "argument_ref": "fixtures/"}
+    JSONEOF
+    cat > fixtures/factorless-ruling.json <<'JSONEOF'
+    {"motion_id": "FIX-FACTORLESS", "term": "fixtures", "motion_file": "fixtures/factorless-motion.json",
+     "disposition": "grant", "force": "binding", "assigned_by": "commissioning-fixture",
+     "seat_id": "cli", "seat_family": "DETERMINISTIC", "reasons": "fixture: an overrule with no named factor must be refused"}
+    JSONEOF
+    printf '%s\n' '{"id": "P-902", "layer": "doctrine", "case_name": "Fixture v. Digest", "cite": "000 U.S. 001", "holding_text": "a row whose digest does not recompute", "necessary_to_outcome": false, "force": "persuasive", "assigned_by": "commissioning-fixture", "provenance": {"query_url": "https://www.courtlistener.com/api/rest/v4/citation-lookup/?citations=442+U.S.+735", "captured_at": "2026-09-04T00:00:00+00:00", "response_sha256": "0000000000000000000000000000000000000000000000000000000000000000", "api_vintage": "courtlistener-rest-v4", "archive_path": "fixtures/unauth-401.json"}}' > fixtures/corrupted-index.jsonl
+    mkdir -p fixtures/half-errata
+    printf 'corrected canon bytes whose ledger row lies about the join\n' > fixtures/half-errata/canon.md
+    printf '%s\n' '{"id": "ER-FIX-1", "seq": 1, "claim_id": "FIX", "prior_hash": "deadbeef", "new_hash": "0000000000000000000000000000000000000000000000000000000000000000", "date": "2026-09-04", "note": "half-written pair: new_hash does not join the canon"}' > fixtures/half-errata/ledger.jsonl
+    cat > fixtures/concurrent-motion.json <<'JSONEOF'
+    {"motion_id": "FIX-CONCURRENT", "term": "fixtures", "type": "overrule",
+     "cites": ["H-001"], "target": "H-001", "successor": "H-901", "scope": "fixture-vintage",
+     "factors": ["changed-circumstances"], "argument_ref": "fixtures/",
+     "proposed_row": {"id": "H-901", "layer": "campaign", "case_name": "Concurrent Fixture Holding", "cite": "—", "holding_text": "raced enrollment", "necessary_to_outcome": true, "force": "binding", "assigned_by": "commissioning-fixture", "provenance": {"query_url": "score:04-proof-score.yaml", "captured_at": "2026-09-04T00:00:00+00:00", "response_sha256": "fixture", "api_vintage": "score", "archive_path": "score"}}}
+    JSONEOF
+    cat > fixtures/concurrent-ruling.json <<'JSONEOF'
+    {"motion_id": "FIX-CONCURRENT", "term": "fixtures", "motion_file": "fixtures/concurrent-motion.json",
+     "disposition": "grant", "force": "binding", "assigned_by": "commissioning-fixture",
+     "seat_id": "cli", "seat_family": "DETERMINISTIC", "reasons": "fixture: two racers, exactly one may enroll"}
+    JSONEOF
+    # the tampered verify panel: a flipped digest the live gate MUST catch
+    python3 - <<'PYEOF'
+    import json, pathlib
+    v = [{"row": "P-001", "query_url": "https://www.courtlistener.com/api/rest/v4/citation-lookup/?citations=425+U.S.+435",
+          "normalized_sha256": "0" * 64, "captured_at": "fixture", "slug": "miller"},
+         {"row": "P-002", "query_url": "https://www.courtlistener.com/api/rest/v4/citation-lookup/?citations=442+U.S.+735",
+          "normalized_sha256": "0" * 64, "captured_at": "fixture", "slug": "smith"},
+         {"row": "P-004", "query_url": "https://www.courtlistener.com/api/rest/v4/citation-lookup/?citations=565+U.S.+400",
+          "normalized_sha256": "0" * 64, "captured_at": "fixture", "slug": "jones"},
+         {"row": "P-006", "query_url": "https://www.courtlistener.com/api/rest/v4/citation-lookup/?citations=138+S.+Ct.+2206",
+          "normalized_sha256": "0" * 64, "captured_at": "fixture", "slug": "carpenter"}]
+    pathlib.Path("fixtures/tampered-verify.json").write_text(json.dumps(v, indent=2) + "\n")
+    PYEOF
+
+    # the converter fixtures (commissioned: pandoc's replacements must WORK,
+    # not merely exist) and the structural-dispatch + referential-integrity
+    # fixtures — the production-named motion rides the SAME typecheck path the
+    # fixtures do, and the writer refuses unresolvable references
+    printf '%s\n' '## Conclusion' 'Smith is superseded for CSLI by Carpenter and remains citable otherwise.' '- one bullet' > fixtures/fixture-memo.md
+    cat > fixtures/MOT-FIX-STRUCTURAL.json <<'JSONEOF'
+    {"motion_id": "MOT-FIX-STRUCTURAL", "term": "fixtures", "type": "overrule",
+     "cites": ["P-001"], "target": "P-001", "scope": "fixture",
+     "factors": [], "argument_ref": "fixtures/"}
+    JSONEOF
+    cat > fixtures/unrelated-target-motion.json <<'JSONEOF'
+    {"motion_id": "FIX-UNRELATED-TARGET", "term": "fixtures", "type": "distinguish",
+     "cites": ["P-001"], "target": "H-999", "successor": "H-998", "scope": "fixture",
+     "factors": [], "argument_ref": "fixtures/",
+     "proposed_row": {"id": "H-998", "layer": "campaign", "case_name": "Unrelated Target Fixture", "cite": "—", "holding_text": "the writer must refuse a target that never enrolled", "necessary_to_outcome": true, "force": "binding", "assigned_by": "commissioning-fixture", "provenance": {"query_url": "score:04-proof-score.yaml", "captured_at": "2026-09-04T00:00:00+00:00", "response_sha256": "fixture", "api_vintage": "score", "archive_path": "score"}}}
+    JSONEOF
+    cat > fixtures/unrelated-target-ruling.json <<'JSONEOF'
+    {"motion_id": "FIX-UNRELATED-TARGET", "term": "fixtures", "motion_file": "fixtures/unrelated-target-motion.json",
+     "disposition": "grant", "force": "binding", "assigned_by": "commissioning-fixture",
+     "seat_id": "cli", "seat_family": "DETERMINISTIC", "reasons": "fixture: the writer must refuse a target that never enrolled"}
+    JSONEOF
+
+    # ── Commissioning: every designed failure OBSERVED FIRING, recorded ─────────
+    python3 - <<'PYEOF' > run/commissioning-log.json
+    import json, subprocess
+    # list-form subprocess everywhere: fixture commands are static literals —
+    # no shell, no interpolation, nothing to inject
+    def run(cmd):
+        p = subprocess.run(cmd, capture_output=True, text=True)
+        return {"cmd": " ".join(cmd), "exit": p.returncode, "tail": ((p.stderr or p.stdout).strip() or "")[-160:]}
+    def sh(script):
+        return run(["bash", "-c", script])
+    controls = [
+        {"control": "dangling-cite-refused", "expect": "nonzero", **run(["bash", "scripts/cite-join.sh", "fixtures/dangling-motion.json"])},
+        {"control": "untyped-row-refused", "expect": "nonzero", **run(["python3", "scripts/force-typecheck.py", "fixtures/untyped-row.jsonl"])},
+        {"control": "production-named-motion-typechecked-on-motion-path", "expect": "nonzero",
+         **run(["python3", "scripts/force-typecheck.py", "fixtures/MOT-FIX-STRUCTURAL.json"]),
+         "why": "a MOT-*.json filename carries no 'motion' substring — stage-4 filename dispatch typechecked it as rows; structural dispatch must refuse its factor-less overrule ON THE MOTION PATH"},
+        {"control": "factorless-overrule-refused", "expect": "nonzero", **run(["python3", "scripts/enroll.py", "fixtures/factorless-ruling.json"])},
+        {"control": "unrelated-target-refused", "expect": "nonzero",
+         **run(["python3", "scripts/enroll.py", "--root", "fixtures/idx2", "fixtures/unrelated-target-ruling.json"]),
+         "why": "referential integrity at the serialized writer: target H-999 never enrolled"},
+        {"control": "corrupted-digest-refused", "expect": "nonzero", **run(["python3", "scripts/digest-verify.py", "--index", "fixtures/corrupted-index.jsonl"])},
+        {"control": "half-errata-refused", "expect": "nonzero", **run(["python3", "scripts/errata-commit.py", "--verify-join", "--ledger", "fixtures/half-errata/ledger.jsonl", "--canon", "fixtures/half-errata/canon.md"])},
+        {"control": "concurrent-enroll-single-writer", "expect": "exactly-one", **run(["bash", "scripts/concurrent-fixture.sh"])},
+        {"control": "md-to-html-renders", "expect": "observed",
+         **sh("python3 scripts/md-to-html.py fixtures/fixture-memo.md run/fixture-memo.html && grep -q '<h2>' run/fixture-memo.html && grep -q 'superseded for CSLI' run/fixture-memo.html")},
+        {"control": "html-to-text-extracts", "expect": "observed",
+         **sh("printf '%s' '<html><body><h1>The Precedent Bench</h1><p>Smith is <em>superseded for CSLI</em> by Carpenter.</p></body></html>' > run/fixture-page.html && python3 scripts/html-to-text.py run/fixture-page.html run/fixture-page.txt && grep -q 'superseded for CSLI' run/fixture-page.txt && ! grep -q '<em>' run/fixture-page.txt")},
+    ]
+    print(json.dumps({"controls": controls}, indent=2))
+    PYEOF
+    python3 - <<'PYEOF'
+    import json, sys
+    log = json.load(open("run/commissioning-log.json"))["controls"]
+    bad = []
+    for c in log:
+        if c["expect"] == "nonzero" and c["exit"] == 0:
+            bad.append(f'{c["control"]}: exit 0 — the gate did NOT refuse its designed failure')
+        if c["expect"] == "exactly-one" and c["exit"] != 0:
+            bad.append(f'{c["control"]}: the fixture harness itself failed — {c["tail"]}')
+        if c["expect"] == "observed" and c["exit"] != 0:
+            bad.append(f'{c["control"]}: the commissioned behavior was not observed — {c["tail"]}')
+    if bad:
+        print("COMMISSIONING FAIL:\n  " + "\n  ".join(bad), file=sys.stderr); sys.exit(1)
+    print(f"commissioning: {len(log)} designed behaviors observed firing — the gates have teeth")
+    PYEOF
+
+    # ── The git substrate (Fork-Evident History): the bench repo is born ────────
+    if [ ! -d .git ]; then
+      git init -q -b main
+      git config user.name "Precedent Bench"
+      git config user.email "bench@precedent.invalid"
+    fi
+    git add -A
+    git diff --cached --quiet || git commit -qm "M0: commission the bench — substrate, authenticated capture, frozen contracts, commissioned gates"
+    touch .commissioned
+    fi   # end of the first-commission guard
+
+    {% elif stage == 2 %}
+    # ══ Movement 2 · Seed the Bench (M1) — Typed Force emit + CLI admission ══
+    {{ ai_ground_rules() }}
+    {{ force_discipline() }}
+
+    ## Task
+    Seed the two-layer corpus. You DRAFT; the CLI gates ADMIT. You do NOT fetch:
+    every byte you need is already on disk from movement 1.
+
+    **Read first (from disk, never from memory):**
+    - `run/field-map.json` — the jq-GENERATED map of what the authenticated
+      payloads actually contain (keys + normalized_sha256 per file). The
+      provenance sub-schema derives from THIS. If a field you want is not in
+      the observed keys, you may not use it.
+    - `evidence/authenticated/cite-*.json` — the four archived bodies.
+    - `run/case-order.json` — slug/cite/display/name per case.
+    - `schema/*.json` — the frozen contracts.
+    - `run/bench-config.json` — the jurisdiction pin and campaign parameters.
+
+    **Write `seed/doctrine-rows.jsonl`** (one JSON object per line, ids fixed):
+    - `P-001` United States v. Miller, 425 U.S. 435 (1976) — force binding,
+      necessary_to_outcome true (bank records / third-party doctrine origin).
+    - `P-002` Smith v. Maryland, 442 U.S. 735 (1979) — binding, holding.
+    - `P-003` United States v. Jones, 565 U.S. 400 (2012), majority — binding,
+      holding (trespass theory).
+    - `P-004` Jones, Alito J., concurring — **persuasive, dictum**
+      (necessary_to_outcome false): skepticism toward the third-party doctrine.
+    - `P-005` Jones, Sotomayor J., concurring — **persuasive, dictum**.
+    - `P-006` Carpenter v. United States, 585 U.S. ___ (2018) — binding,
+      holding (CSLI; declined to extend Smith).
+    - Each row's provenance is COPIED FROM DISK, byte for byte: query_url =
+      the `url` field for that slug in `run/case-order.json` (movement 1
+      computed it by CODE — you COPY it; the movement-2 gate string-compares
+      your copy against movement 1's, and a retyped-URL drift is refused
+      HERE, not fourteen movements later), captured_at =
+      field-map.generated_at, response_sha256 = that file's entry in
+      `run/field-map.json` (`.files["cite-<slug>.json"].normalized_sha256`),
+      api_vintage from run/bench-config.json, archive_path =
+      `evidence/authenticated/cite-<slug>.json` (Jones concurrences P-003,
+      P-004, P-005 use the jones url and archive; P-006 the carpenter one).
+      Type none of these by hand.
+    - `holding_text`: 2–4 faithful sentences each, from your legal knowledge
+      of these cases, flagging nothing you cannot stand behind. Honest limit,
+      on the record: holding text is drafted knowledge, anchored by
+      provenance-bound citation bytes — opinion-text binding is not claimed
+      (the capture is metadata-tier; opinion samples are best-effort).
+
+    **Write `seed/campaign-rows.jsonl`** — the concert's own first holdings,
+    assigned_by: `composer-registration (score 04-proof-score.yaml, concert
+    rosetta-prove)` — the human-authorized composition act, recorded:
+    - `H-001` jurisdiction pin (from run/bench-config.json.jurisdiction_pin) —
+      binding holding.
+    - `H-002` citation-vintage pin: the index binds to the
+      `run/field-map.json` capture (generated_at + normalized digests). Binding.
+    - `H-003` bench-seat assignment: `{{ bench_seat }}` holds the adjudication
+      seat, family recorded in run/seat-matrix.json. Binding.
+    - `H-004` no-LLM-fallback rule: every deterministic gate runs
+      `instrument: cli` with `instrument_fallbacks: []`. Binding.
+    - Campaign-row provenance: query_url `score:04-proof-score.yaml`,
+      archive_path `score`, captured_at now (UTC ISO), response_sha256 `n/a`,
+      api_vintage `score-composition`.
+    - Later motions will cite-check against THESE like any other holding —
+      the orchestration binds itself.
+
+    **Then admit (run these; a refusal means fix the rows, never the gate):**
+        python3 scripts/force-typecheck.py seed/doctrine-rows.jsonl seed/campaign-rows.jsonl
+        python3 scripts/enroll.py --seed=seed/doctrine-rows.jsonl
+        python3 scripts/enroll.py --seed=seed/campaign-rows.jsonl
+        python3 scripts/digest-verify.py
+        python3 scripts/render-index.py
+        git add -A && git diff --cached --quiet || git commit -m "M1: render the live index after seeding"
+    (enroll.py makes the CHECKED, journaled seed commits itself — no `|| true`
+    anywhere in the admission path; a failed commit is a failed admission.)
+
+    `precedent/INDEX.md` must exist at the end — it is the cadenza source the
+    brief and bench sheets receive. Your movement is complete when
+    `bash scripts/movement-gate.sh 2` passes.
+
+    {% elif stage == 3 %}
+    # ══ Movement 3 · Term-1 Motion (M2) — the Carpenter move, re-enacted ══
+    {{ ai_ground_rules() }}
+    {{ force_discipline() }}
+    {{ motion_packet_spec(1) }}
+
+    ## The motion
+    Re-enact *Carpenter*'s move as a typed motion against the seeded bench:
+    **MOT-T1-001** — DISTINGUISH `P-002` (Smith) as applied to cell-site
+    location information, factor `changed-circumstances`, successor `P-006`
+    (Carpenter), scope `CSLI`. Cites: `P-002` and `P-006` at minimum — the
+    target and the successor are both enrolled rows and both belong ON the
+    table (cite-join refuses a target you did not cite). The scope is the
+    cultural hinge: Smith is not
+    overruled — it is superseded FOR CSLI and remains citable otherwise. A
+    legal reader will check precisely this nuance; flattening it discredits
+    the artifact with its own audience.
+
+    The argued motion file (`motions/term-1/MOT-T1-001.md`) stands on the
+    enrolled record: facts of Smith (pen register, 1979), what changed (the
+    depth of CSLI retrieval), why the third-party rationale does not carry,
+    and the precise disposition requested. Cite row ids.
+    Then verify: `bash scripts/cite-join.sh motions/term-1/MOT-T1-001.json` and
+    `bash scripts/movement-gate.sh 3`.
+
+    {% elif stage == 4 %}
+    {{ cite_check_block(1) }}
+
+    {% elif stage == 5 %}
+    # ══ Movement 5 · Brief t1 (M4) — the advocate of record (family GLM) ══
+    {{ ai_ground_rules() }}
+    {{ brief_spec(1) }}
+
+    The injected `INDEX.md` cadenza is the LIVE record — argue against what it
+    actually says, not what you remember enrolling. Term 1's motion is
+    MOT-T1-001 (read `motions/term-1/`); your brief argues it for the bench.
+    Complete when `bash scripts/movement-gate.sh 5` passes.
+
+    {% elif stage == 6 %}
+    # ══ Movement 6 · Bench t1 (M5) — ONE named authority (family GPT) ══
+    {{ ai_ground_rules() }}
+    {{ bench_oath(1) }}
+
+    Your seat's independence is load-bearing: you are a different vendor family
+    than the brief emitter (binary and version probed and recorded at movement 1
+    — read `run/seat-matrix.json` and copy your `seat_family` from it into the
+    ruling).
+    Rule on MOT-T1-001 from `briefs/term-1/brief.md` + the injected live index.
+    Honest framing, on the record: this bench is a HISTORICAL RE-ENACTMENT —
+    the disposition is pinned to what *Carpenter* actually did (decline to
+    extend *Smith* to CSLI), so you GRANT here; what the proof exercises is
+    the bar's mechanics, and your `## Reasons` are yours alone, argued from
+    the record, not copied from the prompt.
+    The scoped-supersession nuance is yours to protect: the edge
+    scope is `CSLI` — Smith stays on the books. Complete when
+    `bash scripts/movement-gate.sh 6` passes.
+
+    {% elif stage == 7 %}
+    {{ enroll_block(1) }}
+
+    {% elif stage == 8 %}
+    {{ notify_block(1) }}
+
+    {% elif stage == 9 %}
+    # ══ Movement 9 · Errata Arm (M8) — the memo + the two transition types ══
+    {{ ai_ground_rules() }}
+
+    ## Task A — the argued research memo
+    Write `memo/memo.md`: the bench-memo-register research memo a first-year
+    associate could circulate, answering the deliverable's question directly:
+    *is Smith still good law for CSLI, and why, visibly?* Stand on the enrolled
+    record (rows, the term-1 edge, the campaign holdings), cite row and edge
+    ids, end with a literal `## Conclusion` section. The memo MUST include a
+    citation line for Carpenter carrying the parallel cite `138 S. Ct. 2206`
+    (the derived HTML must contain that string — Task B stages its error
+    against it). Render the derived HTML with the score's own converter (the
+    host owes no pandoc): `python3 scripts/md-to-html.py memo/memo.md memo/memo.html`.
+
+    ## Task B — the disclosed erratum (The Errata Ledger contrast arm)
+    1. Seed a DISCLOSED wrong parallel citation into the derived HTML:
+       `sed -i 's/S\. Ct\. 2206/S. Ct. 2205/' memo/memo.html` (one digit off).
+       This is a staged error for the demonstration, disclosed here and on the
+       site. The sed is deterministic — the seeded state is reproducible.
+    2. Record the seeded state: `sha256sum memo/memo.html` — prior_hash.
+    3. Write `errata/entry-t1.json`:
+       `{"claim_id": "carpenter-parallel-cite", "canon_path": "memo/memo.html",
+       "prior_hash": "<from step 2>", "note": "parallel citation typo, disclosed and corrected"}`
+    4. CORRECT the canon: `sed -i 's/S\. Ct\. 2205/S. Ct. 2206/' memo/memo.html`.
+    5. Commit the pair: `python3 scripts/errata-commit.py errata/entry-t1.json`
+       — it refuses if the bytes did not change, fsyncs the ledger under an
+       errata lock, hash-joins ledger new_hash to the corrected canon, assigns
+       the next monotonic watermark seq, and commits BOTH in one CHECKED,
+       journaled commit.
+    6. Verify the join survives: `python3 scripts/errata-commit.py --verify-join`
+       (the default canon is the HTML you corrected — ledger and validator
+       finally hash the same file).
+    The contrast you just demonstrated goes on the site: an ERRATUM changed
+    bytes and recorded it (hash-joined pair); the TERM-1 SUPERSESSION changed
+    no old byte and recorded an edge. Both are now on the same corpus with
+    observably different mechanics — that is the answer to "isn't this just a
+    changelog?" Complete when `bash scripts/movement-gate.sh 9` passes.
+
+    {% elif stage == 10 %}
+    # ══ Movement 10 · Term-2 Motions (M2') — against the campaign's OWN holdings ══
+    {{ ai_ground_rules() }}
+    {{ force_discipline() }}
+    {{ motion_packet_spec(2) }}
+
+    ## Fresh bytes first (the deterministic path — you do not fetch)
+    Run `bash scripts/recapture.sh` — curl + body-asserted HTTP + digests
+    generated from the fresh payloads land in `evidence/recapture/`. Draft
+    from what it wrote, never from memory of the API.
+
+    ## Motion 1 — MOT-T2-001 (will be GRANTED): re-pin the citation vintage
+    OVERRULE `H-002` (the vintage pin), factor `changed-circumstances`, successor
+    `H-005`, scope `citation-vintage`. Ground the changed circumstance HONESTLY
+    — this matters: the live gate at movement 16 re-verifies every doctrine
+    row's ORIGINAL capture digest against the live API, so this motion may NOT
+    claim upstream bytes moved. What changed is the CAMPAIGN's position, not
+    the bytes: the campaign has entered its second term with a fresh
+    authenticated recapture on disk, and binding the index to term-1 bytes
+    forever would make every future live verification depend on a vintage that
+    goes stale the moment CourtListener re-serializes. The recapture exists;
+    the pin should bind to it. The `proposed_row` is the new vintage
+    holding: provenance binds to the recapture (captured_at =
+    recapture-field-map.generated_at, digests from its files, archive_path
+    `evidence/recapture/cite-<slug>.json` for the Smith row), assigned_by
+    `composer-registration (term-2 motion)`, force binding, layer campaign.
+    The superseded term-1 vintage pin must remain readable after enrollment —
+    that is the demonstration.
+
+    ## Motion 2 — MOT-T2-002 (will be DENIED): jurisdiction expansion
+    OVERRULE `H-001` (the jurisdiction pin) to admit a second doctrinal line —
+    argue it honestly (a good-faith case for breadth), factors you genuinely
+    believe apply. Carry NO `successor` and NO `proposed_row` in the packet:
+    nothing about this motion can ever be enrolled, and the packet must say so
+    structurally. The bench will deny it on the merits: the single-line pin is
+    load-bearing and a scope-doubling overrule does not survive the bar. A
+    denial with reasons on the record is the proof that the bar is real — file
+    it straight.
+    Both motions CITE their targets (MOT-T2-001 cites `H-002`; MOT-T2-002
+    cites `H-001`) — cite-join refuses a target that is not also on the table.
+    Then: `bash scripts/cite-join.sh motions/term-2/*.json` and
+    `bash scripts/movement-gate.sh 10`.
+
+    {% elif stage == 11 %}
+    {{ cite_check_block(2) }}
+
+    {% elif stage == 12 %}
+    # ══ Movement 12 · Brief t2 (M4') — both motions, one brief ══
+    {{ ai_ground_rules() }}
+    {{ brief_spec(2) }}
+    Argue BOTH term-2 motions (MOT-T2-001 and MOT-T2-002) in
+    `briefs/term-2/brief.md`, with a `## Disposition Requested` section PER
+    motion. The injected live index reflects term 1's supersession — argue
+    against the record as it stands now. Complete when
+    `bash scripts/movement-gate.sh 12` passes.
+
+    {% elif stage == 13 %}
+    # ══ Movement 13 · Bench t2 (M5') — one grant AND one denial on the record ══
+    {{ ai_ground_rules() }}
+    {{ bench_oath(2) }}
+    Write TWO rulings (same seat, same independence discipline — BOTH rulings
+    carry seat_family from run/seat-matrix.json; the gates family-check the
+    denial as well as the grant):
+    - `rulings/term-2/ruling-grant.json` + its section in `rulings/term-2/ruling.md`
+      — grant MOT-T2-001 (the vintage re-pin): re-enactment pins this
+      disposition; your reasons are your own, on the record.
+    - `rulings/term-2/ruling-deny.json` — DENY MOT-T2-002, `reasons` >= a real
+      paragraph: why the jurisdiction pin holds, on the record.
+    A denial is not a failure of the run — it is the bar being real. Complete
+    when `bash scripts/movement-gate.sh 13` passes.
+
+    {% elif stage == 14 %}
+    {{ enroll_block(2) }}
+
+    {% elif stage == 15 %}
+    {{ notify_block(2) }}
+
+    {% elif stage == 16 %}
+    {{ strict() }}
+    # ══ Movement 16 · Publish + Live Gate (M9) — the Gas-Free Certificate ══
+    OWNER=$(python3 -c "import json;print(json.load(open('run/bench-config.json'))['github_owner'])")
+    REPO=$(python3 -c "import json;print(json.load(open('run/bench-config.json'))['repo_name'])")
+
+    # 1. Build the site from the CURRENT index (deterministic; must contain the
+    #    scoped-supersession flag BEFORE any deploy — local proof first)
+    python3 scripts/build-site.py
+    grep -q "superseded for CSLI" site/index.html \
+      || { echo "BUILD REFUSED: the scoped-supersession flag is missing from the built site"; exit 1; }
+    grep -q "carpenter-parallel-cite" errata/ledger.jsonl \
+      || { echo "BUILD REFUSED: the errata contrast arm is not on the record"; exit 1; }
+    grep -q "still citable outside CSLI" site/index.html \
+      || { echo "BUILD REFUSED: the scope nuance the reader battery inverts is not stated"; exit 1; }
+    git add -A && git diff --cached --quiet || git commit -qm "M9: build the bench site"
+
+    # 2. Repo: create-or-reuse, FENCED (foreign branch state refuses — never
+    #    force main). gh auth setup-git makes the https credential path explicit.
+    if ! gh repo view "$OWNER/$REPO" >/dev/null 2>&1; then
+      gh repo create "$REPO" --public --source . --remote origin --push \
+        || { echo "DEPLOY REFUSED: repo create failed"; exit 1; }
+    else
+      git remote remove origin 2>/dev/null || true
+      git remote add origin "https://github.com/$OWNER/$REPO.git"
+      if git ls-remote origin refs/heads/main 2>/dev/null | grep -q .; then
+        git fetch origin main \
+          || { echo "DEPLOY REFUSED: cannot fetch origin/main"; exit 1; }
+        git merge-base --is-ancestor FETCH_HEAD HEAD \
+          || { echo "DEPLOY REFUSED: origin/main carries foreign branch state — resolve deliberately; forcing is not an option"; exit 1; }
+      fi
+      git push origin main || { echo "DEPLOY REFUSED: push failed"; exit 1; }
+    fi
+    gh auth setup-git >/dev/null 2>&1 || true
+
+    # 3. Protect the enrollment branch (Fork-Evident History): no force-push,
+    #    no deletion, linear history, AND enforce_admins TRUE — with it false,
+    #    the repo owner (the only person who can run this) is EXEMPT and the
+    #    fixture below would push straight through the "protection"
+    #    (review-1 finding). Then PROVE the protection with the shared,
+    #    GENUINELY DIVERGENT force-push fixture: it amends to a sibling commit,
+    #    force-pushes EXPECTING rejection, records the rejection, and restores.
+    #    An up-to-date force push exits 0 and proves nothing (review-3 finding).
+    cat > run/protection.json <<'J'
+    {"required_status_checks": null, "enforce_admins": true,
+     "required_pull_request_reviews": null, "restrictions": null,
+     "allow_force_pushes": false, "allow_deletions": false,
+     "required_linear_history": true}
+    J
+    gh api -X PUT "repos/$OWNER/$REPO/branches/main/protection" --input run/protection.json >/dev/null \
+      || { echo "DEPLOY REFUSED: branch protection could not be set"; exit 1; }
+    gh api "repos/$OWNER/$REPO/branches/main/protection" \
+      | jq -e '.allow_force_pushes == false and .enforce_admins.enabled == true and .required_linear_history.enabled == true' >/dev/null \
+      || { echo "DEPLOY REFUSED: protection did not verify (force-pushes banned, admins included, linear history)"; exit 1; }
+    bash scripts/force-push-fixture.sh
+
+    # 4. Publish: the orphan gh-pages branch carries ONLY the rendered site and
+    #    Pages serves its ROOT — the only source path the REST API accepts
+    #    (source[path]=/site was a guaranteed 422; review-1/review-2 finding).
+    #    main remains the full evidence repo.
+    bash scripts/publish-site.sh
+
+    # 5. The LIVE recompute gate — against the PUBLIC URL, after propagation.
+    #    Served digests must equal live-query recomputes; the tampered copy
+    #    must FAIL. The certificate is gas-free only NOW.
+    bash scripts/live-gate.sh
+    if bash scripts/live-gate.sh --file=fixtures/tampered-verify.json 2>/dev/null; then
+      echo "LIVE-GATE LEAK: the tampered copy passed"; exit 1
+    fi
+
+    # 6. Record the deployment (disk is the source; placeholders are not)
+    python3 - <<'PYEOF'
+    import json, datetime, subprocess
+    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    cfg = json.load(open("run/bench-config.json"))
+    json.dump({"url": cfg["site_url"], "repo": cfg["repo_name"], "owner": cfg["github_owner"],
+               "branch": "main", "source_branch": "gh-pages", "source_path": "/",
+               "deployed_commit": commit,
+               "verified_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+               "gate": "live-gate.sh (served digests == live recomputes; tampered copy refused); divergent force-push rejected under enforce_admins"},
+              open("run/deployment.json", "w"), indent=2)
+    PYEOF
+    git add -A && git diff --cached --quiet || git commit -qm "M9: deploy the bench — protection verified, live gate green"
+    git push origin main || { echo "DEPLOY WARNING: post-deploy push failed"; exit 1; }
+    echo "the bench is live: {{ site_url }}"
+
+    {% elif stage == 17 %}
+    {{ strict() }}
+    # ══ Movement 17 · Controls Published (M10a) — Exploit Failure as Signal ══
+    # Every negative control re-run end-to-end against the LIVE system, results
+    # published on the site with per-control verdicts. History rewrite-detection
+    # by ANCESTRY (history-check.sh — the log-count tautology is gone). The
+    # reader page fetched to text by the score's own converter (no pandoc).
+    python3 - <<'PYEOF' > run/controls.json
+    import json, subprocess
+    def run(cmd):
+        p = subprocess.run(cmd, capture_output=True, text=True)
+        return {"cmd": " ".join(cmd), "exit": p.returncode, "tail": ((p.stderr or p.stdout).strip() or "")[-160:]}
+    controls = [
+        {"control": "dangling-cite-refused", "expect": "nonzero", **run(["bash", "scripts/cite-join.sh", "fixtures/dangling-motion.json"])},
+        {"control": "untyped-row-refused", "expect": "nonzero", **run(["python3", "scripts/force-typecheck.py", "fixtures/untyped-row.jsonl"])},
+        {"control": "production-named-motion-typechecked-on-motion-path", "expect": "nonzero", **run(["python3", "scripts/force-typecheck.py", "fixtures/MOT-FIX-STRUCTURAL.json"])},
+        {"control": "factorless-overrule-refused", "expect": "nonzero", **run(["python3", "scripts/enroll.py", "fixtures/factorless-ruling.json"])},
+        {"control": "unrelated-target-refused", "expect": "nonzero", **run(["python3", "scripts/enroll.py", "--root", "fixtures/idx3", "fixtures/unrelated-target-ruling.json"])},
+        {"control": "corrupted-digest-refused", "expect": "nonzero", **run(["python3", "scripts/digest-verify.py", "--index", "fixtures/corrupted-index.jsonl"])},
+        {"control": "half-errata-refused", "expect": "nonzero", **run(["python3", "scripts/errata-commit.py", "--verify-join", "--ledger", "fixtures/half-errata/ledger.jsonl", "--canon", "fixtures/half-errata/canon.md"])},
+        {"control": "concurrent-enroll-single-writer", "expect": "exactly-one", **run(["bash", "scripts/concurrent-fixture.sh"])},
+        {"control": "force-push-rejected", "expect": "observed", **run(["bash", "scripts/force-push-fixture.sh"]),
+         "why": "exit 0 = the divergent force push WAS rejected and history restored; the stage-4 no-op version exited 0 while proving nothing at all"},
+        {"control": "tampered-page-fails-live-gate", "expect": "nonzero", **run(["bash", "scripts/live-gate.sh", "--file=fixtures/tampered-verify.json"])},
+        {"control": "unauth-401-observed", "expect": "observed", **run(["bash", "-c", 'test "$(curl -s -o /dev/null -w \'%{http_code}\' \'https://www.courtlistener.com/api/rest/v4/citation-lookup/?citations=442+U.S.+735\')" = "401"'])},
+    ]
+    print(json.dumps(controls, indent=2))
+    PYEOF
+    python3 - <<'PYEOF'
+    import json, sys
+    cs = json.load(open("run/controls.json"))
+    bad = []
+    for c in cs:
+        if c["expect"] == "nonzero" and c["exit"] == 0:
+            bad.append(f'{c["control"]}: exit 0 — leaked')
+        if c["expect"] in ("observed", "exactly-one") and c["exit"] != 0:
+            bad.append(f'{c["control"]}: expected behavior not observed — {c["tail"]}')
+    if bad:
+        print("CONTROLS FAIL:\n  " + "\n  ".join(bad), file=sys.stderr); sys.exit(1)
+    print(f"controls: {len(cs)} controls, every designed behavior fired")
+    PYEOF
+
+    # fork-evidence by ANCESTRY: local == origin AND every journaled writer
+    # commit still reachable from HEAD (a rewritten history orphans exactly
+    # these); fsck for damage. Counting log against rev-list is NOT evidence.
+    bash scripts/history-check.sh
+
+    # republish with the results table, then re-gate the LIVE url
+    git add -A && git diff --cached --quiet || git commit -qm "M10a: the live control results"
+    git push origin main || { echo "push failed"; exit 1; }
+    bash scripts/publish-site.sh
+    bash scripts/live-gate.sh
+    SITE="$(python3 -c "import json;print(json.load(open('run/bench-config.json'))['site_url'])")"
+    curl -fsSL "$SITE" -o run/reader-page.html \
+      || { echo "CONTROLS REFUSED: the live page did not fetch after republish"; exit 1; }
+    grep -q "superseded for CSLI" run/reader-page.html \
+      || { echo "CONTROLS REFUSED: the live page lost the supersession flag after republish"; exit 1; }
+
+    # fetch the reader's ONLY input (the published page, as plain text) and
+    # record the reader's provenance — the unprimed instrument's exposure is
+    # the published page and NOTHING else
+    python3 scripts/html-to-text.py run/reader-page.html run/reader-page.md
+    test -s run/reader-page.md || { echo "READER REFUSED: the published page did not convert to text"; exit 1; }
+    python3 - <<'PYEOF'
+    import json
+    cfg = json.load(open("run/bench-config.json"))
+    sm = json.load(open("run/seat-matrix.json"))
+    prof = sm.get("reader_profile", {})
+    json.dump({"instrument": cfg["seats"]["reader"], "family": sm["reader_family"],
+               "model": prof.get("model", "unresolved"), "input": "run/reader-page.md (the deployed page, by REQUIRED cadenza)",
+               "exposure": "published page only — no build artifacts, no score context, no prelude",
+               "confinement": "prompt-level: no prelude exists and the cadenza is the only injection, but the instrument profile retains workspace access — a recorded limit, mitigated by inversion-scored answers a page-parrot cannot pass"},
+              open("run/reader-provenance.json", "w"), indent=2)
+    PYEOF
+
+    {% elif stage == 18 %}
+    # ══ Movement 18 · Unprimed Reader (M10b) — The Unprimed Falsifier ══
+    You are a member of the public reading a web page. The injected page text
+    is ALL you have — you have never seen this project, its files, or how the
+    page was built. Do not explore any directory; do not run commands; answer
+    from the injected page alone.
+
+    Write `reader/answers.md` answering, in your own words, with EXACTLY these
+    four section labels:
+
+    ## Q1 — Status
+    Is *Smith v. Maryland* still good law for cell-site location information
+    (CSLI)? Say plainly what the page tells you, including any nuance about
+    scope.
+
+    ## Q2 — Why
+    Why — what happened, and in which case, per the page?
+
+    ## Q3 — Verify
+    If you wanted to verify the page's claim yourself, what does the page
+    offer you to do so?
+
+    ## Q4 — Structured answers
+    A fenced ```json block — and ONLY from what the page says — with exactly
+    these keys and allowed values:
+    {"smith_good_law_for_csli": "yes or no",
+     "smith_still_citable_outside_csli": "yes or no",
+     "which_case_changed_it": "the case name, or 'unknown'",
+     "verify_method": "one of: recompute-digest, read-opinion, ask-author, none"}
+
+    If the page does not answer a question, say so plainly — that is a result
+    about the page, not about you. Do not guess beyond the page. The structured
+    block is scored mechanically; honest "unknown" beats invented certainty.
+    {% endif %}
+
+# ═══════════════════ Validations (Commissioning Cascade: staged fail-fast) ═══════════════════
+# Every movement carries the GENERIC outcome gate (one enforcement point that
+# dispatches by movement number — the macro at the validation layer) plus
+# movement-specific rules: stage 1 receipt → stage 2 structure → stage 3 join.
+# Evidence asserts on bodies, digests, joins — never on exit codes alone,
+# never file_exists alone. The movement-16 rules test the RUNNING deployed
+# artifact, not local files.
+validations:
+  # ── The generic gate: applies to ALL 18 movements ────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && bash scripts/movement-gate.sh {sheet_num}'
+    stage: 2
+    description: "Outcome gate for this movement (dispatches by number; refuses loudly)"
+
+  # ── Movement 1 · Commission + Capture ─────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -e ".controls | length >= 10" run/commissioning-log.json >/dev/null && test -x scripts/enroll.py -a -x scripts/cite-join.sh -a -x scripts/live-gate.sh -a -x scripts/md-to-html.py -a -x scripts/html-to-text.py -a -x scripts/publish-site.sh -a -x scripts/force-push-fixture.sh -a -x scripts/history-check.sh -a -x scripts/consumer-ack.py'
+    condition: "stage == 1"
+    stage: 1
+    description: "M0: the substrate exists — the commissioned gate scripts (incl. the pandoc-free converters and the publish/fixture/history helpers) on disk"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -e ".controls | map(select(.expect == \"nonzero\")) | all(.[]; .exit != 0)" run/commissioning-log.json >/dev/null && jq -e ".family_inequality and .reader_third_family" run/seat-matrix.json >/dev/null'
+    condition: "stage == 1"
+    stage: 3
+    description: "M0: every designed failure observed firing; bench/brief families unequal; reader third-family (Condorcet + Unprimed-Falsifier seams)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -e ".files | to_entries | map(select(.key | startswith(\"cite-\"))) | length >= 4" run/field-map.json >/dev/null && for S in schema/*.json; do python3 -m json.tool "$S" >/dev/null || exit 1; done'
+    condition: "stage == 1"
+    stage: 3
+    description: "M0: the jq-GENERATED field map covers four bodies; the frozen contracts parse (The Freeze)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && test -s fixtures/unauth-401.json && jq -e "has(\"detail\")" fixtures/unauth-401.json >/dev/null'
+    condition: "stage == 1"
+    stage: 3
+    description: "M0: the 401 negative control is on disk — an exit-0 curl with a 401 body can never pass for evidence (crush lesson)"
+
+  # ── Movement 2 · Seed the bench ───────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && test "$(jq -s "map(select(.layer == \"doctrine\")) | length" precedent/index.jsonl)" -ge 6 && test "$(jq -s "map(select(.layer == \"campaign\")) | length" precedent/index.jsonl)" -ge 4'
+    condition: "stage == 2"
+    stage: 2
+    description: "M1: the two-layer corpus is seeded — six doctrine rows (incl. both concurrences typed persuasive) + four campaign holdings"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python3 scripts/digest-verify.py && grep -q "P-002" precedent/INDEX.md && grep -q "H-002" precedent/INDEX.md'
+    condition: "stage == 2"
+    stage: 3
+    description: "M1: every doctrine digest recomputes against archived bytes; the cadenza source renders both layers"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python3 -c "import json,pathlib; rows=[json.loads(l) for l in open(\"precedent/index.jsonl\") if l.strip()]; order=json.load(open(\"run/case-order.json\")); exp={c[\"url\"] for c in order.values()}; got={r[\"provenance\"][\"query_url\"] for r in rows if r.get(\"layer\")==\"doctrine\"}; assert exp<=got, f\"doctrine rows lost exact movement-1 URLs: {sorted(exp-got)}\"; print(\"URL join:\", len(got), \"doctrine URLs, all byte-equal to movement 1 captures")"'
+    condition: "stage == 2"
+    stage: 3
+    description: "M1: provenance URLs are byte-equal to movement 1's computed URLs — re-implemented here independently of the gate's join (no LLM-retyped URL survives seeding; the drift review-3 flagged now dies at movement 2, not 16)"
+
+  # ── Movement 3 · Term-1 motion ────────────────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/motions/term-1/MOT-T1-001.json"
+    condition: "stage == 3"
+    stage: 1
+    description: "M2: the term-1 typed motion packet exists"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -e ".type == \"distinguish\" and (.factors | index(\"changed-circumstances\")) and .scope == \"CSLI\"" motions/term-1/MOT-T1-001.json >/dev/null'
+    condition: "stage == 3"
+    stage: 2
+    description: "M2: the Carpenter move is typed honestly — DISTINGUISH, factor named, scope CSLI (not a flattened overrule)"
+
+  # ── Movement 4 · Cite-check t1 ────────────────────────────────────────────────
+  - &dangling_control
+    type: command_succeeds
+    command: 'cd "{workspace}" && if bash scripts/cite-join.sh fixtures/dangling-motion.json 2>/dev/null; then echo "LEAK: the dangling fixture joined"; exit 1; fi'
+    condition: "stage == 4"
+    stage: 3
+    description: "M3: the dangling-citation fixture refuses IN THE SAME MOVEMENT that trusts the gate (a gate unobserved failing is not yet a gate)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && grep -q "every citation joins" run/cite-check-term-1.txt && ! grep -q "LEAK" run/cite-check-term-1.txt'
+    condition: "stage == 4"
+    stage: 2
+    description: "M3: the live motion joined; the transcript is on disk (receipt)"
+
+  # ── Movement 5 · Brief t1 ─────────────────────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/briefs/term-1/brief.md"
+    condition: "stage == 5"
+    stage: 1
+    description: "M4: the brief exists"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/briefs/term-1/brief.md") -ge 300'
+    condition: "stage == 5"
+    stage: 2
+    description: "M4: the brief is argued, not sketched (300+ words)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python3 -c "import re,pathlib,json; toks=set(re.findall(r\"\b[PH]-\d{3}[a-z]?\b\", pathlib.Path(\"briefs/term-1/brief.md\").read_text())); rows={json.loads(l)[\"id\"] for l in open(\"precedent/index.jsonl\") if l.strip()}; bad=toks-rows; assert not bad, f\"brief cites dangling rows: {sorted(bad)}\""'
+    condition: "stage == 5"
+    stage: 3
+    description: "M4: every [P-###]/[H-###] token in the brief joins the index — independently re-implemented, not the gate's own jq"
+
+  # ── Movement 6 · Bench t1 ─────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -e ".disposition == \"grant\" and (.force == \"binding\" or .force == \"persuasive\") and (.assigned_by | length >= 3) and (.seat_family | length >= 2)" rulings/term-1/ruling.json >/dev/null'
+    condition: "stage == 6"
+    stage: 2
+    description: "M5: the ruling carries its Typed-Force fields — disposition, force, assigned_by (the pattern's own validation)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && BF=$(jq -r .brief_family run/seat-matrix.json); jq -e --arg bf "$BF" ".seat_family != $bf" rulings/term-1/ruling.json >/dev/null'
+    condition: "stage == 6"
+    stage: 3
+    description: "M5: the bench seat's family differs from the brief emitter's — from disk receipts, not from the prompt's say-so (Condorcet's Premise)"
+  - type: content_contains
+    path: "{workspace}/rulings/term-1/ruling.md"
+    pattern: "## Reasons"
+    condition: "stage == 6"
+    stage: 2
+    description: "M5: the argued bench memo states its reasons on the record"
+
+  # ── Movement 7 · Enroll t1 (the headline assertion) ───────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -s "map(select(.id == \"P-002\")) | length == 1" precedent/index.jsonl >/dev/null && jq -s "map(select(.id == \"P-006\")) | length == 1" precedent/index.jsonl >/dev/null'
+    condition: "stage == 7"
+    stage: 2
+    description: "M6: BOTH rows remain in the index — the overruled precedent stays on the books"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -s -e "map(select(.motion_id == \"MOT-T1-001\"))[0] | .scope == \"CSLI\" and .from == \"P-002\" and .to == \"P-006\"" precedent/edges.jsonl >/dev/null'
+    condition: "stage == 7"
+    stage: 3
+    description: "M6: the scoped supersession edge carries scope CSLI, Smith → Carpenter — jq -s (a map over a raw JSONL stream exits 5; the stage-4 form failed every run)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && test "$(git log --oneline --grep \"^enroll: MOT-T1-001\" | wc -l)" -eq 1'
+    condition: "stage == 7"
+    stage: 3
+    description: "M6: EXACTLY one enrollment commit for the motion (at-least-one let duplicates pass; the writer journals every sha)"
+
+  # ── Movement 8 · Notify t1 ────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -e ".flags | length >= 1" site/data/consumers.json >/dev/null && jq -e ".supersession_flags | length >= 1" site/data/consumer-render.json >/dev/null'
+    condition: "stage == 8"
+    stage: 2
+    description: "M7: consumers carry the supersession flag — they learned it moved"
+
+  # ── Movement 9 · Errata arm ───────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/memo/memo.md") -ge 400'
+    condition: "stage == 9"
+    stage: 2
+    description: "M8: the research memo is an argued document (400+ words)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python3 scripts/errata-commit.py --verify-join'
+    condition: "stage == 9"
+    stage: 3
+    description: "M8: the atomic pair joins — ledger new_hash == sha256 of the corrected canon (The Errata Ledger's own semantics)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && WANT=$(jq -s "last | .new_hash" errata/ledger.jsonl); GOT=$(sha256sum memo/memo.html | cut -d" " -f1); test "$WANT" = "$GOT"'
+    condition: "stage == 9"
+    stage: 3
+    description: "M8: the hash-join recomputed independently at the validation layer (diverse observers)"
+
+  # ── Movement 10 · Term-2 motions ──────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -e ".type == \"overrule\" and (.factors | length >= 1) and .target == \"H-002\"" motions/term-2/MOT-T2-001.json >/dev/null && jq -e ".target == \"H-001\"" motions/term-2/MOT-T2-002.json >/dev/null'
+    condition: "stage == 10"
+    stage: 2
+    description: "M2': BOTH motions target the campaign's OWN holdings — the self-referential bind, filed as typed packets"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -e ".files | length >= 4" evidence/recapture/recapture-field-map.json >/dev/null'
+    condition: "stage == 10"
+    stage: 2
+    description: "M2': fresh capture bytes + generated digests exist (the re-pin cites evidence, not vibes)"
+
+  # ── Movement 11 · Cite-check t2 (the YAML-anchored repeat of the control) ─────
+  - <<: *dangling_control
+    condition: "stage == 11"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && grep -q "every citation joins" run/cite-check-term-2.txt'
+    condition: "stage == 11"
+    stage: 2
+    description: "M3': term-2 citations all join"
+
+  # ── Movement 12 · Brief t2 ────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/briefs/term-2/brief.md") -ge 400 && test $(grep -c "## Disposition Requested" "{workspace}/briefs/term-2/brief.md") -ge 2'
+    condition: "stage == 12"
+    stage: 2
+    description: "M4': both motions argued, each with its own disposition request"
+
+  # ── Movement 13 · Bench t2 ────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -e ".disposition == \"grant\"" rulings/term-2/ruling-grant.json >/dev/null && jq -e ".disposition == \"deny\" and (.reasons | length >= 80)" rulings/term-2/ruling-deny.json >/dev/null && BF=$(jq -r .brief_family run/seat-matrix.json) && jq -e --arg bf "$BF" ".seat_family != $bf" rulings/term-2/ruling-grant.json >/dev/null && jq -e --arg bf "$BF" ".seat_family != $bf" rulings/term-2/ruling-deny.json >/dev/null'
+    condition: "stage == 13"
+    stage: 2
+    description: "M5': one grant AND one denial with real reasons, BOTH rulings family-checked against the brief emitter — the denial rode unchecked at stage 4 (review-2 finding)"
+
+  # ── Movement 14 · Enroll t2 ───────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -s "map(select(.id == \"H-002\")) | length == 1 and (.[0].layer == \"campaign\")" precedent/index.jsonl >/dev/null && jq -s "map(select(.id == \"H-005\")) | length == 1" precedent/index.jsonl >/dev/null'
+    condition: "stage == 14"
+    stage: 2
+    description: "M6': the superseded term-1 vintage pin remains READABLE and the new H-005 row enrolled — accumulation across terms"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -s -e "map(select(.motion_id == \"MOT-T2-001\")) | length == 1" precedent/edges.jsonl >/dev/null && jq -s -e "map(select(.motion_id == \"MOT-T2-002\")) | length == 0" precedent/edges.jsonl >/dev/null && test "$(git log --oneline --grep \"^enroll: MOT-T2-001\" | wc -l)" -eq 1'
+    condition: "stage == 14"
+    stage: 3
+    description: "M6': the granted motion has its edge and exactly one journaled commit; the DENIED motion enrolled NOTHING (jq -s — the stage-4 stream form exited 5)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && test -s run/deny-refusal.txt && grep -qi "disposition" run/deny-refusal.txt'
+    condition: "stage == 14"
+    stage: 3
+    description: "M6': the serialized writer's refusal of the denied motion is on the record"
+
+  # ── Movement 15 · Notify t2 ───────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -e ".flags | length >= 2" site/data/consumers.json >/dev/null'
+    condition: "stage == 15"
+    stage: 2
+    description: "M7': both supersession edges flagged"
+
+  # ── Movement 16 · Publish + live gate (RUNNING-artifact validations) ──────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python3 -c "import json,urllib.request; u=json.load(open(\"run/deployment.json\"))[\"url\"]; body=urllib.request.urlopen(u, timeout=180).read().decode(); assert \"superseded for CSLI\" in body, \"the deployed page lost the scoped-supersession flag\"; assert \"Precedent\" in body"'
+    condition: "stage == 16"
+    stage: 3
+    retry_count: 6
+    retry_delay_ms: 5000
+    description: "M9: the DEPLOYED page serves the scoped-supersession flag — tested against the running artifact, not local files (retried through Pages propagation)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && bash scripts/live-gate.sh --file=fixtures/tampered-verify.json >/dev/null 2>&1; test $? -ne 0'
+    condition: "stage == 16"
+    stage: 3
+    description: "M9: a TAMPERED verify panel fails the gate — tamper-detection is proven, not assumed"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && test -s run/force-push-rejection.txt && gh api "repos/$(python3 -c "import json;c=json.load(open(\"run/bench-config.json\"));print(c[\"github_owner\"]+\"/\"+c[\"repo_name\"])")/branches/main/protection" | jq -e ".allow_force_pushes == false and .enforce_admins.enabled == true" >/dev/null && jq -e ".source_branch == \"gh-pages\" and .source_path == \"/\"" run/deployment.json >/dev/null'
+    condition: "stage == 16"
+    stage: 3
+    description: "M9: main is protected INCLUDING admins, the DIVERGENT force-push rejection is on record, and Pages serves the orphan gh-pages branch at / — the only source path the REST API accepts (all three were stage-4 run-killers)"
+
+  # ── Movement 17 · Controls published ──────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -e "length >= 11" run/controls.json >/dev/null && jq -e "map(select(.expect == \"nonzero\")) | all(.[]; .exit != 0)" run/controls.json >/dev/null && jq -e "(map(select(.expect == \"observed\")) + map(select(.expect == \"exactly-one\"))) | all(.[]; .exit == 0)" run/controls.json >/dev/null && bash scripts/history-check.sh'
+    condition: "stage == 17"
+    stage: 2
+    description: "M10a: eleven controls re-ran end-to-end — every designed failure refused, every expected behavior observed (incl. the genuinely divergent force-push rejection) — and rewrite-detection passes by ANCESTRY"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/run/reader-page.md") -ge 100'
+    condition: "stage == 17"
+    stage: 2
+    description: "M10a: the reader's only input — the deployed page as text — is fetched and substantial"
+
+  # ── Movement 18 · Unprimed reader ─────────────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/reader/answers.md"
+    condition: "stage == 18"
+    stage: 1
+    description: "M10b: the reader answered"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && grep -q "## Q1" reader/answers.md && grep -q "## Q2" reader/answers.md && grep -q "## Q3" reader/answers.md'
+    condition: "stage == 18"
+    stage: 2
+    description: "M10b: all three battery answers present (exact labels)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python3 -c "import pathlib,re; t=pathlib.Path(\"reader/answers.md\").read_text(); q1=re.search(r\"## Q1.*?## Q2\", t, re.S).group(0); q2=re.search(r\"## Q2.*?## Q3\", t, re.S).group(0); q3=re.search(r\"## Q3.*\", t, re.S).group(0); assert re.search(r\"(?i)smith\", q1) and re.search(r\"(?i)(superseded|no longer|not.{0,20}good law)\", q1), \"Q1 must state Smith not still good law for CSLI (with the scoped nuance)\"; assert re.search(r\"(?i)carpenter\", q2), \"Q2 must name Carpenter\"; assert re.search(r\"(?i)(verif|digest|query|sha|curl)\", q3), \"Q3 must point at the verify panel\""'
+    condition: "stage == 18"
+    stage: 3
+    description: "M10b: the unprimed reader got the status, the why, and the verification path — from the page alone (below threshold would mean the page, not the reader, must be rebuilt)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python3 -c "import json,pathlib,re; t=pathlib.Path(\"reader/answers.md\").read_text(); q4=re.search(r\"## Q4.*\",t,re.S).group(0); fence=chr(96)*3; m=re.search(fence+r\"json\s*(\{.*?\})\s*\"+fence,q4,re.S); assert m, \"Q4 needs a fenced json block\"; a=json.loads(m.group(1)); assert a.get(\"smith_good_law_for_csli\")==\"no\", a; assert a.get(\"smith_still_citable_outside_csli\")==\"yes\", a; assert \"carpenter\" in str(a.get(\"which_case_changed_it\",\"\")).lower(), a; assert a.get(\"verify_method\")==\"recompute-digest\", a; print(\"reader battery: structured answers exact, including the inversion question\")"'
+    condition: "stage == 18"
+    stage: 3
+    description: "M10b: the STRUCTURED battery scores exact answers — including the INVERSION question (Smith still citable OUTSIDE CSLI: yes) whose correct answer runs OPPOSITE to the page's dominant 'superseded' vocabulary; lexical echo passes the prose checks and dies here"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && jq -e ".family == \"GEMMA-LOCAL\" and (.exposure | contains(\"published page only\"))" run/reader-provenance.json >/dev/null'
+    condition: "stage == 18"
+    stage: 2
+    description: "M10b: the reader's provenance is recorded — third family, published page only"

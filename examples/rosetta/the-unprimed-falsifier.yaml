@@ -1,0 +1,3418 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  THE PLAIN-LANGUAGE DISPENSARY — The Unprimed Falsifier proof score           ║
+# ║        sheet 6 of 8 · REVISED from 04 + three adversarial reviews            ║
+# ║                                                                               ║
+# ║  PRIMARY PATTERN : The Unprimed Falsifier — makers cannot perceive their      ║
+# ║                    finished artifact (fluency hides the claims it makes)     ║
+# ║                    and internal evaluation shares the blind spot. Here the   ║
+# ║                    artifact is the FDA Medication Guide: the most-read       ║
+# ║                    safety document in American daily life, written 2–6       ║
+# ║                    grade levels above the patients who depend on it.         ║
+# ║                    Unprimed reader panels (artifact-only REQUIRED            ║
+# ║                    cadenzas; no score-level prelude exists) perform a        ║
+# ║                    pre-registered task battery against two arms: the         ║
+# ║                    pinned OFFICIAL bytes (control) and a plain-language      ║
+# ║                    REBUILD (treatment; reformulation-only — enforced as      ║
+# ║                    mapping-plus-refusal on a STRICT bullet format, the       ║
+# ║                    residual semantic risk declared, never claimed as         ║
+# ║                    arithmetic). Cards are CLI-coded into typed, LOCATED      ║
+# ║                    evidence; recut targets only sections whose MISREAD       ║
+# ║                    events span >= corroboration_min distinct vendor          ║
+# ║                    families; the loop ends in an authority-declared          ║
+# ║                    lock joined to the evidence — never the author's own     ║
+# ║                    satisfaction.                                             ║
+# ║                                                                               ║
+# ║  COMPOSING       : The Freeze (lock half; structure is DISCOVERED through    ║
+# ║                    falsification, then terminated: done.stamp → frozen/      ║
+# ║                    + frozen.sha256 covering guides, provenance, ALL round    ║
+# ║                    evidence, the registration, the manifest, both            ║
+# ║                    self-assessments and the final verdict; every finishing   ║
+# ║                    movement joins against the digest), Rehearsal             ║
+# ║                    Spotlight (recut only flagged sections; the               ║
+# ║                    untouched-sections diff covers section SETS, heading      ║
+# ║                    lines, and the provenance anchors of unflagged            ║
+# ║                    sections), The Declared Window (claims.jsonl class ∈      ║
+# ║                    in-window|total-seen|refused; join arithmetic exact;      ║
+# ║                    an in-window row must satisfy ≥2 of four window           ║
+# ║                    classes — observation, family, count, round — not one     ║
+# ║                    lexical token), plus WIRED SCRIPT LOGIC: Condorcet's      ║
+# ║                    Premise (the manifest parses the STAGED SCORE COPY and    ║
+# ║                    refuses <2 distinct corroboration families PER           ║
+# ║                    drug×arm condition), The Etiquette Law (every            ║
+# ║                    deterministic check is a CLI exit code with an EMPTY      ║
+# ║                    fallback chain), The Validity Window (official bytes      ║
+# ║                    pinned once, source identity recorded in pin-meta.json   ║
+# ║                    under the same digest; never re-read after round 1).      ║
+# ║                    Immune Checkpoint (the priming gate is path-shaped,       ║
+# ║                    not bare English — a late fatal replay must be narrow).   ║
+# ║                                                                               ║
+# ║  PROBLEM SOLVED  : No proof in the corpus is EXP-led. This proof measures    ║
+# ║                    the makers' fluency blind spot itself (the primed         ║
+# ║                    self-assessment + own battery answers joined against      ║
+# ║                    unprimed reader evidence = the headline covariate),      ║
+# ║                    then closes the measured gap through bounded              ║
+# ║                    falsification — a coordination property no monolithic     ║
+# ║                    context can produce — demonstrated on real federal        ║
+# ║                    drug-safety bytes, landing as a deployed, printable       ║
+# ║                    artifact a pharmacist can use this week.                  ║
+# ║                                                                               ║
+# ║  PRODUCES       : <auto-workspace>/plain-language-dispensary/ → official/     ║
+# ║                    (pinned MedGuide bytes + pins.sha256 + run/pin-meta.json  ║
+# ║                    with setid/source identity), rubric.yaml +                ║
+# ║                    thresholds.yaml + rubric.sha256 (pre-registered BEFORE    ║
+# ║                    any rebuilt sentence), battery/, rebuilt/ +               ║
+# ║                    provenance/ + self-assessment/ (maker arm + blind-spot    ║
+# ║                    instrument, schema-gated), delivery/, cards/ (nonce-      ║
+# ║                    bound, accumulated per round per arm), evidence/ (typed   ║
+# ║                    located evidence per round + verdict-input.json),         ║
+# ║                    frozen/ + frozen.sha256 (the extended lock), dist/        ║
+# ║                    (print-ready pharmacy one-pagers, ≥14pt, ≤2 pages,        ║
+# ║                    digest-citing footer), claims.jsonl + window-             ║
+# ║                    manifest.yaml + claims-summary.json, site/ + evidence     ║
+# ║                    page, run/ (deployment.json, six negative-control         ║
+# ║                    records, round odometer, deps lock, stamps),              ║
+# ║                    self-chain.yaml — plus the LIVE GitHub Pages site the     ║
+# ║                    live gate proves serves the frozen bytes by EXACT          ║
+# ║                    normalized-content equality, not a similarity score.     ║
+# ║                                                                               ║
+# ║  INSTRUMENTS     : 10 of 15 movements are instrument:cli with EMPTY          ║
+# ║                    fallback chains. AI is confined to five judgment roles,    ║
+# ║                    every one behind CLI gates: rubric author (claude-        ║
+# ║                    code, pinned — authored intent readers must never         ║
+# ║                    see), maker (claude-code, pinned — the blind-spot         ║
+# ║                    instrument's family is load-bearing evidence),            ║
+# ║                    verdict (codex-cli — family ALTERNATES from the           ║
+# ║                    maker's), evidence prose (claude-code, may fall           ║
+# ║                    back — numbers machine-injected), and the reader          ║
+# ║                    panels: 20 local-tier readers on opencode-gemma           ║
+# ║                    (ollama/gemma4:26b — many, shallow, genuinely naive,      ║
+# ║                    zero marginal cost; the http `ollama` profile was         ║
+# ║                    REJECTED because it cannot write card files) + 8          ║
+# ║                    corroboration readers: codex-cli (GPT) ×4 and             ║
+# ║                    opencode-gemma (GEMMA-LOCAL) ×4. The former               ║
+# ║                    GEMMA-CLOUD arm (gemini-cli) was REMOVED: the shipped     ║
+# ║                    profile declares execution_status: unsupported and no     ║
+# ║                    Google credentials exist on the venue. The ready-          ║
+# ║                    looking `crush` replacement was REJECTED after a          ║
+# ║                    live probe: a rate-limited failure still exited 0 —       ║
+# ║                    an instrument that lies about failure cannot carry        ║
+# ║                    evidence. Family inequality is asserted from the          ║
+# ║                    live staged configuration, per condition.                 ║
+# ║                                                                               ║
+# ║  PREREQUISITES   : network (openFDA / DailyMed, pip, npm, GitHub);           ║
+# ║                    python3 + venv (textstat, scipy, pyyaml, requests,        ║
+# ║                    markdown, reportlab, pypdf — the ENTIRE document          ║
+# ║                    toolchain is pure-Python in the venv: no pandoc, no       ║
+# ║                    LaTeX, no poppler, no linkchecker; versions frozen        ║
+# ║                    to run/deps-lock.txt at first commission and drift-       ║
+# ║                    checked every cycle); node + pa11y@8 (browser             ║
+# ║                    launch probed at M0, not discovered at M14); gh           ║
+# ║                    authenticated AS THE CONFIGURED OWNER (probed at         ║
+# ║                    M0: gh api user must equal github_owner — override       ║
+# ║                    with --var github_owner=<login>); ollama daemon           ║
+# ║                    serving gemma4:26b + the opencode-gemma profile          ║
+# ║                    (~/.marianne/instruments/opencode-gemma.yaml — a         ║
+# ║                    HOST instrument, probed at M0 via `mzt instruments       ║
+# ║                    check`); codex + OPENAI_API_KEY. Duration: round 1       ║
+# ║                    ≈ 1.5–3 h (24 local readers serialize on the             ║
+# ║                    daemon's max_concurrent:1). Rough cost ≈ $2–6.            ║
+# ║                    Unattended risk: fail_fast + max_retries 1; every         ║
+# ║                    gate fails loudly rather than falling back. A reader      ║
+# ║                    sheet that dies is typed ABSENT, not ignored: the         ║
+# ║                    note-coder enforces a per-condition quorum (≥            ║
+# ║                    quorum_min readers, ≥2 vendor families) and refuses       ║
+# ║                    below it — partial failure is tolerated, silent           ║
+# ║                    degeneration is not.                                      ║
+# ║                                                                               ║
+# ║  EXECUTION MAP   : (15 movements -> 44 expanded sheets; fan-outs at 5 (2      ║
+# ║                    drugs), 7 (28 readers), 11 (2 one-pagers); architecture   ║
+# ║                    stages M0–M14 are binding names)                          ║
+# ║                                                                               ║
+# ║      1  The Tool Chain        venv + FULL probes (gh OWNER match,    [CLI]   ║
+# ║         |  (M0)               browser launch, model present) + ALL          ║
+# ║         |                     gate scripts + staged chain copy + run         ║
+# ║         |                     nonce + drugs.json + deps lock; the six        ║
+# ║         |                     recorded negative controls live here           ║
+# ║      2  Pin Official Bytes    openFDA(spl_medguide) → DailyMed     [CLI]     ║
+# ║         |  (M1)               (data[].setid) fallback → sentinel grep        ║
+# ║         |                     → pins.sha256 + pin-meta.json (the             ║
+# ║         |                     Validity Window: upstream drift becomes        ║
+# ║         |                     harmless to correctness from here on)          ║
+# ║      3  Pre-Register          battery + machine-gradable rubric +  [AI]      ║
+# ║         |  (M2)               thresholds (schema- and range-gated),          ║
+# ║         |                     hash-pinned BEFORE the rebuild exists;          ║
+# ║         |                     rubric drug set must EQUAL the pinned          ║
+# ║         |                     drugs.json set                                  ║
+# ║      4  Baseline Readability  textstat on pinned bytes, run twice   [CLI]   ║
+# ║      |  (M3)                  byte-identical (the measured — not           ║
+# ║      |                       cited — statement of the problem)               ║
+# ║      5  Assemble: Rebuild x2  per drug: plain-language rebuild     [AI x2]   ║
+# ║      |  (M4)                  on a STRICT bullets-only format,              
+# ║      |                       provenance map (every bullet maps to an        ║
+# ║      |                       official anchor), + the DELIBERATELY           ║
+# ║      |                       PRIMED self-assessment (predicted_clarity       ║
+# ║      |                       AND own battery answers — both schema-          ║
+# ║      |                       gated and both joined downstream); gated        ║
+# ║      |                       4 ways; delivery staged                         ║
+# ║      6  Panel Manifest        parse the STAGED SCORE COPY; per-      [CLI]   ║
+# ║      |  (M5)                  condition family inequality gate               ║
+# ║      |                       (Condorcet's Premise); writes                   ║
+# ║      |                       reader-arms.txt (the skip arithmetic           ║
+# ║      |                       reads THIS file, not hardcoded numbers)         ║
+# ║      7  Read-Cold x28         4 conditions × (5 local + GPT +     [28 readers]
+# ║      |  (M6)                  GEMMA-local); artifact-only REQUIRED          ║
+# ║      |                       cadenzas; no prelude; nonce-bound               ║
+# ║      |                       reaction cards + task answers +                 ║
+# ║      |                       calibration item                                 ║
+# ║      8  Note-Code            cards → typed located evidence;      [CLI]     ║
+# ║         |  (M7)               rubric digest re-checked; nonce join;          ║
+# ║         |                     path↔manifest bijection; per-condition         ║
+# ║         |                     QUORUM (≥5 readers, ≥2 families) with           
+# ║         |                     absent readers typed and declared;             
+# ║         |                     corroboration counted over MISREAD-           
+# ║         |                     supplying families only; determinism;          
+# ║         |                     maker-vs-reader gap + maker's own              
+# ║         |                     battery performance                            
+# ║      9  Verdict               threshold arithmetic already ran;    [AI]      
+# ║         |  (M8)               judgment decides only HOW. verdict-           
+# ║         |                     apply ENFORCES the evidence join: done        
+# ║         |                     is refused while flags remain (unless         
+# ║         |                     exhausted at the bound); the recut set         
+# ║         |                     must EQUAL the deterministic flag set;        
+# ║         |                     anti-churn covers sets, headings, and          
+# ║         |                     unflagged provenance anchors; the round       
+# ║         |                     bound holds — the AI cannot recut past 4       
+# ║     10  Lock                  done.stamp required; frozen/ +       [CLI]     
+# ║         |  (M9)               frozen.sha256 over the EXTENDED set           
+# ║         |                       (guides, provenance, all-round              
+# ║         |                       evidence, registration, manifest,            
+# ║         |                       baseline, self-assessments, final            
+# ║         |                       verdict) — the chain terminated,             
+# ║         |                       not abandoned                                
+# ║     11  One-Pagers x2         reportlab ≥14pt ≤2 pages from         [CLI x2]  
+# ║      |  (M10)                 FROZEN bytes only; digest join before         
+# ║      |                       build; pypdf checks; the "accompany,           
+# ║      |                       do not replace" footer                          
+# ║     12  Claims Ledger         evidence → claims.jsonl (windowed);  [CLI]     
+# ║         |  (M11)              join arithmetic; INDEPENDENT recompute        
+# ║         |                       over the task-key UNION (zero-correct        
+# ║         |                       tasks counted); 2-of-4 window classes;        
+# ║         |                       the six negative controls run here —         
+# ║         |                       BEFORE site build (ledger precedes            
+# ║         |                       site)                                        
+# ║     13  Evidence Prose        windowed prose citing claim IDs;    [AI]       
+# ║         |  (M12)              numbers machine-injected by cadenza;          
+# ║         |                       every numeric SENTENCE carries its           
+# ║         |                       citation; citation + quantifier gate          
+# ║     14  Site Build + Deploy   pure-Python site from frozen bytes + [CLI]     
+# ║         |  (M13)              evidence page; FENCED gh deploy (foreign      
+# ║         |                       branch state refuses, pages config           
+# ║         |                       VERIFIED not swallowed, 20-min Pages          
+# ║         |                       poll); deployment.json records the URL       
+# ║     15  Live Gate             EVERY check replayed against the    [CLI]     
+# ║            (M14)               DEPLOYED artifact — digests, rubric          
+# ║                                gate, frozen provenance joins,               
+# ║                                readability determinism, per-round            
+# ║                                coder determinism, PDF checks, panel          
+# ║                                gate, all six negative controls, the          
+# ║                                narrow priming grep, claim arithmetic,        
+# ║                                rendered citation gate, Pa11y, internal-      
+# ║                                only link check, EXACT served-content         
+# ║                                join — then the deterministic chain          
+# ║                                terminator swap: the concert ends by          
+# ║                                design                                        
+# ║                                                                               
+# ║  LOOP MECHANICS : self-chain via on_success → the STAGED COPY (pinned to     
+# ║                    the bytes that started the run). skip_when is            
+# ║                    movement-keyed: loop movements skip on done.stamp;        
+# ║                    official-arm readers skip on official-arm-               
+# ║                    measured.stamp (rounds 2+ re-read ONLY the rebuilt        
+# ║                    arm — 14 sheets, not 28); finishing movements skip        
+# ║                    on recut.stamp (a recut round ends the run; the          
+# ║                    lock proceeds IN-RUN on a quiet or exhausted             
+# ║                    round). max_chain_depth: 4 is the hard backstop;          
+# ║                    verdict-apply refuses a recut at round ≥ 4 (chain        
+# ║                    exhaustion is a publishable outcome, honestly            
+# ║                    windowed). The movement-1 skip predicate ITSELF re-      
+# ║                    probes gh auth, the ollama daemon, codex, and the        
+# ║                    venv each cycle: a credential or daemon that dies        
+# ║                    mid-concert is caught at the next cycle's front          
+# ║                    door, not at movement 14. Archive on fresh is            
+# ║                    FALSE, deliberately: cards and evidence ACCUMULATE       
+# ║                    per round — accumulation is the safety property          
+# ║                    here, and every card is run-nonce-bound so a             
+# ║                    foreign concert's stale card cannot enter the            
+# ║                    count.                                                    
+# ║                                                                               
+# ║  ANTI-FRAUD SEAMS (all deterministic joins, never LLM judgment):             
+# ║    - UNPRIMEDNESS, STATED HONESTLY: delivery is enforced (artifact-only     
+# ║      REQUIRED cadenzas; a missing guide fails the reader sheet BEFORE       
+# ║      execution; no score-level prelude exists). NON-READING is not          
+# ║      structurally enforceable — every reader instrument here is an          
+# ║      agentic CLI with shell access over the shared workspace, and no        
+# ║      per-sheet filesystem-jail primitive exists in the engine (a           
+# ║      recorded Patterns-Awaiting-Primitives gap). The load-bearing          
+# ║      defense is the SYMMETRIC battery: identical wording across both        
+# ║      arms cancels differential priming in the comparison. The priming       
+# ║      gate is a narrow path-shaped grep (rubric.yaml, provenance,            
+# ║      self-assessment, verdict.json, answer_patterns, ...) over every        
+# ║      card, replayed at the live gate — it catches citation, not             
+# ║      reading, and it no longer fires on ordinary English like               
+# ║      "intent" or "design"                                                   
+# ║    - the CONTROL ARM is the official bytes themselves, hash-pinned          
+# ║      with recorded setid/source identity; the treatment arm's only          
+# ║      safety claim is provenance under a STRICT format: the rebuilt          
+# ║      guide is headings + bullets ONLY — any other content line REFUSES      
+# ║      the gate — and every bullet maps to an official anchor that must       
+# ║      regex-match, else the join refuses (negative control: a planted        
+# ║      unmappable bullet)                                                     
+# ║    - the REGISTRATION held: rubric.sha256 (written at M2 over rubric +      
+# ║      thresholds) is digest-checked at every note-code and at the live       
+# ║      gate; post-hoc drift is a visible mismatch. The rubric's drug set      
+# ║      must equal the pinned drugs.json set; thresholds are range-gated       
+# ║      at authoring time                                                        
+# ║    - the THRESHOLD pre-dates the rebuild (same pinned hash); the            
+# ║      verdict cannot move the line — and now cannot even choose the          
+# ║      outcome: verdict-apply refuses `done` while corroborated flags         
+# ║      remain and refuses any recut set that is not EXACTLY the              
+# ║      deterministic flag set                                                  
+# ║    - the BLIND SPOT is the instrument: the maker's self-assessment is       
+# ║      deliberately primed, lives outside cards/, is never priming-           
+# ║      gated, is schema-gated (every section covered, clarity 1–5, all        
+# ║      battery answers present) and BOTH halves are joined: predicted         
+# ║      clarity against located misreads, and the maker's own battery          
+# ║      answers graded against the rubric the maker wrote                      
+# ║    - NO SINGLE HAND: the maker never judges (readers do), readers           
+# ║      never see the rubric (the narrow gate greps for its citations),        
+# ║      the verdict never locks (the script does) and never chooses           
+# ║      whether (the evidence join does), the prose writer never               
+# ║      certifies its own arithmetic (the join gates do), and every            
+# ║      consequential gate ships with a recorded negative control              
+# ║      proving it can fail (six of them, re-run at the live gate)             \n# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: plain-language-dispensary
+description: "The Unprimed Falsifier proof — FDA Medication Guides for warfarin and albuterol HFA, hash-pinned from openFDA/DailyMed with recorded source identity, measured (textstat) then rebuilt as plain language under a strict-format reformulation-only provenance constraint, falsified by 28 structurally isolated reader sheets per round (20 local gemma + GPT + GEMMA-local corroboration; artifact-only required cadenzas; narrow path-shaped priming gate; run-nonce-bound cards), CLI-coded into typed located evidence with per-condition quorum, misread-family corroboration and a maker-vs-reader blind-spot join (predicted clarity AND graded own answers), recut only where corroborated misread density crosses a pre-registered threshold inside a 4-round self-chained loop whose verdict is evidence-joined (done refused while flags remain; recut sets must equal the deterministic flags) and which terminates in an authority lock (an extended frozen.sha256 over guides, provenance, all-round evidence, registration, manifest and verdict), finished as print-ready pharmacy one-pagers (pure-Python reportlab, no LaTeX) plus a live GitHub Pages site (fenced deploy, verified Pages config) whose every claim is windowed by a join-arithmetic claim ledger (2-of-4 window classes) and whose served bytes are proven against the frozen digest by exact normalized-content equality at a final live gate that replays every gate against the deployed artifact."
+
+# workspace: intentionally omitted — auto-managed at <workspace-root>/plain-language-dispensary
+# (#58). The score is GENERIC: the drug set, deployment target, thresholds, and
+# reader panel are variables; movement 1 writes them to run/drugs.json and
+# run/deployment.json, and EVERY script reads disk (never a hardcoded drug
+# list). Override with --var github_owner=<login> etc.
+
+instrument: claude-code            # score default; every deterministic movement
+instrument_config:                 # overrides to cli below
+  timeout_seconds: 1800
+
+# Judgment movements without a calibration role may fall back across vendors.
+# The rubric author (3), the maker sheets (5-6), and the verdict (37) pin EMPTY
+# chains — their vendor identity is load-bearing evidence (authored intent, the
+# blind-spot instrument, the alternating-family judge). The evidence prose
+# writer (42) may fall back: its numbers are machine-injected and gated.
+instrument_fallbacks: [codex-cli]
+
+movements:
+  # ── M0 · Substrate commissioning (The Tool Chain / Etiquette Law) ────────────
+  1:
+    name: "The Tool Chain (M0)"
+    instrument: cli            # the ENTIRE deterministic substrate is heredoc-
+    instrument_fallbacks: []   # authored here at run time; probes — including
+    instrument_config:         # the gh OWNER match and a real browser launch —
+      timeout_seconds: 2700    # fail LOUDLY before any expensive token is
+                               # spent (Gate on Environmental Readiness); the
+                               # six recorded negative controls are authored
+                               # here and RUN at movement 12; staged chain
+                               # copy + run nonce + drugs.json + deps lock
+                               # materialize here
+  # ── M1 · Pin the official bytes (Validity Window, wired) ─────────────────────
+  2:
+    name: "Pin Official Bytes (M1)"
+    instrument: cli            # openFDA(spl_medguide) → DailyMed(data[].setid)
+    instrument_fallbacks: []   # fallback; sentinel grep refuses a JSON error
+    instrument_config:         # envelope masquerading as a document; source
+      timeout_seconds: 1200    # identity (setid/effective date) recorded in
+                               # pin-meta.json under the same digest; upstream
+                               # drift is harmless to correctness from here on
+  # ── M2 · Pre-register battery + rubric (authored-intent seam) ────────────────
+  3:
+    name: "Pre-Register Battery + Rubric (M2)"
+    instrument: claude-code    # comprehension-plus-design over the official
+    instrument_fallbacks: []   # text is judgment — and the product is exactly
+    instrument_config:         # the document readers must never see. The
+      timeout_seconds: 2700    # danger is acknowledged by structure: schema +
+                               # range + drug-set gates (keys, grep-able
+                               # official anchors per item, thresholds in
+                               # bounds, drugs == pinned drugs.json) +
+                               # rubric.sha256 + the downstream priming gate
+  # ── M3 · Baseline readability (the measured problem statement) ───────────────
+  4:
+    name: "Baseline Readability (M3)"
+    instrument: cli            # textstat on the pinned bytes — measured, not
+    instrument_fallbacks: []   # cited; determinism proven by double-run
+    instrument_config:
+      timeout_seconds: 600
+  # ── M4 · Assemble: the rebuild (maker arm + blind-spot instrument) ───────────
+  5:
+    name: "Assemble: Rebuild (M4)"
+    instrument: claude-code    # the maker (family A); fans out one sheet per
+    instrument_fallbacks: []   # drug. Sees the rubric BY DEFINITION (makers
+    instrument_config:         # are primed); its gated outputs are the
+      timeout_seconds: 3600    # strict-format rebuild, the provenance map,
+                               # and the DELIBERATELY PRIMED self-assessment
+                               # (clarity predictions + own battery answers —
+                               # the fluency-blind-spot instrument, ungated
+                               # by design: it measures, it does not claim)
+  # ── M5 · Panel manifest (Condorcet's Premise, wired per condition) ───────────
+  6:
+    name: "Panel Manifest (M5)"
+    instrument: cli            # parses the STAGED SCORE COPY — the config
+    instrument_fallbacks: []   # actually running, a delivery fact not a
+    instrument_config:         # belief; refuses <2 distinct corroboration
+      timeout_seconds: 600     # families in ANY drug×arm condition; emits
+                               # reader-arms.txt which movement-7's skip
+                               # predicate consumes
+  # ── M6 · Read-cold: the experiment (the audience instrument) ─────────────────
+  7:
+    name: "Read-Cold (M6)"
+    instrument: opencode-gemma # the local tier: ollama/gemma4:26b via OpenCode
+    instrument_fallbacks: []   # (agentic — it writes its own card; the http
+    instrument_config:         # `ollama` profile cannot). 24 local + 4 GPT
+      timeout_seconds: 3600    # corroboration (per_sheet overrides below);
+                               # artifact-only REQUIRED cadenzas; NO prelude;
+                               # cards are run-nonce-bound
+  # ── M7 · Note-code: cards become evidence (Etiquette Law) ────────────────────
+  8:
+    name: "Note-Code (M7)"
+    instrument: cli            # deterministic coder, empty fallbacks; nonce
+    instrument_fallbacks: []   # join + path↔manifest bijection + per-condition
+    instrument_config:         # QUORUM with absent readers typed + conservation
+      timeout_seconds: 1200    # + byte-identical determinism + rubric digest
+                               # join + misread-family corroboration +
+                               # maker-vs-reader gap (both halves)
+  # ── M8 · Verdict: recut or done (Rehearsal Spotlight) ────────────────────────
+  9:
+    name: "Verdict (M8)"
+    instrument: codex-cli      # family B — ALTERNATES from the maker's so
+    instrument_fallbacks: []   # the loop's judgment does not share the
+    instrument_config:         # maker's training bias. Decides HOW only;
+      timeout_seconds: 3600    # WHETHER is threshold arithmetic at M7, and
+                               # verdict-apply ENFORCES the evidence join;
+                               # the round bound holds; explicitly NOT the
+                               # lock authority
+  # ── M9 · Lock (The Freeze — lock half) ───────────────────────────────────────
+  10:
+    name: "Lock (M9)"
+    instrument: cli            # requires done.stamp (the chain TERMINATED,
+    instrument_fallbacks: []   # not abandoned); writes frozen/ + the EXTENDED
+    instrument_config:         # digest every finishing movement joins against
+      timeout_seconds: 600
+  # ── M10 · Finish: pharmacy one-pagers (The Freeze — specialize) ──────────────
+  11:
+    name: "One-Pagers (M10)"
+    instrument: cli            # reportlab from FROZEN bytes only (no LaTeX,
+    instrument_fallbacks: []   # no poppler); ≥14pt body, ≤2 pages, real
+    instrument_config:         # extractable text (pypdf), digest join before
+      timeout_seconds: 1500    # build, "accompany, do not replace" footer
+                               # citing the frozen digest
+  # ── M11 · Claims ledger (The Declared Window — arithmetic) ───────────────────
+  12:
+    name: "Claims Ledger (M11)"
+    instrument: cli            # evidence → windowed claims.jsonl; join
+    instrument_fallbacks: []   # arithmetic; INDEPENDENT recompute over the
+    instrument_config:         # task-key union; the six negative controls
+      timeout_seconds: 900     # RUN here — gate teeth are proven before the
+                               # site trusts any number
+  # ── M12 · Evidence page prose (The Declared Window — bounded synthesis) ──────
+  13:
+    name: "Evidence Prose (M12)"
+    instrument: claude-code    # arranges what the ledger already contains;
+    instrument_fallbacks: [codex-cli]   # numbers machine-injected by cadenza;
+    instrument_config:         # the citation + quantifier + numeric-sentence
+      timeout_seconds: 2400    # gates make an unwindowed or uncited claim
+                               # unsurvivable
+  # ── M13 · Site build + deploy (The Freeze — join-gate, local half) ───────────
+  14:
+    name: "Site Build + Deploy (M13)"
+    instrument: cli            # pure-Python site from frozen bytes + evidence
+    instrument_fallbacks: []   # page; FENCED gh deploy (foreign branch state
+    instrument_config:         # refuses; Pages config VERIFIED); deployment
+      timeout_seconds: 2700    # .json records the live URL + served commit
+  # ── M14 · Live gate (Gas-Free discipline: same-run proof on deployed bytes) ──
+  15:
+    name: "Live Gate (M14)"
+    instrument: cli            # EVERY check replayed against the LIVE URL —
+    instrument_fallbacks: []   # digests, rubric gate, frozen provenance
+    instrument_config:         # joins, readability determinism, per-round
+      timeout_seconds: 3300    # coder determinism, PDF checks, panel gate,
+                               # six negative controls, narrow priming grep,
+                               # claim arithmetic, rendered citation gate,
+                               # Pa11y, internal link check, EXACT served-
+                               # content join; then the chain-terminator swap
+
+sheet:
+  size: 1
+  total_items: 15           # movements pre-expansion; engine expands to 44 sheets
+  fan_out:
+    5: 2                    # the maker: one sheet per drug (sheets 5-6)
+    7: 28                   # readers: 4 conditions × (5 local + GPT + GEMMA-local) (sheets 8-35)
+    11: 2                   # one-pagers: one per drug (sheets 39-40)
+  dependencies:             # movement-keyed; engine expands to the sheet DAG
+    2: [1]                  # nothing runs before the tool chain
+    3: [2]                  # the rubric anchors key to the PINNED bytes
+    4: [2]                  # readability measures the same pins (leaf ∥ M2's consumer)
+    5: [3]                  # CONSTITUTIONAL: rubric precedes rebuild (registration)
+    6: [1]                  # the manifest reads score config only — ∥ M2–M4
+    7: [5, 6]               # readers need guides + delivery staged AND the manifest
+    8: [7]                  # note-code fans in all 28 readers
+    9: [8]                  # the verdict reads coded evidence
+    10: [9]                 # the lock follows the verdict (loop point: see skip_when)
+    11: [10]                # PDFs join against frozen.sha256
+    12: [10]                # CONSTITUTIONAL: ledger before site build (circularity fix)
+    13: [12, 4]             # prose needs the ledger + the baseline covariate (M3)
+    14: [11, 13]            # site needs PDFs + evidence page
+    15: [14]                # the live gate audits the DEPLOYED artifact
+
+  # Vendor spread — expanded-SHEET numbers, ALL 28 reader sheets assigned
+  # concretely (full concrete coverage: no V308 inheritance gap, and the
+  # manifest's parse of the staged copy matches what actually dispatches).
+  # Families: codex-cli=GPT, opencode-gemma=GEMMA-LOCAL (ollama gemma4:26b) —
+  # two families, NEITHER the maker's (claude-code=GLM). The former
+  # GEMMA-CLOUD arm (gemini-cli) is removed: execution_status unsupported.
+  per_sheet_instruments:
+    8: opencode-gemma        # warfarin  · official · local
+    9: opencode-gemma
+    10: opencode-gemma
+    11: opencode-gemma
+    12: opencode-gemma
+    13: codex-cli            # warfarin  · official · corroboration GPT
+    14: opencode-gemma       # warfarin  · official · corroboration GEMMA-local
+    15: opencode-gemma       # warfarin  · rebuilt  · local
+    16: opencode-gemma
+    17: opencode-gemma
+    18: opencode-gemma
+    19: opencode-gemma
+    20: codex-cli            # warfarin  · rebuilt  · corroboration GPT
+    21: opencode-gemma       # warfarin  · rebuilt  · corroboration GEMMA-local
+    22: opencode-gemma       # albuterol · official · local
+    23: opencode-gemma
+    24: opencode-gemma
+    25: opencode-gemma
+    26: opencode-gemma
+    27: codex-cli            # albuterol · official · corroboration GPT
+    28: opencode-gemma       # albuterol · official · corroboration GEMMA-local
+    29: opencode-gemma       # albuterol · rebuilt  · local
+    30: opencode-gemma
+    31: opencode-gemma
+    32: opencode-gemma
+    33: opencode-gemma
+    34: codex-cli            # albuterol · rebuilt  · corroboration GPT
+    35: opencode-gemma       # albuterol · rebuilt  · corroboration GEMMA-local
+
+  per_sheet_instrument_config:
+    5: {timeout_seconds: 3600}    # maker sheets: deep rewriting work
+    6: {timeout_seconds: 3600}
+    37: {timeout_seconds: 3600}   # verdict: reads evidence + authors recuts
+    42: {timeout_seconds: 2400}   # evidence prose
+
+  # Skip is GREEN (exit 0 = skip; fail-open on error by engine design). The map
+  # below encodes BOTH loop bounds and the chain-cycle economy: rounds 2+ execute
+  # ONLY the loop movements. Movement 7's predicate branches on {instance} via
+  # reader-arms.txt — the manifest-authored file, NOT hardcoded arithmetic
+  # (fail-open ⇒ a broken predicate runs a phantom reader, visible, never a
+  # silent drop — the safe direction for evidence). Movement 1's predicate
+  # ITSELF re-probes the perishable credentials each cycle: a skip that stops
+  # proving readiness is stale-state acceptance, not commissioning.
+  skip_when:
+    1:
+      command: 'test -f "{workspace}/.commissioned" && command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1 && curl -fsS --max-time 10 http://localhost:11434/api/tags >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && test -x "{workspace}/.venv/bin/python"'
+      description: "Skip the tool chain only while commissioned AND the perishable probes still hold (gh auth, ollama daemon, codex, venv) — a dead credential re-opens the gate loudly"
+      timeout_seconds: 60
+    2:
+      command: 'cd "{workspace}" && sha256sum -c pins.sha256 >/dev/null 2>&1'
+      description: "Skip the pin when the pinned bytes (and pin-meta identity) still verify — and re-verify them every cycle for free"
+      timeout_seconds: 60
+    3:
+      command: 'cd "{workspace}" && sha256sum -c rubric.sha256 >/dev/null 2>&1'
+      description: "Skip the rubric while the registration hash holds"
+      timeout_seconds: 60
+    4:
+      command: 'test -f "{workspace}/readability-official.json"'
+      description: "Skip baseline readability once measured (pinned bytes do not drift)"
+      timeout_seconds: 30
+    5:
+      command: 'test -f "{workspace}/.assembled-warfarin" -a -f "{workspace}/.assembled-albuterol"'
+      description: "Skip the maker once both drugs are rebuilt and gate-admitted (recut is the verdict's job, never the maker's)"
+      timeout_seconds: 30
+    6:
+      command: 'test -f "{workspace}/panel-manifest.yaml"'
+      description: "Skip the manifest once asserted (static configuration)"
+      timeout_seconds: 30
+    7:
+      command: 'arm=$(awk "\$1=={instance}{print \$3}" "{workspace}/reader-arms.txt"); if [ "$arm" = official ]; then test -f "{workspace}/official-arm-measured.stamp"; else test -f "{workspace}/done.stamp"; fi'
+      description: "Official-arm readers run ONCE (Validity Window: re-reading pinned bytes spends corroboration budget to learn nothing); rebuilt-arm readers run until done.stamp"
+      timeout_seconds: 30
+    8:
+      command: 'test -f "{workspace}/done.stamp"'
+      description: "Note-code runs once per round until the loop terminates"
+      timeout_seconds: 30
+    9:
+      command: 'test -f "{workspace}/done.stamp"'
+      description: "The verdict runs once per round until the loop terminates"
+      timeout_seconds: 30
+    10:
+      command: 'test -f "{workspace}/recut.stamp"'
+      description: "Lock/finishing skip in recut rounds — the recut ends the run and re-enters via the chain"
+      timeout_seconds: 30
+    11:
+      command: 'test -f "{workspace}/recut.stamp"'
+      description: "One-pagers skip in recut rounds"
+      timeout_seconds: 30
+    12:
+      command: 'test -f "{workspace}/recut.stamp"'
+      description: "Claims ledger skips in recut rounds"
+      timeout_seconds: 30
+    13:
+      command: 'test -f "{workspace}/recut.stamp"'
+      description: "Evidence prose skips in recut rounds"
+      timeout_seconds: 30
+    14:
+      command: 'test -f "{workspace}/recut.stamp"'
+      description: "Site build + deploy skip in recut rounds"
+      timeout_seconds: 30
+    15:
+      command: 'test -f "{workspace}/recut.stamp"'
+      description: "The live gate runs only in the round that publishes"
+      timeout_seconds: 30
+
+  # Explicit per-sheet fallback policy for EVERY expanded sheet (release design
+  # gate). Empty chain = deterministic refusal. The only sheet that may fall
+  # across vendors is 42 (evidence prose — no calibration role; its numbers are
+  # machine-injected and the citation gate is mechanical).
+  per_sheet_fallbacks: {1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 8: [], 9: [], 10: [], 11: [], 12: [], 13: [], 14: [], 15: [], 16: [], 17: [], 18: [], 19: [], 20: [], 21: [], 22: [], 23: [], 24: [], 25: [], 26: [], 27: [], 28: [], 29: [], 30: [], 31: [], 32: [], 33: [], 34: [], 35: [], 36: [], 37: [], 38: [], 39: [], 40: [], 41: [], 42: [codex-cli], 43: [], 44: []}
+
+  # THE EXPERIMENT'S DELIVERY MECHANISM. Cadenza paths render per-sheet against
+  # the full context (voice/instance both provided by the engine); `required:
+  # true` means a missing guide FAILS the reader sheet before execution —
+  # delivery isolation enforced structurally. Readers receive the artifact as
+  # `context` (after the body): the sheet is literally handed the document.
+  # There is NO score-level prelude — any shared preamble would reach the
+  # readers and prime them.
+  cadenzas:
+    # M2 — the rubric author reads the pinned bytes (primed by design; NOT a reader)
+    3:
+      - directory: "{{ workspace }}/official"
+        as: context
+        required: true
+    # M4 — the maker: its drug's official guide + the rubric it may see (primed
+    # by definition). Anchor: &maker_context defined at sheet 5, aliased at 6.
+    5: &maker_context
+      - file: "{{ workspace }}/official/{{ drugs[voice].slug }}.md"
+        as: context
+        required: true
+      - file: "{{ workspace }}/rubric.yaml"
+        as: skill
+        required: true
+    6: *maker_context
+    # M6 — one artifact per reader, NOTHING else. The 28 entries are YAML
+    # aliases of one anchored item (a structural macro): sheet 8 defines
+    # &reader_delivery; sheets 9-35 alias it.
+    8: &reader_delivery
+      - file: "{{ workspace }}/delivery/{{ readers[voice].file }}"
+        as: context
+        required: true
+    9: *reader_delivery
+    10: *reader_delivery
+    11: *reader_delivery
+    12: *reader_delivery
+    13: *reader_delivery
+    14: *reader_delivery
+    15: *reader_delivery
+    16: *reader_delivery
+    17: *reader_delivery
+    18: *reader_delivery
+    19: *reader_delivery
+    20: *reader_delivery
+    21: *reader_delivery
+    22: *reader_delivery
+    23: *reader_delivery
+    24: *reader_delivery
+    25: *reader_delivery
+    26: *reader_delivery
+    27: *reader_delivery
+    28: *reader_delivery
+    29: *reader_delivery
+    30: *reader_delivery
+    31: *reader_delivery
+    32: *reader_delivery
+    33: *reader_delivery
+    34: *reader_delivery
+    35: *reader_delivery
+    # M12 — the prose writer's ENTIRE numeric interface, machine-rendered:
+    # claims ledger + FROZEN final evidence + both readability measurements
+    # (the rebuilt one measured on frozen bytes at the lock). Injected
+    # read-only by cadenza; the writer cannot invent a number it never received.
+    42:
+      - file: "{{ workspace }}/claims.jsonl"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/frozen/evidence-final.json"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/readability-official.json"
+        as: skill
+        required: true
+      - file: "{{ workspace }}/readability-rebuilt.json"
+        as: skill
+        required: true
+
+  descriptions:
+    1: "M0 — venv + full probes (gh owner match, browser launch, model present) + all gate scripts + negative controls + staged chain copy + nonce + drugs.json + deps lock"
+    2: "M1 — fetch (openFDA spl_medguide / DailyMed data[].setid) + sentinel + pin official MedGuide bytes + source identity"
+    3: "M2 — author + hash-pin the battery, machine-gradable rubric, range-gated thresholds (the registration)"
+    4: "M3 — textstat baseline on pinned bytes, determinism double-run"
+    5: "M4 maker — warfarin strict-format rebuild + provenance + primed self-assessment (gated)"
+    6: "M4 maker — albuterol strict-format rebuild + provenance + primed self-assessment (gated)"
+    7: "M5 — panel manifest from the staged score copy; per-condition family-inequality gate"
+    8: "M6 reader 1 — warfarin · official · local gemma"
+    9: "M6 reader 2 — warfarin · official · local gemma"
+    10: "M6 reader 3 — warfarin · official · local gemma"
+    11: "M6 reader 4 — warfarin · official · local gemma"
+    12: "M6 reader 5 — warfarin · official · local gemma"
+    13: "M6 reader 6 — warfarin · official · corroboration GPT"
+    14: "M6 reader 7 — warfarin · official · corroboration GEMMA-local"
+    15: "M6 reader 8 — warfarin · rebuilt · local gemma"
+    16: "M6 reader 9 — warfarin · rebuilt · local gemma"
+    17: "M6 reader 10 — warfarin · rebuilt · local gemma"
+    18: "M6 reader 11 — warfarin · rebuilt · local gemma"
+    19: "M6 reader 12 — warfarin · rebuilt · local gemma"
+    20: "M6 reader 13 — warfarin · rebuilt · corroboration GPT"
+    21: "M6 reader 14 — warfarin · rebuilt · corroboration GEMMA-local"
+    22: "M6 reader 15 — albuterol · official · local gemma"
+    23: "M6 reader 16 — albuterol · official · local gemma"
+    24: "M6 reader 17 — albuterol · official · local gemma"
+    25: "M6 reader 18 — albuterol · official · local gemma"
+    26: "M6 reader 19 — albuterol · official · local gemma"
+    27: "M6 reader 20 — albuterol · official · corroboration GPT"
+    28: "M6 reader 21 — albuterol · official · corroboration GEMMA-local"
+    29: "M6 reader 22 — albuterol · rebuilt · local gemma"
+    30: "M6 reader 23 — albuterol · rebuilt · local gemma"
+    31: "M6 reader 24 — albuterol · rebuilt · local gemma"
+    32: "M6 reader 25 — albuterol · rebuilt · local gemma"
+    33: "M6 reader 26 — albuterol · rebuilt · local gemma"
+    34: "M6 reader 27 — albuterol · rebuilt · corroboration GPT"
+    35: "M6 reader 28 — albuterol · rebuilt · corroboration GEMMA-local"
+    36: "M7 — note-code: nonce join, bijection, quorum with typed absents; corroboration over misread families; blind-spot join (both halves)"
+    37: "M8 — verdict (family B): recut flagged sections only, or done; the evidence join is ENFORCED by the apply script"
+    38: "M9 — lock: frozen/ + extended frozen.sha256 on done.stamp (authority-declared termination)"
+    39: "M10 — warfarin pharmacy one-pager PDF (reportlab, no LaTeX) from frozen bytes"
+    40: "M10 — albuterol pharmacy one-pager PDF (reportlab, no LaTeX) from frozen bytes"
+    41: "M11 — claims ledger: windowed claims.jsonl + join arithmetic + six negative controls"
+    42: "M12 — evidence prose: windowed claims with IDs, machine-injected numbers, cited numeric sentences"
+    43: "M13 — site build (pure Python) + fenced gh Pages deploy; deployment.json records the live URL"
+    44: "M14 — live gate on deployed bytes (full replay, exact served-content join) + deterministic chain-terminator swap"
+
+parallel:
+  enabled: true
+  max_concurrent: 6          # local readers serialize on the ollama daemon
+                             # (model max_concurrent: 1) while cloud
+                             # corroboration and CLI movements proceed
+  fail_fast: true
+
+# cross_sheet: deliberately ABSENT — the workspace IS the shared memory, and the
+# 28 readers must not see each other's stdout: independence is the mechanism,
+# not an optimization. (Shed Wall precedent, same reason.)
+
+retry:
+  max_retries: 1             # gates fail loudly for diagnosis, not blind retry;
+  base_delay_seconds: 30     # typed refusal is the design's failure semantics.
+                             # A reader sheet that still fails after its one
+                             # retry is typed ABSENT by the note-coder's
+                             # quorum arithmetic — partial failure tolerated,
+                             # silent degeneration refused
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800 # CLI movements run silent python/reportlab fans;
+                             # a tight idle timeout is the #1 stuck-verification
+                             # killer
+
+# Accumulation is the safety property: cards/ and evidence/ persist PER ROUND
+# and the evidence page cites every round — so fresh chain cycles archive
+# NOTHING. The stamps + round odometer + per-card run nonce provide
+# idempotence instead: a stale card from a foreign concert cannot enter the
+# count (nonce mismatch refuses), and round R's files are never re-derived.
+workspace_lifecycle:
+  archive_on_fresh: false
+  max_archives: 5
+
+concert:
+  enabled: true
+  max_chain_depth: 4        # 4 chained falsification cycles — the hard backstop
+  cooldown_between_jobs_seconds: 30
+  inherit_workspace: true
+
+# Self-chain: the staged copy (movement 1) is the target — the chain is pinned
+# to the bytes that started it. Termination is the deterministic swap at
+# movement 15 (live gate green ⇒ terminator candidate validated + atomically
+# installed). If the done-round lands at chain depth 4 the terminator is never
+# submitted — the conductor's clean stop ends the concert with all work green.
+on_success:
+  - type: run_job
+    job_path: "{workspace}/self-chain.yaml"
+    description: "Chain to the next falsification round (ends via the movement-15 terminator swap)"
+    detached: true
+    fresh: true
+
+prompt:
+  variables:
+    # ── Deployment inputs (overridable via --var; recorded to run/deployment.json ──
+    #    at M0, which is where validations read them — never an unexpandable
+    #    placeholder). The M0 probe refuses to start unless gh is authenticated
+    #    AS github_owner — the authorization failure that used to surface at
+    #    movement 14 now surfaces before any token is spent.
+    github_owner: "Mzzkc"
+    repo_name: "plain-language-dispensary"
+    site_url: "https://mzzkc.github.io/plain-language-dispensary/"
+    # ── Endpoints (keyless) ──────────────────────────────────────────────────────
+    fda_base: "https://api.fda.gov/drug/label.json"
+    dailymed_base: "https://dailymed.nlm.nih.gov/dailymed/services/v2/spls"
+    # ── Pre-registered experiment parameters (echoed into thresholds.yaml at M2;
+    #    the PINNED thresholds.yaml is what gates consume — these are seeds) ─────
+    grade_target: 8            # rebuilt-arm Flesch-Kincaid ceiling
+    density_threshold: 2       # corroborated located misreads per section that crosses
+    corroboration_min: 2       # distinct vendor families: lead -> finding
+    max_rounds: 4              # falsification-round bound (perfectionism circuit-breaker)
+    onepager_max_pages: 2
+    quorum_min: 5              # per-condition reader floor (of 7) below which the
+                               # note-coder refuses — partial failure tolerated,
+                               # silent degeneration not
+    reader_model: "gemma4:26b" # the ollama model the M0 probe requires present
+    # ── Staged-copy search (bridge to the engine-injected score_dir context;
+    #    resolved by the #331 variable pre-renderer at run time; empty string
+    #    falls back to the working directory search below) ────────────────────
+    chain_search_dirs: "{{ score_dir }}"
+    # ── The anchor drugs (the maker fans out over these; movement 1 writes
+    #    run/drugs.json and EVERY script reads THAT — the single source, no
+    #    hardcoded drug lists anywhere downstream) ─────────────────────────────
+    drugs:
+      1: {slug: warfarin,  query: 'openfda.substance_name:"warfarin"',  label: "warfarin (anticoagulant)"}
+      2: {slug: albuterol, query: 'openfda.substance_name:"albuterol"', label: "albuterol HFA (rescue inhaler)"}
+    # ── Vendor-family table (Condorcet's Premise). The manifest script maps the
+    #    STAGED config's instrument names through THIS table; inequality of the
+    #    resulting families PER CONDITION is the gate. gemini-cli removed
+    #    (unsupported, unauthenticated); crush rejected (exit-0 failure lie). ────
+    families:
+      opencode-gemma: "GEMMA-LOCAL-26B"
+      codex-cli: "GPT"
+      claude-code: "GLM"
+      cli: "DETERMINISTIC"
+    # ── The 28 readers (movement 7's fan-out, instance-keyed). INSTANCE ORDER IS
+    #    LOAD-BEARING: per_sheet_instruments above and reader-arms.txt (written
+    #    from this dict by panel-manifest.py) must agree with it. Instances:
+    #    1-7 warfarin official, 8-14 warfarin rebuilt, 15-21 albuterol official,
+    #    22-28 albuterol rebuilt; within each: 5 local, then GPT, then
+    #    GEMMA-local. ────────────────────────────────────────────────────────────
+    readers:
+      1:  {drug: warfarin,  arm: official, file: "official-warfarin.md",  tier: local}
+      2:  {drug: warfarin,  arm: official, file: "official-warfarin.md",  tier: local}
+      3:  {drug: warfarin,  arm: official, file: "official-warfarin.md",  tier: local}
+      4:  {drug: warfarin,  arm: official, file: "official-warfarin.md",  tier: local}
+      5:  {drug: warfarin,  arm: official, file: "official-warfarin.md",  tier: local}
+      6:  {drug: warfarin,  arm: official, file: "official-warfarin.md",  tier: corroboration}
+      7:  {drug: warfarin,  arm: official, file: "official-warfarin.md",  tier: corroboration}
+      8:  {drug: warfarin,  arm: rebuilt,  file: "rebuilt-warfarin.md",   tier: local}
+      9:  {drug: warfarin,  arm: rebuilt,  file: "rebuilt-warfarin.md",   tier: local}
+      10: {drug: warfarin,  arm: rebuilt,  file: "rebuilt-warfarin.md",   tier: local}
+      11: {drug: warfarin,  arm: rebuilt,  file: "rebuilt-warfarin.md",   tier: local}
+      12: {drug: warfarin,  arm: rebuilt,  file: "rebuilt-warfarin.md",   tier: local}
+      13: {drug: warfarin,  arm: rebuilt,  file: "rebuilt-warfarin.md",   tier: corroboration}
+      14: {drug: warfarin,  arm: rebuilt,  file: "rebuilt-warfarin.md",   tier: corroboration}
+      15: {drug: albuterol, arm: official, file: "official-albuterol.md", tier: local}
+      16: {drug: albuterol, arm: official, file: "official-albuterol.md", tier: local}
+      17: {drug: albuterol, arm: official, file: "official-albuterol.md", tier: local}
+      18: {drug: albuterol, arm: official, file: "official-albuterol.md", tier: local}
+      19: {drug: albuterol, arm: official, file: "official-albuterol.md", tier: local}
+      20: {drug: albuterol, arm: official, file: "official-albuterol.md", tier: corroboration}
+      21: {drug: albuterol, arm: official, file: "official-albuterol.md", tier: corroboration}
+      22: {drug: albuterol, arm: rebuilt,  file: "rebuilt-albuterol.md",  tier: local}
+      23: {drug: albuterol, arm: rebuilt,  file: "rebuilt-albuterol.md",  tier: local}
+      24: {drug: albuterol, arm: rebuilt,  file: "rebuilt-albuterol.md",  tier: local}
+      25: {drug: albuterol, arm: rebuilt,  file: "rebuilt-albuterol.md",  tier: local}
+      26: {drug: albuterol, arm: rebuilt,  file: "rebuilt-albuterol.md",  tier: local}
+      27: {drug: albuterol, arm: rebuilt,  file: "rebuilt-albuterol.md",  tier: corroboration}
+      28: {drug: albuterol, arm: rebuilt,  file: "rebuilt-albuterol.md",  tier: corroboration}
+
+  template: |
+    {# ══════════ Macros: the house style, defined once ════════════════════════ #}
+    {% macro strict() %}set -euo pipefail
+    cd "{{ workspace }}"{% endmacro %}
+
+    {% macro ai_ground_rules() %}
+    ## Ground Rules (non-negotiable)
+    - Fabrication wears completion's clothes: never write a placeholder where a
+      real artifact is owed, and never claim a command ran without running it.
+    - The deterministic gates are the coordination. If a gate fails against your
+      work, fix the work — never the gate, never the record.
+    - Every file you author is evidence in a published experiment: exact labels,
+      no loose prose where a parser expects a field.
+    {% endmacro %}
+
+    {% macro accompany_clause() %}
+    ACCOMPANY, DO NOT REPLACE: this guide is a comprehension aid that must
+    accompany — never replace — the federally required Medication Guide.
+    {% endmacro %}
+
+    {% macro window_clause() %}
+    Window discipline: every published claim states WHAT was tested, on WHICH
+    drug and arm, by HOW MANY readers of WHICH vendor families, in WHICH round.
+    "Among N simulated unprimed readers..." — never "patients will understand".
+    {% endmacro %}
+
+    {% if stage == 1 %}
+    {{ strict() }}
+    # ── Movement 1 · The Tool Chain (M0) — Etiquette Law / The Tool Chain ───────
+    # The ENTIRE deterministic substrate is heredoc-authored here, by CLI, at run
+    # time. Probes fail LOUDLY before any expensive token is spent — including
+    # the two authorization/capability probes the reviews found missing: the gh
+    # OWNER match (the failure that used to surface at movement 14) and a real
+    # headless-browser launch (the failure that used to surface at movement 15).
+    # The document toolchain is PURE PYTHON in the venv — no pandoc, no LaTeX,
+    # no poppler, no linkchecker — so "tool missing" cannot happen mid-run.
+    mkdir -p official rebuilt provenance self-assessment battery cards evidence \
+             frozen dist site scripts delivery run site/downloads
+
+    # ── Probes (Gate on Environmental Readiness — refusal is the mechanism) ─────
+    command -v python3 >/dev/null || { echo "PROBE FAIL: python3 missing"; exit 1; }
+    command -v gh >/dev/null || { echo "PROBE FAIL: gh missing"; exit 1; }
+    gh auth status >/dev/null 2>&1 || { echo "PROBE FAIL: gh not authenticated"; exit 1; }
+    GH_LOGIN=$(gh api user --jq .login 2>/dev/null) \
+      || { echo "PROBE FAIL: gh api user refused"; exit 1; }
+    [ "$GH_LOGIN" = "{{ github_owner }}" ] || { echo "PROBE FAIL: gh is authenticated as $GH_LOGIN but github_owner={{ github_owner }} — rerun with --var github_owner=$GH_LOGIN (or point repo_name at an org you own)"; exit 1; }
+    command -v codex >/dev/null || { echo "PROBE FAIL: codex missing (GPT corroboration + verdict need it)"; exit 1; }
+    test -n "$OPENAI_API_KEY" || { echo "PROBE FAIL: OPENAI_API_KEY not set (codex-cli needs it)"; exit 1; }
+    command -v claude >/dev/null || { echo "PROBE FAIL: claude missing (maker + rubric + prose need it)"; exit 1; }
+    command -v opencode >/dev/null || { echo "PROBE FAIL: opencode missing (local readers need it)"; exit 1; }
+    curl -fsS --max-time 10 http://localhost:11434/api/tags >/dev/null 2>&1 \
+      || { echo "PROBE FAIL: ollama daemon not reachable (opencode-gemma needs it)"; exit 1; }
+    curl -fsS --max-time 10 http://localhost:11434/api/tags 2>/dev/null | grep -q "{{ reader_model }}" \
+      || { echo "PROBE FAIL: ollama is not serving {{ reader_model }} (pull it first)"; exit 1; }
+    mzt instruments check opencode-gemma 2>/dev/null | grep -q "is ready" \
+      || { echo "PROBE FAIL: opencode-gemma instrument not registered on this host (a HOST profile, see header PREREQUISITES)"; exit 1; }
+    command -v node >/dev/null || { echo "PROBE FAIL: node missing (pa11y needs it)"; exit 1; }
+    command -v npm >/dev/null || { echo "PROBE FAIL: npm missing"; exit 1; }
+
+    # ── Python venv — the ENTIRE document toolchain lives here (markdown →
+    #    HTML; reportlab → PDF; pypdf → page/text checks). Determinism is
+    #    proven by double-run and pinned by the deps lock below, not assumed
+    #    from version floors. ────────────────────────────────────────────────────
+    if [ ! -x .venv/bin/python ]; then
+      python3 -m venv .venv
+      .venv/bin/pip install -q --disable-pip-version-check \
+        'textstat>=0.7.3' 'scipy>=1.11' 'pyyaml>=6.0' 'requests>=2.31' \
+        'markdown>=3.5' 'reportlab>=4.0' 'pypdf>=4.0'
+    fi
+    .venv/bin/python -c 'import textstat, scipy, yaml, requests, markdown, reportlab, pypdf' \
+      || { echo "PROBE FAIL: venv deps"; exit 1; }
+
+    # ── Dependency lock (write-time record): the first commission freezes the
+    #    exact resolved versions; every later cycle drift-checks against them.
+    #    "textstat>=0.7.3" admits the future — the lock does not. ────────────────
+    if [ ! -f run/deps-lock.txt ]; then
+      .venv/bin/pip freeze > run/deps-lock.txt
+      { ./node_modules/.bin/pa11y --version 2>/dev/null || true; node --version; } > run/tool-versions.txt
+    else
+      .venv/bin/pip freeze | diff -q - run/deps-lock.txt >/dev/null \
+        || { echo "PROBE FAIL: venv drifted from run/deps-lock.txt — delete the lock to re-commission deliberately"; exit 1; }
+    fi
+
+    # ── pa11y (local node_modules; survives fresh cycles) + a REAL browser
+    #    launch probe now, so libnss3-class failures surface at M0 — not after
+    #    publication at M14. ─────────────────────────────────────────────────────
+    if [ ! -x node_modules/.bin/pa11y ]; then
+      npm install --silent --no-audit --no-fund --prefix . pa11y@8 >/dev/null 2>&1 \
+        || npm install --silent --no-audit --no-fund --prefix . pa11y
+    fi
+    ./node_modules/.bin/pa11y --version >/dev/null 2>&1 \
+      || { echo "PROBE FAIL: pa11y unusable"; exit 1; }
+    cat > run/browser-probe.js <<'JSEOF'
+    let p;
+    try { p = require("puppeteer"); }
+    catch (e1) {
+      try { p = require("pa11y/node_modules/puppeteer"); }
+      catch (e2) { console.error("puppeteer not installed"); process.exit(1); }
+    }
+    p.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] })
+      .then(function (b) { return b.close().then(function () { console.log("browser-ok"); }); })
+      .catch(function (e) { console.error("launch failed: " + e.message); process.exit(1); });
+    JSEOF
+    node run/browser-probe.js >/dev/null 2>&1 \
+      || { echo "PROBE FAIL: headless browser cannot launch (pa11y needs one at M14)"; exit 1; }
+    cat > run/pa11y-config.json <<'JSONEOF'
+    {
+      "standard": "WCAG2AA",
+      "chromeLaunchConfig": { "args": ["--no-sandbox", "--disable-setuid-sandbox"] }
+    }
+    JSONEOF
+
+    # ── Run nonce + deployment facts + the single drug source (validations and
+    #    scripts read DISK, never unexpandable placeholders) ─────────────────────
+    python3 - <<'PYEOF'
+    import json, os, time
+    cfg = {
+        "github_owner": "{{ github_owner }}",
+        "repo_name": "{{ repo_name }}",
+        "site_url": "{{ site_url }}",
+        "fda_base": "{{ fda_base }}",
+        "dailymed_base": "{{ dailymed_base }}",
+        "grade_target": {{ grade_target }},
+        "density_threshold": {{ density_threshold }},
+        "corroboration_min": {{ corroboration_min }},
+        "max_rounds": {{ max_rounds }},
+        "onepager_max_pages": {{ onepager_max_pages }},
+        "quorum_min": {{ quorum_min }},
+    }
+    if not os.path.exists("run/deployment.json"):
+        cfg["run_nonce"] = format(int(time.time() * 1000), "x")
+        with open("run/deployment.json", "w") as fh:
+            json.dump(cfg, fh, indent=2, sort_keys=True)
+    if not os.path.exists("run/run-nonce.txt"):
+        nonce = json.load(open("run/deployment.json"))["run_nonce"]
+        open("run/run-nonce.txt", "w").write(nonce + "\n")
+    drugs = json.loads('''{{ drugs | tojson }}''')
+    ordered = [drugs[k] for k in sorted(drugs, key=lambda x: int(x))]
+    with open("run/drugs.json", "w") as fh:
+        json.dump(ordered, fh, indent=2)
+    with open("run/drug-order.txt", "w") as fh:
+        fh.write("\n".join(d["slug"] for d in ordered) + "\n")
+    if not os.path.exists("run/round.txt"):
+        with open("run/round.txt", "w") as fh:
+            fh.write("1\n")
+    if not os.path.exists("run/pin-meta.json"):
+        open("run/pin-meta.json", "w").write("{}\n")
+    PYEOF
+
+    # ── The staged chain copy: the self-chain target, pinned to these bytes.
+    #    chain_search_dirs bridges the engine-injected score_dir; cwd is the
+    #    fallback. Chain cycles reuse the workspace's own staged copy (that IS
+    #    the pinning). ───────────────────────────────────────────────────────────
+    SCORE_SRC=""
+    if [ -s self-chain.yaml ]; then
+      SCORE_SRC="self-chain.yaml"
+    else
+      for f in 06-final-score.yaml 04-proof-score.yaml the-unprimed-falsifier.yaml plain-language-dispensary.yaml; do
+        if [ -n "{{ chain_search_dirs }}" ] && [ -f "{{ chain_search_dirs }}/$f" ]; then SCORE_SRC="{{ chain_search_dirs }}/$f"; break; fi
+        if [ -f "$f" ]; then SCORE_SRC="$PWD/$f"; break; fi
+      done
+    fi
+    if [ -z "$SCORE_SRC" ]; then echo "PROBE FAIL: score file not found beside the score or in the working directory"; exit 1; fi
+    if [ "$SCORE_SRC" != "self-chain.yaml" ]; then cp "$SCORE_SRC" self-chain.yaml; fi
+
+    # ── scripts/instance-file.sh — per-instance drug path resolver ──────────────
+    cat > scripts/instance-file.sh <<'SHEOF'
+    #!/usr/bin/env bash
+    # usage: instance-file.sh <maker-instance 1|2|...> <dir> <suffix> -> path
+    set -euo pipefail
+    D=$(sed -n "$1p" run/drug-order.txt)
+    echo "$2/$D.$3"
+    SHEOF
+
+    # ── scripts/card-path.sh — per-reader card path resolver ────────────────────
+    cat > scripts/card-path.sh <<'SHEOF'
+    #!/usr/bin/env bash
+    # usage: card-path.sh <reader-instance> -> cards/<drug>/<arm>/r<R>/card-<i>.md
+    set -euo pipefail
+    D=$(awk -v i="$1" '$1==i{print $2}' reader-arms.txt)
+    A=$(awk -v i="$1" '$1==i{print $3}' reader-arms.txt)
+    R=$(tr -dc '0-9' < run/round.txt)
+    echo "cards/$D/$A/r$R/card-$1.md"
+    SHEOF
+
+    # ── scripts/fetch-pin.sh — M1: fetch + sentinel + pin one official guide ────
+    # Field names verified against the live APIs during revision (the review-1/2
+    # blocker): openFDA carries spl_medguide/spl_medguide_table; DailyMed lists
+    # return {"data":[{"setid":...}]} — not "results"/"splsetid".
+    cat > scripts/fetch-pin.sh <<'SHEOF'
+    #!/usr/bin/env bash
+    # usage: fetch-pin.sh <slug> <openfda-query>  (cwd = workspace)
+    set -euo pipefail
+    SLUG=$1; QUERY=$2
+    FDA=$(python3 -c 'import json;print(json.load(open("run/deployment.json"))["fda_base"])')
+    DM=$(python3 -c 'import json;print(json.load(open("run/deployment.json"))["dailymed_base"])')
+    mkdir -p run/provenance-raw
+    OK=0
+    # Route 1: openFDA label JSON — medication-guide sections
+    if curl -fsSL --retry 3 --retry-delay 5 -H 'Accept: application/json' \
+         --get "$FDA" --data-urlencode "search=$QUERY" --data-urlencode 'limit=5' \
+         -o "run/provenance-raw/fda-$SLUG.json"; then
+      if python3 - "$SLUG" <<'PYEOF'
+    import json, re, sys
+    slug = sys.argv[1]
+    meta = {"route": "openFDA", "setid": None, "effective_time": None}
+    try:
+        doc = json.load(open("run/provenance-raw/fda-%s.json" % slug))
+    except Exception:
+        sys.exit(1)
+    for r in doc.get("results", []):
+        for key in ("spl_medguide", "spl_medguide_table", "information_for_patients", "medicationguide"):
+            v = r.get(key)
+            if isinstance(v, list) and v and isinstance(v[0], str):
+                v = v[0]
+            if isinstance(v, str) and len(v) > 400:
+                clean = re.sub(r"<[^>]+>", " ", v)
+                clean = re.sub(r"[ \t]+", " ", clean).strip()
+                open("official/%s.md" % slug, "w").write(clean + "\n")
+                meta["setid"] = r.get("setid")
+                meta["effective_time"] = r.get("effective_time")
+                pin = json.load(open("run/pin-meta.json"))
+                pin[slug] = meta
+                json.dump(pin, open("run/pin-meta.json", "w"), indent=2, sort_keys=True)
+                sys.exit(0)
+    sys.exit(1)
+    PYEOF
+      then OK=1; PROV="$FDA (openFDA label, field spl_medguide)"; fi
+    fi
+    # Route 2: DailyMed SPL markdown fallback
+    if [ "$OK" -ne 1 ]; then
+      SETID=$(curl -fsSL --retry 3 "$DM.json?drug_name=$SLUG&limit=5" \
+        | python3 -c 'import json,sys;d=json.load(sys.stdin);r=d.get("data") or [];print((r[0].get("setid") or "") if r else "")')
+      if [ -n "$SETID" ]; then
+        curl -fsSL --retry 3 "$DM/$SETID.md" -o "run/provenance-raw/dm-$SLUG.md"
+        python3 - "$SLUG" "$SETID" <<'PYEOF'
+    import json, re, sys
+    slug, setid = sys.argv[1], sys.argv[2]
+    txt = open("run/provenance-raw/dm-%s.md" % slug, encoding="utf-8", errors="replace").read()
+    m = re.search(r"(?is)\bMEDICATION GUIDE\b.*", txt)
+    if not m or len(m.group(0)) < 400:
+        sys.exit(1)
+    clean = re.sub(r"[ \t]+", " ", m.group(0)).strip()
+    open("official/%s.md" % slug, "w").write(clean + "\n")
+    pin = json.load(open("run/pin-meta.json"))
+    pin[slug] = {"route": "dailymed", "setid": setid, "effective_time": None}
+    json.dump(pin, open("run/pin-meta.json", "w"), indent=2, sort_keys=True)
+    PYEOF
+        OK=1; PROV="$DM/$SETID.md (DailyMed SPL)"
+      fi
+    fi
+    [ "$OK" -eq 1 ] || { echo "FETCH FAIL: no MedGuide section via openFDA or DailyMed for $SLUG"; exit 1; }
+    # Sentinel: a document, not an error envelope
+    grep -qi 'medication guide' "official/$SLUG.md" || { echo "SENTINEL FAIL: header"; exit 1; }
+    grep -qi "$SLUG" "official/$SLUG.md" || { echo "SENTINEL FAIL: drug name"; exit 1; }
+    test -s "official/$SLUG.md"
+    python3 - "$SLUG" "$PROV" <<'PYEOF'
+    import json, sys
+    pin = json.load(open("run/pin-meta.json"))
+    pin.setdefault(sys.argv[1], {})["source"] = sys.argv[2]
+    json.dump(pin, open("run/pin-meta.json", "w"), indent=2, sort_keys=True)
+    PYEOF
+    SHEOF
+
+    # ── scripts/rubric-gate.py — M2: registration gate + battery emitter ────────
+    # Refuses a rubric that: lacks per-drug sections/tasks, carries an anchor
+    # regex that does not match the pinned official text, omits machine-gradable
+    # answer_patterns — and (revision) whose drug set does not EQUAL the pinned
+    # drugs.json set, or whose thresholds.yaml is missing/out of range. Stale
+    # battery files from a reused workspace cannot satisfy the gate: it refuses
+    # on the current bytes only.
+    cat > scripts/rubric-gate.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """rubric-gate.py — the pre-registration gate (M2) and battery emitter."""
+    import json, re, sys
+    import yaml
+
+    THRESHOLD_SPECS = {
+        "density_threshold": (1, 10),
+        "corroboration_min": (2, 4),
+        "max_rounds": (2, 8),
+        "grade_target": (5, 12),
+        "quorum_min": (3, 7),
+    }
+
+    def load_official(slug):
+        return open("official/%s.md" % slug, encoding="utf-8").read()
+
+    def check(rubric, official):
+        problems = []
+        try:
+            pinned = {d["slug"] for d in json.load(open("run/drugs.json"))}
+        except (OSError, ValueError):
+            return ["run/drugs.json missing or malformed — commissioning did not run"]
+        have = set(rubric.get("drugs") or {})
+        if have != pinned:
+            problems.append("rubric drugs %s != pinned drugs %s" % (sorted(have), sorted(pinned)))
+        for drug, spec in (rubric.get("drugs") or {}).items():
+            text = official.get(drug)
+            if text is None:
+                problems.append("%s: no pinned official bytes" % drug); continue
+            sections = spec.get("sections") or {}
+            if not sections:
+                problems.append("%s: no section map" % drug)
+            ids = list(sections.keys())
+            if len(ids) != len(set(ids)):
+                problems.append("%s: duplicate section ids" % drug)
+            for sid, pat in sections.items():
+                try:
+                    if not re.search(pat, text):
+                        problems.append("%s: section %s regex does not match official text" % (drug, sid))
+                except re.error as e:
+                    problems.append("%s: section %s bad regex: %s" % (drug, sid, e))
+            tasks = spec.get("tasks") or []
+            if len(tasks) < 4:
+                problems.append("%s: fewer than 4 tasks (calibration + 3)" % drug)
+            seen = set()
+            for t in tasks:
+                tid = t.get("id")
+                if tid in seen:
+                    problems.append("%s: duplicate task id %s" % (drug, tid))
+                seen.add(tid)
+                for field in ("question", "section", "anchor"):
+                    if not t.get(field):
+                        problems.append("%s task %s: missing %s" % (drug, tid, field))
+                pats = t.get("answer_patterns")
+                if not isinstance(pats, list) or not pats:
+                    problems.append("%s task %s: answer_patterns must be a non-empty list" % (drug, tid))
+                else:
+                    for p in pats:
+                        try:
+                            re.compile(p)
+                        except re.error as e:
+                            problems.append("%s task %s: bad pattern %r: %s" % (drug, tid, p, e))
+                if t.get("section") and t["section"] not in sections:
+                    problems.append("%s task %s: section %r not in section map" % (drug, tid, t.get("section")))
+                if t.get("anchor"):
+                    try:
+                        if not re.search(t["anchor"], text):
+                            problems.append("%s task %s: anchor not grep-able in official text" % (drug, tid))
+                    except re.error:
+                        pass
+        return problems
+
+    def check_thresholds():
+        problems = []
+        try:
+            th = yaml.safe_load(open("thresholds.yaml", encoding="utf-8")) or {}
+        except OSError:
+            return ["thresholds.yaml missing"]
+        for key, (lo, hi) in THRESHOLD_SPECS.items():
+            v = th.get(key)
+            if not isinstance(v, int) or isinstance(v, bool) or not (lo <= v <= hi):
+                problems.append("thresholds.yaml: %s must be an integer in [%d, %d] (got %r)" % (key, lo, hi, v))
+        return problems
+
+    def main():
+        argv = sys.argv[1:]
+        official = {}
+        for spec in json.load(open("run/drugs.json")):
+            try:
+                official[spec["slug"]] = load_official(spec["slug"])
+            except OSError:
+                official[spec["slug"]] = None
+        if "--selftest" in argv:
+            bad = {"drugs": {"warfarin": {"sections": {"x": "(?i)zzzz-no-such-header"},
+                "tasks": [{"id": 0, "question": "q", "section": "x",
+                           "anchor": "(?i)zzzz-absent", "answer_patterns": ["(?i)zzz"]}]}}}
+            probs = check(bad, official)
+            open("run/.selftest-thresholds.yaml", "w").write(
+                "density_threshold: 99\ncorroboration_min: 2\nmax_rounds: 4\ngrade_target: 8\nquorum_min: 5\n")
+            saved = None
+            import os, shutil
+            if os.path.exists("thresholds.yaml"):
+                saved = "run/.selftest-thresholds-backup.yaml"
+                shutil.copy("thresholds.yaml", saved)
+            shutil.copy("run/.selftest-thresholds.yaml", "thresholds.yaml")
+            probs += check_thresholds()
+            if saved:
+                shutil.copy(saved, "thresholds.yaml")
+            if probs:
+                print("SELFTEST PASS: planted bad rubric + bad thresholds refused (%d problems)" % len(probs))
+                return 0
+            print("SELFTEST FAIL: gate accepted a bad rubric")
+            return 1
+        rubric = yaml.safe_load(open("rubric.yaml", encoding="utf-8"))
+        probs = check(rubric, official) + check_thresholds()
+        if probs:
+            for p in probs:
+                print("RUBRIC GATE REFUSED: %s" % p)
+            return 1
+        if "--emit-battery" in argv:
+            for drug, spec in rubric["drugs"].items():
+                lines = ["# Task list (%s)" % drug, ""]
+                for t in sorted(spec["tasks"], key=lambda x: x["id"]):
+                    label = "task 0 (calibration)" if t["id"] == 0 else "task %d" % t["id"]
+                    lines.append("%s: %s" % (label, t["question"]))
+                open("battery/%s.md" % drug, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+        print("RUBRIC GATE PASS")
+        return 0
+
+    if __name__ == "__main__":
+        sys.exit(main())
+    PYEOF
+
+    # ── scripts/readability.py — M3/M4/M8/M14: measured grade levels ────────────
+    cat > scripts/readability.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """readability.py — textstat metrics with bounds + determinism proof.
+
+    Modes: --out FILE --files f1 [f2...]   compute and write JSON
+           --gate N --files f1 [...]       refuse any Flesch-Kincaid grade > N
+           --determinism --files f1 [...]  compute twice; digests must be equal
+    """
+    import hashlib, json, sys
+    import textstat
+
+    def metrics(path):
+        text = open(path, encoding="utf-8").read()
+        return {
+            "flesch_kincaid_grade": round(textstat.flesch_kincaid_grade(text), 2),
+            "flesch_reading_ease": round(textstat.flesch_reading_ease(text), 2),
+            "smog_index": round(textstat.smog_index(text), 2),
+            "dale_chall_score": round(textstat.dale_chall_readability_score(text), 2),
+        }
+
+    def main():
+        argv = sys.argv[1:]
+        files = []
+        if "--files" in argv:
+            files = argv[argv.index("--files") + 1:]
+        out = argv[argv.index("--out") + 1] if "--out" in argv else None
+        gate = float(argv[argv.index("--gate") + 1]) if "--gate" in argv else None
+        det = "--determinism" in argv
+        if not files:
+            print("readability: no files"); return 2
+        res = {f: metrics(f) for f in files}
+        blob1 = json.dumps(res, sort_keys=True).encode()
+        if det:
+            res2 = {f: metrics(f) for f in files}
+            if json.dumps(res2, sort_keys=True).encode() != blob1:
+                print("READABILITY DETERMINISM FAIL: two runs differ"); return 1
+        for f, m in res.items():
+            if not (0 < m["flesch_kincaid_grade"] < 30):
+                print("READABILITY BOUNDS FAIL: %s fk=%s outside (0,30)" % (f, m["flesch_kincaid_grade"])); return 1
+            if gate is not None and m["flesch_kincaid_grade"] > gate:
+                print("READABILITY GATE FAIL: %s fk=%.2f > %.2f" % (f, m["flesch_kincaid_grade"], gate)); return 1
+        if out:
+            open(out, "w", encoding="utf-8").write(json.dumps(res, indent=2, sort_keys=True) + "\n")
+        print("READABILITY PASS")
+        return 0
+
+    if __name__ == "__main__":
+        sys.exit(main())
+    PYEOF
+
+    # ── scripts/provenance-join.py — M4/M8/M14: reformulation-only, STRICT ──────
+    # Revision closes the review-1/2 bypass: the rebuilt guide format is
+    # headings + bullets ONLY. Any other non-blank content line REFUSES (a
+    # paragraph of unanchored medical claims can no longer sail through as a
+    # zero-bullet section). Duplicate section ids are detected during parsing
+    # (list-based, not dict-overwritten), and a section needs >=1 bullet with
+    # >=1 matching anchor. 'No new medical claims' is enforced as
+    # strict-format + mapping + refusal; residual semantic risk is declared on
+    # the evidence page, never claimed as arithmetic.
+    cat > scripts/provenance-join.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """provenance-join.py — every rebuilt bullet maps to official text, strictly."""
+    import re, sys
+    import yaml
+
+    def split_sections(path):
+        """Return (ordered ids, {id: [lines INCLUDING heading]}) or raise on dup."""
+        ids, secs, cur, buf = [], {}, None, []
+        for line in open(path, encoding="utf-8").read().splitlines():
+            m = re.match(r"^##\s+([A-Za-z0-9_-]+)\s*(?::(.*))?$", line)
+            if m:
+                if cur is not None:
+                    secs[cur] = buf
+                cur, buf = m.group(1), [line]
+                if cur in secs or cur in ids:
+                    raise ValueError("duplicate section id %r" % cur)
+                ids.append(cur)
+            else:
+                if cur is None and line.strip() and not line.startswith("# "):
+                    raise ValueError("content before the first section heading: %r" % line[:60])
+                buf.append(line)
+        if cur is not None:
+            secs[cur] = buf
+        return ids, secs
+
+    def strict_bullets(sid, buf):
+        """Bullets under a section; ANY other non-blank line refuses."""
+        bl = []
+        for ln in buf[1:]:
+            s = ln.strip()
+            if not s:
+                continue
+            if s.startswith("- "):
+                bl.append(s[2:].strip())
+            else:
+                raise ValueError("section %s: non-bullet content line refused (strict format: headings + bullets only): %r"
+                                 % (sid, s[:60]))
+        return bl
+
+    def run_join(rebuilt_path, prov, official_text, drug):
+        problems = []
+        try:
+            ids, secs = split_sections(rebuilt_path)
+        except ValueError as e:
+            return ["%s: %s" % (drug, e)]
+        if not ids:
+            problems.append("%s: no sections in rebuilt guide" % drug)
+        pmap = (prov.get("drugs") or {}).get(drug) or prov.get(drug) or {}
+        for sid in ids:
+            try:
+                bl = strict_bullets(sid, secs[sid])
+            except ValueError as e:
+                problems.append("%s: %s" % (drug, e)); continue
+            anchors = pmap.get(sid) or []
+            if not bl:
+                problems.append("%s/%s: section has no bullets (empty section refused)" % (drug, sid)); continue
+            if not anchors:
+                problems.append("%s/%s: no provenance anchors for a non-empty section" % (drug, sid)); continue
+            if len(bl) != len(anchors):
+                problems.append("%s/%s: %d bullets vs %d anchors" % (drug, sid, len(bl), len(anchors)))
+                continue
+            for i, a in enumerate(anchors):
+                pat = a.get("anchor") if isinstance(a, dict) else a
+                try:
+                    if not re.search(pat, official_text):
+                        problems.append("%s/%s bullet %d: anchor not found in official text: %r" % (drug, sid, i + 1, pat))
+                except re.error as e:
+                    problems.append("%s/%s bullet %d: bad regex %r: %s" % (drug, sid, i + 1, pat, e))
+        for sid in pmap:
+            if sid not in secs:
+                problems.append("%s: provenance entry for absent section %s" % (drug, sid))
+        return problems
+
+    def main():
+        argv = sys.argv[1:]
+        if "--selftest" in argv:
+            open("run/.selftest-rebuilt.md", "w").write("## test: T\n- You should take extra vitamins.\n")
+            fake = {"test": [{"anchor": "(?i)zzz-no-such-passage"}]}
+            probs = run_join("run/.selftest-rebuilt.md", fake, "the official text has no such passage", "selftest")
+            open("run/.selftest-prose.md", "w").write("## test2: T\nA paragraph of unanchored medical claims.\n")
+            probs += run_join("run/.selftest-prose.md", {"test2": []}, "official text", "selftest2")
+            if len(probs) >= 2:
+                print("SELFTEST PASS: unmappable bullet AND non-bullet prose refused"); return 0
+            print("SELFTEST FAIL: join accepted a planted violation"); return 1
+        drug = sys.argv[1]
+        rebuilt = sys.argv[2] if len(sys.argv) > 2 else "rebuilt/%s.md" % drug
+        prov_path = sys.argv[3] if len(sys.argv) > 3 else "provenance/%s.yaml" % drug
+        official_text = open("official/%s.md" % drug, encoding="utf-8").read().replace("\n", " ")
+        prov = yaml.safe_load(open(prov_path, encoding="utf-8"))
+        probs = run_join(rebuilt, prov, official_text, drug)
+        if probs:
+            for p in probs:
+                print("PROVENANCE GATE REFUSED: %s" % p)
+            return 1
+        print("PROVENANCE GATE PASS: %s" % drug)
+        return 0
+
+    if __name__ == "__main__":
+        sys.exit(main())
+    PYEOF
+
+    # ── scripts/assess-gate.py — M4: the blind-spot instrument's schema gate ────
+    # Revision (review-2/3): the self-assessment was validated only by a
+    # substring grep. Now: predicted_clarity must cover EVERY section id of the
+    # rebuilt guide with an integer 1..5, and own_answers must cover every
+    # battery task (the decomposition's maker panel — previously a dead
+    # artifact; notes.py now grades it).
+    cat > scripts/assess-gate.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """assess-gate.py — self-assessment schema gate (both halves, complete)."""
+    import re, sys
+    import yaml
+
+    def rebuilt_ids(path):
+        return re.findall(r"^##\s+([A-Za-z0-9_-]+)", open(path, encoding="utf-8").read(), re.M)
+
+    def check(drug, rubric_path="rubric.yaml", rebuilt_path=None, sa_path=None):
+        problems = []
+        rebuilt_path = rebuilt_path or "rebuilt/%s.md" % drug
+        sa_path = sa_path or "self-assessment/%s.yaml" % drug
+        try:
+            rubric = yaml.safe_load(open(rubric_path, encoding="utf-8"))["drugs"][drug]
+        except (OSError, KeyError):
+            return ["no rubric entry for %s" % drug]
+        try:
+            sa = yaml.safe_load(open(sa_path, encoding="utf-8")) or {}
+        except OSError:
+            return ["%s missing" % sa_path]
+        ids = rebuilt_ids(rebuilt_path)
+        pc = sa.get("predicted_clarity") or {}
+        for sid in ids:
+            v = pc.get(sid)
+            if not isinstance(v, int) or isinstance(v, bool) or not (1 <= v <= 5):
+                problems.append("%s: predicted_clarity[%r] must be an integer 1..5 (got %r)" % (drug, sid, v))
+        for sid in pc:
+            if sid not in ids:
+                problems.append("%s: predicted_clarity covers absent section %r" % (drug, sid))
+        task_ids = sorted(t["id"] for t in rubric.get("tasks") or [] if t.get("id") != 0)
+        oa = sa.get("own_answers") or {}
+        for tid in task_ids:
+            v = oa.get(tid) or oa.get(str(tid))
+            if not isinstance(v, str) or not v.strip():
+                problems.append("%s: own_answers[%r] missing or empty (the maker panel is load-bearing)" % (drug, tid))
+        return problems
+
+    def main():
+        argv = sys.argv[1:]
+        if "--selftest" in argv:
+            import os
+            os.makedirs("run/.selftest-ag", exist_ok=True)
+            base = "run/.selftest-ag"
+            open("%s/rebuilt.md" % base, "w").write("## a: A\n- one\n## b: B\n- two\n")
+            yaml.safe_dump({"a": 9, "b": 2}, open("%s/sa.yaml" % base, "w"))
+            yaml.safe_dump({"drugs": {"x": {"tasks": [
+                {"id": 0, "question": "q", "answer_patterns": ["x"]},
+                {"id": 1, "question": "q", "answer_patterns": ["x"]}]}}},
+                open("%s/rubric.yaml" % base, "w"))
+            probs = check("x", rubric_path="%s/rubric.yaml" % base,
+                          rebuilt_path="%s/rebuilt.md" % base, sa_path="%s/sa.yaml" % base)
+            if len(probs) >= 2:
+                print("SELFTEST PASS: malformed self-assessment refused (%d problems)" % len(probs)); return 0
+            print("SELFTEST FAIL: gate accepted a malformed self-assessment"); return 1
+        drug = argv[0] if argv else None
+        drugs = [drug] if drug else [d["slug"] for d in __import__("json").load(open("run/drugs.json"))]
+        probs = []
+        for d in drugs:
+            probs += check(d)
+        if probs:
+            for p in probs:
+                print("ASSESS GATE REFUSED: %s" % p)
+            return 1
+        print("ASSESS GATE PASS: %s" % ", ".join(drugs))
+        return 0
+
+    if __name__ == "__main__":
+        sys.exit(main())
+    PYEOF
+
+    # ── scripts/panel-manifest.py — M5: Condorcet's Premise per condition ───────
+    # Parses the STAGED SCORE COPY (self-chain.yaml — the bytes actually
+    # running) with the engine's own expansion arithmetic, resolves every
+    # reader sheet's instrument, maps instruments to vendor families, and
+    # REFUSES fewer than corroboration_min distinct corroboration families in
+    # ANY drug×arm condition (revision: per condition, not globally — a future
+    # layout concentrating families in different conditions no longer passes).
+    # Emits panel-manifest.yaml + reader-arms.txt. --selftest feeds a doctored
+    # single-family config and must observe refusal.
+    cat > scripts/panel-manifest.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """panel-manifest.py — the per-condition family-inequality gate."""
+    import sys
+    import yaml
+
+    READER_MOVEMENT = 7
+
+    def expand(movements, fan_out):
+        total, stage_sheets = 0, {}
+        for m in sorted(movements):
+            n = fan_out.get(m, 1)
+            stage_sheets[m] = list(range(total + 1, total + n + 1))
+            total += n
+        return stage_sheets
+
+    def resolve(stage_sheets, cfg):
+        per_sheet = (cfg.get("sheet") or {}).get("per_sheet_instruments") or {}
+        mv_instr = {}
+        for m, mdef in (cfg.get("movements") or {}).items():
+            if isinstance(mdef, dict) and mdef.get("instrument"):
+                mv_instr[int(m)] = mdef["instrument"]
+        resolved = {}
+        for m, sheets in stage_sheets.items():
+            default = mv_instr.get(m) or cfg.get("instrument")
+            for offset, sn in enumerate(sheets, start=1):
+                resolved[sn] = {"instance": offset, "instrument": per_sheet.get(sn, default)}
+        return resolved
+
+    def gate(cfg, families):
+        fan_out = {int(k): v for k, v in ((cfg.get("sheet") or {}).get("fan_out") or {}).items()}
+        movements = {int(k): v for k, v in (cfg.get("movements") or {}).items()}
+        stage_sheets = expand(movements, fan_out)
+        readers = {int(k): v for k, v in ((cfg.get("prompt") or {}).get("variables") or {}).get("readers", {}).items()}
+        drugs = ((cfg.get("prompt") or {}).get("variables") or {}).get("drugs") or {}
+        slugs = [spec["slug"] for k, spec in sorted(drugs.items(), key=lambda kv: int(kv[0]))]
+        resolved = resolve(stage_sheets, cfg)
+        rows, problems = [], []
+        if READER_MOVEMENT not in stage_sheets:
+            return rows, ["movement %d absent from config" % READER_MOVEMENT]
+        for sn in sorted(stage_sheets[READER_MOVEMENT]):
+            info = resolved.get(sn)
+            if info is None:
+                problems.append("sheet %d: unresolved instrument" % sn); continue
+            inst = info["instrument"]
+            fam = families.get(inst)
+            if fam is None:
+                problems.append("sheet %d: instrument %r has no family mapping" % (sn, inst)); continue
+            r = readers.get(info["instance"])
+            if r is None:
+                problems.append("sheet %d: reader instance %d missing from variables" % (sn, info["instance"])); continue
+            rows.append({"sheet": sn, "instance": info["instance"], "drug": r["drug"],
+                         "arm": r["arm"], "tier": r["tier"], "instrument": inst, "family": fam})
+        return rows, problems
+
+    def condition_families(rows, tier="corroboration"):
+        per = {}
+        for r in rows:
+            if r["tier"] == tier:
+                per.setdefault((r["drug"], r["arm"]), set()).add(r["family"])
+        return per
+
+    def main():
+        argv = sys.argv[1:]
+        thresholds = yaml.safe_load(open("thresholds.yaml", encoding="utf-8"))
+        need = int(thresholds.get("corroboration_min", 2))
+        if "--selftest" in argv:
+            cfg = {"instrument": "claude-code",
+                   "movements": {"7": {"instrument": "claude-code"}},
+                   "sheet": {"fan_out": {7: 2}},
+                   "prompt": {"variables": {"readers": {
+                       1: {"drug": "warfarin", "arm": "official", "tier": "corroboration"},
+                       2: {"drug": "warfarin", "arm": "rebuilt", "tier": "corroboration"}}}}}
+            families = {"claude-code": "GLM"}
+            rows, problems = gate(cfg, families)
+            per = condition_families(rows)
+            bad = problems or any(len(f) < need for f in per.values()) or len(rows) != 2
+            if bad:
+                print("SELFTEST PASS: single-family panel refused"); return 0
+            print("SELFTEST FAIL: gate accepted a single-family panel"); return 1
+        cfg = yaml.safe_load(open("self-chain.yaml", encoding="utf-8"))
+        families = {k: str(v) for k, v in cfg["prompt"]["variables"]["families"].items()}
+        rows, problems = gate(cfg, families)
+        if problems:
+            for p in problems:
+                print("PANEL GATE REFUSED: %s" % p)
+            return 1
+        per = condition_families(rows)
+        slugs = [spec["slug"] for k, spec in sorted((cfg["prompt"]["variables"].get("drugs") or {}).items(), key=lambda kv: int(kv[0]))]
+        expected = {(d, a) for d in slugs for a in ("official", "rebuilt")}
+        for cond in sorted(expected):
+            fams = per.get(cond)
+            if not fams:
+                print("PANEL GATE REFUSED: condition %s/%s has NO corroboration readers" % cond); return 1
+            if len(fams) < need:
+                print("PANEL GATE REFUSED: condition %s/%s corroboration families %s < %d — a correlated panel cannot ratify its own blind spot"
+                      % (cond[0], cond[1], sorted(fams), need)); return 1
+        corr = sorted({f for fams in per.values() for f in fams})
+        local = sorted({r["family"] for r in rows if r["tier"] == "local"})
+        manifest = {
+            "corroboration_families": corr,
+            "local_families": local,
+            "per_condition_corroboration": {"%s/%s" % k: sorted(v) for k, v in sorted(per.items())},
+            "readers": [{"instance": r["instance"], "drug": r["drug"], "arm": r["arm"],
+                         "tier": r["tier"], "instrument": r["instrument"], "family": r["family"]} for r in rows],
+            "source": "self-chain.yaml (staged score copy — a fact about the configuration actually running; execution-identity receipts are an engine primitive this score records as a limit)",
+        }
+        open("panel-manifest.yaml", "w", encoding="utf-8").write(
+            yaml.safe_dump(manifest, sort_keys=True, allow_unicode=True))
+        with open("reader-arms.txt", "w", encoding="utf-8") as fh:
+            for r in sorted(rows, key=lambda x: x["instance"]):
+                fh.write("%d %s %s\n" % (r["instance"], r["drug"], r["arm"]))
+        print("PANEL GATE PASS: corroboration=%s local=%s (per-condition enforced)" % (corr, local))
+        return 0
+
+    if __name__ == "__main__":
+        sys.exit(main())
+    PYEOF
+
+    # ── scripts/stage-delivery.sh — one file per reader condition ───────────────
+    cat > scripts/stage-delivery.sh <<'SHEOF'
+    #!/usr/bin/env bash
+    # usage: stage-delivery.sh <slug>  — official+rebuilt copies into delivery/
+    set -euo pipefail
+    cp "official/$1.md" "delivery/official-$1.md"
+    if [ -f "rebuilt/$1.md" ]; then cp "rebuilt/$1.md" "delivery/rebuilt-$1.md"; fi
+    SHEOF
+
+    # ── scripts/notes.py — M7: cards -> typed, LOCATED evidence (the coder) ─────
+    # Revision responds to all three reviews at the strongest seam:
+    #   - QUORUM, not unanimity: a dead reader sheet is typed ABSENT (recorded,
+    #     declared on the evidence page); below quorum_min per condition, or
+    #     fewer than 2 vendor families per condition, the coder REFUSES.
+    #   - CUSTODY: every card must carry this run's nonce; a stale card from a
+    #     foreign concert refuses. Card path (drug/arm) must match the
+    #     manifest row for its instance (bijection, no duplicates).
+    #   - CORROBORATION is counted over the families that actually SUPPLIED
+    #     misread-type events — one family's misreads plus another family's
+    #     dead-zone note no longer promotes a finding.
+    #   - The blind-spot join now grades the maker's own battery answers
+    #     (own_answers — previously authored-but-unconsumed) alongside
+    #     predicted clarity.
+    #   - Unmapped section headings are counted and declared, not silently
+    #     bucketed. Conservation, determinism, and the registration digest
+    #     join are unchanged.
+    cat > scripts/notes.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """notes.py — deterministic card coder (instrument_fallbacks: [])."""
+    import glob, hashlib, json, os, re, sys
+    import yaml
+
+    CARD_RE = re.compile(r"^section:\s*(.+?)\s*\|\s*(confusion|misread|dead-zone|correct)\s*\|\s*(.*)$")
+    ANS_RE = re.compile(r"^answer-(\d+):\s*(.*)$")
+    RUN_RE = re.compile(r"^run:\s*(\S+)\s*$")
+
+    def digest_ok():
+        expect = {}
+        for line in open("rubric.sha256", encoding="utf-8"):
+            parts = line.split()
+            if len(parts) == 2:
+                expect[parts[1]] = parts[0]
+        for path, want in expect.items():
+            got = hashlib.sha256(open(path, "rb").read()).hexdigest()
+            if got != want:
+                return "registration broken: %s digest mismatch" % path
+        return None
+
+    def canon_section(heading, section_map):
+        for sid, pat in section_map.items():
+            try:
+                if re.search(pat, heading):
+                    return sid, True
+            except re.error:
+                continue
+        slug = re.sub(r"[^a-z0-9]+", "-", heading.lower()).strip("-")[:40]
+        return "other:%s" % slug, False
+
+    def parse_card(path):
+        out = {"run": None, "medicine": None, "answers": {}, "sections": []}
+        for line in open(path, encoding="utf-8", errors="replace").read().splitlines():
+            s = line.strip()
+            if s.startswith("```"):
+                continue
+            m = RUN_RE.match(s)
+            if m:
+                out["run"] = m.group(1); continue
+            if s.lower().startswith("medicine:"):
+                out["medicine"] = s.split(":", 1)[1].strip(); continue
+            m = ANS_RE.match(s)
+            if m:
+                out["answers"][int(m.group(1))] = m.group(2).strip(); continue
+            m = CARD_RE.match(s)
+            if m:
+                out["sections"].append((m.group(1).strip(), m.group(2), m.group(3).strip()))
+        return out
+
+    def active_conditions(manifest, R):
+        conds = []
+        for r in manifest["readers"]:
+            key = (r["drug"], r["arm"])
+            if key not in conds:
+                conds.append(key)
+        if R > 1 and os.path.exists("official-arm-measured.stamp"):
+            conds = [c for c in conds if c[1] == "rebuilt"]
+        return sorted(conds)
+
+    def code_round():
+        R = int(open("run/round.txt", encoding="utf-8").read().strip())
+        rubric = yaml.safe_load(open("rubric.yaml", encoding="utf-8"))
+        thresholds = yaml.safe_load(open("thresholds.yaml", encoding="utf-8"))
+        manifest = yaml.safe_load(open("panel-manifest.yaml", encoding="utf-8"))
+        nonce = open("run/run-nonce.txt", encoding="utf-8").read().strip()
+        fam_by_instance = {r["instance"]: r for r in manifest["readers"]}
+        quorum = int(thresholds.get("quorum_min", 5))
+        cards = sorted(glob.glob("cards/*/*/r%d/card-*.md" % R))
+        # ── custody + bijection ────────────────────────────────────────────────
+        by_instance = {}
+        for path in cards:
+            instance = int(re.search(r"card-(\d+)\.md$", path).group(1))
+            m = re.match(r"cards/([^/]+)/([^/]+)/r%d/card-%d\.md$" % (R, instance), path)
+            if not m:
+                raise SystemExit("CONSERVATION REFUSED: card path not in cards/<drug>/<arm>/r%d/ layout: %s" % (R, path))
+            pdrug, parm = m.group(1), m.group(2)
+            row = fam_by_instance.get(instance)
+            if row is None:
+                raise SystemExit("CONSERVATION REFUSED: card for unknown reader instance %d" % instance)
+            if (row["drug"], row["arm"]) != (pdrug, parm):
+                raise SystemExit("CONSERVATION REFUSED: card %d filed under %s/%s but the manifest arms it %s/%s"
+                                 % (instance, pdrug, parm, row["drug"], row["arm"]))
+            if instance in by_instance:
+                raise SystemExit("CONSERVATION REFUSED: duplicate card for reader instance %d" % instance)
+            card = parse_card(path)
+            if card["run"] != nonce:
+                raise SystemExit("CONSERVATION REFUSED: card %d run nonce %r != this run's %r (stale or foreign card)"
+                                 % (instance, card["run"], nonce))
+            by_instance[instance] = (card, row)
+        # ── quorum per active condition ────────────────────────────────────────
+        absent = []
+        for cond in active_conditions(manifest, R):
+            rows = [r for r in manifest["readers"] if (r["drug"], r["arm"]) == cond]
+            present = [i for i in by_instance if (by_instance[i][1]["drug"], by_instance[i][1]["arm"]) == cond]
+            fams = sorted({by_instance[i][1]["family"] for i in present})
+            if len(present) < quorum:
+                raise SystemExit("QUORUM REFUSED: condition %s/%s round %d has %d of %d cards (quorum %d) — absent: %s"
+                                 % (cond[0], cond[1], R, len(present), len(rows), quorum,
+                                    [r["instance"] for r in rows if r["instance"] not in present]))
+            if len(fams) < 2:
+                raise SystemExit("QUORUM REFUSED: condition %s/%s round %d carries a single family %s — corroboration impossible"
+                                 % (cond[0], cond[1], R, fams))
+            missing = [r["instance"] for r in rows if r["instance"] not in present]
+            if missing:
+                absent.append({"condition": "%s/%s" % cond, "instances": missing})
+        # ── coding ──────────────────────────────────────────────────────────────
+        per_condition = {}
+        located = {}
+        coded = 0
+        calibration_failures = 0
+        refused_answers = 0
+        unmapped_events = 0
+        for instance in sorted(by_instance):
+            card, meta = by_instance[instance]
+            drug, arm, family = meta["drug"], meta["arm"], meta["family"]
+            spec = rubric["drugs"][drug]
+            cond = per_condition.setdefault((drug, arm), {"n": 0, "task_correct": {}, "task_misread": {}, "task_dead": 0})
+            cond["n"] += 1
+            coded += 1
+            calib = [t for t in spec["tasks"] if t["id"] == 0][0]
+            calib_ok = card["medicine"] is not None and any(
+                re.search(p, card["medicine"], re.I) for p in calib.get("answer_patterns", []))
+            if not calib_ok:
+                calibration_failures += 1
+                cond["task_dead"] += 1
+                for (h, _t, note) in card["sections"]:
+                    sid, mapped = canon_section(h, spec["sections"])
+                    unmapped_events += 0 if mapped else 1
+                    key = (drug, arm, sid)
+                    located.setdefault(key, {"families": set(), "misread_families": set(), "events": []})
+                    located[key]["families"].add(family)
+                    located[key]["events"].append({"type": "dead-zone", "family": family, "note": note[:200]})
+                continue
+            for t in sorted(spec["tasks"], key=lambda x: x["id"])[1:]:
+                tid = t["id"]
+                ans = card["answers"].get(tid)
+                if ans is None or not ans.strip():
+                    refused_answers += 1
+                    continue
+                if any(re.search(p, ans, re.I) for p in t.get("answer_patterns", [])):
+                    cond["task_correct"][tid] = cond["task_correct"].get(tid, 0) + 1
+                else:
+                    cond["task_misread"][tid] = cond["task_misread"].get(tid, 0) + 1
+                    key = (drug, arm, t["section"])
+                    located.setdefault(key, {"families": set(), "misread_families": set(), "events": []})
+                    located[key]["families"].add(family)
+                    located[key]["misread_families"].add(family)
+                    located[key]["events"].append({"type": "task-misread", "task": tid, "family": family,
+                                                   "answer": ans[:200]})
+            for (h, stype, note) in card["sections"]:
+                if stype == "correct":
+                    continue
+                sid, mapped = canon_section(h, spec["sections"])
+                unmapped_events += 0 if mapped else 1
+                key = (drug, arm, sid)
+                located.setdefault(key, {"families": set(), "misread_families": set(), "events": []})
+                located[key]["families"].add(family)
+                if stype in ("misread", "confusion"):
+                    located[key]["misread_families"].add(family)
+                located[key]["events"].append({"type": stype, "family": family, "note": note[:200]})
+        cmin = int(thresholds.get("corroboration_min", 2))
+        dthr = int(thresholds.get("density_threshold", 2))
+        per_section, flagged = {}, []
+        for (drug, arm, canon), data in sorted(located.items()):
+            mis = [e for e in data["events"] if e["type"] in ("misread", "confusion", "task-misread")]
+            mis_fams = sorted(data["misread_families"])
+            corroborated = len(mis_fams) >= cmin
+            entry = {"drug": drug, "arm": arm, "section": canon,
+                     "families": sorted(data["families"]), "misread_families": mis_fams,
+                     "events": len(data["events"]),
+                     "misread_events": len(mis), "corroborated": corroborated,
+                     "density": len(mis) if corroborated else 0}
+            per_section["%s/%s/%s" % (drug, arm, canon)] = entry
+            if corroborated and len(mis) >= dthr and arm == "rebuilt":
+                flagged.append({"drug": drug, "section": canon, "density": len(mis),
+                                "families": mis_fams})
+        gap = []
+        maker_tasks = {}
+        for drug in rubric["drugs"]:
+            sa_path = "self-assessment/%s.yaml" % drug
+            if not os.path.exists(sa_path):
+                continue
+            sa = yaml.safe_load(open(sa_path, encoding="utf-8")) or {}
+            for sid, pred in (sa.get("predicted_clarity") or {}).items():
+                conf = sum(v["misread_events"] for v in per_section.values()
+                           if v["drug"] == drug and v["arm"] == "rebuilt" and v["section"] == sid)
+                gap.append({"drug": drug, "section": sid, "predicted_clarity": pred,
+                            "reader_misread_events": conf})
+            oa = sa.get("own_answers") or {}
+            perf = {}
+            for t in rubric["drugs"][drug]["tasks"]:
+                if t.get("id") == 0:
+                    continue
+                ans = oa.get(t["id"]) or oa.get(str(t["id"])) or ""
+                perf[t["id"]] = bool(ans.strip()) and any(
+                    re.search(p, ans, re.I) for p in t.get("answer_patterns", []))
+            maker_tasks[drug] = perf
+        expected_total = sum(len([r for r in manifest["readers"] if (r["drug"], r["arm"]) == c])
+                             for c in active_conditions(manifest, R))
+        evidence = {
+            "round": R, "cards_in": len(cards), "coded": coded,
+            "expected_cards": expected_total, "quorum_min": quorum,
+            "absent_readers": absent, "unmapped_section_events": unmapped_events,
+            "calibration_failures": calibration_failures, "refused_answers": refused_answers,
+            "per_condition": {"%s/%s" % k: v for k, v in sorted(per_condition.items())},
+            "per_section": per_section, "flagged": flagged, "maker_reader_gap": gap,
+            "maker_task_performance": maker_tasks,
+            "run_nonce": nonce,
+        }
+        return R, evidence, flagged
+
+    def quorum_report(R):
+        evidence = json.load(open("evidence/round-%d.json" % R, encoding="utf-8"))
+        problems = []
+        if evidence["cards_in"] != evidence["coded"]:
+            problems.append("conservation: cards_in %d != coded %d" % (evidence["cards_in"], evidence["coded"]))
+        for key, cond in evidence["per_condition"].items():
+            if cond["n"] < evidence["quorum_min"]:
+                problems.append("condition %s: n=%d < quorum %d" % (key, cond["n"], evidence["quorum_min"]))
+        for a in evidence.get("absent_readers") or []:
+            print("ABSENT: %s -> instances %s (typed, declared)" % (a["condition"], a["instances"]))
+        print("QUORUM REPORT round %d: %s" % (R, "OK" if not problems else "; ".join(problems)))
+        return 1 if problems else 0
+
+    def main():
+        argv = sys.argv[1:]
+        problem = digest_ok()
+        if problem:
+            print("NOTES REFUSED: %s" % problem); return 1
+        if "--quorum-report" in argv:
+            R = int(open("run/round.txt", encoding="utf-8").read().strip())
+            return quorum_report(R)
+        if "--check" in argv:
+            R = int(argv[argv.index("--check") + 1]) if len(argv) > argv.index("--check") + 1 else \
+                int(open("run/round.txt", encoding="utf-8").read().strip())
+            blob_expected = "evidence/round-%d.json" % R
+            _R, evidence, _f = None, None, None
+            # re-derive without writing: code_round is pure given the same inputs
+            saved_out = None
+            R2, evidence2, _g = code_round()
+            blob = json.dumps(evidence2, indent=2, sort_keys=True) + "\n"
+            if R2 != R:
+                print("NOTES REFUSED: odometer moved since round-%d.json was written" % R); return 1
+            if not os.path.exists(blob_expected) or open(blob_expected, encoding="utf-8").read() != blob:
+                print("NOTES DETERMINISM REFUSED: re-run differs from %s" % blob_expected); return 1
+            print("NOTES DETERMINISM PASS (round %d)" % R)
+            return 0
+        R, evidence, flagged = code_round()
+        out = "evidence/round-%d.json" % R
+        os.makedirs("evidence", exist_ok=True)
+        blob = json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+        open(out, "w", encoding="utf-8").write(blob)
+        vi = {"round": R, "max_rounds": int(yaml.safe_load(open("thresholds.yaml"))["max_rounds"]),
+              "flagged": flagged}
+        open("run/verdict-input-r%d.json" % R, "w", encoding="utf-8").write(
+            json.dumps(vi, indent=2, sort_keys=True) + "\n")
+        if R == 1 and not os.path.exists("official-arm-measured.stamp"):
+            open("official-arm-measured.stamp", "w").write(
+                "official arm measured in round 1; pinned bytes re-measure nothing\n")
+        print("NOTES PASS: round=%d coded=%d absent=%d flagged=%d"
+              % (R, evidence["coded"], len(evidence["absent_readers"]), len(flagged)))
+        return 0
+
+    if __name__ == "__main__":
+        sys.exit(main())
+    PYEOF
+
+    # ── scripts/verdict-apply.py — M8: evidence join + bounds + anti-churn ──────
+    # Revision restores the decisive invariant (review-2's core finding): the
+    # deterministic evidence, not the LLM, chooses WHETHER. `done` is refused
+    # while corroborated flags remain (unless the round bound is hit, which
+    # must be declared as exhaustion); a recut set must EQUAL the flag set
+    # exactly. The anti-churn diff now covers the section SET (no additions or
+    # removals), the heading lines (title edits are changes), and the
+    # provenance anchors of unflagged sections (staged as .new.yaml and
+    # swapped only after the gates pass).
+    cat > scripts/verdict-apply.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """verdict-apply.py — the deterministic half of the verdict."""
+    import json, os, re, subprocess, sys
+    import yaml
+
+    def split_sections(path):
+        """ids + bodies INCLUDING the heading line (title edits are changes)."""
+        ids, secs, cur, buf = [], {}, None, []
+        for line in open(path, encoding="utf-8").read().splitlines():
+            m = re.match(r"^##\s+([A-Za-z0-9_-]+)", line)
+            if m:
+                if cur is not None:
+                    secs[cur] = buf
+                cur, buf = m.group(1), [line]
+                ids.append(cur)
+            else:
+                buf.append(line)
+        if cur is not None:
+            secs[cur] = buf
+        return ids, secs
+
+    def evidence_flags(R):
+        try:
+            vi = json.load(open("run/verdict-input-r%d.json" % R, encoding="utf-8"))
+        except OSError:
+            raise SystemExit("VERDICT REFUSED: run/verdict-input-r%d.json missing — the evidence join cannot run without coded evidence" % R)
+        per = {}
+        for f in vi.get("flagged") or []:
+            per.setdefault(f["drug"], set()).add(f["section"])
+        return {d: sorted(s) for d, s in per.items()}
+
+    def lawfulness(v, R, maxr, flags=None):
+        """The evidence join: returns a refusal string, 'CHAIN-EXHAUSTED', or None."""
+        decision = v.get("decision")
+        if flags is None:
+            flags = evidence_flags(R)
+        any_flags = any(flags.values())
+        if decision not in ("recut", "done"):
+            return "decision must be recut|done"
+        if decision == "done":
+            if any_flags and R < maxr:
+                return "evidence flags remain (%d sections) and round %d < max_rounds %d — author a recut, not done" % (
+                    sum(len(s) for s in flags.values()), R, maxr)
+            if any_flags and v.get("reason") != "exhausted":
+                return "done with remaining flags requires reason: exhausted"
+            return None
+        # recut
+        if not any_flags:
+            return "recut with no corroborated flags — author done instead"
+        if R >= maxr:
+            return "CHAIN-EXHAUSTED"
+        per = v.get("per_drug") or {}
+        norm = {d: sorted(set(s or [])) for d, s in per.items() if s}
+        if norm != flags:
+            return "recut set %s != deterministic flag set %s — the evidence chooses, you only execute" % (
+                json.dumps(norm, sort_keys=True), json.dumps(flags, sort_keys=True))
+        return None
+
+    def prov_anchors(path, drug):
+        prov = yaml.safe_load(open(path, encoding="utf-8"))
+        pmap = (prov.get("drugs") or {}).get(drug) or prov.get(drug) or {}
+        return {sid: [ (a.get("anchor") if isinstance(a, dict) else a) for a in (lst or []) ]
+                for sid, lst in pmap.items()}
+
+    def anti_churn(slug, old, new, old_prov, new_prov, flagged):
+        problems = []
+        old_ids, old_secs = split_sections(old)
+        new_ids, new_secs = split_sections(new)
+        if set(new_ids) != set(old_ids):
+            problems.append("ANTI-CHURN REFUSED: section set changed (%s added/removed) — a recut modifies, it never restructures"
+                            % sorted(set(new_ids) ^ set(old_ids)))
+        oa, na = prov_anchors(old_prov, slug), prov_anchors(new_prov, slug)
+        for sid in old_ids:
+            if sid in new_ids and sid not in flagged and old_secs[sid] != new_secs.get(sid):
+                problems.append("ANTI-CHURN REFUSED: unflagged section %s/%s changed (heading or body) — recut ONLY flagged sections (Rehearsal Spotlight)" % (slug, sid))
+            if sid not in flagged and oa.get(sid) != na.get(sid):
+                problems.append("ANTI-CHURN REFUSED: provenance anchors for unflagged section %s/%s changed" % (slug, sid))
+        for sid in flagged:
+            if sid not in new_secs:
+                problems.append("VERDICT REFUSED: flagged section %s/%s absent from recut" % (slug, sid))
+        return problems
+
+    def main():
+        argv = sys.argv[1:]
+        thresholds = yaml.safe_load(open("thresholds.yaml", encoding="utf-8"))
+        maxr = int(thresholds.get("max_rounds", 4))
+        if "--selftest" in argv:
+            os.makedirs("run/.selftest-va", exist_ok=True)
+            base = "run/.selftest-va"
+            open("%s/old.md" % base, "w").write("## a: A\n- old\n## b: B\n- keep\n")
+            open("%s/new.md" % base, "w").write("## a: A\n- new\n## b: B\n- CHANGED AGAINST THE RULE\n")
+            open("%s/old.yaml" % base, "w").write("a: [{anchor: old}]\nb: [{anchor: keep}]\n")
+            open("%s/new.yaml" % base, "w").write("a: [{anchor: new}]\nb: [{anchor: keep}]\n")
+            probs = anti_churn("x", "%s/old.md" % base, "%s/new.md" % base,
+                               "%s/old.yaml" % base, "%s/new.yaml" % base, flagged=set("a"))
+            v = {"decision": "done", "reason": "quiet"}
+            law = lawfulness(v, 1, 4, flags={"x": ["a"]})
+            if probs and law:
+                print("SELFTEST PASS: unflagged change + evidence-contradicting done both refused"); return 0
+            print("SELFTEST FAIL: a planted violation slipped through"); return 1
+        if "--verify" in argv:
+            rec_path = None
+            for cand in sorted(glob_files("run/verdict-records"), reverse=True):
+                rec_path = cand
+            if rec_path is None:
+                print("VERDICT VERIFY REFUSED: no recorded verdict to verify"); return 1
+            rec = json.load(open(rec_path, encoding="utf-8"))
+            law = lawfulness(rec["verdict"], rec["round"], maxr)
+            flags_now = evidence_flags(rec["round"])
+            if law == "CHAIN-EXHAUSTED":
+                law = None if rec["verdict"].get("reason") == "exhausted" else "exhaustion done requires reason: exhausted"
+            if law:
+                print("VERDICT VERIFY REFUSED: %s" % law); return 1
+            if rec.get("applied_flags") != flags_now:
+                print("VERDICT VERIFY REFUSED: recorded flags drifted from evidence"); return 1
+            print("VERDICT VERIFY PASS: round %d decision %s lawful against the evidence" % (rec["round"], rec["verdict"]["decision"]))
+            return 0
+        v = json.load(open("verdict.json", encoding="utf-8"))
+        R = int(open("run/round.txt", encoding="utf-8").read().strip())
+        law = lawfulness(v, R, maxr)
+        if law == "CHAIN-EXHAUSTED":
+            print("CHAIN EXHAUSTION: round %d >= max_rounds %d — re-author verdict.json "
+                  "with decision: done, reason: exhausted (a null result is publishable)" % (R, maxr))
+            return 42
+        if law:
+            print("VERDICT REFUSED: %s" % law); return 1
+        decision = v["decision"]
+        if decision == "recut":
+            per = v.get("per_drug") or {}
+            flagged_total = 0
+            for slug, spec in per.items():
+                flagged = set(spec.get("flagged") or [])
+                if not flagged:
+                    continue
+                flagged_total += len(flagged)
+                new = "rebuilt/%s.new.md" % slug
+                old = "rebuilt/%s.md" % slug
+                new_prov = "provenance/%s.new.yaml" % slug
+                old_prov = "provenance/%s.yaml" % slug
+                for path in (new, new_prov):
+                    if not os.path.exists(path):
+                        print("VERDICT REFUSED: %s missing for recut" % path); return 1
+                probs = anti_churn(slug, old, new, old_prov, new_prov, flagged)
+                if probs:
+                    for p in probs:
+                        print(p)
+                    return 1
+                for tool, args in (
+                        (".venv/bin/python", ["scripts/provenance-join.py", slug, new, new_prov]),
+                        (".venv/bin/python", ["scripts/readability.py", "--gate",
+                                              str(thresholds.get("grade_target", 8)), "--files", new])):
+                    rc = subprocess.call([tool] + args)
+                    if rc != 0:
+                        print("VERDICT REFUSED: recut gate failed (%s)" % " ".join(args)); return rc
+                os.replace(new, old)
+                os.replace(new_prov, old_prov)
+                subprocess.call(["bash", "scripts/stage-delivery.sh", slug])
+            if flagged_total == 0:
+                print("VERDICT REFUSED: recut with no flagged sections — author done instead"); return 1
+            if os.path.exists("done.stamp"):
+                os.remove("done.stamp")
+            open("recut.stamp", "w").write("round %d recut: %d sections\n" % (R, flagged_total))
+            open("run/round.txt", "w").write("%d\n" % (R + 1))
+            os.makedirs("run/verdict-records", exist_ok=True)
+            json.dump({"round": R, "verdict": v, "applied_flags": evidence_flags(R)},
+                      open("run/verdict-records/r%d.json" % R, "w"), indent=2, sort_keys=True)
+            print("VERDICT APPLIED: recut round %d -> %d" % (R, R + 1))
+            return 0
+        # decision == done
+        if os.path.exists("recut.stamp"):
+            os.remove("recut.stamp")
+        open("done.stamp", "w").write("round %d complete: %s\n" % (R, v.get("reason", "quiet")))
+        json.dump(v, open("run/final-verdict.json", "w", encoding="utf-8"), indent=2, sort_keys=True)
+        os.makedirs("run/verdict-records", exist_ok=True)
+        json.dump({"round": R, "verdict": v, "applied_flags": evidence_flags(R)},
+                  open("run/verdict-records/r%d.json" % R, "w"), indent=2, sort_keys=True)
+        print("VERDICT APPLIED: done at round %d (%s)" % (R, v.get("reason", "quiet")))
+        return 0
+
+    def glob_files(d):
+        import glob as _g
+        return sorted(_g.glob(os.path.join(d, "r*.json")))
+
+    if __name__ == "__main__":
+        sys.exit(main())
+    PYEOF
+
+    # ── scripts/lock.sh — M9: the authority-declared lock (The Freeze) ──────────
+    # The freeze is EXTENDED (review-2): everything downstream claims join
+    # against — guides, provenance, all-round evidence, the registration, the
+    # manifest, the baseline measurement, both self-assessments, and the final
+    # verdict — is copied under one digest. "Everything public joins against a
+    # digest" is now literally what frozen.sha256 covers.
+    cat > scripts/lock.sh <<'SHEOF'
+    #!/usr/bin/env bash
+    # Requires done.stamp: the chain TERMINATED, not abandoned.
+    set -euo pipefail
+    test -f done.stamp || { echo "LOCK REFUSED: no done.stamp — the loop has not terminated"; exit 1; }
+    .venv/bin/python - <<'PYEOF'
+    import glob, json
+    rounds = sorted(glob.glob("evidence/round-*.json"),
+                    key=lambda p: int(p.rsplit("-", 1)[1].split(".")[0]))
+    assert rounds, "no evidence rounds to freeze"
+    final = {"rounds": [json.load(open(p)) for p in rounds]}
+    try:
+        final["final_verdict"] = json.load(open("run/final-verdict.json"))
+    except OSError:
+        pass
+    open("evidence-final.json", "w").write(json.dumps(final, indent=2, sort_keys=True) + "\n")
+    PYEOF
+    mkdir -p frozen
+    python3 - <<'PYEOF'
+    import json, shutil
+    drugs = [d["slug"] for d in json.load(open("run/drugs.json"))]
+    for d in drugs:
+        shutil.copy("rebuilt/%s.md" % d, "frozen/%s.md" % d)
+        shutil.copy("provenance/%s.yaml" % d, "frozen/%s.yaml" % d)
+        shutil.copy("self-assessment/%s.yaml" % d, "frozen/self-assessment-%s.yaml" % d)
+    for f in ("evidence-final.json", "rubric.yaml", "thresholds.yaml", "rubric.sha256",
+              "panel-manifest.yaml", "readability-official.json", "run/final-verdict.json"):
+        shutil.copy(f, "frozen/%s" % f.replace("/", "-"))
+    PYEOF
+    sha256sum frozen/* > frozen.sha256
+    sha256sum -c frozen.sha256
+    # The rebuilt-arm readability measurement is taken ON the frozen bytes —
+    # the number the evidence page publishes joins against the digest.
+    python3 - <<'PYEOF'
+    import json, subprocess, sys
+    drugs = [d["slug"] for d in json.load(open("run/drugs.json"))]
+    rc = subprocess.call([".venv/bin/python", "scripts/readability.py", "--out", "readability-rebuilt.json",
+                          "--files"] + ["frozen/%s.md" % d for d in drugs])
+    sys.exit(rc)
+    PYEOF
+    echo "M9 LOCKED (extended freeze)"
+    SHEOF
+
+    # ── scripts/build-onepager.py — M10: the pharmacy-counter artifact ──────────
+    # Pure-Python (reportlab + pypdf): no pandoc, no pdflatex, no poppler —
+    # the toolchain cannot be missing mid-run because it IS the venv. Digest
+    # join BEFORE build; >=14pt body; <=2 pages; real extractable text; the
+    # accompany footer cites the frozen digest.
+    cat > scripts/build-onepager.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """build-onepager.py — reportlab one-pager from FROZEN bytes only."""
+    import hashlib, json, re, sys
+    from xml.sax.saxutils import escape
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from pypdf import PdfReader
+
+    def build(slug):
+        cfg = json.load(open("run/deployment.json"))
+        maxp = int(cfg["onepager_max_pages"])
+        frozen = open("frozen/%s.md" % slug, encoding="utf-8").read()
+        digest = hashlib.sha256(open("frozen/%s.md" % slug, "rb").read()).hexdigest()[:16]
+        title_style = ParagraphStyle("t", fontName="Helvetica-Bold", fontSize=16, leading=20, spaceAfter=6)
+        head_style = ParagraphStyle("h", fontName="Helvetica-Bold", fontSize=14, leading=18, spaceBefore=8, spaceAfter=3)
+        body_style = ParagraphStyle("b", fontName="Helvetica", fontSize=14, leading=19)
+        foot_style = ParagraphStyle("f", fontName="Helvetica", fontSize=9, leading=12, spaceBefore=10)
+        story = [Paragraph(escape(slug.upper() + " — plain-language guide (comprehension aid)"), title_style)]
+        for block in frozen.split("## "):
+            if not block.strip():
+                continue
+            lines = block.strip().splitlines()
+            head = escape(re.sub(r"^[A-Za-z0-9_-]+:\s*", "", lines[0]).strip())
+            story.append(Paragraph(head, head_style))
+            for ln in lines[1:]:
+                s = ln.strip()
+                if s.startswith("- "):
+                    story.append(Paragraph("&#8226; " + escape(s[2:].strip()), body_style))
+                elif s:
+                    story.append(Paragraph(escape(s), body_style))
+        story.append(Spacer(1, 6))
+        story.append(Paragraph(
+            "Source digest: %s | This guide accompanies --- do not replace --- your Medication Guide." % digest,
+            foot_style))
+        out = "dist/%s-onepager.pdf" % slug
+        doc = SimpleDocTemplate(out, pagesize=letter,
+                                leftMargin=0.7 * inch, rightMargin=0.7 * inch,
+                                topMargin=0.6 * inch, bottomMargin=0.6 * inch,
+                                title="Plain-language guide: %s" % slug)
+        doc.build(story)
+        r = PdfReader(out)
+        text = "".join((p.extract_text() or "") for p in r.pages)
+        ok = True
+        if len(r.pages) > maxp:
+            print("ONEPAGER FAIL: %s has %d pages (max %d) — shorten flagged-section prose" % (slug, len(r.pages), maxp)); ok = False
+        if "accompan" not in text.lower():
+            print("ONEPAGER FAIL: %s accompany clause missing from extractable text" % slug); ok = False
+        if digest not in text:
+            print("ONEPAGER FAIL: %s digest footer missing from extractable text" % slug); ok = False
+        if ok:
+            print("M10 ONEPAGER PASS: %s (%d pages, digest %s)" % (slug, len(r.pages), digest))
+        return 0 if ok else 1
+
+    if __name__ == "__main__":
+        sys.exit(build(sys.argv[1]))
+    PYEOF
+
+    # ── scripts/pdfcheck.py — M10/M14 validation: pypdf re-check of a PDF ───────
+    cat > scripts/pdfcheck.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """pdfcheck.py — page cap + extractable text + accompany + digest (env D)."""
+    import hashlib, json, os, sys
+    from pypdf import PdfReader
+
+    slug = os.environ["D"]
+    cfg = json.load(open("run/deployment.json"))
+    r = PdfReader("dist/%s-onepager.pdf" % slug)
+    text = "".join((p.extract_text() or "") for p in r.pages)
+    digest = hashlib.sha256(open("frozen/%s.md" % slug, "rb").read()).hexdigest()[:16]
+    problems = []
+    if len(r.pages) > int(cfg["onepager_max_pages"]):
+        problems.append("pages %d > %d" % (len(r.pages), cfg["onepager_max_pages"]))
+    if not text.strip():
+        problems.append("no extractable text")
+    if "accompan" not in text.lower():
+        problems.append("accompany clause missing")
+    if digest not in text:
+        problems.append("digest footer missing")
+    if problems:
+        print("PDFCHECK REFUSED: %s: %s" % (slug, "; ".join(problems))); sys.exit(1)
+    print("PDFCHECK PASS: %s" % slug)
+    PYEOF
+
+    # ── scripts/claims-join.py — M11: The Declared Window's arithmetic ──────────
+    # Revision: the independent recompute walks the UNION of task_correct and
+    # task_misread keys (a task with zero correct answers is a severe finding,
+    # not a verification failure); in-window rows must satisfy >=2 of four
+    # window classes (observation / family / count / round) — one lexical
+    # token no longer launders a claim; the maker-gap row is drawn from the
+    # FINAL round only and carries N + families; absent readers are declared.
+    cat > scripts/claims-join.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """claims-join.py — windowed claims ledger with teeth."""
+    import json, os, re, sys
+    import yaml
+    from scipy.stats import binomtest
+
+    WINDOW_CLASSES = [
+        re.compile(r"(among|simulated|unprimed)", re.I),
+        re.compile(r"(families|GPT|GEMMA|GLM)", re.I),
+        re.compile(r"(N\s*=\s*\d+|\d+\s+(?:of|readers|correct|misread|cards|answers|failed|tasks))"),
+        re.compile(r"(round\s+\d+|in\s+round)", re.I),
+    ]
+    QUANTIFIER = re.compile(
+        r"\b(all readers|patients will|everyone|always|never|any patient|clear for|"
+        r"most readers|most patients|none of the|every participant|proved|proven|improved|guaranteed)\b", re.I)
+
+    def classes_hit(text):
+        return sum(1 for c in WINDOW_CLASSES if c.search(text))
+
+    def ci(k, n):
+        r = binomtest(int(k), int(n)).proportion_ci(method="exact", confidence_level=0.95)
+        return round(r.low, 4), round(r.high, 4)
+
+    def load_inputs():
+        ev = json.load(open("frozen/evidence-final.json", encoding="utf-8"))
+        manifest = yaml.safe_load(open("panel-manifest.yaml", encoding="utf-8"))
+        rounds = [r["round"] for r in ev["rounds"]]
+        fams = sorted({r["family"] for r in manifest["readers"]})
+        chain = yaml.safe_load(open("self-chain.yaml", encoding="utf-8"))
+        observed = {}
+        for rnd in ev["rounds"]:
+            observed[str(rnd["round"])] = {"%s/%s" % k: v["n"] for k, v in
+                                           ((tuple(k.split("/")), v) for k, v in rnd["per_condition"].items())}
+        window = {
+            "drugs": sorted({r["drug"] for r in manifest["readers"]}),
+            "arms": ["official", "rebuilt"],
+            "reader_families": fams,
+            "corroboration_families": manifest["corroboration_families"],
+            "local_families": manifest["local_families"],
+            "configured_readers_per_condition": 7,
+            "observed_readers_per_condition": observed,
+            "quorum_min": ev["rounds"][0].get("quorum_min"),
+            "rounds_executed": rounds,
+            "max_chain_depth": (chain.get("concert") or {}).get("max_chain_depth"),
+            "task_battery": "3 tasks + calibration, identical wording across arms, frozen pre-rebuild",
+            "external_validity": "simulated readers (model panels), not human subjects — every derived claim inherits this window",
+        }
+        return ev, manifest, window
+
+    def emit(ev, window):
+        rows, n = [], 0
+        fams = "/".join(window["reader_families"])
+        def add(class_, text, **kw):
+            nonlocal n
+            n += 1
+            row = {"id": "CL-%03d" % n, "class": class_, "text": text}
+            row.update(kw)
+            rows.append(row)
+        for rnd in ev["rounds"]:
+            R = rnd["round"]
+            for key, cond in sorted(rnd["per_condition"].items()):
+                drug, arm = key.split("/")
+                tc = {int(k): v for k, v in (cond["task_correct"] or {}).items()}
+                tm = {int(k): v for k, v in (cond["task_misread"] or {}).items()}
+                for tid in sorted(set(list(tc) + list(tm))):
+                    k = tc.get(tid, 0)
+                    m = tm.get(tid, 0)
+                    tot = k + m
+                    if tot == 0:
+                        continue
+                    lo, hi = ci(k, tot)
+                    add("in-window",
+                        "Among N=%d simulated unprimed readers of families %s in round %d (%s, %s arm, task %s): "
+                        "%d correct, %d misread (rate %.2f, exact 95%% CI %.2f-%.2f)."
+                        % (tot, fams, R, drug, arm, tid, k, m, k / tot, lo, hi),
+                        drug=drug, arm=arm, round=R, task=tid, k=k, n=tot)
+                if cond["task_dead"]:
+                    add("total-seen",
+                        "In round %d (%s, %s arm): %d of %d readers failed the calibration item and were typed "
+                        "dead-zone (disengaged is separable from confused)." % (R, drug, arm, cond["task_dead"], cond["n"]),
+                        drug=drug, arm=arm, round=R)
+            for a in (rnd.get("absent_readers") or []):
+                add("total-seen",
+                    "In round %d (%s): %d expected readers were ABSENT (typed and declared — partial failure tolerated, never hidden)."
+                    % (R, a["condition"], len(a["instances"])), round=R)
+            add("total-seen",
+                "Round %d coded %d cards with %d calibration failures and %d refused (ungradable) answers."
+                % (R, rnd["cards_in"], rnd["calibration_failures"], rnd["refused_answers"]), round=R)
+        final = max(r["round"] for r in ev["rounds"])
+        rnd = [r for r in ev["rounds"] if r["round"] == final][0]
+        gap = rnd.get("maker_reader_gap") or []
+        maker = rnd.get("maker_task_performance") or {}
+        for drug, perf in sorted(maker.items()):
+            cond = rnd["per_condition"].get("%s/rebuilt" % drug) or {}
+            N = cond.get("n", 0)
+            total = len(perf)
+            correct = sum(1 for v in perf.values() if v)
+            gtext = "; ".join("%s/%s predicted clarity %s vs %d reader misread events" %
+                              (g["drug"], g["section"], g["predicted_clarity"], g["reader_misread_events"])
+                              for g in gap if g["drug"] == drug)
+            add("in-window",
+                "Among N=%d simulated unprimed readers of families %s in round %d (%s, rebuilt arm), the maker's blind spot: "
+                "the primed maker answered %d of %d battery tasks correctly while unprimed readers located the misreads above; %s."
+                % (N, fams, final, drug, correct, total, gtext or "no located misreads"),
+                drug=drug, arm="rebuilt", round=final)
+        add("refused", "Whether plain-language rebuilding changes patient behavior or health outcomes — "
+                       "out of window: no behavior or outcome endpoint was measured.")
+        add("refused", "Generalization beyond the tested drugs — "
+                       "out of window: the pinned drug set was tested, no more.")
+        add("refused", "Comprehension by human patients — out of window: readers were simulated "
+                       "(model panels on declared families), not human subjects.")
+        add("refused", "That reformulation preserves medical meaning exactly — out of window: provenance is "
+                       "enforced as strict-format mapping plus refusal; residual semantic risk is declared, not computed.")
+        return rows, window
+
+    def verify(ev, window, rows):
+        problems = []
+        # Independent recount from raw evidence — over the task-key UNION.
+        want = set()
+        for rnd in ev["rounds"]:
+            for key, cond in rnd["per_condition"].items():
+                drug, arm = key.split("/")
+                tc = {int(k): v for k, v in (cond["task_correct"] or {}).items()}
+                tm = {int(k): v for k, v in (cond["task_misread"] or {}).items()}
+                for tid in set(list(tc) + list(tm)):
+                    k = int(tc.get(tid, 0))
+                    m = int(tm.get(tid, 0))
+                    if k + m > 0:
+                        want.add((drug, arm, rnd["round"], tid, k, k + m))
+        emitted = {(r.get("drug"), r.get("arm"), r.get("round"), r.get("task"), r.get("k"), r.get("n"))
+                   for r in rows if r["class"] == "in-window" and r.get("task") is not None
+                   and r.get("arm") and r.get("n")}
+        if emitted != want:
+            problems.append("independent task-count recount drift: %d emitted vs %d recomputed" % (len(emitted), len(want)))
+        # Reclassify every row from its OWN text.
+        for r in rows:
+            if r["class"] == "in-window" and classes_hit(r["text"]) < 2:
+                problems.append("%s: in-window row with %d/4 window classes: %s" % (r["id"], classes_hit(r["text"]), r["text"][:80]))
+            if QUANTIFIER.search(r["text"]) and r["class"] != "refused":
+                problems.append("%s: unwindowed quantifier: %s" % (r["id"], r["text"][:80]))
+            if re.search(r"\b(rate|CI)\b", r["text"]):
+                m = re.search(r"(\d+) correct, (\d+) misread \(rate ([\d.]+), exact 95% CI ([\d.]+)-([\d.]+)\)", r["text"])
+                if m:
+                    k, m2 = int(m.group(1)), int(m.group(2))
+                    lo, hi = ci(k, k + m2)
+                    if abs(float(m.group(3)) - k / (k + m2)) > 0.005 or abs(float(m.group(4)) - lo) > 0.005 \
+                       or abs(float(m.group(5)) - hi) > 0.005:
+                        problems.append("%s: recomputed rate/CI drift" % r["id"])
+        # Join arithmetic.
+        iwr = sum(1 for r in rows if r["class"] in ("in-window", "total-seen"))
+        refused = sum(1 for r in rows if r["class"] == "refused")
+        if iwr + refused != len(rows):
+            problems.append("join arithmetic: in-window(%d) + refused(%d) != emitted(%d)" % (iwr, refused, len(rows)))
+        return problems, {"exact_in_window": iwr, "refused": refused, "claims_emitted": len(rows)}
+
+    def main():
+        argv = sys.argv[1:]
+        ev, manifest, window = load_inputs()
+        if "--verify" in argv:
+            rows = [json.loads(l) for l in open("claims.jsonl", encoding="utf-8") if l.strip()]
+            problems, summary = verify(ev, window, rows)
+            if problems:
+                for p in problems:
+                    print("CLAIMS GATE REFUSED: %s" % p)
+                return 1
+            print("CLAIMS VERIFY PASS: %s" % json.dumps(summary, sort_keys=True))
+            return 0
+        rows, window = emit(ev, window)
+        problems, summary = verify(ev, window, rows)
+        if problems:
+            for p in problems:
+                print("CLAIMS GATE REFUSED: %s" % p)
+            return 1
+        with open("claims.jsonl", "w", encoding="utf-8") as fh:
+            for r in rows:
+                fh.write(json.dumps(r, sort_keys=True) + "\n")
+        open("window-manifest.yaml", "w", encoding="utf-8").write(
+            yaml.safe_dump(window, sort_keys=True, allow_unicode=True))
+        open("claims-summary.json", "w", encoding="utf-8").write(
+            json.dumps(summary, indent=2, sort_keys=True) + "\n")
+        print("CLAIMS PASS: %s" % json.dumps(summary, sort_keys=True))
+        return 0
+
+    if __name__ == "__main__":
+        sys.exit(main())
+    PYEOF
+
+    # ── scripts/citation-gate.py — M12/M14: prose cannot out-window itself ──────
+    # Revision: claim IDs dumped in one paragraph no longer launder numeric
+    # claims elsewhere — every SENTENCE containing a digit must carry its
+    # [CL-xxx] citation in the same sentence; the quantifier vocabulary is
+    # expanded beyond six phrases. --selftest plants both violations.
+    cat > scripts/citation-gate.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """citation-gate.py — every ledger row cited; every number and quantifier windowed."""
+    import json, re, sys
+
+    SENT = re.compile(r"[^.!?]*[.!?]")
+    QUANT = re.compile(
+        r"\b(all readers|patients will|everyone|always|never|any patient|clear for|"
+        r"most readers|most patients|none of the|every participant|proved|proven|improved|guaranteed)\b", re.I)
+    WINDOW = re.compile(r"(among|simulated|unprimed|families|GPT|GEMMA|GLM|round|N\s*=|readers of)", re.I)
+
+    def run(path, rows):
+        text = open(path, encoding="utf-8").read()
+        problems = []
+        for r in rows:
+            if ("[%s]" % r["id"]) not in text:
+                problems.append("uncited claim row: %s" % r["id"])
+        for m in SENT.finditer(text):
+            sent = m.group(0)
+            if QUANT.search(sent) and not WINDOW.search(sent):
+                problems.append("unwindowed quantifier sentence: %s" % sent.strip()[:100])
+            body = re.sub(r"\[CL-\d+\]", "", sent)
+            if re.search(r"\d", body) and "[CL-" not in sent:
+                problems.append("numeric sentence without a same-sentence [CL-] citation: %s" % sent.strip()[:100])
+        return problems
+
+    def main():
+        argv = sys.argv[1:]
+        if "--selftest" in argv:
+            open("run/.selftest-evidence.md", "w").write(
+                "## Evidence\nPatients will understand this guide. [CL-001]\n"
+                "Readers improved to 12 on the scale.\n")
+            rows = [{"id": "CL-001", "class": "refused", "text": "x"}]
+            probs = run("run/.selftest-evidence.md", rows)
+            if len(probs) >= 2:
+                print("SELFTEST PASS: unwindowed quantifier + uncited numeric sentence refused"); return 0
+            print("SELFTEST FAIL: gate accepted a planted violation"); return 1
+        if "--rendered" in argv:
+            import re as _re, urllib.request
+            cfg = __import__("json").load(open("run/deployment.json", encoding="utf-8"))
+            html = urllib.request.urlopen(cfg["deployed_url"].rstrip("/") + "/evidence.html",
+                                          timeout=60).read().decode("utf-8", "replace")
+            text = _re.sub(r"<[^>]+>", " ", html)
+            open("run/served-evidence.txt", "w", encoding="utf-8").write(
+                _re.sub(r"\s+", " ", text))
+            path = "run/served-evidence.txt"
+        else:
+            path = "site/evidence.md"
+        rows = [json.loads(l) for l in open("claims.jsonl", encoding="utf-8") if l.strip()]
+        probs = run(path, rows)
+        if probs:
+            for p in probs:
+                print("CITATION GATE REFUSED: %s" % p)
+            return 1
+        print("CITATION GATE PASS (%s)" % path)
+        return 0
+
+    if __name__ == "__main__":
+        sys.exit(main())
+    PYEOF
+
+    # ── scripts/negative-controls.sh — the recorded gate teeth ──────────────────
+    # Revision fixes the review-1/2 blocker: each gate's --selftest exits 0
+    # when it OBSERVES its planted violation being refused (that IS the teeth
+    # proof), so run_case expects rc==0 on success. Six controls now — the
+    # assessment gate and the verdict's evidence join/anti-churn joined the
+    # original four.
+    cat > scripts/negative-controls.sh <<'SHEOF'
+    #!/usr/bin/env bash
+    # Six planted violations; each gate's selftest MUST observe refusal (rc 0).
+    # A gate that cannot fail is a receipt. Records run/negative-controls.json.
+    set -uo pipefail
+    fail=0
+    run_case () {
+      name=$1; shift
+      "$@" >/dev/null 2>&1
+      rc=$?
+      if [ "$rc" -eq 0 ]; then
+        echo "  TEETH PROVEN: $name"
+        printf '"%s": {"passed": true},\n' "$name" >> run/negative-controls.partial
+      else
+        echo "  ACCEPTED/CRASHED (rc=$rc) — GATE HAS NO TEETH: $name"
+        printf '"%s": {"passed": false, "rc": %d},\n' "$name" "$rc" >> run/negative-controls.partial
+        fail=1
+      fi
+    }
+    : > run/negative-controls.partial
+    echo "negative controls:"
+    run_case "rubric-schema-thresholds" .venv/bin/python scripts/rubric-gate.py --selftest
+    run_case "provenance-unmappable-prose" .venv/bin/python scripts/provenance-join.py --selftest
+    run_case "panel-single-family" .venv/bin/python scripts/panel-manifest.py --selftest
+    run_case "citation-unwindowed-numeric" .venv/bin/python scripts/citation-gate.py --selftest
+    run_case "assess-malformed" .venv/bin/python scripts/assess-gate.py --selftest
+    run_case "verdict-anti-churn-evidence-join" .venv/bin/python scripts/verdict-apply.py --selftest
+    { printf '{\n'; sed '$ s/,$//' run/negative-controls.partial; printf '}\n'; } > run/negative-controls.json
+    rm -f run/negative-controls.partial
+    if [ "$fail" -ne 0 ]; then echo "NEGATIVE CONTROLS FAIL: a gate accepted its planted violation"; exit 1; fi
+    echo "NEGATIVE CONTROLS PASS: all six gates refused their planted violations"
+    SHEOF
+
+    chmod +x scripts/*.sh scripts/*.py
+    touch .commissioned
+    echo "M0 COMMISSIONED"
+
+    # ── scripts/build-site.sh — M13: the public artifact from frozen bytes ──────
+    # Pure-Python rendering (markdown lib) into a template whose <main> wraps
+    # EXACTLY the rendered guide — which is what makes the live gate's
+    # EXACT served-content join possible (similarity thresholds cannot defend
+    # medical text; normalized-equality hashes can).
+    cat > scripts/build-site.sh <<'SHEOF'
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sha256sum -c frozen.sha256
+    cat > site/style.css <<'CSSEOF'
+    body { font-family: Georgia, 'Times New Roman', serif; font-size: 19px; line-height: 1.6;
+           color: #111; background: #fff; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; }
+    a { color: #0645ad; } a:focus, a:hover { outline: 3px solid #d00; }
+    h1, h2, h3 { line-height: 1.25; }
+    .digest { font-family: monospace; font-size: 0.85em; background: #f2f2f2; padding: 0.5rem; }
+    footer { margin-top: 3rem; border-top: 2px solid #111; padding-top: 1rem; font-size: 1rem; }
+    CSSEOF
+    python3 - <<'PYEOF'
+    import hashlib, json, markdown
+    PAGE = """<!doctype html>
+    <html lang="en"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{title}</title>
+    <link rel="stylesheet" href="style.css"></head><body>
+    <main>
+    {body}
+    </main>
+    <footer>Plain-language rebuilds of official FDA Medication Guide text
+    (reformulation only; provenance-joined). Not medical advice. Generated by a
+    falsification loop whose evidence page states its own limits.</footer>
+    </body></html>"""
+    drugs = [d["slug"] for d in json.load(open("run/drugs.json"))]
+    rows = []
+    for d in drugs:
+        digest = hashlib.sha256(open("frozen/%s.md" % d, "rb").read()).hexdigest()
+        body = markdown.markdown(open("frozen/%s.md" % d, encoding="utf-8").read(),
+                                 extensions=["extra"])
+        open("site/%s.html" % d, "w", encoding="utf-8").write(
+            PAGE.format(title="Plain-language guide: %s" % d, body=body))
+        rows.append((d, digest))
+    ev = markdown.markdown(open("site/evidence.md", encoding="utf-8").read(), extensions=["extra"])
+    open("site/evidence.html", "w", encoding="utf-8").write(
+        PAGE.format(title="Evidence — what was tested", body=ev))
+    links = "\n".join(
+        '<li><a href="{d}.html">{d} — plain-language guide (comprehension aid)</a> '
+        '(frozen digest <span class="digest">{g}</span>) &middot; '
+        '<a href="downloads/{d}-onepager.pdf">printable one-pager (PDF)</a></li>'.format(d=d, g=g)
+        for d, g in rows)
+    index_body = (
+        "<h1>The Plain-Language Dispensary</h1>\n<p>Comprehension aids for FDA Medication "
+        "Guides, rebuilt in plain language and falsified by unprimed reader panels. These "
+        "guides <strong>accompany — do not replace</strong> the federally required Medication "
+        "Guide your pharmacy must hand you.</p>\n<ul>\n" + links + "\n</ul>\n"
+        "<p><a href=\"evidence.html\">What was tested, on which drugs, by which reader "
+        "families, in which rounds — the evidence page</a></p>")
+    open("site/index.html", "w", encoding="utf-8").write(
+        PAGE.format(title="The Plain-Language Dispensary", body=index_body))
+    PYEOF
+    for PDF in dist/*-onepager.pdf; do cp "$PDF" site/downloads/; done
+    echo "M13 SITE BUILT"
+    SHEOF
+
+    # ── scripts/deploy.sh — M13: the ONE heralded external effect, FENCED ───────
+    # Revision: the force-push is fenced (a foreign gh-pages HEAD refuses — our
+    # own prior deploys carry the marker commit subject and may be replaced);
+    # the Pages configuration is VERIFIED after configuration, not swallowed
+    # with || true; the Pages poll allows 20 minutes (TLS/DNS provisioning on a
+    # new repo is routinely slower than the old 5-minute tripwire).
+    cat > scripts/deploy.sh <<'SHEOF'
+    #!/usr/bin/env bash
+    set -euo pipefail
+    OWNER=$(python3 -c 'import json;print(json.load(open("run/deployment.json"))["github_owner"])')
+    REPO=$(python3 -c 'import json;print(json.load(open("run/deployment.json"))["repo_name"])')
+    URL=$(python3 -c 'import json;print(json.load(open("run/deployment.json"))["site_url"])')
+    cd site
+    if [ ! -d .git ]; then git init -q -b gh-pages; fi
+    git add -A
+    git -c user.name="plain-language-dispensary" -c user.email="noreply@example.invalid" \
+        commit -q -m "deploy: frozen digest build" || true
+    gh repo view "$OWNER/$REPO" >/dev/null 2>&1 || gh repo create "$OWNER/$REPO" --public >/dev/null
+    git remote add origin "https://github.com/$OWNER/$REPO.git" 2>/dev/null || true
+    # ── The fence: refuse to overwrite work that is not ours ──────────────────
+    git fetch -q origin gh-pages || true
+    if git rev-parse --verify -q origin/gh-pages >/dev/null 2>&1; then
+      MSG=$(git log -1 --format=%s origin/gh-pages)
+      case "$MSG" in
+        *"frozen digest build"*|*plsd*) : ;;
+        *) echo "DEPLOY REFUSED: origin/gh-pages holds foreign work ('$MSG') — not force-pushing over it"; exit 1 ;;
+      esac
+    fi
+    git push -q -f origin gh-pages
+    cd ..
+    # ── Pages config: attempted, then VERIFIED (never swallowed) ──────────────
+    if ! gh api "repos/$OWNER/$REPO/pages" >/dev/null 2>&1; then
+      gh api "repos/$OWNER/$REPO/pages" -X POST -f source[branch]=gh-pages -f source[path]=/ >/dev/null \
+        || { echo "DEPLOY FAIL: enabling Pages refused"; exit 1; }
+    fi
+    gh api "repos/$OWNER/$REPO/pages" --jq .html_url >/dev/null 2>&1 \
+      || { echo "DEPLOY FAIL: Pages configuration not verifiable"; exit 1; }
+    ok=0
+    for i in $(seq 1 120); do
+      if curl -fsS --max-time 15 "$URL" >/dev/null 2>&1; then ok=1; break; fi
+      sleep 10
+    done
+    [ "$ok" -eq 1 ] || { echo "DEPLOY FAIL: $URL not serving after 20 minutes"; exit 1; }
+    SHA=$(cd site && git rev-parse HEAD)
+    python3 - "$URL" "$SHA" "$OWNER/$REPO" <<'PYEOF'
+    import json, sys
+    cfg = json.load(open("run/deployment.json"))
+    cfg["deployed_url"], cfg["deployed_sha"], cfg["deployed_repo"] = sys.argv[1], sys.argv[2], sys.argv[3]
+    json.dump(cfg, open("run/deployment.json", "w"), indent=2, sort_keys=True)
+    PYEOF
+    echo "M13 DEPLOYED: $URL"
+    SHEOF
+
+    # ── scripts/linkcheck.py — internal link integrity, in the venv ────────────
+    # Replaces system linkchecker: same-host links only, so an external 404
+    # (fda.gov, dailymed) can never fail a published run (review-3).
+    cat > scripts/linkcheck.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """linkcheck.py <base-url> — every same-host link on every page serves."""
+    import json, re, sys, urllib.parse, urllib.request
+
+    def check(base):
+        drugs = [d["slug"] for d in json.load(open("run/drugs.json"))]
+        pages = ["index.html", "evidence.html"] + ["%s.html" % d for d in drugs]
+        problems, seen = [], set()
+        for page in pages:
+            url = base.rstrip("/") + "/" + page
+            try:
+                html = urllib.request.urlopen(url, timeout=60).read().decode("utf-8", "replace")
+            except Exception as e:
+                problems.append("%s unreachable: %s" % (page, e)); continue
+            for m in re.finditer(r'(?:href|src)="([^"]+)"', html):
+                target = urllib.parse.urljoin(url, m.group(1))
+                t = urllib.parse.urlparse(target)
+                if t.netloc != urllib.parse.urlparse(base).netloc:
+                    continue
+                if target in seen:
+                    continue
+                seen.add(target)
+                try:
+                    code = urllib.request.urlopen(urllib.request.Request(
+                        target, method="HEAD"), timeout=60).getcode()
+                    if code is not None and code >= 400:
+                        problems.append("%s -> %s HTTP %s" % (page, target, code))
+                except Exception as e:
+                    problems.append("%s -> %s failed: %s" % (page, target, e))
+        for p in problems:
+            print("LINKCHECK REFUSED: %s" % p)
+        print("LINKCHECK %s: %d internal links on %d pages" % ("PASS" if not problems else "FAIL", len(seen), len(pages)))
+        return 1 if problems else 0
+
+    if __name__ == "__main__":
+        sys.exit(check(sys.argv[1]))
+    PYEOF
+
+    # ── scripts/served-content.py — EXACT join: deploy drift cannot survive ────
+    # Revision replaces the 0.85 similarity heuristic (15% drift on medical
+    # text is not proof of anything) with normalized-content EQUALITY: the
+    # served page's <main> text must equal the frozen markdown's normalized
+    # text, byte for byte, in both directions.
+    cat > scripts/served-content.py <<'PYEOF'
+    #!/usr/bin/env python3
+    """served-content.py <base-url> — served <main> text == normalized frozen md."""
+    import difflib, hashlib, html as htmllib, json, re, sys, urllib.request
+
+    def norm_md(text):
+        out = []
+        for ln in text.splitlines():
+            s = ln.strip()
+            if s.startswith("## "):
+                s = s[3:]
+            elif s.startswith("# "):
+                s = s[2:]
+            elif s.startswith("- "):
+                s = s[2:]
+            s = s.replace("**", "")
+            if s:
+                out.append(s)
+        return re.sub(r"\s+", " ", " ".join(out)).strip()
+
+    def norm_main(page_html):
+        m = re.search(r"(?is)<main[^>]*>(.*?)</main>", page_html)
+        t = m.group(1) if m else page_html
+        t = re.sub(r"<[^>]+>", " ", t)
+        return re.sub(r"\s+", " ", htmllib.unescape(t)).strip()
+
+    def main():
+        base = sys.argv[1].rstrip("/")
+        drugs = [d["slug"] for d in json.load(open("run/drugs.json"))]
+        ok = True
+        for drug in drugs:
+            frozen = norm_md(open("frozen/%s.md" % drug, encoding="utf-8").read())
+            served = norm_main(urllib.request.urlopen("%s/%s.html" % (base, drug),
+                                                      timeout=60).read().decode("utf-8", "replace"))
+            fh, sh = hashlib.sha256(frozen.encode()).hexdigest(), hashlib.sha256(served.encode()).hexdigest()
+            if fh == sh:
+                print("SERVED-CONTENT PASS: %s.html exact (sha256 %s)" % (drug, fh[:16]))
+            else:
+                ok = False
+                delta = next(difflib.unified_diff(frozen.split(), served.split(), lineterm=""), None)
+                print("SERVED-CONTENT REFUSED: %s.html normalized content differs from frozen (first delta: %r)"
+                      % (drug, delta))
+        return 0 if ok else 1
+
+    if __name__ == "__main__":
+        sys.exit(main())
+    PYEOF
+
+    # ── scripts/live-gate.sh — M14: every check, against the DEPLOYED artifact ──
+    # Revision replays the omitted checks too (review-2's list): rubric schema,
+    # frozen provenance joins, readability determinism AND gate, per-round
+    # coder determinism, PDF checks, panel gate, and all six negative
+    # controls — alongside the digests, the narrow priming grep, claim
+    # arithmetic, the rendered citation gate, WCAG2AA, the internal link
+    # check, and the EXACT served-content join. Then the terminator swaps.
+    cat > scripts/live-gate.sh <<'SHEOF'
+    #!/usr/bin/env bash
+    # Gas-Free discipline: yesterday's check authorizes nothing. Every gate
+    # re-runs in THIS run against the LIVE URL; then the chain terminator swaps.
+    set -euo pipefail
+    URL=$(python3 -c 'import json;print(json.load(open("run/deployment.json"))["deployed_url"])')
+    G=$(python3 -c 'import json;print(json.load(open("run/deployment.json"))["grade_target"])')
+    test -n "$URL" || { echo "LIVE GATE REFUSED: no deployed_url"; exit 1; }
+    DRUGS=$(python3 -c 'import json;print(" ".join(d["slug"] for d in json.load(open("run/drugs.json"))))')
+    echo "[live-gate] 1/14 registration + freeze digests"
+    sha256sum -c rubric.sha256
+    sha256sum -c frozen.sha256
+    echo "[live-gate] 2/14 rubric schema + thresholds gate replayed"
+    .venv/bin/python scripts/rubric-gate.py
+    echo "[live-gate] 3/14 provenance joins replayed on the FROZEN bytes"
+    for D in $DRUGS; do
+      .venv/bin/python scripts/provenance-join.py "$D" "frozen/$D.md" "frozen/$D.yaml"
+    done
+    echo "[live-gate] 4/14 readability determinism + bounds + grade gate on frozen bytes"
+    FROZEN_FILES=$(for D in $DRUGS; do printf 'frozen/%s.md ' "$D"; done)
+    .venv/bin/python scripts/readability.py --determinism --files $FROZEN_FILES
+    .venv/bin/python scripts/readability.py --gate "$G" --files $FROZEN_FILES
+    echo "[live-gate] 5/14 note-coder determinism replayed for EVERY executed round"
+    for E in evidence/round-*.json; do
+      R=${E#evidence/round-}; R=${R%.json}
+      .venv/bin/python scripts/notes.py --check "$R"
+    done
+    echo "[live-gate] 6/14 one-pager PDFs re-checked (pages, text, footer, digest)"
+    for D in $DRUGS; do
+      D="$D" .venv/bin/python scripts/pdfcheck.py
+    done
+    echo "[live-gate] 7/14 panel family-inequality gate replayed"
+    .venv/bin/python scripts/panel-manifest.py
+    echo "[live-gate] 8/14 all six negative controls re-run"
+    bash scripts/negative-controls.sh
+    echo "[live-gate] 9/14 priming gate (narrow, path-shaped) replayed over ALL rounds' cards"
+    if grep -rqE 'rubric\.yaml|provenance|self-assessment|thresholds\.yaml|battery/|verdict\.json|self-chain|panel-manifest|reader-arms|claims\.jsonl|notes\.py|answer_patterns|spl_medguide|pin-meta' cards/; then
+      echo "LIVE GATE REFUSED: a card references an intent instrument"; exit 1
+    fi
+    echo "[live-gate] 10/14 claim arithmetic + window reclassification"
+    .venv/bin/python scripts/claims-join.py --verify
+    echo "[live-gate] 11/14 citation + quantifier + numeric-sentence gate on the PUBLISHED evidence page"
+    .venv/bin/python scripts/citation-gate.py --rendered
+    echo "[live-gate] 12/14 accessibility (WCAG 2 AA) on every served page"
+    for p in index evidence $DRUGS; do
+      ./node_modules/.bin/pa11y --config run/pa11y-config.json --standard WCAG2AA "$URL/$p.html" >/dev/null
+    done
+    echo "[live-gate] 13/14 internal link integrity on the live site"
+    .venv/bin/python scripts/linkcheck.py "$URL"
+    echo "[live-gate] 14/14 served-content EXACT join: the deployment serves the frozen bytes"
+    .venv/bin/python scripts/served-content.py "$URL"
+    bash scripts/chain-terminate.sh
+    echo "M14 LIVE GATE PASS"
+    SHEOF
+
+    # ── scripts/chain-terminate.sh — the deterministic end of the concert ───────
+    cat > scripts/chain-terminate.sh <<'SHEOF'
+    #!/usr/bin/env bash
+    # Live gate green => swap self-chain.yaml for a VALIDATED one-sheet
+    # terminator. Atomic; a failed validation leaves the chain intact (loud).
+    set -euo pipefail
+    test -f done.stamp
+    TMP="run/.terminator-candidate.yaml"
+    cat > "$TMP" <<'TEOF'
+    name: plsd-chain-terminator
+    description: "Terminal no-op: the Plain-Language Dispensary concert ended by design."
+    instrument: cli
+    instrument_fallbacks: []
+    sheet:
+      size: 1
+      total_items: 1
+      skip_when:
+        1:
+          command: 'test -f "{{ '{{' }} workspace {{ '}}' }}/.chain-terminated"'
+          description: "Already terminated"
+          timeout_seconds: 30
+    prompt:
+      template: |
+        set -euo pipefail
+        cd "{{ '{{' }} workspace {{ '}}' }}"
+        printf 'The Plain-Language Dispensary converged and delivered; chain terminated by design.\n' > .chain-terminated
+    validations:
+      - type: file_exists
+        path: "{{ '{{' }} workspace {{ '}}' }}/.chain-terminated"
+        description: "Termination marker written"
+    TEOF
+    mzt validate "$TMP" && mv "$TMP" self-chain.yaml || {
+      echo "TERMINATOR REFUSED: candidate failed validation — chain left intact"; exit 1; }
+    touch run/.terminator-swapped
+    echo "CHAIN TERMINATOR INSTALLED"
+    SHEOF
+
+    {% elif stage == 2 %}
+    {{ strict() }}
+    # ── Movement 2 · Pin Official Bytes (M1) — The Validity Window, wired ───────
+    # Fetched ONCE, hash-pinned (bytes + source identity); from here on,
+    # upstream drift is harmless to correctness. The sentinel refuses a JSON
+    # error envelope posing as a doc. The drug list comes from variables —
+    # one source, zero hardcoded slugs.
+    {% for d in drugs.values() %}
+    bash scripts/fetch-pin.sh {{ d.slug }} '{{ d.query }}'
+    {% endfor %}
+    sha256sum official/*.md run/pin-meta.json > pins.sha256
+    sha256sum -c pins.sha256
+    echo "M1 PINNED"
+    {% elif stage == 3 %}
+    {{ strict() }}
+    # ── Movement 3 · Pre-Register (M2) — the authored-intent seam ───────────────
+    # You are authoring the EXPERIMENT: the battery, the machine-gradable rubric,
+    # and the thresholds. This is deliberately maker-side work — the product is
+    # exactly the document readers must never see, and the priming gate exists
+    # downstream to guard it. Machine gradability is a design constraint, not a
+    # hope: answers must be gradeable by regex against answer_patterns, and a
+    # pattern that cannot compile or match refuses HERE, cheaply, before any
+    # reader runs.
+    {{ ai_ground_rules() }}
+
+    Read the pinned official Medication Guides delivered with this sheet. Author
+    TWO files in {{ workspace }}:
+
+    1. `rubric.yaml` — schema, one key per pinned drug (the drug set must EQUAL
+       the pinned set exactly):
+       - `sections:` a map of canonical section id -> regex that matches that
+         section's heading AS PRINTED in the official text (e.g.
+         missed-dose: "(?i)miss(ed)?\\s+dose"). Cover at least: missed-dose,
+         food-or-lifestyle, emergency-signs, how-to-take.
+       - `tasks:` a list, per drug, of at least 4 tasks:
+         - id 0 = calibration ("What is the name of the medicine this sheet is
+           about?") with answer_patterns matching the drug name;
+         - ids 1-3 = the battery: missed-dose timing ("You forgot this
+           morning's dose — when do you take your next dose?"), a food change
+           ("Name one food or drink you would change after reading this"),
+           and the ER symptom ("What symptom sends you to the emergency room
+           tonight?").
+         - EVERY task carries: question, section (a canonical id from the map,
+           where the task's answer lives), anchor (a regex that MATCHES the
+           official text at that point — the gate greps it), answer_patterns
+           (a non-empty list of regexes; an answer matching any one grades
+           correct). Design patterns so a correct extraction matches and a
+           plausible wrong answer does not (time bounds, named symptoms).
+         - If a task cannot be graded deterministically, restructure it until
+           it can.
+
+    2. `thresholds.yaml` — keys (the gate range-checks each):
+       density_threshold ({{ density_threshold }}), corroboration_min
+       ({{ corroboration_min }}), max_rounds ({{ max_rounds }}), grade_target
+       ({{ grade_target }}), quorum_min ({{ quorum_min }}).
+
+    Then run the gates — both must PASS before you finish:
+        .venv/bin/python scripts/rubric-gate.py --emit-battery
+        sha256sum rubric.yaml thresholds.yaml > rubric.sha256
+        sha256sum -c rubric.sha256
+
+    The rubric hash is the registration: note-code digest-checks it every round,
+    so post-hoc drift becomes a visible mismatch.
+    {% elif stage == 4 %}
+    {{ strict() }}
+    # ── Movement 4 · Baseline Readability (M3) — the measured problem ───────────
+    FROZEN_LIST=$(python3 -c 'import json;print(" ".join("official/%s.md" % d["slug"] for d in json.load(open("run/drugs.json"))))')
+    .venv/bin/python scripts/readability.py --out readability-official.json \
+      --determinism --files $FROZEN_LIST
+    echo "M3 MEASURED"
+    {% elif stage == 5 %}
+    {{ strict() }}
+    # ── Movement 5 · Assemble: the Rebuild (M4) — maker arm + blind-spot ────────
+    # You are the MAKER. You may see the rubric (makers are primed by
+    # definition). Reformulation ONLY: every bullet you write must be a
+    # plain-language rendering of something the official text already says,
+    # and your provenance map must prove it by anchor. FORMAT IS LOAD-BEARING:
+    # headings and bullets ONLY — the provenance gate REFUSES any other
+    # content line, so unanchored prose physically cannot pass.
+    {{ ai_ground_rules() }}
+
+    Your drug: {{ drugs[instance].label }} ({{ drugs[instance].slug }}).
+    Write THREE artifacts for {{ drugs[instance].slug }}:
+
+    1. `rebuilt/{{ drugs[instance].slug }}.md` — the plain-language guide:
+       - Sections as `## <canonical-id>: <short title>` using the canonical ids
+         of the rubric section map for the sections you keep (you may add
+         ids of your own beyond the map, but every section needs provenance).
+       - Bullets only under sections: `- <one plain-language sentence>`. No
+         paragraphs, no blockquotes, no preamble above the first `## `.
+       - Second person, short declarative sentences, imperative where safety is
+         time-critical ("Call 911 if ..." stays imperative). Target grade ≤
+         {{ grade_target }} (Flesch-Kincaid) — the gate refuses above it.
+       - {{ accompany_clause() }}
+
+    2. `provenance/{{ drugs[instance].slug }}.yaml` — for EVERY section, the
+       bullet list in order, each entry `{anchor: <regex>}` matching the
+       official passage the bullet reformulates. An anchor that does not match
+       the official text REFUSES the gate — that is the no-new-claims
+       arithmetic. Cover every bullet exactly once.
+
+    3. `self-assessment/{{ drugs[instance].slug }}.yaml` — your OWN predicted
+       clarity per section (this is the fluency-blind-spot instrument — it is
+       DELIBERATELY primed; answer as the maker, not as a naive reader):
+       - `predicted_clarity:` map canonical-id -> integer 1..5 (5 = crystal
+         clear), covering EVERY section you wrote;
+       - `own_answers:` map task-id -> your one-line answer to each battery
+         task (1..3) for your rebuilt guide. Both halves are gate-checked and
+         both are joined downstream — an empty answer here refuses.
+
+    Then run, in order, and all must PASS:
+        D={{ drugs[instance].slug }}
+        .venv/bin/python scripts/provenance-join.py "$D"
+        .venv/bin/python scripts/readability.py --gate {{ grade_target }} --files "rebuilt/$D.md"
+        .venv/bin/python scripts/assess-gate.py "$D"
+        bash scripts/stage-delivery.sh "$D"
+        touch ".assembled-$D"
+    {% elif stage == 6 %}
+    {{ strict() }}
+    # ── Movement 6 · Panel Manifest (M5) — Condorcet's Premise, wired ───────────
+    # Parses the STAGED SCORE COPY: the panel's composition is asserted from the
+    # configuration actually running — a delivery fact, not a belief — and the
+    # inequality is enforced PER drug×arm condition.
+    .venv/bin/python scripts/panel-manifest.py
+    test -s reader-arms.txt
+    test -s panel-manifest.yaml
+    echo "M5 MANIFESTED"
+    {% elif stage == 7 %}
+    # ── Movement 7 · Read-Cold (M6) — THE EXPERIMENT ────────────────────────────
+    # No prelude exists in this score. This body is the reader's ENTIRE world
+    # besides the one handed document (attached after this body as a required
+    # cadenza) and the task list. Anything intent-shaped that reaches this
+    # prompt is a priming leak the M14 gate will catch.
+    You are taking part in a reading study. You have been handed ONE document
+    (it is attached at the end of this sheet). A short task list for your
+    document is at:
+
+        {{ workspace }}/battery/{{ readers[instance].drug }}.md
+
+    Read the task list. Do every task using ONLY the handed document. The only
+    other files you may read are {{ workspace }}/run/round.txt and
+    {{ workspace }}/run/run-nonce.txt (each holds one token).
+
+    Write your reaction card with these exact commands, then APPEND your
+    answers to it:
+
+        R=$(cat {{ workspace }}/run/round.txt)
+        N=$(cat {{ workspace }}/run/run-nonce.txt)
+        CARD={{ workspace }}/cards/{{ readers[instance].drug }}/{{ readers[instance].arm }}/r$R/card-{{ instance }}.md
+        mkdir -p "$(dirname "$CARD")"
+        printf 'run: %s\n' "$N" > "$CARD"
+
+    Append to $CARD, in exactly this order (one line each):
+
+        medicine: <one line — your answer to task 0 (calibration)>
+        answer-1: <one sentence>
+        answer-2: <one sentence>
+        answer-3: <one sentence>
+        sections:
+        section: <a section heading from the document, copied as printed> | <confusion|misread|dead-zone|correct> | <what happened, one line>
+
+    Repeat the `section:` line once for every section you actually used or
+    struggled with, using one of the four types. All three answer lines are
+    required — write "not stated" if the document does not say.
+
+    Rules:
+    - Answer from the handed document alone. If it does not say, write exactly: not stated.
+    - Do not read any other file.
+    - Do not polish. Your honest first-pass experience — hesitation, wrong
+      turns, attention dying — is the data.
+    {% elif stage == 8 %}
+    {{ strict() }}
+    # ── Movement 8 · Note-Code (M7) — cards become located evidence ─────────────
+    # The coder re-checks the registration digest (post-hoc rubric drift is a
+    # visible mismatch), joins every card to this run's nonce and the manifest
+    # (bijection — misfiled or duplicate cards refuse), enforces the
+    # per-condition quorum with absent readers typed and declared, and proves
+    # its own determinism by re-running byte-identical. No LLM grades clarity
+    # here — this is the pattern's second enforcement seam.
+    .venv/bin/python scripts/notes.py
+    .venv/bin/python scripts/notes.py --check
+    echo "M7 CODED"
+    {% elif stage == 9 %}
+    {{ strict() }}
+    # ── Movement 9 · Verdict (M8) — Rehearsal Spotlight ─────────────────────────
+    # WHETHER to recut was threshold arithmetic at M7 — and the apply script
+    # ENFORCES it: `done` while flags remain is refused, and your recut set
+    # must EQUAL the deterministic flag set exactly. You decide only HOW. You
+    # are family B, deliberately not the maker's family; you are explicitly
+    # NOT the lock authority.
+    {{ ai_ground_rules() }}
+
+    R=$(cat run/round.txt)
+    Read run/verdict-input-r$R.json. Two lawful outcomes:
+
+    A) flagged is EMPTY, or round $R is at max_rounds: author verdict.json:
+           {"decision": "done", "reason": "quiet" | "exhausted", "per_drug": {}}
+       A quiet screening is a green verdict. Exhaustion is a publishable
+       result — never stretch for one more round. (If flags remain at the
+       bound, the reason MUST be "exhausted".)
+
+    B) flagged is NON-empty and $R is below max_rounds: for each drug with
+       flagged sections, recut ONLY those sections:
+       - Copy rebuilt/<slug>.md to rebuilt/<slug>.new.md AND
+         provenance/<slug>.yaml to provenance/<slug>.new.yaml, then edit ONLY
+         the flagged sections in the .new files. Unflagged sections, their
+         headings, and their anchors must remain byte-identical (the apply
+         script diffs both and refuses).
+       - Update the flagged sections' anchors in the .new.yaml so every
+         changed bullet still maps to a real official anchor (reformulation
+         only — zero new medical claims).
+       - Address the located evidence: the flagged sections carry reader
+         misreadings; rewrite so the misread instruction becomes un-missable
+         (structure, order, imperative force — not extra claims).
+       - Author verdict.json with per_drug flagged lists that EQUAL the
+         verdict-input flags exactly:
+           {"decision": "recut", "per_drug": {"<slug>": {"flagged": ["<section-id>", ...]}}}
+
+    Then run the deterministic applier (it owns everything consequential):
+        .venv/bin/python scripts/verdict-apply.py
+
+    If it refuses, fix YOUR work per its message and re-run. Never edit
+    stamps, round.txt, or gates directly.
+    {% elif stage == 10 %}
+    {{ strict() }}
+    # ── Movement 10 · Lock (M9) — The Freeze's lock half ────────────────────────
+    bash scripts/lock.sh
+    sha256sum -c frozen.sha256
+    echo "M9 VERIFIED"
+    {% elif stage == 11 %}
+    {{ strict() }}
+    # ── Movement 11 · One-Pagers (M10) — finishing against the digest ───────────
+    D=$(sed -n "{{ instance }}p" run/drug-order.txt)
+    .venv/bin/python scripts/build-onepager.py "$D"
+    {% elif stage == 12 %}
+    {{ strict() }}
+    # ── Movement 12 · Claims Ledger (M11) — The Declared Window, arithmetic ─────
+    # The ledger PRECEDES the site build (the circularity fix). The six
+    # negative controls run here: gate teeth are proven before any published
+    # number exists.
+    .venv/bin/python scripts/claims-join.py
+    bash scripts/negative-controls.sh
+    test -s claims.jsonl -a -s window-manifest.yaml -a -s claims-summary.json
+    echo "M11 LEDGERED"
+    {% elif stage == 13 %}
+    {{ strict() }}
+    # ── Movement 13 · Evidence Prose (M12) — bounded synthesis ──────────────────
+    # Every number you may use arrives in the files delivered with this sheet
+    # (claims.jsonl, evidence-final.json, both readability measurements) —
+    # machine-rendered, read-only. You arrange; you never originate a number.
+    {{ ai_ground_rules() }}
+    {{ window_clause() }}
+
+    Write {{ workspace }}/site/evidence.md — the page a skeptic AND a pharmacist
+    can read. Required sections, exactly these headings:
+
+    ## What was tested
+    ## Results (two arms, per drug, per task)
+    ## Readability, measured
+    ## The maker's blind spot, measured
+    ## Limits of this evidence
+
+    Rules:
+    - Cite every claim inline by its ledger ID as [CL-001] style. The citation
+      gate refuses any uncited ledger row — and any SENTENCE containing a
+      number that lacks a same-sentence [CL-] citation. Numbers live only in
+      cited sentences.
+    - EVERY sentence with a global quantifier (all readers, patients will,
+      everyone, always, never, any patient, clear for, most readers, proved,
+      improved...) must carry its window in the same sentence: which N, which
+      families, which round. "Patients will understand this guide." FAILS.
+    - Declare the absent readers per round (the evidence file lists them) and
+      the unmapped-section event count — partial failure is declared, never
+      hidden.
+    - State the simulated-reader limit plainly in Limits. State the refused
+      claims (behavior/outcome, generalization, human subjects, exact
+      semantic preservation) as refused.
+    - Include the table of rounds executed and what each recut changed.
+
+    Then run: .venv/bin/python scripts/citation-gate.py
+    {% elif stage == 14 %}
+    {{ strict() }}
+    # ── Movement 14 · Site Build + Deploy (M13) — the heralded external effect ──
+    bash scripts/build-site.sh
+    bash scripts/deploy.sh
+    echo "M13 PUBLISHED"
+    {% elif stage == 15 %}
+    {{ strict() }}
+    # ── Movement 15 · Live Gate (M14) — same-run proof on deployed bytes ────────
+    # Verification that stops at the local copy leaves exactly the failure
+    # mode (deploy drift) this seam exists to catch. Every check re-runs
+    # against the LIVE URL; on green, the chain terminator installs.
+    bash scripts/live-gate.sh
+    test -f run/.terminator-swapped
+    echo "M14 LIVE"
+    {% endif %}
+
+# ═══ Validations — staged fail-fast (Commissioning Cascade): stage 1 coarse, ═══
+# stage 2 structure/joins, stage 3 behavior. Every rule proves an OUTCOME; the
+# litmus ("can the agent pass this without achieving the goal?") was applied
+# per movement, and the reviews' findings closed the holes they named: the
+# card's run-nonce + full answer set, the quorum report, the verdict's
+# evidence join, the extended freeze coverage, the six negative controls, and
+# the two corrected M13 Python expressions. Fan-out movements resolve
+# per-instance paths through the movement-1 helpers (card-path.sh,
+# drug-order.txt) — the manifest and the odometer are the single sources,
+# never duplicated arithmetic.
+
+validations:
+  # ── M0 · The Tool Chain ──────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'test -f "{workspace}/.commissioned"'
+    condition: "stage == 1"
+    stage: 1
+    description: "M0: tool chain commissioned (probes passed loudly — gh owner match, browser launch, model present)"
+  - type: command_succeeds
+    command: 'test -s "{workspace}/self-chain.yaml" -a -x "{workspace}/scripts/notes.py" -a -x "{workspace}/scripts/live-gate.sh" -a -x "{workspace}/scripts/verdict-apply.py" -a -x "{workspace}/scripts/assess-gate.py" -a -x "{workspace}/scripts/build-onepager.py"'
+    condition: "stage == 1"
+    stage: 2
+    description: "M0: staged chain copy + the contract scripts exist"
+  - type: command_succeeds
+    command: 'test -x "{workspace}/.venv/bin/python" -a -d "{workspace}/node_modules/.bin" -a -s "{workspace}/run/drugs.json" -a -s "{workspace}/run/run-nonce.txt"'
+    condition: "stage == 1"
+    stage: 2
+    description: "M0: venv + pa11y + the single drug source + the run nonce materialized"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && .venv/bin/pip freeze | diff -q - run/deps-lock.txt >/dev/null'
+    condition: "stage == 1"
+    stage: 3
+    description: "M0: dependency lock holds (a write-time record; drift is a visible mismatch)"
+  # ── M1 · Pin Official Bytes ──────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && sha256sum -c pins.sha256'
+    condition: "stage == 2"
+    stage: 1
+    description: "M1: pinned official bytes + source identity verify"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && for D in $(cat run/drug-order.txt); do grep -qi "medication guide" "official/$D.md" || exit 1; grep -qi "$D" "official/$D.md" || exit 1; done'
+    condition: "stage == 2"
+    stage: 2
+    description: "M1: sentinel — each pinned file is a Medication Guide naming its drug, not an error envelope"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && for D in $(cat run/drug-order.txt); do python3 -c "import json,sys; m=json.load(open(\"run/pin-meta.json\")); d=sys.argv[1]; sys.exit(0 if m.get(d,{}).get(\"source\") else 1)" "$D" || exit 1; done'
+    condition: "stage == 2"
+    stage: 2
+    description: "M1: source identity recorded per drug under the pin digest (Validity Window)"
+  # ── M2 · Pre-Register ────────────────────────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/rubric.yaml"
+    condition: "stage == 3"
+    stage: 1
+    description: "M2: rubric authored"
+  - type: file_exists
+    path: "{workspace}/thresholds.yaml"
+    condition: "stage == 3"
+    stage: 1
+    description: "M2: thresholds authored (pre-registered)"
+  - type: content_contains
+    path: "{workspace}/rubric.yaml"
+    pattern: "answer_patterns"
+    condition: "stage == 3"
+    stage: 2
+    description: "M2: machine-gradable patterns present"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && sha256sum -c rubric.sha256 && .venv/bin/python scripts/rubric-gate.py --emit-battery'
+    condition: "stage == 3"
+    stage: 3
+    description: "M2: registration hash holds AND schema gate passes (anchors grep-able, drug set == pinned set, thresholds in range)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && for D in $(cat run/drug-order.txt); do test -s "battery/$D.md" || exit 1; done'
+    condition: "stage == 3"
+    stage: 3
+    description: "M2: battery extracted per drug (questions only — keys never left the rubric)"
+  # ── M3 · Baseline Readability ────────────────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/readability-official.json"
+    condition: "stage == 4"
+    stage: 1
+    description: "M3: baseline measured"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && .venv/bin/python scripts/readability.py --determinism --files $(echo official/*.md)'
+    condition: "stage == 4"
+    stage: 2
+    description: "M3: determinism replay + bounds (the problem statement, re-derivable)"
+  # ── M4 · Assemble (per drug, by instance) ────────────────────────────────────
+  - type: command_succeeds
+    command: 'D=$(sed -n "{instance}p" "{workspace}/run/drug-order.txt"); test -s "{workspace}/rebuilt/$D.md" -a -s "{workspace}/provenance/$D.yaml" -a -s "{workspace}/self-assessment/$D.yaml"'
+    condition: "stage == 5"
+    stage: 1
+    description: "M4: rebuild + provenance + the primed self-assessment exist"
+  - type: command_succeeds
+    command: 'D=$(sed -n "{instance}p" "{workspace}/run/drug-order.txt"); cd "{workspace}" && .venv/bin/python scripts/assess-gate.py "$D"'
+    condition: "stage == 5"
+    stage: 2
+    description: "M4: the blind-spot instrument is COMPLETE (every section covered 1-5, all battery answers present)"
+  - type: command_succeeds
+    command: 'D=$(sed -n "{instance}p" "{workspace}/run/drug-order.txt"); cd "{workspace}" && .venv/bin/python scripts/provenance-join.py "$D"'
+    condition: "stage == 5"
+    stage: 3
+    description: "M4: strict-format reformulation-only provenance join passes (every bullet maps to official text; no prose escapes)"
+  - type: command_succeeds
+    command: 'D=$(sed -n "{instance}p" "{workspace}/run/drug-order.txt"); cd "{workspace}" && G=$(python3 -c "import json;print(json.load(open(\"run/deployment.json\"))[\"grade_target\"])") && .venv/bin/python scripts/readability.py --gate "$G" --files "rebuilt/$D.md"'
+    condition: "stage == 5"
+    stage: 3
+    description: "M4: rebuild meets the grade target"
+  - type: command_succeeds
+    command: 'D=$(sed -n "{instance}p" "{workspace}/run/drug-order.txt"); test -f "{workspace}/.assembled-$D"'
+    condition: "stage == 5"
+    stage: 3
+    description: "M4: delivery staged for this drug's readers"
+  # ── M5 · Panel Manifest ──────────────────────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/panel-manifest.yaml"
+    condition: "stage == 6"
+    stage: 1
+    description: "M5: manifest emitted"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && .venv/bin/python scripts/panel-manifest.py && N=$(.venv/bin/python -c "import yaml;print(yaml.safe_load(open(\"self-chain.yaml\"))[\"sheet\"][\"fan_out\"][7])") && test "$(wc -l < reader-arms.txt)" -eq "$N"'
+    condition: "stage == 6"
+    stage: 2
+    description: "M5: per-condition family-inequality gate re-passes; reader count derived from the staged copy, not hardcoded"
+  # ── M6 · Read-Cold (per reader, by instance) ─────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && test -s "$(bash scripts/card-path.sh {instance})"'
+    condition: "stage == 7"
+    stage: 1
+    description: "M6: this reader's card exists"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && C=$(bash scripts/card-path.sh {instance}) && head -1 "$C" | grep -q "^run: $(cat run/run-nonce.txt)$" && grep -q "^medicine:" "$C" && grep -q "^answer-1:" "$C" && grep -q "^answer-2:" "$C" && grep -q "^answer-3:" "$C" && grep -q "^section:" "$C"'
+    condition: "stage == 7"
+    stage: 2
+    description: "M6: card carries THIS run's nonce + the exact labels + ALL THREE task answers (a silent card cannot pass)"
+  - type: command_succeeds
+    command: '! grep -rqE "rubric\.yaml|provenance|self-assessment|thresholds\.yaml|battery/|verdict\.json|self-chain|panel-manifest|reader-arms|claims\.jsonl|notes\.py|answer_patterns|spl_medguide|pin-meta" "{workspace}/cards"'
+    condition: "stage == 7"
+    stage: 2
+    description: "M6: THE PRIMING GATE — narrow and path-shaped (Immune Checkpoint discipline: a fatal late replay must not fire on ordinary English like 'intent')"
+  # ── M7 · Note-Code ───────────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && test -s "evidence/round-$(cat run/round.txt).json"'
+    condition: "stage == 8"
+    stage: 1
+    description: "M7: this round's evidence file exists"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && .venv/bin/python scripts/notes.py --check'
+    condition: "stage == 8"
+    stage: 2
+    description: "M7: coder determinism (re-run byte-identical) + registration digest + nonce join held"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && .venv/bin/python scripts/notes.py --quorum-report'
+    condition: "stage == 8"
+    stage: 2
+    description: "M7: conservation + per-condition quorum + absent readers typed and declared"
+  # ── M8 · Verdict ─────────────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && test -s verdict.json && ! (test -f done.stamp && test -f recut.stamp)'
+    condition: "stage == 9"
+    stage: 1
+    description: "M8: a verdict exists; exactly one outcome stamp (never both)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && (test -f recut.stamp || (test -f done.stamp && test -s run/final-verdict.json))'
+    condition: "stage == 9"
+    stage: 2
+    description: "M8: recut stamped and odometer advanced, OR done stamped with the final verdict recorded"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && .venv/bin/python scripts/verdict-apply.py --verify'
+    condition: "stage == 9"
+    stage: 3
+    description: "M8: the evidence join held — done was lawful against the flags (or exhausted at the bound) and the applied recut set equals the deterministic flag set"
+  # ── M9 · Lock ────────────────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'test -f "{workspace}/done.stamp"'
+    condition: "stage == 10"
+    stage: 1
+    description: "M9: the chain TERMINATED (never abandoned)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && sha256sum -c frozen.sha256 && test "$(wc -l < frozen.sha256)" -ge 10'
+    condition: "stage == 10"
+    stage: 2
+    description: "M9: the EXTENDED freeze digest verifies and actually covers the claimed surface (>= 10 files: guides, provenance, evidence, registration, manifest, verdict)"
+  - type: file_exists
+    path: "{workspace}/frozen/evidence-final.json"
+    condition: "stage == 10"
+    stage: 2
+    description: "M9: all rounds' evidence frozen with the guides"
+  # ── M10 · One-Pagers (per drug, by instance) ─────────────────────────────────
+  - type: command_succeeds
+    command: 'D=$(sed -n "{instance}p" "{workspace}/run/drug-order.txt"); test -s "{workspace}/dist/$D-onepager.pdf"'
+    condition: "stage == 11"
+    stage: 1
+    description: "M10: the printable one-pager exists"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && D=$(sed -n "{instance}p" run/drug-order.txt) && sha256sum -c frozen.sha256 >/dev/null && D="$D" .venv/bin/python scripts/pdfcheck.py'
+    condition: "stage == 11"
+    stage: 2
+    description: "M10: digest join + page cap + extractable text + the accompany clause + the digest footer (pypdf, no poppler)"
+  # ── M11 · Claims Ledger ──────────────────────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/claims.jsonl"
+    condition: "stage == 12"
+    stage: 1
+    description: "M11: the ledger exists"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && .venv/bin/python scripts/claims-join.py --verify'
+    condition: "stage == 12"
+    stage: 2
+    description: "M11: join arithmetic + independent recompute (over the task-key union) + 2-of-4 window classes all hold"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && test "$(wc -l < claims.jsonl)" -ge 8 && python3 -c "import json; d=json.load(open(\"run/negative-controls.json\")); assert len(d)==6 and all(v[\"passed\"] for v in d.values()), \"gate teeth unproven\""'
+    condition: "stage == 12"
+    stage: 2
+    description: "M11: substantive ledger AND all six negative controls refused their planted violations"
+  # ── M12 · Evidence Prose ─────────────────────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/site/evidence.md"
+    condition: "stage == 13"
+    stage: 1
+    description: "M12: the evidence page draft exists"
+  - type: content_contains
+    path: "{workspace}/site/evidence.md"
+    pattern: "## Limits of this evidence"
+    condition: "stage == 13"
+    stage: 2
+    description: "M12: the limits section exists (the window is visible, not buried)"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && .venv/bin/python scripts/citation-gate.py'
+    condition: "stage == 13"
+    stage: 3
+    description: "M12: every ledger row cited; every quantifier windowed; every numeric sentence carries its citation"
+  # ── M13 · Site Build + Deploy ────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'cd "{workspace}" && test -s site/index.html -a -s site/evidence.html && for D in $(cat run/drug-order.txt); do test -s "site/$D.html" -a -s "site/downloads/$D-onepager.pdf" || exit 1; done'
+    condition: "stage == 14"
+    stage: 1
+    description: "M13: the site is built from frozen bytes (index, evidence, per-drug pages, downloadable PDFs)"
+  - type: command_succeeds
+    command: 'python3 -c "import json; d=json.load(open(\"{workspace}/run/deployment.json\")); assert d.get(\"deployed_url\") and d.get(\"deployed_sha\"), \"no recorded deployment\""'
+    condition: "stage == 14"
+    stage: 2
+    description: "M13: deployment facts recorded (URL + served commit)"
+  - type: command_succeeds
+    command: 'curl -fsS --max-time 30 "$(python3 -c "import json;print(json.load(open(\"{workspace}/run/deployment.json\"))[\"deployed_url\"] + \"/index.html\")")" | grep -qi "plain-language"'
+    condition: "stage == 14"
+    stage: 3
+    description: "M13: the LIVE site serves the index (running-artifact check)"
+  # ── M14 · Live Gate ──────────────────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'bash "{workspace}/scripts/live-gate.sh"'
+    working_directory: "{workspace}"
+    condition: "stage == 15"
+    stage: 2
+    description: "M14: EVERY gate replayed green against the DEPLOYED artifact — digests, rubric gate, frozen provenance joins, readability determinism+gate, per-round coder determinism, PDF checks, panel gate, six negative controls, narrow priming grep, claim arithmetic, rendered citation gate, WCAG2AA, internal links, EXACT served-content join"
+    timeout_seconds: 2400
+  - type: command_succeeds
+    command: 'test -f "{workspace}/run/.terminator-swapped" && grep -q plsd-chain-terminator "{workspace}/self-chain.yaml"'
+    condition: "stage == 15"
+    stage: 3
+    description: "M14: the deterministic chain terminator is installed — the concert ends by design"
