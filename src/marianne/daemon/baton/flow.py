@@ -266,9 +266,11 @@ class FlowEngine:
                 )
                 if evaluate(expr, context):
                     reason = "condition_met"
-            except ExpressionError:
+            except ExpressionError as exc:
                 reason = "condition_error"
                 members[-1].status = SheetStatus.FAILED
+                members[-1].error_message = f"Flow condition {config.until!r}: {exc}"
+                members[-1].error_code = "E999"
         if reason is not None:
             run.phase = "completed"
             run.completed_reason = reason
