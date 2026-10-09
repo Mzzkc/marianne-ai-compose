@@ -1063,16 +1063,23 @@ class JobManager:
         here — nothing else re-reads config or profiles. Steps:
 
         1. Re-read the config file (with the start profile overlay) and the
-           instrument profile directories into temporaries. Any load or
-           validation error is fail-closed: nothing is applied, the running
-           config/registry/caps are untouched, generation does not advance.
+           instrument profile directories into temporaries. A config-file
+           load or validation error is fail-closed: nothing is applied,
+           the running config/registry/caps are untouched, generation
+           does not advance. A profile FILE that exists but fails to
+           load is NOT fail-closed — its previous registry entry and
+           caps are retained and the file is reported in ``declined``
+           with ``partial=True`` (the #397 edit-accident must not
+           silently remove a live instrument).
         2. Build the effective config: fields that cannot change in a
            running conductor keep their running values and are reported in
            ``declined``; everything else is applied in place (resize, never
            replace holding objects — #231 pattern).
-        3. Swap the live registry, invalidate the backend pool (#171
-           semantics: in-flight executions finish on their loaded profile),
-           and atomically replace the per-model cap map — including REMOVAL
+        3. Swap the live registry (fresh profiles ∪ retained previous
+           entries from broken files; a healthy fresh profile always wins
+           the name), invalidate the backend pool (#171 semantics:
+           in-flight executions finish on their loaded profile), and
+           atomically replace the per-model cap map — including REMOVAL
            of entries for profiles that disappeared.
         4. Enqueue a dispatch retry so a raised cap releases waiting sheets
            on the next baton cycle instead of an unrelated event. A lowered
@@ -1087,7 +1094,7 @@ class JobManager:
         Returns:
             The typed reload outcome (also exposed via daemon.status).
         """
-        from marianne.instruments.loader import load_all_profiles
+        from marianne.instruments.loader import load_all_profiles_with_failures
 
         async with self._reload_lock:
             old = self._config
@@ -1111,8 +1118,10 @@ class JobManager:
 
                 new_config = _load_config(config_file, profile=profile)
                 _, org_dir, venue_dir = self.profile_source_paths
-                fresh_profiles = load_all_profiles(
-                    organization_dir=org_dir, venue_dir=venue_dir,
+                fresh_profiles, failed_profiles = (
+                    load_all_profiles_with_failures(
+                        organization_dir=org_dir, venue_dir=venue_dir,
+                    )
                 )
             except Exception as exc:
                 return fail(
@@ -1124,9 +1133,45 @@ class JobManager:
                     ],
                 )
 
+            # ── Broken profile files: keep previous entries (P1, #397) ──
+            # A source file that exists but failed to load must not
+            # silently remove its live registry entry and cap keys. Merge
+            # key is the profile's recorded _source_path — never the
+            # name — so legal name overrides cannot resurrect stale
+            # entries. A healthy fresh profile owning the same name wins.
+            merged_profiles = dict(fresh_profiles)
+            retained_from: dict[Path, str] = {}
+            if failed_profiles and self._instrument_registry is not None:
+                failed_paths = {failure.path for failure in failed_profiles}
+                for previous in self._instrument_registry.list_all():
+                    source = previous._source_path
+                    if source is None or source not in failed_paths:
+                        continue
+                    if previous.name in merged_profiles:
+                        continue  # a healthy fresh profile owns the name
+                    merged_profiles[previous.name] = previous
+                    retained_from[source] = previous.name
+
+            partial_reload = bool(failed_profiles)
+
             # ── Classify: restart-only changes keep running values ──
             applied: list[str] = []
-            declined: list[str] = []
+            declined: list[str] = [
+                # Every failed profile file is reported — even when a
+                # healthy fresh profile now owns the name — so the
+                # operator always learns the file on disk is broken.
+                # Distinguishable prefix; ``partial`` is the machine flag.
+                (
+                    f"profile load failed ({failure.path}): "
+                    f"{failure.reason_code}: {failure.reason}"
+                    + (
+                        f" — previous entry '{retained_from[failure.path]}' retained"
+                        if failure.path in retained_from
+                        else ""
+                    )
+                )
+                for failure in failed_profiles
+            ]
             keep_running: dict[str, Any] = {}
             for field_name in self._RESTART_ONLY_FIELDS:
                 if getattr(new_config, field_name) != getattr(old, field_name):
@@ -1192,16 +1237,16 @@ class JobManager:
 
             # ── Instrument profiles: registry swap + caps diff ──
             if self._instrument_registry is not None:
-                self._instrument_registry.replace_all(fresh_profiles)
+                self._instrument_registry.replace_all(merged_profiles)
                 if (
                     self._baton_adapter is not None
                     and self._baton_adapter._backend_pool is not None
                 ):
                     self._baton_adapter._backend_pool.invalidate()
-                applied.append(f"instrument_profiles: {len(fresh_profiles)}")
+                applied.append(f"instrument_profiles: {len(merged_profiles)}")
                 if self._baton_adapter is not None:
                     diff = self._baton_adapter.sync_model_concurrency(
-                        self._model_caps_from_profiles(fresh_profiles)
+                        self._model_caps_from_profiles(merged_profiles)
                     )
                     if diff["added"] or diff["changed"] or diff["removed"]:
                         applied.append(
@@ -1216,6 +1261,7 @@ class JobManager:
             self._config_loaded_at = datetime.now(UTC).isoformat()
             result = ConfigReloadResult(
                 success=True,
+                partial=partial_reload,
                 reason=reason,
                 config_generation=self._config_generation,
                 config_loaded_at=self._config_loaded_at,
@@ -1227,6 +1273,7 @@ class JobManager:
                 "manager.config_reloaded",
                 reason=reason,
                 generation=self._config_generation,
+                partial=partial_reload,
                 applied=applied,
                 declined=declined,
             )

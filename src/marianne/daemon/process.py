@@ -301,31 +301,51 @@ def get_conductor_status(
     """Check Marianne conductor (daemon) status via health probes.
 
     Called by ``mzt conductor-status`` via ``cli/commands/conductor.py``.
-    With ``as_json``, prints the raw ``daemon.status`` payload (including
-    #408 hot-reload fields) instead of the rich panel.
+    With ``as_json``, stdout carries ONLY the JSON document (human
+    commentary goes to stderr) so ``mzt conductor-status --json | jq .``
+    works. With an explicit ``socket_path``, no PID file is read,
+    asserted, or unlinked — the daemon's own payload is the pid
+    authority (#408 landing fixes).
     """
     _defaults = DaemonConfig()
-    # Explicit pid_file always wins; only the default probes legacy (#227).
-    resolved_pid_file = (
-        pid_file
-        if pid_file is not None
-        else _resolve_live_pid_file(_defaults.pid_file)
+    # #408 landing P2: explicit --socket means socket-only probing — the
+    # default pid file must never be read, asserted, or UNLINKED as a
+    # side effect of inspecting a clone.
+    socket_only = socket_path is not None
+    resolved_socket: Path = (
+        socket_path if socket_path is not None else _defaults.socket.path
     )
-    resolved_socket = socket_path or _defaults.socket.path
-    # #227 transitional: a pre-move conductor serves on the legacy socket.
-    if socket_path is None and not resolved_socket.exists():
-        from marianne.daemon.config import LEGACY_SOCKET_PATH
 
-        if LEGACY_SOCKET_PATH.exists():
-            resolved_socket = LEGACY_SOCKET_PATH
+    def _note(message: str) -> None:
+        # In --json mode stdout is reserved for the JSON document alone;
+        # human commentary goes to stderr so pipes stay parseable.
+        if as_json:
+            typer.secho(message, err=True)
+        else:
+            typer.echo(message)
 
-    pid = _read_pid(resolved_pid_file)
-    if pid is None or not _pid_alive(pid):
-        typer.echo("Marianne conductor is not running")
-        resolved_pid_file.unlink(missing_ok=True)
-        raise typer.Exit(1)
+    pid: int | None = None
+    if not socket_only:
+        # Explicit pid_file always wins; only the default probes legacy (#227).
+        resolved_pid_file = (
+            pid_file
+            if pid_file is not None
+            else _resolve_live_pid_file(_defaults.pid_file)
+        )
+        # #227 transitional: a pre-move conductor serves on the legacy socket.
+        if not resolved_socket.exists():
+            from marianne.daemon.config import LEGACY_SOCKET_PATH
 
-    typer.echo(f"Marianne conductor is running (PID {pid})")
+            if LEGACY_SOCKET_PATH.exists():
+                resolved_socket = LEGACY_SOCKET_PATH
+
+        pid = _read_pid(resolved_pid_file)
+        if pid is None or not _pid_alive(pid):
+            _note("Marianne conductor is not running")
+            resolved_pid_file.unlink(missing_ok=True)
+            raise typer.Exit(1)
+
+        _note(f"Marianne conductor is running (PID {pid})")
 
     from marianne.daemon.ipc.client import DaemonClient
 
@@ -359,8 +379,20 @@ def get_conductor_status(
     try:
         health, ready, daemon_info = asyncio.run(_get_health())
     except (OSError, DaemonError):
-        typer.echo("  (Could not connect to conductor socket for details)")
+        _note("  (Could not connect to conductor socket for details)")
+        if as_json or socket_only:
+            # Machine consumers get an empty stdout plus exit 1, never a
+            # half-valid document; socket-only human mode has no pid-file
+            # fallback, so there is no honest status to print either.
+            raise typer.Exit(1) from None
         return
+
+    if socket_only and daemon_info is None:
+        # The daemon itself did not answer — with an explicit --socket it
+        # is the only authority, so fail honestly instead of printing a
+        # payload with a foreign or missing pid.
+        _note("Could not connect to conductor socket")
+        raise typer.Exit(1)
 
     if as_json:
         import json
@@ -375,6 +407,15 @@ def get_conductor_status(
     from rich.panel import Panel
 
     con = Console()
+
+    # Socket-only mode has no pid-file pid; the daemon payload is
+    # authoritative wherever it answered.
+    display_pid: Any = (
+        pid if pid is not None
+        else (daemon_info or {}).get("pid", "unknown")
+    )
+    if socket_only:
+        typer.echo(f"Marianne conductor is running (PID {display_pid})")
 
     # Build uptime string
     uptime_str = ""
@@ -391,7 +432,10 @@ def get_conductor_status(
 
     # Build panel content
     lines: list[str] = []
-    lines.append(f"PID {pid} [dim]\u00b7[/dim] Up {uptime_str}" if uptime_str else f"PID {pid}")
+    lines.append(
+        f"PID {display_pid} [dim]\u00b7[/dim] Up {uptime_str}"
+        if uptime_str else f"PID {display_pid}"
+    )
 
     if ready:
         status_str = ready.get("status", "unknown")

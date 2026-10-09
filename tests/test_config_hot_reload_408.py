@@ -50,11 +50,14 @@ def _sheet(num: int, *, instrument: str = "alpha", model: str | None = "m1") -> 
 
 
 def _profile_yaml(
-    *, max_concurrent: int = 2, gate_keys: list[str] | None = None
+    *,
+    name: str = "alpha",
+    max_concurrent: int = 2,
+    gate_keys: list[str] | None = None,
 ) -> str:
     lines = [
-        "name: alpha",
-        "display_name: alpha",
+        f"name: {name}",
+        f"display_name: {name}",
         "kind: cli",
         "default_model: m1",
         "models:",
@@ -625,3 +628,292 @@ async def test_watcher_triggers_on_config_and_profile_changes(tmp_path: Path) ->
     finally:
         await watcher.stop()
     assert not watcher.is_running
+
+
+# ─── Broken profile files: keep-previous + declined + partial (P1) ─────
+
+
+_BROKEN_YAML = "name: alpha\n  bad indent: [\n"
+
+
+async def test_broken_profile_keeps_previous_entry_and_caps(
+    tmp_path: Path,
+) -> None:
+    """SC1 (commission-exact sequence, real manager): a profile that
+    breaks mid-edit is NOT removed — entry retained, cap retained,
+    declined names the file with the loader's reason, partial=True,
+    success=True, generation advanced; repair → entry updated."""
+    org = _profile_dir(tmp_path)
+    config = _load_config(_config_file(tmp_path))
+    manager = _manager(tmp_path, config=config, org_dir=org)
+
+    warm = await manager.reload_configuration("warm")
+    assert warm.success is True
+    assert warm.partial is False
+    old = manager._instrument_registry.get("alpha")
+    assert old is not None
+    old_sha = old._source_sha256
+    assert manager._baton_adapter is not None
+    assert manager._baton_adapter.model_concurrency_snapshot().get(
+        "alpha:m1"
+    ) == 2
+
+    (org / "alpha.yaml").write_text(_BROKEN_YAML)
+    result = await manager.reload_configuration("edit-accident")
+
+    assert result.success is True  # applied, not fail-closed
+    assert result.partial is True  # honest qualification
+    assert result.config_generation == warm.config_generation + 1
+    assert result.declined, "the broken file must be reported"
+    entry = result.declined[0]
+    assert entry.startswith("profile load failed (")
+    assert "alpha.yaml" in entry
+    assert "instrument_yaml_parse_error" in entry
+    assert "previous entry 'alpha' retained" in entry
+
+    kept = manager._instrument_registry.get("alpha")
+    assert kept is not None, "entry must NOT be silently removed"
+    assert kept._source_sha256 == old_sha  # the previous bytes, not new
+    assert manager._baton_adapter.model_concurrency_snapshot().get(
+        "alpha:m1"
+    ) == 2  # cap key retained
+
+    # Repair: the next reload restores and updates the entry.
+    (org / "alpha.yaml").write_text(_profile_yaml(max_concurrent=5))
+    repaired = await manager.reload_configuration("repair")
+    assert repaired.success is True
+    assert repaired.partial is False
+    assert not repaired.declined
+    fresh = manager._instrument_registry.get("alpha")
+    assert fresh is not None
+    assert fresh._source_sha256 != old_sha
+    assert manager._baton_adapter.model_concurrency_snapshot().get(
+        "alpha:m1"
+    ) == 5
+
+
+async def test_fresh_profile_wins_over_kept_previous_on_name_collision(
+    tmp_path: Path,
+) -> None:
+    """A healthy fresh profile owning the name beats the kept previous
+    entry (new truth wins); the broken file is still reported."""
+    org = _profile_dir(tmp_path)
+    venue = tmp_path / "venue"
+    venue.mkdir()
+    config = _load_config(_config_file(tmp_path))
+    manager = _manager(tmp_path, config=config, org_dir=org)
+
+    await manager.reload_configuration("warm")
+
+    (org / "alpha.yaml").write_text(_BROKEN_YAML)
+    (venue / "override.yaml").write_text(_profile_yaml(max_concurrent=9))
+    result = await manager.reload_configuration("collision")
+
+    assert result.success is True
+    assert result.partial is True
+    assert any("alpha.yaml" in d for d in result.declined)
+    assert all("retained" not in d for d in result.declined)
+    live = manager._instrument_registry.get("alpha")
+    assert live is not None
+    assert live._source_path == (venue / "override.yaml").resolve()
+    assert manager._baton_adapter is not None
+    assert manager._baton_adapter.model_concurrency_snapshot().get(
+        "alpha:m1"
+    ) == 9
+
+
+async def test_keep_previous_keys_on_source_path_not_filename(
+    tmp_path: Path,
+) -> None:
+    """Merge key is _source_path: a file whose declared name differs
+    from its filename still gets its previous entry retained when the
+    file breaks (name↔file are independent; legal name overrides)."""
+    org = tmp_path / "org"
+    org.mkdir()
+    (org / "gamma.yaml").write_text(_profile_yaml(name="delta"))
+    config = _load_config(_config_file(tmp_path))
+    manager = _manager(tmp_path, config=config, org_dir=org)
+
+    await manager.reload_configuration("warm")
+    assert manager._instrument_registry.get("delta") is not None
+
+    (org / "gamma.yaml").write_text(_BROKEN_YAML)
+    result = await manager.reload_configuration("edit-accident")
+
+    assert result.partial is True
+    assert any(
+        "gamma.yaml" in d and "previous entry 'delta' retained" in d
+        for d in result.declined
+    )
+    kept = manager._instrument_registry.get("delta")
+    assert kept is not None, "entry keyed by source path, not filename"
+    assert manager._baton_adapter is not None
+    assert manager._baton_adapter.model_concurrency_snapshot().get(
+        "delta:m1"
+    ) == 2
+
+
+def test_boot_and_plain_load_contract_unchanged(tmp_path: Path) -> None:
+    """SC2/SC3: boot semantics and the load_all_profiles contract stay
+    tolerant — a broken file is skipped with a warning and absent from
+    the registry; only the failures-aware variant reports it."""
+    from marianne.instruments.loader import (
+        load_all_profiles,
+        load_all_profiles_with_failures,
+    )
+
+    org = _profile_dir(tmp_path)
+    (org / "alpha.yaml").write_text(_BROKEN_YAML)
+    venue = tmp_path / "venue"
+
+    profiles = load_all_profiles(organization_dir=org, venue_dir=venue)
+    assert "alpha" not in profiles  # boot: skip-with-warning
+
+    merged, failures = load_all_profiles_with_failures(
+        organization_dir=org, venue_dir=venue
+    )
+    assert merged == profiles  # same tolerant dict contract
+    assert [f.path.name for f in failures] == ["alpha.yaml"]
+    assert failures[0].reason_code == "instrument_yaml_parse_error"
+    assert failures[0].path == (org / "alpha.yaml").resolve()
+
+
+# ─── conductor-status: pure JSON stdout + socket-only pid (P2) ─────────
+
+
+def _daemon_payload(pid: int) -> dict[str, Any]:
+    return {
+        "pid": pid,
+        "uptime_seconds": 5.0,
+        "running_jobs": 0,
+        "total_jobs_active": 0,
+        "memory_usage_mb": 12.0,
+        "version": "test",
+        "protocol_version": 1,
+        "config_generation": 3,
+        "model_concurrency": {"alpha:m1": 2},
+    }
+
+
+class TestConductorStatusJsonPurity:
+    """SC4/SC5: ``--json`` stdout is one parseable JSON document; an
+    explicit ``--socket`` never reads/asserts/unlinks a pid file."""
+
+    def _patch_run(self, monkeypatch, value) -> None:
+        import marianne.daemon.process as process_module
+
+        def _fake_run(coro):
+            coro.close()
+            if isinstance(value, Exception):
+                raise value
+            return value
+
+        monkeypatch.setattr(process_module.asyncio, "run", _fake_run)
+
+    def test_socket_only_json_is_pure_and_pid_file_untouched(
+        self, tmp_path: Path, monkeypatch, capsys,
+    ) -> None:
+        import marianne.daemon.process as process_module
+
+        self._patch_run(
+            monkeypatch,
+            ({"uptime_seconds": 5.0}, {"status": "ready"}, _daemon_payload(4242)),
+        )
+        read_calls: list[Path] = []
+
+        def _record_read(pid_file: Path) -> int | None:
+            read_calls.append(pid_file)
+            return None  # simulate: no live pid anywhere
+
+        monkeypatch.setattr(process_module, "_read_pid", _record_read)
+
+        process_module.get_conductor_status(
+            socket_path=tmp_path / "clone.sock", as_json=True,
+        )
+
+        captured = capsys.readouterr()
+        payload = json.loads(captured.out)  # SC4: whole stdout parses
+        assert payload["pid"] == 4242  # SC5: daemon-authoritative pid
+        assert payload["config_generation"] == 3
+        assert read_calls == []  # SC5: pid file never read
+
+    def test_socket_only_json_failure_empty_stdout_exit_1(
+        self, tmp_path: Path, monkeypatch, capsys,
+    ) -> None:
+        import pytest
+
+        self._patch_run(monkeypatch, OSError("socket nowhere"))
+
+        import marianne.daemon.process as process_module
+
+        with pytest.raises(process_module.typer.Exit):
+            process_module.get_conductor_status(
+                socket_path=tmp_path / "clone.sock", as_json=True,
+            )
+        captured = capsys.readouterr()
+        assert captured.out == ""  # machine surface stays empty
+        assert captured.err  # human reason on stderr
+
+    def test_socket_only_human_reports_daemon_pid(
+        self, tmp_path: Path, monkeypatch, capsys,
+    ) -> None:
+        import marianne.daemon.process as process_module
+
+        self._patch_run(
+            monkeypatch,
+            ({"uptime_seconds": 5.0}, {"status": "ready"}, _daemon_payload(777)),
+        )
+        read_calls: list[Path] = []
+        monkeypatch.setattr(
+            process_module, "_read_pid",
+            lambda pid_file: read_calls.append(pid_file) or None,
+        )
+
+        process_module.get_conductor_status(socket_path=tmp_path / "c.sock")
+
+        captured = capsys.readouterr()
+        assert "PID 777" in captured.out
+        assert read_calls == []
+
+    def test_json_with_explicit_pid_file_still_pure(
+        self, tmp_path: Path, monkeypatch, capsys,
+    ) -> None:
+        import marianne.daemon.process as process_module
+
+        pid_file = tmp_path / "m.pid"
+        pid_file.write_text("12345")
+        self._patch_run(
+            monkeypatch,
+            (
+                {"uptime_seconds": 5.0},
+                {"status": "ready"},
+                _daemon_payload(4242),
+            ),
+        )
+        monkeypatch.setattr(
+            process_module, "_pid_alive", lambda pid: True,
+        )
+
+        process_module.get_conductor_status(
+            pid_file=pid_file, socket_path=None, as_json=True,
+        )
+
+        captured = capsys.readouterr()
+        payload = json.loads(captured.out)  # pure even with pid file
+        assert payload["pid"] == 4242  # daemon payload overrides file pid
+
+    def test_json_not_running_stdout_empty_stderr_says_so(
+        self, tmp_path: Path, monkeypatch, capsys,
+    ) -> None:
+        import pytest
+
+        import marianne.daemon.process as process_module
+
+        pid_file = tmp_path / "m.pid"  # absent — not running
+        with pytest.raises(process_module.typer.Exit):
+            process_module.get_conductor_status(
+                pid_file=pid_file, socket_path=None, as_json=True,
+            )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "not running" in captured.err

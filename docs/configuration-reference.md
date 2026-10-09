@@ -1301,9 +1301,22 @@ through a single fail-closed reload path. Triggers:
 | Signal | `kill -HUP <conductor-pid>` |
 | Watcher | automatic, on file content change (see `hot_reload` below) |
 
-Every reload validates the ENTIRE new config plus all profiles before
-applying anything. On any error the running config, profile registry, and
-per-model caps are untouched and `config_generation` does not advance.
+Every reload validates the ENTIRE new config before applying anything.
+On a config-file error the reload is fail-closed: the running config,
+profile registry, and per-model caps are untouched and
+`config_generation` does not advance.
+
+Instrument profile files get keep-previous semantics instead: a profile
+file that exists on disk but fails to load (broken YAML, schema
+violation, read error) does NOT remove its live registry entry or caps —
+the previous entry is retained, the file is reported in `declined` with
+a `profile load failed (<path>)` prefix and the loader's reason, and the
+reload result carries `partial: true` (generation still advances because
+the config and every loadable profile were applied). Boot differs on
+purpose: at boot there is no previous entry to keep, so a broken file is
+skipped with a warning and the instrument is simply absent — repair the
+file and reload to restore it.
+
 Instrument profiles swap in place (#171 semantics: in-flight executions
 finish on their loaded profile), and per-model caps update with removal of
 entries whose profiles disappeared. A raised cap wakes waiting sheets on
@@ -1311,8 +1324,11 @@ the next dispatch cycle; a lowered cap never cancels in-flight work — new
 dispatch waits for the running count to drain below the new limit (#231).
 
 `mzt conductor-status --json` exposes `config_generation`,
-`config_loaded_at`, the last reload outcome (`last_config_reload`), and the
-live per-model caps (`model_concurrency`).
+`config_loaded_at`, the last reload outcome (`last_config_reload`, with
+`partial` when profile files failed to load), and the live per-model caps
+(`model_concurrency`). With `--json`, stdout carries only the JSON
+document (safe for `jq`); with an explicit `--socket`, no PID file is
+read and the daemon's own payload supplies the `pid`.
 
 **Field reloadability** — what a reload applies vs. what needs a restart
 (changed restart-only fields are reported in `declined` and the running
@@ -1324,6 +1340,7 @@ value is kept):
 | `max_concurrent_sheets` | Hot — live baton dispatch ceiling + scheduler resized |
 | per-model caps (`max_concurrent` in instrument profiles) | Hot — set/changed/removed atomically |
 | instrument profiles (new/edited/removed files) | Hot — registry swap + backend pool invalidation |
+| instrument profile file broken at reload (YAML/schema/read error) | Partial — previous registry entry + caps retained; file reported in `declined` with the loader's reason and `partial: true` on the result. Boot keeps skip-with-warning (no previous entry exists to keep) |
 | `resource_limits` | Hot — monitor limits updated |
 | `preflight` (token thresholds) | Hot — applied to new admissions |
 | `job_timeout_seconds` | Hot — live read at job admission |

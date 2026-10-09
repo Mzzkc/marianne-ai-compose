@@ -300,6 +300,12 @@ def conductor_reload(
         f"Config generation {result.get('config_generation')} "
         f"(loaded {result.get('config_loaded_at')})"
     )
+    if result.get("partial"):
+        typer.echo(
+            "Partial: some instrument profile files failed to load — "
+            "their previous registry entries and caps were retained "
+            "(see Declined)"
+        )
     applied = result.get("applied") or []
     declined = result.get("declined") or []
     if applied:
@@ -309,7 +315,7 @@ def conductor_reload(
     else:
         typer.echo("Applied: (nothing changed)")
     if declined:
-        typer.echo("Declined (restart required, running values kept):")
+        typer.echo("Declined (running values kept):")
         for entry in declined:
             typer.echo(f"  - {entry}")
     typer.echo(_json.dumps(result))

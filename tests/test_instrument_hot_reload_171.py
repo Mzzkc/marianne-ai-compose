@@ -145,7 +145,8 @@ class TestManagerReload:
 
         fresh = {"fresh": _profile("fresh")}
         with patch(
-            "marianne.instruments.loader.load_all_profiles", return_value=fresh
+            "marianne.instruments.loader.load_all_profiles_with_failures",
+            return_value=(fresh, []),
         ):
             result = await mgr.reload_configuration("test")
 

@@ -295,10 +295,28 @@ class ConfigReloadResult(BaseModel):
     ``JobManager.reload_configuration``). A failed reload applies
     nothing: the running config, instrument registry, and per-model
     caps are untouched and ``config_generation`` does not advance.
+
+    A partial reload applied the config and every loadable profile but
+    at least one profile file exists on disk and failed to load: its
+    previous registry entry and caps are retained and the file is
+    reported in ``declined`` with a ``profile load failed (...)``
+    prefix. Three machine-distinguishable states: success / partial /
+    failed.
     """
 
     success: bool = Field(
         description="Whether the reload applied. False means nothing changed.",
+    )
+    partial: bool = Field(
+        default=False,
+        description=(
+            "True when the reload applied but at least one instrument "
+            "profile file exists and failed to load — previous entries "
+            "and caps for those files are retained and each file is "
+            "reported in ``declined``. Generation still advances because "
+            "changes were applied. False on results from conductors "
+            "predating this field."
+        ),
     )
     reason: str = Field(
         description="Trigger origin (sighup, ipc, cli, watcher).",

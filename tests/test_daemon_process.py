@@ -226,7 +226,8 @@ class TestGetConductorStatus:
             get_conductor_status(pid_file=pid_file)
 
     def test_status_shows_pid_when_running(self, tmp_path: Path, capsys):
-        """get_conductor_status shows the PID when running."""
+        """get_conductor_status shows the PID when running (pid-file only;
+        socket details unavailable is non-fatal in human mode)."""
         pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
 
@@ -238,6 +239,25 @@ class TestGetConductorStatus:
         with (
             patch("marianne.daemon.process._pid_alive", return_value=True),
             patch("marianne.daemon.process.asyncio.run", side_effect=_mock_asyncio_run),
+        ):
+            get_conductor_status(pid_file=pid_file)
+
+        assert "PID 12345" in capsys.readouterr().out
+
+    def test_status_explicit_socket_unreachable_exits_1(self, tmp_path: Path):
+        """Explicit --socket that does not answer exits 1 — socket-only
+        probing has no pid-file fallback (#408 landing P2)."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text("12345")
+
+        def _mock_asyncio_run(coro):
+            coro.close()
+            return (None, None, None)  # probes got no answer
+
+        with (
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.asyncio.run", side_effect=_mock_asyncio_run),
+            pytest.raises(typer.Exit),
         ):
             get_conductor_status(pid_file=pid_file, socket_path=tmp_path / "sock")
 
