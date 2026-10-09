@@ -40,7 +40,12 @@ from marianne.core.checkpoint import (
     ErrorRecord,
     SheetStatus,
 )
-from marianne.core.constants import DAEMON_STATE_DB_PATH, SHEET_NUM_KEY, STATE_DB_FILENAME
+from marianne.core.constants import (
+    DAEMON_STATE_DB_PATH,
+    SHEET_NUM_KEY,
+    STATE_DB_FILENAME,
+    active_registry_db_path,
+)
 from marianne.core.log_sources import (
     LogSource,
     discover_job_log_sources,
@@ -341,9 +346,12 @@ async def _resolve_job_log_sources(
     db_path: Path | None = None,
 ) -> list[LogSource]:
     """Resolve daemon-managed log sources for a known score id."""
+    from marianne.daemon.clone import is_clone_active
     from marianne.daemon.registry_backend import RegistryFirstReadBackend
 
-    resolved_db_path = db_path or DAEMON_STATE_DB_PATH
+    resolved_db_path = db_path or (
+        active_registry_db_path() if is_clone_active() else DAEMON_STATE_DB_PATH
+    )
     backend = RegistryFirstReadBackend(Path.cwd(), db_path=resolved_db_path)
     try:
         state = await backend.load(job_id)
@@ -704,6 +712,21 @@ async def _errors_job(
                 if type_mismatch or code_mismatch:
                     continue
                 all_errors.append((sheet_num, synthetic_error))
+
+    # A job that failed outside any sheet (wall deadline, admission) carries its
+    # error on the job itself; surface it as sheet 0 so `mzt errors` never says
+    # "No errors" for a FAILED job (GH #405).
+    if not all_errors and sheet_filter is None and found_job.error_message:
+        job_error = ErrorRecord(
+            error_type="permanent",
+            error_code=format_error_code_for_display(None, None),
+            error_message=found_job.error_message,
+            attempt_number=1,
+            context={"terminal_reason": found_job.terminal_reason, "scope": "job"},
+        )
+        if found_job.completed_at:
+            job_error.timestamp = found_job.completed_at
+        all_errors.append((0, job_error))
 
     # Sort by sheet number, then timestamp
     all_errors.sort(key=lambda x: (x[0], x[1].timestamp))

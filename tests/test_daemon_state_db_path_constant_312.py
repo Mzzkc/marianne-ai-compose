@@ -38,3 +38,19 @@ def test_recover_db_path_uses_constant() -> None:
     from marianne.cli.commands.recover import _get_db_path
 
     assert _get_db_path() == DAEMON_STATE_DB_PATH.expanduser()
+
+
+def test_recover_db_path_follows_active_clone(monkeypatch) -> None:
+    """GH #401: with --conductor-clone active, offline readers open the clone's DB."""
+    from marianne.cli.commands.recover import _get_db_path
+    from marianne.core.constants import active_registry_db_path
+    from marianne.daemon.clone import resolve_clone_paths, set_clone_name
+
+    set_clone_name("pin401")
+    try:
+        expected = resolve_clone_paths("pin401").state_db.expanduser()
+        assert _get_db_path() == expected
+        assert active_registry_db_path() == expected
+    finally:
+        set_clone_name(None)
+    assert _get_db_path() == DAEMON_STATE_DB_PATH.expanduser()

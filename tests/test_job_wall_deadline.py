@@ -178,6 +178,11 @@ async def test_expired_score_fails_before_execution_and_persists_reason(
         assert record is not None
         assert record.status is DaemonJobStatus.FAILED
         assert record.terminal_reason == "timed_out"
+        # GH #405: the job-level error reaches the live checkpoint too.
+        live = manager._live_states.get(meta.job_id)
+        if live is not None:
+            assert live.error_message == meta.error_message
+            assert live.error_message
     finally:
         await manager._registry.close()
 

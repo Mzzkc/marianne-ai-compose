@@ -21,7 +21,7 @@ import typer
 from rich.console import Console
 
 from marianne.core.checkpoint import CheckpointState
-from marianne.core.constants import DAEMON_STATE_DB_PATH
+from marianne.core.constants import DAEMON_STATE_DB_PATH, active_registry_db_path
 from marianne.core.errors.codes import ErrorCode
 from marianne.core.logging import configure_logging, get_logger
 from marianne.state import StateBackend
@@ -235,7 +235,7 @@ async def _try_registry_state(
     workspace fallback anywhere — the registry is the ONLY state source;
     a job absent here does not exist as far as state is concerned.
     """
-    db_path = DAEMON_STATE_DB_PATH.expanduser()
+    db_path = _offline_registry_db_path()
     if not db_path.exists():
         return None
 
@@ -260,6 +260,16 @@ async def _try_registry_state(
             "find_job_state.registry_read_failed", job_id=job_id, exc_info=True
         )
         return None
+
+
+def _offline_registry_db_path() -> Path:
+    """Registry DB for conductor-down reads: the active clone's (GH #401),
+    else this module's ``DAEMON_STATE_DB_PATH`` (a patch seam for tests)."""
+    from marianne.daemon.clone import is_clone_active
+
+    if is_clone_active():
+        return active_registry_db_path()
+    return DAEMON_STATE_DB_PATH.expanduser()
 
 
 async def _find_job_state_fs(

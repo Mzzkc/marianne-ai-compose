@@ -9,9 +9,24 @@ import asyncio
 from typing import Any, cast
 
 from marianne.core.logging import get_logger
+from marianne.daemon.exceptions import DaemonError
 from marianne.daemon.ipc.client import DaemonClient
 
 _logger = get_logger("dashboard.system_view")
+
+# The failure classes a daemon read can raise (GH #251): conductor down or
+# refusing (DaemonError family), socket trouble (OSError incl. ConnectionError),
+# the asyncio.wait_for deadline (TimeoutError), and a malformed payload
+# (ValueError/TypeError/KeyError from decoding). Anything else is a bug and
+# must surface, not be swallowed into degraded data.
+_DAEMON_READ_FAILURES: tuple[type[BaseException], ...] = (
+    DaemonError,
+    OSError,
+    TimeoutError,
+    ValueError,
+    TypeError,
+    KeyError,
+)
 
 DASHBOARD_SYSTEM_VIEW_TIMEOUT_SECONDS = 2.0
 
@@ -41,8 +56,8 @@ class DaemonSystemView:
                     timeout=DASHBOARD_SYSTEM_VIEW_TIMEOUT_SECONDS,
                 ),
             )
-        except Exception:
-            _logger.debug("get_snapshot_failed", exc_info=True)
+        except _DAEMON_READ_FAILURES as exc:
+            _logger.warning("get_snapshot_failed", error_type=type(exc).__name__, exc_info=True)
             return None
 
     async def get_daemon_status(self) -> dict[str, Any] | None:
@@ -56,8 +71,10 @@ class DaemonSystemView:
                 timeout=DASHBOARD_SYSTEM_VIEW_TIMEOUT_SECONDS,
             )
             return result.model_dump()
-        except Exception:
-            _logger.debug("get_daemon_status_failed", exc_info=True)
+        except _DAEMON_READ_FAILURES as exc:
+            _logger.warning(
+                "get_daemon_status_failed", error_type=type(exc).__name__, exc_info=True
+            )
             return None
 
     async def rate_limit_state(self) -> dict[str, Any]:
@@ -67,8 +84,10 @@ class DaemonSystemView:
                 self._client.rate_limits(),
                 timeout=DASHBOARD_SYSTEM_VIEW_TIMEOUT_SECONDS,
             )
-        except Exception:
-            _logger.debug("rate_limit_state_failed", exc_info=True)
+        except _DAEMON_READ_FAILURES as exc:
+            _logger.warning(
+                "rate_limit_state_failed", error_type=type(exc).__name__, exc_info=True
+            )
             return {"backends": {}, "active_limits": 0}
 
     async def pressure_level(self) -> dict[str, Any]:
@@ -94,8 +113,10 @@ class DaemonSystemView:
                 timeout=DASHBOARD_SYSTEM_VIEW_TIMEOUT_SECONDS,
             )
             return cast("list[dict[str, Any]]", result.get("patterns", []))
-        except Exception:
-            _logger.debug("learning_patterns_failed", exc_info=True)
+        except _DAEMON_READ_FAILURES as exc:
+            _logger.warning(
+                "learning_patterns_failed", error_type=type(exc).__name__, exc_info=True
+            )
             return []
 
 

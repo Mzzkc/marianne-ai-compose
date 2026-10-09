@@ -29,7 +29,7 @@ from rich.panel import Panel
 
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetStatus
 from marianne.core.config import JobConfig
-from marianne.core.constants import DAEMON_STATE_DB_PATH, SHEET_NUM_KEY
+from marianne.core.constants import SHEET_NUM_KEY, active_registry_db_path
 from marianne.core.logging import get_logger
 from marianne.execution.validation import SheetValidationResult, ValidationEngine
 from marianne.utils.time import utc_now
@@ -96,11 +96,12 @@ def _load_recovery_config(
 
 
 def _get_db_path() -> Path:
-    """Return the path to the conductor's registry DB.
+    """Return the registry DB of the conductor being addressed.
 
-    Extracted so tests can monkeypatch it to use a temp DB.
+    Clone-aware (GH #401): ``--conductor-clone`` selects that clone's own
+    state DB. Extracted so tests can monkeypatch it to use a temp DB.
     """
-    return DAEMON_STATE_DB_PATH.expanduser()
+    return active_registry_db_path()
 
 
 def _load_checkpoint_row(conn: Any, job_id: str) -> tuple[str, str | None] | None:

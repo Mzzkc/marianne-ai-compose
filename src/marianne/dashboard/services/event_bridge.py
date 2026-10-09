@@ -15,6 +15,7 @@ from collections.abc import AsyncIterator
 from typing import Any, cast
 
 from marianne.core.logging import get_logger
+from marianne.daemon.exceptions import DaemonError
 from marianne.daemon.ipc.client import DaemonClient
 
 _logger = get_logger("dashboard.event_bridge")
@@ -132,10 +133,13 @@ class DaemonEventBridge:
         try:
             events = await self._fetch_observer_events(job_id, limit=limit)
             return events
-        except Exception:
-            _logger.debug(
+        except (DaemonError, OSError, TimeoutError, ValueError, TypeError, KeyError) as exc:
+            # Conductor down/refusing, socket failure, deadline, or a malformed
+            # payload (#251). Anything else is a bug and must surface.
+            _logger.warning(
                 "observer_events_fetch_error",
                 job_id=job_id,
+                error_type=type(exc).__name__,
                 exc_info=True,
             )
             return []
@@ -208,10 +212,11 @@ class DaemonEventBridge:
                     delay = _RECONNECT_BASE
             except asyncio.CancelledError:
                 break
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 — supervisor loop: must outlive any failure (#251)
                 _logger.warning(
                     "event_bridge.stream_disconnected",
                     reconnect_in=delay,
+                    error_type=type(exc).__name__,
                     exc_info=True,
                 )
 

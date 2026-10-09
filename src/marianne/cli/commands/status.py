@@ -2286,6 +2286,19 @@ def _collect_recent_errors(
                 synthetic.timestamp = sheet.completed_at
             all_errors.append((sheet_num, synthetic))
 
+    # Job-level failure with no sheet error (wall deadline, admission) — GH #405.
+    if not all_errors and job.error_message:
+        job_error = ErrorRecord(
+            error_type="permanent",
+            error_code=_format_error_code(None, None),
+            error_message=job.error_message,
+            attempt_number=1,
+            context={"terminal_reason": job.terminal_reason, "scope": "job"},
+        )
+        if job.completed_at:
+            job_error.timestamp = job.completed_at
+        all_errors.append((0, job_error))
+
     # Sort by timestamp (most recent first) and take limit
     all_errors.sort(key=lambda x: x[1].timestamp, reverse=True)
     return all_errors[:limit]

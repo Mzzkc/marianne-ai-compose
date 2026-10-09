@@ -21,7 +21,7 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from marianne.core.checkpoint import CheckpointState, JobStatus
-from marianne.core.constants import DAEMON_STATE_DB_PATH
+from marianne.core.constants import active_registry_db_path
 from marianne.core.log_sources import (
     LogSource,
     discover_job_log_sources,
@@ -114,7 +114,7 @@ class LogDownloadInfo(BaseModel):
 
 def _read_registry_job_metadata(job_id: str) -> dict[str, str | None]:
     """Read job file metadata from the daemon registry when available."""
-    db_path = DAEMON_STATE_DB_PATH.expanduser()
+    db_path = active_registry_db_path()
     if not db_path.exists() or db_path.stat().st_size == 0:
         return {}
 

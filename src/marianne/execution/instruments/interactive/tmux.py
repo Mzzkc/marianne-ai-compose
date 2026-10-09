@@ -392,13 +392,18 @@ class TmuxControl:
                 pass
 
     async def pipe_pane_to_file(self, session: str, log_path: Path) -> None:
-        """Stream the pane's raw output to ``log_path`` (append).
+        """Stream the pane's raw output to ``log_path``.
 
         The raw stream is a debug artifact (cursor-addressing soup from
         TUIs) — it is never machine-parsed. State detection uses
         :meth:`capture_screen` exclusively.
+
+        The file is truncated first (GH #398): transcript names are keyed by
+        job/sheet/attempt, and a later run that reuses that identity must not
+        inherit — and misattribute — a previous run's session content.
         """
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_bytes(b"")
         # pipe-pane runs the command via the tmux server's shell; quote the
         # path defensively (it is daemon-constructed, not user input).
         quoted = str(log_path).replace("'", "'\\''")

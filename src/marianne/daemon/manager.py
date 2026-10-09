@@ -1394,6 +1394,11 @@ class JobManager:
             cp_status = _DAEMON_TO_CHECKPOINT_STATUS.get(status)
             if cp_status is not None:
                 live.status = cp_status
+                if error_message is not None:
+                    # Job-level failures (wall deadline, admission) have no
+                    # sheet to carry them; without this the live state shows
+                    # FAILED with error=null (GH #405).
+                    live.error_message = error_message
                 if status not in {
                     DaemonJobStatus.COMPLETED,
                     DaemonJobStatus.FAILED,

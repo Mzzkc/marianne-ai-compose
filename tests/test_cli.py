@@ -1155,6 +1155,39 @@ class TestErrorsCommand:
         assert "Errors for Score" in result.stdout
         assert "Max retries exceeded" in result.stdout or "validation" in result.stdout
 
+    def test_errors_surfaces_job_level_wall_timeout(self, tmp_path: Path) -> None:
+        """GH #405: a job that failed before any sheet ran (wall deadline)
+        carries its error on the job; `mzt errors` must not say 'No errors'."""
+        state = CheckpointState(
+            job_id="walled-job",
+            job_name="Walled Job",
+            total_sheets=2,
+            last_completed_sheet=0,
+            status=JobStatus.FAILED,
+            error_message="Score wall limit of 60s exceeded before execution",
+            terminal_reason="timed_out",
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            sheets={
+                1: SheetState(sheet_num=1, status=SheetStatus.PENDING),
+                2: SheetState(sheet_num=2, status=SheetStatus.PENDING),
+            },
+        )
+        _seed_registry(tmp_path, state)
+
+        result = runner.invoke(app, ["errors", "walled-job", "--workspace", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "No errors found" not in result.stdout
+        assert "wall limit" in result.stdout
+
+        result = runner.invoke(
+            app, ["errors", "walled-job", "--workspace", str(tmp_path), "--json"]
+        )
+        payload = json.loads(result.stdout)
+        assert payload["total_errors"] == 1
+        assert payload["errors"][0]["context"]["terminal_reason"] == "timed_out"
+
     def test_errors_sheet_filter(self, tmp_path: Path) -> None:
         """Test errors command with --sheet filter."""
         state = CheckpointState(

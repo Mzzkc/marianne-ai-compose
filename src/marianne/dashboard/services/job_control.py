@@ -15,13 +15,25 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from marianne.core.config import JobConfig
 from marianne.core.logging import get_logger
-from marianne.daemon.exceptions import DaemonNotRunningError
+from marianne.daemon.exceptions import DaemonError, DaemonNotRunningError
 from marianne.daemon.ipc.client import DaemonClient
 from marianne.daemon.types import JobRequest
 
 logger = get_logger("job_control")
+
+# What loading a score can raise (#251): pydantic ValidationError (a ValueError),
+# PyYAML's own hierarchy (yaml.YAMLError is NOT a ValueError), bad shapes, and io.
+_CONFIG_PARSE_FAILURES: tuple[type[BaseException], ...] = (
+    ValueError,
+    TypeError,
+    KeyError,
+    OSError,
+    yaml.YAMLError,
+)
 
 DASHBOARD_DAEMON_REQUEST_TIMEOUT_SECONDS = 5.0
 
@@ -144,7 +156,7 @@ class JobControlService:
         if config_content:
             try:
                 config = JobConfig.from_yaml_string(config_content)
-            except Exception as exc:
+            except _CONFIG_PARSE_FAILURES as exc:
                 raise ValueError(f"Invalid job configuration: {exc}") from exc
             resolved_path = _write_dashboard_submission(config_content, config.name)
 
@@ -161,7 +173,7 @@ class JobControlService:
             resolved_path = resolved
             try:
                 config = JobConfig.from_yaml(resolved_path)
-            except Exception as exc:
+            except _CONFIG_PARSE_FAILURES as exc:
                 raise ValueError(f"Invalid job configuration: {exc}") from exc
 
         client_cwd_path = client_cwd.resolve() if client_cwd else Path.cwd().resolve()
@@ -213,9 +225,10 @@ class JobControlService:
             raise RuntimeError("Conductor not running. Start it with: mzt start") from None
         except TimeoutError:
             raise RuntimeError("Conductor request timed out.") from None
-        except Exception as e:
-            if isinstance(e, (ValueError, FileNotFoundError, RuntimeError)):
-                raise
+        except (ValueError, FileNotFoundError, RuntimeError):
+            raise
+        except (DaemonError, OSError) as e:  # conductor refused or socket failed (#251)
+            logger.warning("submit_job_failed", error_type=type(e).__name__, exc_info=True)
             raise RuntimeError(f"Failed to submit job to conductor: {e}") from e
 
     async def pause_job(self, job_id: str) -> JobActionResult:

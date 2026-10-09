@@ -342,3 +342,34 @@ class TestTmuxControlHardening:
     async def test_version_parses(self, tmux: TmuxControl) -> None:
         version = await tmux.version()
         assert version is not None and version >= (3, 2)
+
+
+class TestTranscriptTruncation398:
+    async def test_transcript_file_is_truncated_at_session_start(
+        self, tmux: TmuxControl, tmp_path: Path,
+    ) -> None:
+        """GH #398: a reused transcript path must not inherit a previous run's
+        content; pipe-pane starts from an empty file."""
+        script = _write_fake_agent(tmp_path)
+        marker = tmp_path / "attempt.complete"
+        transcript = tmp_path / "logs" / "mzt-job-s1-a1.log"
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text("STALE CONTENT FROM YESTERDAY\n", encoding="utf-8")
+        driver = InteractiveSessionDriver(tmux, _interactive_config())
+
+        result = await driver.run(
+            session="it-trunc",
+            command=[sys.executable, str(script), str(marker)],
+            cwd=tmp_path,
+            prompt="DO-TASK",
+            marker_path=marker,
+            timeout_seconds=25.0,
+            policy=StaticNudgePolicy("please continue"),
+            max_nudges=2,
+            transcript_path=transcript,
+        )
+
+        assert result.outcome == "completed", result.detail
+        text = transcript.read_text(encoding="utf-8", errors="replace")
+        assert "STALE CONTENT FROM YESTERDAY" not in text
+        assert "fake-agent completed task" in text
