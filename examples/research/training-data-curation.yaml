@@ -1127,5 +1127,4 @@ notifications:
   - type: desktop
     on_events: [job_complete, job_failed, sheet_failed]
 
-state_backend: json
 pause_between_sheets_seconds: 10

@@ -1212,8 +1212,8 @@ feedback:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `state_backend` | `"json" \| "sqlite"` | `"sqlite"` | State storage backend |
-| `state_path` | `Path \| None` | `None` | Path for state storage (default: `workspace/.marianne-state.db` for sqlite, `.marianne-state.json` for json) |
+| `state_backend` | `"json" \| "sqlite"` | `"sqlite"` | **Legacy, no effect on job state.** The conductor registry is the sole state authority (#50, #333); this key only picks the workspace-local filename used for learning/outcome data. Omit it. |
+| `state_path` | `Path \| None` | `None` | Legacy companion to `state_backend`; omit. |
 | `pause_between_sheets_seconds` | `int` | `2` | Seconds to wait between sheets. `>= 0`. |
 
 ---

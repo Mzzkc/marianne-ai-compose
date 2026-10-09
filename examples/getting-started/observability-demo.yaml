@@ -27,13 +27,12 @@
 #   mzt errors observability-demo --verbose # With stack traces
 #
 #   # INSPECT RAW STATE (JSON backend for readability):
-#   cat workspaces/observability-demo/.marianne-state.json | jq '.sheets'
-#   cat workspaces/observability-demo/.marianne-state.json | jq '.sheets."1".prompt_metrics'
+#   mzt status observability-demo --json | jq '.sheets'
+#   mzt status observability-demo --json | jq '.sheets."1"'
 #
 # How to Adapt:
 #   - Change project_path to point at YOUR project directory
 #   - Adjust analysis_focus to highlight different health dimensions
-#   - Switch state_backend to "sqlite" for production use
 #   - Change logging.level to "INFO" for quieter score-local output
 #
 # Output:
@@ -89,15 +88,14 @@ cross_sheet:
 # OBSERVABILITY CONFIGURATION
 # ============================================================
 # These settings maximize what you can observe during execution.
-# In production, you would typically use level: INFO and
-# state_backend: sqlite for better performance.
+# In production, you would typically use level: INFO.
 
 logging:
   level: DEBUG              # Capture all log levels for learning
   include_context: true     # Add job_id, sheet_num to log entries
 
-# JSON state backend — lets you inspect raw state with jq
-state_backend: json
+# Job state lives in the conductor's registry (inspect it with
+# `mzt status <job> --json`); there is no per-workspace state file to pick.
 
 # Pause between sheets — gives you time to observe state transitions
 pause_between_sheets_seconds: 5

@@ -268,4 +268,3 @@ rate_limit:
     - "429"
     - "overloaded"
 
-state_backend: json

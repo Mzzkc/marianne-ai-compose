@@ -271,8 +271,8 @@ marked with **(required)**.
 | `name` | str | **(required)** | Unique score identifier. Used in status commands and state files. |
 | `description` | str | `null` | Human-readable description of what this score does. |
 | `workspace` | Path | `./workspace` | Output directory. Resolved to absolute path at parse time. |
-| `state_backend` | `"json"` \| `"sqlite"` | `"sqlite"` | Storage backend for checkpoint state. |
-| `state_path` | Path | `null` | Custom state file path. Default: `{workspace}/.marianne-state.{ext}` |
+| `state_backend` | `"json"` \| `"sqlite"` | `"sqlite"` | Legacy; job state lives in the conductor registry, not the workspace. Omit. |
+| `state_path` | Path | `null` | Legacy companion to `state_backend`; omit. |
 | `pause_between_sheets_seconds` | int | `2` | Seconds to wait between sheets (rate limit courtesy). |
 | `instruments` | dict[str, InstrumentDef] | `{}` | Named instrument definitions local to this score. See [Multi-Instrument Scores](#multi-instrument-scores). |
 | `movements` | dict[int, MovementDef] | `{}` | Movement declarations with names, instruments, and voice counts. See [Multi-Instrument Scores](#multi-instrument-scores). |

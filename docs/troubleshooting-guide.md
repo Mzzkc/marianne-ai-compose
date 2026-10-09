@@ -834,31 +834,26 @@ mzt resume my-score
 **Investigation:**
 
 ```bash
-# For JSON state
-cat workspaces/my-workspace/.marianne-state.json | jq .
-
-# For SQLite state
-sqlite3 workspaces/my-workspace/.marianne-state.db "SELECT * FROM sheets;"
+# Job state lives in the conductor registry, never in the workspace.
+mzt status my-score --json | jq '.sheets'
+sqlite3 ~/.marianne/daemon-state.db "SELECT job_id, status, length(checkpoint_json) FROM jobs;"
 ```
 
 **Recovery:**
 
-1. **If state is partially readable**, try manual repair:
-   - Edit JSON state to fix obvious errors
-   - Use `sqlite3` to repair SQLite state
-   - Resume with `mzt resume`
-
-2. **If state is completely corrupted**, you have two options:
+1. **If a sheet did its work but was recorded as failed**, re-run its
+   validations with the supported command and resume (never edit the
+   registry by hand):
 
    ```bash
-   # Option A: Start fresh (loses progress)
-   mzt run my-score.yaml --fresh
-
-   # Option B: Restore from archive (if enabled)
-   ls workspaces/my-workspace-archives/
-   cp workspaces/my-workspace-archives/2024-01-15_10-30-00/.marianne-state.json \
-      workspaces/my-workspace/.marianne-state.json
+   mzt recover my-score                # re-validates failed sheets without re-executing them
    mzt resume my-score
+   ```
+
+2. **If the checkpoint is unreadable**, start fresh (loses progress):
+
+   ```bash
+   mzt run my-score.yaml --fresh
    ```
 
 **Prevention:**

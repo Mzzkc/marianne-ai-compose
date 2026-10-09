@@ -81,4 +81,3 @@ validations:
     command: 'test $(wc -w < "{workspace}/sheet{sheet_num}.md") -ge 50'
     description: "Output has substantive content (50+ words)"
 
-state_backend: json
