@@ -33,7 +33,6 @@ from marianne.validation.checks import (
     PreludeCadenzaFileCheck,
     PromptValidationContractCheck,
     RegexPatternCheck,
-    SkillFilesExistCheck,
     SkipWhenSheetRangeCheck,
     TemplateFileExistsCheck,
     TimeoutRangeCheck,
@@ -42,6 +41,17 @@ from marianne.validation.checks import (
     VariableShadowingCheck,
     VersionReferenceCheck,
     WorkspaceParentExistsCheck,
+)
+from marianne.validation.checks.schema import UnknownFieldCheck
+from marianne.validation.checks.structure import (
+    AmbiguousFileReferenceCheck,
+    CadenzaTargetCheck,
+    ConcertTargetCheck,
+    DependencyCycleCheck,
+    FanOutCoherenceCheck,
+    UnreachableSheetCheck,
+    UnusedVariableCheck,
+    VariableCoverageCheck,
 )
 
 
@@ -107,22 +117,25 @@ class ValidationRunner:
 
         return all_issues
 
-    def get_exit_code(self, issues: list[ValidationIssue]) -> int:
+    def get_exit_code(self, issues: list[ValidationIssue], *, strict: bool = False) -> int:
         """Determine exit code based on issues found.
 
         Returns:
             0: No errors (warnings/info OK)
             1: One or more ERROR-severity issues
         """
-        return 1 if self.has_errors(issues) else 0
+        return (
+            1
+            if self.has_errors(issues)
+            or (strict and any(i.severity == ValidationSeverity.WARNING for i in issues))
+            else 0
+        )
 
     def has_errors(self, issues: list[ValidationIssue]) -> bool:
         """Check if any issues are errors."""
         return any(i.severity == ValidationSeverity.ERROR for i in issues)
 
-    def count_by_severity(
-        self, issues: list[ValidationIssue]
-    ) -> dict[ValidationSeverity, int]:
+    def count_by_severity(self, issues: list[ValidationIssue]) -> dict[ValidationSeverity, int]:
         """Count issues by severity level."""
         counts: dict[ValidationSeverity, int] = {
             ValidationSeverity.ERROR: 0,
@@ -142,6 +155,15 @@ def create_default_checks() -> list[ValidationCheck]:
     # Note: We return instances, not classes
     # The type checker sees these as ValidationCheck protocol implementations
     checks: list[ValidationCheck] = [
+        UnknownFieldCheck(),
+        DependencyCycleCheck(),
+        FanOutCoherenceCheck(),
+        CadenzaTargetCheck(),
+        ConcertTargetCheck(),
+        VariableCoverageCheck(),
+        UnusedVariableCheck(),
+        AmbiguousFileReferenceCheck(),
+        UnreachableSheetCheck(),
         # Jinja checks (most common issues)
         JinjaSyntaxCheck(),
         JinjaUndefinedVariableCheck(),
@@ -151,7 +173,6 @@ def create_default_checks() -> list[ValidationCheck]:
         # Path checks
         WorkspaceParentExistsCheck(),
         TemplateFileExistsCheck(),
-        SkillFilesExistCheck(),
         PreludeCadenzaFileCheck(),
         CadenzaOrderingCheck(),
         ValidationPathScopeCheck(),

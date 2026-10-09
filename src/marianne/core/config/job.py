@@ -11,7 +11,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 if TYPE_CHECKING:
     from marianne.core.fan_out import FanOutMetadata  # noqa: F401
@@ -42,6 +50,7 @@ from marianne.core.config.orchestration import (
     PostSuccessHookConfig,
     ScheduleConfig,
 )
+from marianne.core.config.schema_walk import UnknownScoreField, strip_unknown_score_fields
 from marianne.core.config.spec import SpecCorpusConfig
 from marianne.core.config.techniques import TechniqueConfig
 from marianne.core.config.workspace import (
@@ -385,9 +394,7 @@ class SheetConfig(BaseModel):
                     "({sheet_num: {command: ..., description: ...}})."
                 )
             skip_when = data.get("skip_when")
-            if isinstance(skip_when, dict) and any(
-                isinstance(v, str) for v in skip_when.values()
-            ):
+            if isinstance(skip_when, dict) and any(isinstance(v, str) for v in skip_when.values()):
                 raise ValueError(
                     "Expression-based skip_when was removed (#119) — it was "
                     "never evaluated at runtime. skip_when now takes a "
@@ -399,48 +406,46 @@ class SheetConfig(BaseModel):
     @field_validator("per_sheet_instruments")
     @classmethod
     def validate_per_sheet_instruments(
-        cls, v: dict[int, str],
+        cls,
+        v: dict[int, str],
     ) -> dict[int, str]:
         """Validate per-sheet instrument assignments."""
         for sheet_num, instrument in v.items():
             if not isinstance(sheet_num, int) or sheet_num < 1:
                 raise ValueError(
-                    f"Per-sheet instrument key must be a positive integer, "
-                    f"got {sheet_num}"
+                    f"Per-sheet instrument key must be a positive integer, got {sheet_num}"
                 )
             if not instrument:
                 raise ValueError(
-                    f"Per-sheet instrument name for sheet {sheet_num} "
-                    f"must not be empty"
+                    f"Per-sheet instrument name for sheet {sheet_num} must not be empty"
                 )
         return v
 
     @field_validator("per_sheet_fallbacks")
     @classmethod
     def validate_per_sheet_fallbacks(
-        cls, v: dict[int, list[str]],
+        cls,
+        v: dict[int, list[str]],
     ) -> dict[int, list[str]]:
         """Validate per-sheet fallback chain keys are positive integers."""
         for sheet_num in v:
             if not isinstance(sheet_num, int) or sheet_num < 1:
                 raise ValueError(
-                    f"Per-sheet fallback key must be a positive integer, "
-                    f"got {sheet_num}"
+                    f"Per-sheet fallback key must be a positive integer, got {sheet_num}"
                 )
         return v
 
     @field_validator("instrument_map")
     @classmethod
     def validate_instrument_map(
-        cls, v: dict[str, list[int]],
+        cls,
+        v: dict[str, list[int]],
     ) -> dict[str, list[int]]:
         """Validate instrument_map: no duplicate sheets, valid names."""
         seen_sheets: dict[int, str] = {}
         for instrument, sheets in v.items():
             if not instrument:
-                raise ValueError(
-                    "Instrument name in instrument_map must not be empty"
-                )
+                raise ValueError("Instrument name in instrument_map must not be empty")
             for sheet_num in sheets:
                 if not isinstance(sheet_num, int) or sheet_num < 1:
                     raise ValueError(
@@ -470,9 +475,7 @@ class SheetConfig(BaseModel):
         When no fan-out was used, total_stages == total_sheets (identity).
         """
         if self.fan_out_stage_map:
-            return max(
-                meta["stage"] for meta in self.fan_out_stage_map.values()
-            )
+            return max(meta["stage"] for meta in self.fan_out_stage_map.values())
         return self.total_sheets
 
     def get_fan_out_metadata(self, sheet_num: int) -> FanOutMetadata:  # noqa: F821
@@ -503,13 +506,9 @@ class SheetConfig(BaseModel):
         """Validate fan_out field values."""
         for stage, count in v.items():
             if not isinstance(stage, int) or stage < 1:
-                raise ValueError(
-                    f"Fan-out stage must be positive integer, got {stage}"
-                )
+                raise ValueError(f"Fan-out stage must be positive integer, got {stage}")
             if not isinstance(count, int) or count < 1:
-                raise ValueError(
-                    f"Fan-out count for stage {stage} must be >= 1, got {count}"
-                )
+                raise ValueError(f"Fan-out count for stage {stage} must be >= 1, got {count}")
         return v
 
     @field_validator("dependencies")
@@ -610,8 +609,7 @@ class SheetConfig(BaseModel):
         for sheet_num, deps in self.dependencies.items():
             if sheet_num < 1 or sheet_num > max_sheet:
                 raise ValueError(
-                    f"Dependency key sheet {sheet_num} is out of range "
-                    f"(valid: 1-{max_sheet})"
+                    f"Dependency key sheet {sheet_num} is out of range (valid: 1-{max_sheet})"
                 )
             for dep in deps:
                 if dep < 1 or dep > max_sheet:
@@ -663,9 +661,7 @@ class PromptConfig(BaseModel):
     def at_least_one_template(self) -> PromptConfig:
         """Warn when no template source is provided (falls back to default prompt)."""
         if self.template is not None and self.template_file is not None:
-            raise ValueError(
-                "PromptConfig accepts 'template' or 'template_file', not both"
-            )
+            raise ValueError("PromptConfig accepts 'template' or 'template_file', not both")
         if self.template is None and self.template_file is None:
             warnings.warn(
                 "PromptConfig has neither 'template' nor 'template_file'. "
@@ -715,10 +711,25 @@ def _apply_default_workspace(data: dict[str, Any]) -> None:
         data["workspace"] = str(ws)
 
 
+class ValidateConfig(BaseModel):
+    """Score-local acknowledgement of advisory validator findings."""
+
+    model_config = ConfigDict(extra="forbid")
+    suppress: list[str] = Field(default_factory=list)
+
+
 class JobConfig(BaseModel):
     """Complete configuration for an orchestration job."""
 
     model_config = ConfigDict(extra="forbid")
+    _unknown_fields: list[UnknownScoreField] = PrivateAttr(default_factory=list)
+
+    @property
+    def unknown_fields(self) -> tuple[UnknownScoreField, ...]:
+        """Fields removed by the tolerant score-file loader."""
+        return tuple(self._unknown_fields)
+
+    validation_settings: ValidateConfig = Field(default_factory=ValidateConfig, alias="validate")
 
     name: str = Field(description="Unique job name")
     description: str | None = Field(default=None, description="Human-readable description")
@@ -913,15 +924,13 @@ class JobConfig(BaseModel):
     @field_validator("movements")
     @classmethod
     def _validate_movement_keys(
-        cls, v: dict[int, MovementDef],
+        cls,
+        v: dict[int, MovementDef],
     ) -> dict[int, MovementDef]:
         """Validate movement numbers are positive integers."""
         for movement_num in v:
             if not isinstance(movement_num, int) or movement_num < 1:
-                raise ValueError(
-                    f"Movement number must be a positive integer, "
-                    f"got {movement_num}"
-                )
+                raise ValueError(f"Movement number must be a positive integer, got {movement_num}")
         return v
 
     @model_validator(mode="after")
@@ -1004,14 +1013,14 @@ class JobConfig(BaseModel):
             # A loaded score that omits workspace gets a conductor-managed one
             # under ~/workspaces/<name> (#58) — workspaces "just work".
             _apply_default_workspace(data)
-        config = cls.model_validate(data)
+        clean, unknown = strip_unknown_score_fields(data, cls)
+        config = cls.model_validate(clean)
+        config._unknown_fields = unknown
         config.source_path = path.resolve()
         return config
 
     @classmethod
-    def from_yaml_bytes(
-        cls, data: bytes, *, source_path: Path | str
-    ) -> JobConfig:
+    def from_yaml_bytes(cls, data: bytes, *, source_path: Path | str) -> JobConfig:
         """Load job configuration from exact bytes, attributed to ``source_path``.
 
         Semantics match :meth:`from_yaml` (workspace pre-resolution relative
@@ -1037,7 +1046,9 @@ class JobConfig(BaseModel):
                 parsed["workspace"] = str((path.resolve().parent / ws).resolve())
         else:
             _apply_default_workspace(parsed)
-        config = cls.model_validate(parsed)
+        clean, unknown = strip_unknown_score_fields(parsed, cls)
+        config = cls.model_validate(clean)
+        config._unknown_fields = unknown
         config.source_path = path.resolve()
         return config
 
@@ -1054,7 +1065,10 @@ class JobConfig(BaseModel):
         # under ~/workspaces/<name> (#58). Explicit relative paths are left to
         # the model's _resolve_workspace (resolved against CWD), as before.
         _apply_default_workspace(data)
-        return cls.model_validate(data)
+        clean, unknown = strip_unknown_score_fields(data, cls)
+        config = cls.model_validate(clean)
+        config._unknown_fields = unknown
+        return config
 
     def get_state_path(self) -> Path:
         """Get the resolved state path."""

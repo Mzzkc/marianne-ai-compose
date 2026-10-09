@@ -1037,7 +1037,7 @@ class TestPreludeCadenzaFileCheck:
 
         assert len(issues) == 1
         assert issues[0].check_id == "V108"
-        assert issues[0].severity == ValidationSeverity.WARNING
+        assert issues[0].severity == ValidationSeverity.ERROR
         assert "prelude" in issues[0].message
 
     def test_catches_missing_cadenza_file(self, tmp_path: Path) -> None:

@@ -31,6 +31,7 @@ from marianne.validation import (
     ValidationRunner,
     create_default_checks,
 )
+from marianne.validation.output_contract import apply_suppression, structural_summary
 
 from ..helpers import configure_global_logging
 from ..output import console, output_error
@@ -55,6 +56,8 @@ def validate(
         "-v",
         help="Show detailed validation output",
     ),
+    strict: bool = typer.Option(False, "--strict", help="Treat unsuppressed warnings as failures"),
+    errors_only: bool = typer.Option(False, "--errors-only", help="Show only error findings"),
 ) -> None:
     """Validate a score configuration file.
 
@@ -119,9 +122,7 @@ def validate(
                         "type": "fleet",
                         "valid": True,
                         "skipped": True,
-                        "message": (
-                            "Fleet config — not subject to score validation."
-                        ),
+                        "message": ("Fleet config — not subject to score validation."),
                         "file": str(config_file),
                     },
                     indent=2,
@@ -135,6 +136,13 @@ def validate(
                 " Fleet configs are not subject to score validation.",
             )
         raise typer.Exit(0) from None
+
+    if not all(key in parsed for key in ("name", "sheet", "prompt")):
+        output_error(
+            "This YAML is not a Marianne score (expected name, sheet, prompt).",
+            json_output=json_output,
+        )
+        raise typer.Exit(2) from None
 
     # Try Pydantic validation
     try:
@@ -160,6 +168,8 @@ def validate(
     # Run extended validation checks
     runner = ValidationRunner(create_default_checks())
     issues = runner.validate(config, config_file, raw_yaml)
+    issues, suppressed = apply_suppression(config, issues)
+    summary = structural_summary(config)
 
     # Output results
     reporter = ValidationReporter(console)
@@ -171,6 +181,12 @@ def validate(
 
         # Build combined JSON with validation issues and rendering preview
         validation_data = json_mod.loads(reporter.report_json(issues))
+        validation_data["summary"] = summary
+        validation_data["suppressed"] = suppressed
+        if errors_only:
+            validation_data["issues"] = [
+                issue for issue in validation_data["issues"] if issue["severity"] == "error"
+            ]
         preview = generate_preview(config, config_file)
         validation_data["rendering"] = reporter.report_rendering_json(preview)
         console.print(
@@ -179,7 +195,17 @@ def validate(
             highlight=False,
         )
     else:
-        reporter.report_terminal(issues, config.name)
+        console.print(f"\nScore: {summary['score']}")
+        console.print(f"Sheets: {summary['sheets']} ({summary['stages']} stages)")
+        console.print(f"Instruments: {summary['instruments']['primary']}")
+        console.print(f"Variables: {summary['variables']['declared']} declared")
+        if summary["loops"]:
+            console.print(f"Loops: {', '.join(summary['loops'])}")
+        if summary["triggers"]:
+            console.print(f"Triggers: {', '.join(summary['triggers'])}")
+        if suppressed:
+            console.print(f"Suppressed: {sum(int(row['count']) for row in suppressed)}")
+        reporter.report_terminal(issues, config.name, verbose=verbose, errors_only=errors_only)
 
         # Show config summary if no errors
         if not runner.has_errors(issues):
@@ -211,12 +237,11 @@ def validate(
             for sheet in preview.sheets:
                 if sheet.render_error:
                     console.print(
-                        f"  [red]Sheet {sheet.sheet_num} render error:[/red]"
-                        f" {sheet.render_error}"
+                        f"  [red]Sheet {sheet.sheet_num} render error:[/red] {sheet.render_error}"
                     )
 
     # Exit with appropriate code
-    exit_code = runner.get_exit_code(issues)
+    exit_code = runner.get_exit_code(issues, strict=strict)
     if exit_code != 0:
         raise typer.Exit(exit_code) from None
 
@@ -316,19 +341,16 @@ def _schema_error_hints(error_msg: str) -> list[str]:
     has_extra_forbidden = "extra inputs are not permitted" in msg_lower
     has_field_required = "field required" in msg_lower
     has_prompt_config_error = "promptconfig" in msg_lower and "prompt" in msg_lower
-    has_movements_dict_error = (
-        "movements" in msg_lower
-        and (
-            "should be a valid dictionary" in msg_lower
-            or "input should be a valid dictionary" in msg_lower
-        )
+    has_movements_dict_error = "movements" in msg_lower and (
+        "should be a valid dictionary" in msg_lower
+        or "input should be a valid dictionary" in msg_lower
     )
 
     # Handle PromptConfig type errors
     if has_prompt_config_error:
         return [
             "The 'prompt' field must be a mapping, not a string.",
-            "Use:  prompt:  /  template: \"your prompt text here\"",
+            'Use:  prompt:  /  template: "your prompt text here"',
             "See: docs/score-writing-guide.md",
         ]
 

@@ -50,8 +50,8 @@ class TestInstrumentNameCheckProperties:
     def test_check_id(self, check: InstrumentNameCheck) -> None:
         assert check.check_id == "V210"
 
-    def test_severity_is_warning(self, check: InstrumentNameCheck) -> None:
-        assert check.severity == ValidationSeverity.WARNING
+    def test_severity_is_error(self, check: InstrumentNameCheck) -> None:
+        assert check.severity == ValidationSeverity.ERROR
 
     def test_description(self, check: InstrumentNameCheck) -> None:
         assert "instrument" in check.description.lower()
@@ -102,7 +102,7 @@ class TestInstrumentNameCheckKnownNames:
 class TestInstrumentNameCheckUnknownNames:
     """Unknown instrument names should produce WARNING."""
 
-    def test_unknown_instrument_produces_warning(
+    def test_unknown_instrument_produces_error(
         self, check: InstrumentNameCheck, tmp_path: Path, _mock_profiles: dict
     ) -> None:
         yaml_text = dedent("""
@@ -121,7 +121,7 @@ class TestInstrumentNameCheckUnknownNames:
         issues = check.check(config, config_path, yaml_text)
         assert len(issues) == 1
         assert issues[0].check_id == "V210"
-        assert issues[0].severity == ValidationSeverity.WARNING
+        assert issues[0].severity == ValidationSeverity.ERROR
         assert "nonexistent-instrument-12345" in issues[0].message
 
     def test_typo_instrument_warns(
