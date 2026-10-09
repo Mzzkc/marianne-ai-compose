@@ -16,6 +16,7 @@ from typing_extensions import TypedDict
 
 from marianne.core.config.instruments import InstrumentRouteBinding
 from marianne.core.errors.codes import ErrorCategory, ExitReason
+from marianne.core.flow_state import FlowState
 from marianne.core.logging import get_logger
 from marianne.utils.time import utc_now
 
@@ -285,6 +286,29 @@ class CheckpointErrorRecord(BaseModel):
 ErrorRecord = CheckpointErrorRecord
 
 
+class InstrumentIdentity(BaseModel):
+    """The configured primary identity, including an explicit default model."""
+
+    name: str = Field(description="Primary instrument name.")
+    model: str | None = Field(description="Primary model; None uses the profile default.")
+
+
+class FlowAttemptRecord(BaseModel):
+    """Bounded evidence retained when a flow transition reopens a sheet."""
+
+    epoch: int = Field(ge=0, description="Dispatch epoch before the reset.")
+    cause: str = Field(description="Reason this sheet was reopened.")
+    loop_indices: dict[str, int] = Field(default_factory=dict, description="Active loop indices.")
+    status: SheetStatus = Field(description="Status before reset.")
+    validation_passed: bool | None = Field(default=None, description="Last validation outcome.")
+    passed_validations: list[str] = Field(default_factory=list, description="Passed checks.")
+    failed_validations: list[str] = Field(default_factory=list, description="Failed checks.")
+    stdout_tail: str | None = Field(default=None, description="Last 500 output characters.")
+    stderr_tail: str | None = Field(default=None, description="Last 500 error characters.")
+    total_cost_usd: float = Field(default=0.0, description="Accumulated sheet cost.")
+    recorded_at: datetime = Field(default_factory=utc_now, description="Record timestamp.")
+
+
 class SheetState(BaseModel):
     """State for a single sheet."""
 
@@ -314,6 +338,15 @@ class SheetState(BaseModel):
         default=None,
         description="Model used by the instrument, e.g. 'gemini-2.5-pro'. "
         "Populated at execution time from backend metadata.",
+    )
+    primary_identity: InstrumentIdentity | None = Field(
+        default=None, description="Configured primary instrument and model for flow resets."
+    )
+    dispatch_epoch: int = Field(
+        default=0, ge=0, description="Generation bumped whenever flow reopens this sheet."
+    )
+    flow_history: list[FlowAttemptRecord] = Field(
+        default_factory=list, description="Last ten sheet states before flow resets."
     )
     movement: int | None = Field(
         default=None,
@@ -971,10 +1004,58 @@ class SheetState(BaseModel):
         self.healing_attempts = 0
         # #187: restart from the primary instrument, not the dead fallback.
         self.current_instrument_index = 0
+        self.restore_primary_identity()
         # #190: drop the stale fallback record so a clean restart shows no
         # phantom "(was X: rate_limit)" tag.
         self.instrument_fallback_history = []
         self.fallback_attempts = {}
+        self.clear_dispatch_block()
+
+    def remember_primary_identity(self) -> None:
+        """Capture the configured primary before any fallback changes the live identity."""
+        self.primary_identity = InstrumentIdentity(
+            name=self.instrument_name or "", model=self.model
+        )
+
+    def restore_primary_identity(self) -> None:
+        """Return to the primary, retaining old-checkpoint identity when unknown."""
+        if self.primary_identity is None:
+            _logger.warning("flow.reset.primary_unknown", extra={"sheet_num": self.sheet_num})
+            return
+        self.instrument_name = self.primary_identity.name
+        self.model = self.primary_identity.model
+        self.instrument_model = self.primary_identity.model
+
+    def reset_for_flow(self, cause: str, loop_indices: dict[str, int] | None = None) -> None:
+        """Reopen a sheet while preserving money, duration, and bounded history."""
+        self.flow_history.append(FlowAttemptRecord(
+            epoch=self.dispatch_epoch,
+            cause=cause,
+            loop_indices=dict(loop_indices or {}),
+            status=self.status,
+            validation_passed=self.validation_passed,
+            passed_validations=list(self.passed_validations),
+            failed_validations=list(self.failed_validations),
+            stdout_tail=self.stdout_tail[-500:] if self.stdout_tail else None,
+            stderr_tail=self.stderr_tail[-500:] if self.stderr_tail else None,
+            total_cost_usd=self.total_cost_usd,
+        ))
+        self.flow_history = self.flow_history[-10:]
+        self.status = SheetStatus.PENDING
+        self.dispatch_epoch += 1
+        self.completed_at = None
+        self.error_message = None
+        self.error_code = None
+        self.normal_attempts = 0
+        self.completion_attempts = 0
+        self.healing_attempts = 0
+        self.attempt_count = 0
+        self.current_instrument_index = 0
+        self.restore_primary_identity()
+        self.fallback_attempts = {}
+        self.fermata_entered_at = None
+        self.fermata_reason = None
+        self.next_retry_at = None
         self.clear_dispatch_block()
 
     def mark_dispatch_blocked(
@@ -1187,6 +1268,9 @@ class CheckpointState(BaseModel):
 
     # Sheet-level state
     sheets: dict[int, SheetState] = Field(default_factory=dict)
+    flow: FlowState = Field(
+        default_factory=FlowState, description="Persisted loop and trigger state."
+    )
 
     # Sheet-first architecture fields (movement 1)
     instruments_used: list[str] = Field(

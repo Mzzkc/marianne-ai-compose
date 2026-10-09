@@ -31,10 +31,14 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from marianne.core.constants import VALIDATION_PASS_RATE_KEY
 from marianne.daemon.types import ObserverEvent
+
+if TYPE_CHECKING:
+    from marianne.core.config.flow import TriggerAction
+    from marianne.core.expressions import FileFacts
 
 # =============================================================================
 # Musician Events — sheet execution results
@@ -61,6 +65,7 @@ class SheetAttemptResult:
     # Public generation of the managed baton registration that owned this
     # execution. Direct legacy BatonCore registrations intentionally use None.
     event_generation: int | None = field(default=None, kw_only=True)
+    dispatch_epoch: int | None = field(default=None, kw_only=True)
 
     # Execution outcome
     execution_success: bool = True
@@ -155,6 +160,7 @@ class SheetSkipped:
     sheet_num: int
     reason: str
     event_generation: int | None = field(default=None, kw_only=True)
+    dispatch_epoch: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -223,6 +229,7 @@ class RetryDue:
     job_id: str
     sheet_num: int
     event_generation: int | None = field(default=None, kw_only=True)
+    dispatch_epoch: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -237,6 +244,7 @@ class StaleCheck:
     job_id: str
     sheet_num: int
     event_generation: int | None = field(default=None, kw_only=True)
+    dispatch_epoch: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -618,6 +626,91 @@ class CircuitBreakerRecovery:
 # Union type — the baton's inbox accepts any of these
 # =============================================================================
 
+
+@dataclass(frozen=True)
+class LoopFactsReady:
+    """Bounded file facts prefetched off the baton loop for one loop boundary."""
+
+    job_id: str
+    span: str
+    request_id: int
+    files: dict[str, FileFacts]
+    error: str | None = None
+    event_generation: int | None = field(default=None, kw_only=True)
+    timestamp: float = field(default_factory=time.time)
+
+
+@dataclass(frozen=True)
+class SheetTriggerFired:
+    job_id: str
+    sheet_num: int
+    outcome: Literal["success", "fail"]
+    actions: tuple[TriggerAction, ...]
+    chain_id: int
+    dispatch_epoch: int
+    event_generation: int | None = field(default=None, kw_only=True)
+    timestamp: float = field(default_factory=time.time)
+
+
+@dataclass(frozen=True)
+class GotoRequested:
+    job_id: str
+    from_sheet: int
+    to_sheet: int
+    direction: Literal["forward", "backward", "same"]
+    reset_sheets: tuple[int, ...]
+    skipped_sheets: tuple[int, ...]
+    event_generation: int | None = field(default=None, kw_only=True)
+    timestamp: float = field(default_factory=time.time)
+
+
+@dataclass(frozen=True)
+class LoopIterating:
+    job_id: str
+    sheets: range
+    index_name: str
+    iteration: int
+    cost_usd: float
+    cost_uncertain: bool
+    event_generation: int | None = field(default=None, kw_only=True)
+    timestamp: float = field(default_factory=time.time)
+
+
+@dataclass(frozen=True)
+class LoopCompleted:
+    job_id: str
+    sheets: range
+    index_name: str
+    iterations: int
+    reason: str
+    event_generation: int | None = field(default=None, kw_only=True)
+    timestamp: float = field(default_factory=time.time)
+
+
+@dataclass(frozen=True)
+class FlowRunFinished:
+    job_id: str
+    chain_id: int
+    cursor: int
+    exit_code: int | None
+    timed_out: bool
+    log_path: str | None
+    error: str | None = None
+    event_generation: int | None = field(default=None, kw_only=True)
+    timestamp: float = field(default_factory=time.time)
+
+
+@dataclass(frozen=True)
+class FlowConcertSubmitted:
+    job_id: str
+    chain_id: int
+    cursor: int
+    accepted: bool
+    child_job_id: str | None
+    message: str | None
+    event_generation: int | None = field(default=None, kw_only=True)
+    timestamp: float = field(default_factory=time.time)
+
 BatonEvent = (
     SheetAttemptResult
     | SheetSkipped
@@ -647,6 +740,13 @@ BatonEvent = (
     | A2ATaskRouted
     | A2ATaskCompleted
     | A2ATaskFailed
+    | LoopFactsReady
+    | FlowRunFinished
+    | FlowConcertSubmitted
+    | SheetTriggerFired
+    | GotoRequested
+    | LoopIterating
+    | LoopCompleted
 )
 
 
@@ -666,6 +766,44 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
     ``{job_id, sheet_num, event, data, timestamp}``
     """
     match event:
+        case SheetTriggerFired():
+            return {
+                "job_id": event.job_id, "sheet_num": event.sheet_num,
+                "event": "baton.flow.trigger_fired",
+                "data": {"outcome": event.outcome, "chain_id": event.chain_id,
+                         "dispatch_epoch": event.dispatch_epoch,
+                         "actions": [action.model_dump(by_alias=True, exclude_none=True)
+                                     for action in event.actions]},
+                "timestamp": event.timestamp,
+            }
+        case GotoRequested():
+            return {
+                "job_id": event.job_id, "sheet_num": event.from_sheet,
+                "event": "baton.flow.goto_requested",
+                "data": {"to_sheet": event.to_sheet, "direction": event.direction,
+                         "reset_sheets": list(event.reset_sheets),
+                         "skipped_sheets": list(event.skipped_sheets)},
+                "timestamp": event.timestamp,
+            }
+        case LoopIterating():
+            return {
+                "job_id": event.job_id, "sheet_num": event.sheets.stop - 1,
+                "event": "baton.flow.loop_iterating",
+                "data": {"range": [event.sheets.start, event.sheets.stop - 1],
+                         "index_name": event.index_name, "iteration": event.iteration,
+                         "cost_usd": event.cost_usd,
+                         "cost_uncertain": event.cost_uncertain},
+                "timestamp": event.timestamp,
+            }
+        case LoopCompleted():
+            return {
+                "job_id": event.job_id, "sheet_num": event.sheets.stop - 1,
+                "event": "baton.flow.loop_completed",
+                "data": {"range": [event.sheets.start, event.sheets.stop - 1],
+                         "index_name": event.index_name,
+                         "iterations": event.iterations, "reason": event.reason},
+                "timestamp": event.timestamp,
+            }
         case SheetAttemptResult():
             return {
                 "job_id": event.job_id,

@@ -268,6 +268,7 @@ async def sheet_task(
             sheet, exec_result,
             total_sheets=total_sheets,
             total_movements=total_movements,
+            flow_vars=attempt_context.flow_vars,
         )
 
         # #344 obs1: rescue a plain non-zero exit whose work passed every
@@ -311,6 +312,7 @@ async def sheet_task(
             instrument_name=effective_instrument,
             attempt=attempt_context.attempt_number,
             event_generation=event_generation,
+            dispatch_epoch=attempt_context.dispatch_epoch,
             execution_success=exec_result.success,
             exit_code=exec_result.exit_code,
             duration_seconds=duration,
@@ -370,6 +372,7 @@ async def sheet_task(
             instrument_name=effective_instrument,
             attempt=attempt_context.attempt_number,
             event_generation=event_generation,
+            dispatch_epoch=attempt_context.dispatch_epoch,
             execution_success=False,
             exit_code=None,
             duration_seconds=duration,
@@ -477,6 +480,8 @@ def _build_prompt(
         total_sheets=total_sheets,
         total_movements=total_movements,
     )
+    template_vars.update(context.flow_vars)
+    template_vars["loops"] = context.flow_vars
 
     # Step 3: Render the Jinja2 template
     rendered_template = _render_template(sheet, template_vars)
@@ -1056,6 +1061,7 @@ async def _validate(
     *,
     total_sheets: int = 1,
     total_movements: int = 1,
+    flow_vars: dict[str, int] | None = None,
 ) -> tuple[int, int, float, dict[str, Any] | None]:
     """Run validations on the execution output.
 
@@ -1092,6 +1098,7 @@ async def _validate(
         total_sheets=total_sheets,
         total_movements=total_movements,
     )
+    sheet_context.update(flow_vars or {})
 
     # Run validations through the validation engine
     try:

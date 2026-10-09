@@ -1,0 +1,38 @@
+# Run with: mzt run examples/patterns/convergence-loop.yaml --fresh
+# A deterministic two-pass loop. The first pass leaves the condition false;
+# the second writes the completion marker. A failed attempt escalates.
+name: convergence-loop
+description: A CLI-only convergence loop with an expression gate and failure trigger.
+workspace: ~/Projects/WORKSPACES/marianne-expansion-20261009/convergence-loop-example
+instrument: cli
+workspace_lifecycle:
+  archive_on_fresh: true
+
+sheet:
+  size: 1
+  total_items: 1
+  loops:
+    1:
+      index: pass_no
+      until: 'file("done.txt").exists'
+      max_iterations: 3
+  triggers:
+    1:
+      on_fail:
+        - escalate: The convergence step failed; inspect iteration.txt and retry.
+
+prompt:
+  template: |
+    mkdir -p "{{ workspace }}"
+    if [ ! -f "{{ workspace }}/iteration.txt" ]; then
+      rm -f "{{ workspace }}/done.txt"
+      printf '1\n' > "{{ workspace }}/iteration.txt"
+    else
+      printf '2\n' > "{{ workspace }}/iteration.txt"
+      printf 'done\n' > "{{ workspace }}/done.txt"
+    fi
+
+validations:
+  - type: file_exists
+    path: "{workspace}/iteration.txt"
+    description: Each iteration writes its numbered artifact.

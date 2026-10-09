@@ -5,6 +5,7 @@ Defines the top-level JobConfig, SheetConfig, and PromptConfig models.
 
 from __future__ import annotations
 
+import re
 import warnings
 from enum import Enum
 from pathlib import Path
@@ -37,6 +38,16 @@ from marianne.core.config.execution import (
     StaleDetectionConfig,
     ValidationRule,
 )
+from marianne.core.config.flow import (
+    FlowConfigError,
+    FlowIssue,
+    LoopConfig,
+    SheetSpan,
+    SheetTriggerConfig,
+    canonical_span,
+    span_bounds,
+    span_range,
+)
 from marianne.core.config.judgment import JudgmentConfig
 from marianne.core.config.learning import (
     CheckpointConfig,
@@ -62,7 +73,9 @@ from marianne.core.config.workspace import (
     WorkspaceLifecycleConfig,
     default_workspace_for,
 )
-from marianne.core.constants import DEFAULT_INSTRUMENT_NAME, STATE_DB_FILENAME
+from marianne.core.constants import DEFAULT_INSTRUMENT_NAME, FLOW_RESERVED_NAMES, STATE_DB_FILENAME
+from marianne.core.expressions import ExpressionError, parse_expression
+from marianne.core.validation_condition import check_validation_condition
 
 
 class InjectionCategory(str, Enum):
@@ -277,6 +290,17 @@ class SheetConfig(BaseModel):
         ),
     )
 
+    loops: dict[SheetSpan, LoopConfig] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        description="Do-while loops keyed by inclusive sheet span, or by stage span under fan-out.",
+    )
+    triggers: dict[SheetSpan, SheetTriggerConfig] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        description="Per-attempt actions keyed by sheet or fan-out stage span.",
+    )
+
     # Per-sheet prompt extensions (GH#76) — additional directives for specific sheets
     prompt_extensions: dict[int, list[str]] = Field(
         default_factory=dict,
@@ -385,6 +409,34 @@ class SheetConfig(BaseModel):
         LOUDLY with the fix, instead of a generic pydantic error.
         """
         if isinstance(data, dict):
+            for section in ("loops", "triggers"):
+                mapping = data.get(section)
+                if not isinstance(mapping, dict):
+                    continue
+                normalized: dict[str, Any] = {}
+                original: dict[str, object] = {}
+                for raw, value in mapping.items():
+                    try:
+                        span = canonical_span(raw)
+                    except ValueError:
+                        # Pydantic reports the invalid key at its normal location.
+                        continue
+                    if span in normalized:
+                        raise FlowConfigError(
+                            (
+                                FlowIssue(
+                                    "V-FLOW-07",
+                                    span,
+                                    f"{section} keys {original[span]!r} and {raw!r} "
+                                    "name the same span",
+                                    "merge the two declarations",
+                                ),
+                            )
+                        )
+                    normalized[span] = value
+                    original[span] = raw
+                if len(normalized) == len(mapping):
+                    data[section] = normalized
             if "total_sheets" in data:
                 data.pop("total_sheets")
             if "skip_when_command" in data:
@@ -582,6 +634,32 @@ class SheetConfig(BaseModel):
                     expanded_skip_when[sheet_num] = cmd
             self.skip_when = expanded_skip_when
 
+        def concrete_span(span: str) -> str:
+            first_stage, last_stage = span_bounds(span)
+            first = expansion.stage_sheets.get(first_stage)
+            last = expansion.stage_sheets.get(last_stage)
+            if not first or not last:
+                return span  # the positioned range check below reports it
+            start, end = first[0], last[-1]
+            return str(start) if start == end else f"{start}-{end}"
+
+        if self.loops:
+            self.loops = {concrete_span(span): loop for span, loop in self.loops.items()}
+        if self.triggers:
+            expanded_triggers: dict[str, SheetTriggerConfig] = {}
+            for span, trigger in self.triggers.items():
+                copied = trigger.model_copy(deep=True)
+                for actions in (copied.on_success, copied.on_fail):
+                    for action in actions or ():
+                        if action.goto is not None:
+                            stage_sheets = expansion.stage_sheets.get(action.goto)
+                            if stage_sheets:
+                                action.goto = stage_sheets[0]
+                        if action.skip is not None:
+                            action.skip = concrete_span(action.skip)
+                expanded_triggers[concrete_span(span)] = copied
+            self.triggers = expanded_triggers
+
         # Store serializable metadata for resume
         self.fan_out_stage_map = {
             sheet_num: {
@@ -595,6 +673,108 @@ class SheetConfig(BaseModel):
         # Clear fan_out to prevent re-expansion on resume
         self.fan_out = {}
 
+        return self
+
+    @model_validator(mode="after")
+    def validate_flow(self) -> SheetConfig:
+        """Collect flow load errors once, after stage keys are concrete."""
+        if not self.loops and not self.triggers:
+            return self
+        issues: list[FlowIssue] = []
+        total = self.total_sheets
+        spans: dict[str, tuple[int, int]] = {}
+        names: dict[str, str] = {}
+        for section, mapping in (("loops", self.loops), ("triggers", self.triggers)):
+            for span in mapping or {}:
+                start, end = span_bounds(span)
+                if start < 1 or end > total:
+                    issues.append(
+                        FlowIssue("V-FLOW-06", span, f"{section} span {span} is outside 1-{total}")
+                    )
+                if section == "loops":
+                    spans[span] = (start, end)
+        for span, loop in (self.loops or {}).items():
+            if loop.count is None and loop.until is None:
+                issues.append(
+                    FlowIssue("V-FLOW-22", span, f"loop {span} needs until, count, or both")
+                )
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", loop.index):
+                issues.append(
+                    FlowIssue(
+                        "V-FLOW-10", span, f"loop index {loop.index!r} must be lowercase ASCII"
+                    )
+                )
+            if loop.index in FLOW_RESERVED_NAMES:
+                issues.append(
+                    FlowIssue(
+                        "V-FLOW-10", span, f"loop index {loop.index!r} collides with a built-in"
+                    )
+                )
+            if loop.index in names:
+                issues.append(
+                    FlowIssue(
+                        "V-FLOW-09",
+                        span,
+                        f"loop index {loop.index!r} is also used by loop {names[loop.index]}",
+                    )
+                )
+            names[loop.index] = span
+        for left, (a, b) in spans.items():
+            for right, (c, d) in spans.items():
+                if left >= right:
+                    continue
+                if max(a, c) <= min(b, d) and not ((a <= c and d <= b) or (c <= a and b <= d)):
+                    issues.append(
+                        FlowIssue(
+                            "V-FLOW-11", left, f"loops {left} and {right} overlap without nesting"
+                        )
+                    )
+        for span, loop in (self.loops or {}).items():
+            if loop.until is None:
+                continue
+            try:
+                refs = parse_expression(loop.until).references()
+            except ExpressionError as exc:
+                issues.append(FlowIssue("V-FLOW-01", span, f"loop {span}: {exc}", exc.hint))
+                continue
+            for reserved in refs.reserved:
+                issues.append(
+                    FlowIssue("V-FLOW-02", span, f"{reserved}() is reserved for a future release")
+                )
+            own_start, own_end = spans[span]
+            for name in refs.loops:
+                owner = names.get(name)
+                if owner is None or not (
+                    spans[owner][0] <= own_start and own_end <= spans[owner][1]
+                ):
+                    issues.append(
+                        FlowIssue("V-FLOW-04", span, f"loop.{name} is unavailable in loop {span}")
+                    )
+            for num in refs.sheets:
+                if not 1 <= num <= total:
+                    issues.append(FlowIssue("V-FLOW-05", span, f"sheet({num}) does not exist"))
+        for span, trigger in (self.triggers or {}).items():
+            for action in (trigger.on_success or []) + (trigger.on_fail or []):
+                if action.goto is not None and not 1 <= action.goto <= total:
+                    issues.append(
+                        FlowIssue(
+                            "V-FLOW-08",
+                            span,
+                            f"goto {action.goto} targets a sheet that does not exist",
+                        )
+                    )
+                if action.skip is not None:
+                    start, end = span_bounds(action.skip)
+                    if start < 1 or end > total:
+                        issues.append(
+                            FlowIssue(
+                                "V-FLOW-08",
+                                span,
+                                f"skip {action.skip} targets a sheet that does not exist",
+                            )
+                        )
+        if issues:
+            raise FlowConfigError(tuple(issues))
         return self
 
     @model_validator(mode="after")
@@ -940,6 +1120,53 @@ class JobConfig(BaseModel):
         This eliminates redundant .resolve() calls scattered across consumers.
         """
         self.workspace = self.workspace.expanduser().resolve()
+        return self
+
+    @model_validator(mode="after")
+    def _validate_flow_variables(self) -> JobConfig:
+        """Reject a loop name that escapes its scope or shadows author data."""
+        if not self.sheet.loops:
+            return self
+        from marianne.core.sheet import build_sheets
+
+        issues: list[FlowIssue] = []
+        configured = {
+            loop.index: span for span, loop in self.sheet.loops.items()
+        }
+        for name, span in configured.items():
+            if name in self.prompt.variables:
+                issues.append(FlowIssue(
+                    "V-FLOW-10", span,
+                    f"loop index {name!r} collides with prompt.variables[{name!r}]",
+                ))
+
+        sheets = build_sheets(self)
+        total_movements = len({sheet.movement for sheet in sheets}) or 1
+        for rule in self.validations:
+            templates = (rule.path, rule.command, rule.working_directory, rule.pattern)
+            used = {
+                name for template in templates if template is not None
+                for name in re.findall(r"(?<!\{)\{([A-Za-z][A-Za-z0-9_]*)\}(?!\})", template)
+                if name in configured
+            }
+            for name in used:
+                span = configured[name]
+                allowed = span_range(span)
+                for sheet in sheets:
+                    context = sheet.template_variables(
+                        total_sheets=len(sheets), total_movements=total_movements
+                    )
+                    if (sheet.num not in allowed
+                            and check_validation_condition(rule.condition, context)):
+                        label = rule.description or rule.type
+                        issues.append(FlowIssue(
+                            "V-FLOW-16", span,
+                            f"validation {label!r} uses loop index {name!r} "
+                            f"but also applies to sheet {sheet.num}, outside loop {span}",
+                        ))
+                        break
+        if issues:
+            raise FlowConfigError(tuple(issues))
         return self
 
     @model_validator(mode="after")

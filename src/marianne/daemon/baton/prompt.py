@@ -202,6 +202,7 @@ class PromptRenderer:
         # Layer 4-8: Build prompt through PromptBuilder (raw_prompt short-circuits inside)
         prompt = self._build_prompt(
             sheet, context, patterns, failure_history, spec_fragments,
+            flow_vars=attempt_context.flow_vars,
             raw_prompt=raw_prompt,
         )
 
@@ -605,6 +606,7 @@ class PromptRenderer:
         failure_history: list[HistoricalFailure] | None,
         spec_fragments: list[SpecFragment] | None,
         *,
+        flow_vars: dict[str, int] | None = None,
         raw_prompt: bool = False,
     ) -> str:
         """Build the rendered prompt through PromptBuilder.
@@ -626,6 +628,9 @@ class PromptRenderer:
         # Merge global config variables with sheet-specific variables
         merged_vars = dict(self._prompt_config.variables)
         merged_vars.update(sheet.variables)
+        merged_vars.update(flow_vars or {})
+        if flow_vars:
+            merged_vars["loops"] = flow_vars
 
         # Determine template: sheet.prompt_template or sheet.template_file
         template_text = sheet.prompt_template
