@@ -654,7 +654,9 @@
       "parse": "ok"
     },
     "venue:examples/engineering/codebase-rewrite.yaml": {
-      "issues": {},
+      "issues": {
+        "V217": 1
+      },
       "parse": "ok"
     },
     "venue:examples/engineering/issue-solver.yaml": {
@@ -681,6 +683,7 @@
     },
     "venue:examples/engineering/quality-triage.yaml": {
       "issues": {
+        "V217": 1,
         "V308": 1
       },
       "parse": "ok"
@@ -690,7 +693,9 @@
       "parse": "ok"
     },
     "venue:examples/engineering/score-composer.yaml": {
-      "issues": {},
+      "issues": {
+        "V110": 1
+      },
       "parse": "ok"
     },
     "venue:examples/finance/24x7-trader/_scheduler/conductor-snippet.yaml": {
@@ -715,7 +720,9 @@
       "parse": "ok"
     },
     "venue:examples/finance/24x7-trader/pre-market.yaml": {
-      "issues": {},
+      "issues": {
+        "V110": 1
+      },
       "parse": "ok"
     },
     "venue:examples/finance/24x7-trader/weekly-review.yaml": {
@@ -902,6 +909,7 @@
     },
     "venue:scores/instrument-catalog-build.yaml": {
       "issues": {
+        "V110": 1,
         "V202": 1
       },
       "parse": "ok"
@@ -913,7 +921,9 @@
       "parse": "ok"
     },
     "venue:scores/instrument-catalog-refresh.yaml": {
-      "issues": {},
+      "issues": {
+        "V110": 2
+      },
       "parse": "ok"
     },
     "venue:scores/marianne-viral-manifesto.yaml": {
