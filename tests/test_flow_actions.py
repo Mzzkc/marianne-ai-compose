@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import signal
 import time
@@ -84,6 +85,15 @@ async def test_foreground_timeout_is_bounded(tmp_path: Path) -> None:
         assert not psutil.pid_exists(parent_pid) or (
             psutil.Process(parent_pid).status() == psutil.STATUS_ZOMBIE
         )
+        live_group: list[int] = []
+        for process in psutil.process_iter(["pid"]):
+            try:
+                if (os.getpgid(process.pid) == parent_pid
+                        and process.status() != psutil.STATUS_ZOMBIE):
+                    live_group.append(process.pid)
+            except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
+                continue
+        assert live_group == []
         assert unrelated.returncode is None
     finally:
         if unrelated.returncode is None:
