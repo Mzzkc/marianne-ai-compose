@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from marianne.core.errors.codes import ErrorCode
 from marianne.healing.diagnosis import Diagnosis
 from marianne.healing.remedies.base import BaseRemedy, RemedyCategory, RemedyResult, RiskLevel
 
@@ -48,7 +49,10 @@ class CreateMissingWorkspaceRemedy(BaseRemedy):
     def diagnose(self, context: "ErrorContext") -> Diagnosis | None:
         """Check if workspace is missing but parent exists."""
         # Check for workspace-related error codes
-        if context.error_code not in ("E601", "E201"):
+        if context.error_code not in (
+            ErrorCode.PREFLIGHT_PATH_MISSING.value,
+            ErrorCode.VALIDATION_FILE_MISSING.value,
+        ):
             return None
 
         # Check for workspace-related message patterns
@@ -165,7 +169,11 @@ class CreateMissingParentDirsRemedy(BaseRemedy):
     def diagnose(self, context: "ErrorContext") -> Diagnosis | None:
         """Check for missing parent directories in validation paths."""
         # Look for path-related error codes
-        if context.error_code not in ("E601", "E201", "E302"):
+        if context.error_code not in (
+            ErrorCode.PREFLIGHT_PATH_MISSING.value,
+            ErrorCode.VALIDATION_FILE_MISSING.value,
+            ErrorCode.CONFIG_MISSING_FIELD.value,
+        ):
             return None
 
         # Try to extract path from error message
@@ -305,7 +313,12 @@ class FixPathSeparatorsRemedy(BaseRemedy):
             return None
 
         # Look for path-related errors
-        if context.error_code not in ("E601", "E201", "E302", "E303"):
+        if context.error_code not in (
+            ErrorCode.PREFLIGHT_PATH_MISSING.value,
+            ErrorCode.VALIDATION_FILE_MISSING.value,
+            ErrorCode.CONFIG_MISSING_FIELD.value,
+            ErrorCode.CONFIG_PATH_NOT_FOUND.value,
+        ):
             return None
 
         # Check if error message contains backslashes

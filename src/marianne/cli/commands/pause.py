@@ -30,6 +30,7 @@ from pydantic import ValidationError
 
 from marianne.core.checkpoint import JobStatus
 from marianne.core.config import JobConfig
+from marianne.core.errors.codes import ErrorCode
 from marianne.daemon.exceptions import DaemonError
 
 from ..helpers import (
@@ -117,7 +118,7 @@ async def _pause_job(
         # Business logic error from conductor (e.g., job not found)
         output_error(
             str(exc),
-            error_code="E501",
+            error_code=ErrorCode.BACKEND_CONNECTION.value,
             hints=["Run 'mzt list' to see available scores."],
             json_output=json_output,
             job_id=job_id,
@@ -132,7 +133,7 @@ async def _pause_job(
             error_msg = result.get("error", "") if isinstance(result, dict) else ""
             output_error(
                 error_msg or f"Failed to pause score '{job_id}'",
-                error_code="E502",
+                error_code=ErrorCode.BACKEND_AUTH.value,
                 hints=[
                     f"Check score status: mzt status {job_id}",
                     "Only running scores can be paused.",
@@ -196,7 +197,7 @@ async def _pause_via_conductor(
         if not quiet:
             output_error(
                 str(exc),
-                error_code="E503",
+                error_code=ErrorCode.BACKEND_RESPONSE.value,
                 hints=[
                     "Check conductor status: mzt conductor-status",
                     "Pause or finish active scores before restarting: mzt restart",
@@ -227,7 +228,7 @@ async def _pause_via_conductor(
             msg += f": {error_msg}"
         output_error(
             msg,
-            error_code="E503",
+            error_code=ErrorCode.BACKEND_RESPONSE.value,
             hints=[
                 f"Check score status: mzt status {job_id}",
                 "Only running scores can be paused.",
@@ -319,7 +320,7 @@ async def _modify_job(
     except (OSError, ValueError, yaml.YAMLError, ValidationError) as e:
         output_error(
             f"Invalid config file: {e}",
-            error_code="E505",
+            error_code=ErrorCode.BACKEND_NOT_FOUND.value,
             hints=["Check YAML syntax and schema in your score file."],
             json_output=json_output,
             job_id=job_id,
@@ -337,7 +338,7 @@ async def _modify_job(
         # Business logic error (e.g., job not found)
         output_error(
             str(exc),
-            error_code="E501",
+            error_code=ErrorCode.BACKEND_CONNECTION.value,
             hints=[
                 "Run 'mzt list' to see available scores.",
                 "Check conductor status: mzt conductor-status",
@@ -386,7 +387,7 @@ async def _modify_job(
             modify_hints.append("Use 'mzt run' to start the score.")
         output_error(
             f"Score '{job_id}' is {status_str}, cannot modify.",
-            error_code="E502",
+            error_code=ErrorCode.BACKEND_AUTH.value,
             hints=modify_hints,
             json_output=json_output,
             job_id=job_id,
@@ -413,7 +414,8 @@ async def _modify_job(
             except (OSError, ConnectionError, DaemonError) as exc:
                 output_error(
                     str(exc),
-                    error_code="E506",
+                    # was the literal "E506", a code that does not exist in the registry (#327)
+                    error_code=ErrorCode.BACKEND_CONNECTION.value,
                     hints=[
                         "Check conductor status: mzt conductor-status",
                         "The conductor must be running to modify a score.",

@@ -14,7 +14,7 @@ from typing import Any
 
 from ..daemon.registry_backend import RegistryFirstReadBackend
 from .resources import ConfigResources
-from .tools import ArtifactTools, ControlTools, JobTools, ScoreTools
+from .tools import ArtifactTools, ControlTools, JobTools
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,6 @@ class MCPServer:
         self.job_tools = JobTools(self.state_backend, self.workspace_root)
         self.control_tools = ControlTools(self.state_backend, self.workspace_root)
         self.artifact_tools = ArtifactTools(self.workspace_root, self.state_backend)
-        self.score_tools = ScoreTools(self.workspace_root)
 
         # Initialize resources
         self.config_resources = ConfigResources(self.state_backend, self.workspace_root)
@@ -126,7 +125,6 @@ class MCPServer:
         tools.extend(await self.job_tools.list_tools())
         tools.extend(await self.control_tools.list_tools())
         tools.extend(await self.artifact_tools.list_tools())
-        tools.extend(await self.score_tools.list_tools())
 
         return tools
 
@@ -158,7 +156,6 @@ class MCPServer:
             "marianne_artifact_list_artifacts",
             "marianne_artifact_get_artifact",
         ]
-        score_tool_names = ["validate_score", "generate_score"]
 
         if name in job_tool_names:
             return await self.job_tools.call_tool(name, arguments)
@@ -166,8 +163,6 @@ class MCPServer:
             return await self.control_tools.call_tool(name, arguments)
         elif name in artifact_tool_names:
             return await self.artifact_tools.call_tool(name, arguments)
-        elif name in score_tool_names:
-            return await self.score_tools.call_tool(name, arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
 
@@ -214,7 +209,6 @@ class MCPServer:
         await self.job_tools.shutdown()
         await self.control_tools.shutdown()
         await self.artifact_tools.shutdown()
-        await self.score_tools.shutdown()
 
         self.initialized = False
 

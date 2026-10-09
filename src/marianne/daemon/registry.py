@@ -43,17 +43,28 @@ class DaemonJobStatus(str, Enum):
     CANCELLED = "cancelled"
     PENDING = "pending"
 
+    @property
+    def is_terminal(self) -> bool:
+        """Whether the job has finished (completed, failed, or cancelled).
+
+        Mirrors ``JobStatus.is_terminal``; both enums share the same three
+        terminal members by name. ``TERMINAL_DAEMON_JOB_STATUSES`` is the one
+        set every consumer reads (GH #225).
+        """
+        return self in TERMINAL_DAEMON_JOB_STATUSES
+
+
+TERMINAL_DAEMON_JOB_STATUSES = frozenset({
+    DaemonJobStatus.COMPLETED,
+    DaemonJobStatus.FAILED,
+    DaemonJobStatus.CANCELLED,
+})
+"""The daemon job-level terminal set — the single definition (GH #225)."""
 
 # Status groupings, derived from the enum (#268) so a value rename can't leave a
 # stale string literal behind. Terminal = finished job (used for completed_at
 # timestamps, orphan detection, delete_jobs safety); active = currently running.
-_TERMINAL_STATUSES = frozenset(
-    {
-        DaemonJobStatus.COMPLETED.value,
-        DaemonJobStatus.FAILED.value,
-        DaemonJobStatus.CANCELLED.value,
-    }
-)
+_TERMINAL_STATUSES = frozenset(s.value for s in TERMINAL_DAEMON_JOB_STATUSES)
 _ACTIVE_STATUSES = frozenset(
     {DaemonJobStatus.QUEUED.value, DaemonJobStatus.RUNNING.value}
 )

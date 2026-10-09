@@ -40,21 +40,16 @@ MAX_FALLBACK_HISTORY: int = 50
 # The RUNNING member was renamed to IN_PROGRESS in SheetStatus.
 # Since RUNNING was never assigned to any sheet (DISPATCHED is the
 # de facto running state), the rename has no behavioral impact.
-from marianne.core.checkpoint import SheetStatus
+from marianne.core.checkpoint import TERMINAL_SHEET_STATUSES, SheetStatus
 from marianne.core.config.instruments import InstrumentRouteBinding
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.execution.base import RESPONSE_FORMAT_UNSET, ResponseFormatResolution
 
 BatonSheetStatus = SheetStatus
 
-# Frozenset for O(1) terminal status checks — used by is_terminal
-# and by core.py for event handler guards.
-_TERMINAL_BATON_STATUSES = frozenset({
-    BatonSheetStatus.COMPLETED,
-    BatonSheetStatus.FAILED,
-    BatonSheetStatus.SKIPPED,
-    BatonSheetStatus.CANCELLED,
-})
+# Terminal sheet statuses: ONE definition lives beside SheetStatus
+# (core/checkpoint.py); this is the baton's name for it (GH #225).
+_TERMINAL_BATON_STATUSES = TERMINAL_SHEET_STATUSES
 
 # Statuses that satisfy downstream dependencies
 _SATISFIED_BATON_STATUSES = frozenset({

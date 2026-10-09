@@ -214,6 +214,27 @@ class JobStatus(str, Enum):
     PAUSED_AT_CHAIN = "paused_at_chain"
     CANCELLED = "cancelled"
 
+    @property
+    def is_terminal(self) -> bool:
+        """Whether the job has finished (completed, failed, or cancelled).
+
+        Paused states are NOT terminal: the job can resume. Every consumer
+        that needs the terminal job set reads ``TERMINAL_JOB_STATUSES`` so
+        there is one source of truth (GH #225).
+        """
+        return self in TERMINAL_JOB_STATUSES
+
+
+TERMINAL_JOB_STATUSES = frozenset({
+    JobStatus.COMPLETED,
+    JobStatus.FAILED,
+    JobStatus.CANCELLED,
+})
+"""The job-level terminal set — the single definition (GH #225)."""
+
+TERMINAL_SHEET_STATUSES = _TERMINAL_SHEET_STATUSES
+"""Public alias for the sheet-level terminal set."""
+
 
 class CheckpointErrorRecord(BaseModel):
     """Record of a single error occurrence during sheet execution.

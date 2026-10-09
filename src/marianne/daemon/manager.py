@@ -27,7 +27,13 @@ if TYPE_CHECKING:
 import yaml
 
 import marianne
-from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.core.checkpoint import (
+    TERMINAL_JOB_STATUSES,
+    CheckpointState,
+    JobStatus,
+    SheetState,
+    SheetStatus,
+)
 from marianne.core.config.spec import SpecCorpusConfig
 from marianne.core.constants import STATE_DB_FILENAME
 from marianne.core.logging import get_logger
@@ -159,9 +165,7 @@ _RESUME_PRESERVE_TERMINAL_STATUSES = frozenset(
 _ACTIVE_DAEMON_STATUSES = frozenset(
     {DaemonJobStatus.QUEUED, DaemonJobStatus.RUNNING}
 )
-_TERMINAL_CHECKPOINT_STATUSES = frozenset(
-    {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
-)
+_TERMINAL_CHECKPOINT_STATUSES = TERMINAL_JOB_STATUSES  # one definition (GH #225)
 
 
 def _checkpoint_status_and_updated_at(

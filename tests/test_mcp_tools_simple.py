@@ -352,7 +352,6 @@ class TestMCPToolSchemaValidation:
             ("JobTools", 3),
             ("ControlTools", 3),
             ("ArtifactTools", 5),
-            ("ScoreTools", 0),  # Stub tools hidden from discovery
         ],
     )
     async def test_tool_count_per_class(
@@ -379,7 +378,6 @@ class TestMCPToolSchemaValidation:
             "JobTools",
             "ControlTools",
             "ArtifactTools",
-            "ScoreTools",
         ],
     )
     async def test_all_tools_have_valid_schema(
@@ -416,7 +414,6 @@ class TestMCPToolSchemaValidation:
             "JobTools",
             "ControlTools",
             "ArtifactTools",
-            "ScoreTools",
         ],
     )
     async def test_required_params_exist_in_properties(
@@ -440,104 +437,3 @@ class TestMCPToolSchemaValidation:
                     f"Tool {tool['name']}: required param '{param}' "
                     f"not in properties {list(properties.keys())}"
                 )
-
-
-class TestScoreToolsBasic:
-    """Tests for ScoreTools MCP implementation."""
-
-    @pytest.fixture
-    def temp_workspace(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            yield Path(temp_dir)
-
-    @pytest.fixture
-    def score_tools(self, temp_workspace):
-        from marianne.mcp.tools import ScoreTools
-
-        return ScoreTools(temp_workspace)
-
-    @pytest.mark.asyncio
-    async def test_validate_score_success(self, score_tools, temp_workspace):
-        """validate_score returns stub text for valid workspace."""
-        result = await score_tools.call_tool(
-            "validate_score",
-            {
-                "workspace": str(temp_workspace),
-            },
-        )
-        assert "isError" not in result or result.get("isError") is False
-        assert "STUB IMPLEMENTATION" in result["content"][0]["text"]
-
-    @pytest.mark.asyncio
-    async def test_validate_score_missing_workspace(self, score_tools):
-        """validate_score returns error for nonexistent workspace."""
-        result = await score_tools.call_tool(
-            "validate_score",
-            {
-                "workspace": "/nonexistent/path/xyz",
-            },
-        )
-        assert result["isError"] is True
-
-    @pytest.mark.asyncio
-    async def test_generate_score_success(self, score_tools, temp_workspace):
-        """generate_score returns stub text for valid workspace."""
-        result = await score_tools.call_tool(
-            "generate_score",
-            {
-                "workspace": str(temp_workspace),
-            },
-        )
-        assert "isError" not in result or result.get("isError") is False
-        text = result["content"][0]["text"]
-        assert "STUB IMPLEMENTATION" in text
-        assert "score" in text.lower()
-
-    @pytest.mark.asyncio
-    async def test_generate_score_with_options(self, score_tools, temp_workspace):
-        """generate_score handles optional parameters."""
-        result = await score_tools.call_tool(
-            "generate_score",
-            {
-                "workspace": str(temp_workspace),
-                "since_commit": "abc123",
-                "detailed": True,
-            },
-        )
-        text = result["content"][0]["text"]
-        assert "abc123" in text
-        assert "True" in text
-
-    @pytest.mark.asyncio
-    async def test_validate_score_security_traversal(self, score_tools, temp_workspace):
-        """validate_score blocks path traversal."""
-        result = await score_tools.call_tool(
-            "validate_score",
-            {
-                "workspace": str(temp_workspace / ".." / ".." / "etc"),
-            },
-        )
-        assert result["isError"] is True
-
-    @pytest.mark.asyncio
-    async def test_unknown_tool(self, score_tools):
-        """Unknown tool name returns error."""
-        result = await score_tools.call_tool("nonexistent_tool", {})
-        assert result["isError"] is True
-
-    @pytest.mark.asyncio
-    async def test_shutdown(self, score_tools):
-        """shutdown completes without error."""
-        await score_tools.shutdown()
-
-
-if __name__ == "__main__":
-    pytest.main([__file__])
-
-
-@pytest.fixture(autouse=True)
-def isolate_mcp_conductor_path(monkeypatch, tmp_path):
-    """Unit tools use an absent task-owned endpoint, never the live conductor."""
-    monkeypatch.setattr(
-        "marianne.mcp.tools._resolve_socket_path", lambda _: tmp_path / "absent.sock"
-    )

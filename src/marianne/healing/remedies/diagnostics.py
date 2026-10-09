@@ -16,6 +16,7 @@ import re
 import shutil
 from typing import TYPE_CHECKING
 
+from marianne.core.errors.codes import ErrorCode
 from marianne.healing.diagnosis import Diagnosis
 from marianne.healing.remedies.base import BaseRemedy, RemedyCategory, RemedyResult, RiskLevel
 
@@ -153,7 +154,13 @@ class DiagnoseAuthErrorRemedy(BaseRemedy):
     def diagnose(self, context: "ErrorContext") -> Diagnosis | None:
         """Check for authentication-related errors."""
         # Check for auth-related error codes
-        auth_codes = ("E101", "E102", "E401", "E403")  # Rate limit / auth codes
+        # Rate limit / auth codes (#327: registry members, never literals).
+        auth_codes = (
+            ErrorCode.RATE_LIMIT_API.value,
+            ErrorCode.RATE_LIMIT_CLI.value,
+            ErrorCode.STATE_CORRUPTION.value,
+            ErrorCode.STATE_SAVE_FAILED.value,
+        )
         if context.error_code in auth_codes:
             return self._diagnose_from_code(context)
 
@@ -184,7 +191,7 @@ class DiagnoseAuthErrorRemedy(BaseRemedy):
         env_var = _auth_env_var_for(instrument)
         has_key = bool(os.environ.get(env_var)) if env_var.isupper() else False
 
-        if context.error_code == "E101":
+        if context.error_code == ErrorCode.RATE_LIMIT_API.value:
             return Diagnosis(
                 error_code=context.error_code,
                 issue="Rate limit exceeded",
@@ -195,7 +202,10 @@ class DiagnoseAuthErrorRemedy(BaseRemedy):
                 remedy_name=self.name,
                 context={"auth_type": "rate_limit", "instrument": instrument},
             )
-        elif context.error_code in ("E401", "E102"):
+        elif context.error_code in (
+            ErrorCode.STATE_CORRUPTION.value,
+            ErrorCode.RATE_LIMIT_CLI.value,
+        ):
             return Diagnosis(
                 error_code=context.error_code,
                 issue="Authentication failed" if has_key else "API key not set",
@@ -384,7 +394,10 @@ class DiagnoseMissingCLIRemedy(BaseRemedy):
         """Check for missing CLI errors."""
         # Check for CLI-related error codes
         # Check if it's specifically about CLI
-        if context.error_code in ("E601", "E901") and self._is_cli_error(context.error_message):
+        if context.error_code in (
+            ErrorCode.PREFLIGHT_PATH_MISSING.value,
+            ErrorCode.NETWORK_CONNECTION_FAILED.value) and self._is_cli_error(context.error_message,
+        ):
             return self._create_diagnosis(context)
 
         # Check message patterns

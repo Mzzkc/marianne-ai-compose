@@ -113,8 +113,7 @@ class TestMCPServerIntegration:
         assert "marianne_artifact_read" in tool_names
         assert "marianne_artifact_get_logs" in tool_names
 
-        # Score tools are intentionally hidden from list_tools (stubs)
-        # They still work via call_tool but aren't advertised to MCP clients
+        # There are no quality-score tools (GH #232 removed the hidden stubs).
         assert "validate_score" not in tool_names
         assert "generate_score" not in tool_names
 
@@ -179,29 +178,6 @@ class TestMCPServerIntegration:
         assert "content" in result
         assert "Test content" in result["content"][0]["text"]
 
-    async def test_score_tools_integration(self, mcp_server, temp_workspace):
-        """Test score management tools integration."""
-        # Create test workspace with git repository
-        test_workspace = temp_workspace / "test-score-workspace"
-        test_workspace.mkdir()
-
-        # Test validate_score (stub implementation)
-        result = await mcp_server.call_tool(
-            "validate_score",
-            {"workspace": str(test_workspace), "min_score": 60, "target_score": 80},
-        )
-        assert "content" in result
-        assert "Quality Score Validation" in result["content"][0]["text"]
-        assert "STUB IMPLEMENTATION" in result["content"][0]["text"]
-
-        # Test generate_score (stub implementation)
-        result = await mcp_server.call_tool(
-            "generate_score", {"workspace": str(test_workspace), "detailed": True}
-        )
-        assert "content" in result
-        assert "Quality Score Generation" in result["content"][0]["text"]
-        assert "STUB IMPLEMENTATION" in result["content"][0]["text"]
-
     async def test_resource_access(self, mcp_server):
         """Test resource listing and reading."""
         # Test resource listing
@@ -249,7 +225,10 @@ class TestMCPServerIntegration:
                 "marianne_artifact_read",
                 {"workspace": str(test_workspace), "file_path": "test0.txt"},
             ),
-            mcp_server.call_tool("validate_score", {"workspace": str(test_workspace)}),
+            mcp_server.call_tool(
+                "marianne_artifact_read",
+                {"workspace": str(test_workspace), "file_path": "test1.txt"},
+            ),
         ]
 
         results = await asyncio.gather(*tasks)
@@ -291,20 +270,6 @@ class TestMCPToolSchemas:
             # Verify required fields are properly specified
             if "required" in schema:
                 assert isinstance(schema["required"], list)
-
-    async def test_score_tool_schemas(self):
-        """Test score tools are hidden stubs (not listed but callable)."""
-        from marianne.mcp.tools import ScoreTools
-
-        tools = ScoreTools(Path("/tmp"))
-        tool_list = await tools.list_tools()
-
-        # Score tools are intentionally hidden from list_tools (stubs)
-        assert len(tool_list) == 0
-
-        # But they should still be callable via call_tool
-        result = await tools.call_tool("validate_score", {"workspace": "/tmp"})
-        assert "content" in result
 
 
 # Code Review During Implementation:

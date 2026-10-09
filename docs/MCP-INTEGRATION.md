@@ -20,10 +20,9 @@ Marianne's MCP server exposes these current capabilities:
   options, validation types, learning options, score templates, and conductor
   records.
 
-The advertised tool list does not include `validate_score` or `generate_score`.
-Those names remain hidden compatibility stubs in code until quality-score
-integration is implemented, so MCP clients should not build workflows around
-them.
+There are no quality-score tools. The former `validate_score` / `generate_score`
+names were never advertised and returned placeholder text; they were removed
+(GH #232). Use `mzt validate` for score validation.
 
 ## Claude Desktop Configuration
 

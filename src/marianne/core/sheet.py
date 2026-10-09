@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 
 from marianne.core.config.execution import ValidationRule
 from marianne.core.config.job import InjectionItem
-from marianne.core.constants import SHEET_NUM_KEY
+from marianne.core.constants import SHEET_NUM_KEY, positional_template_variables
 
 if TYPE_CHECKING:
     from marianne.core.config.job import JobConfig
@@ -181,16 +181,14 @@ class Sheet(BaseModel):
             "total_sheets": total_sheets,
             "workspace": str(self.workspace),
             "instrument_name": self.instrument_name,
-            # New terminology
-            "movement": self.movement,
-            "voice": self.voice,
-            "voice_count": self.voice_count,
-            "total_movements": total_movements,
-            # Old terminology (aliases — kept forever)
-            "stage": self.movement,
-            "instance": self.voice,
-            "fan_count": self.voice_count,
-            "total_stages": total_movements,
+            # movement/voice vocabulary + legacy stage/instance aliases, from
+            # the one shared table (GH #267)
+            **positional_template_variables(
+                movement=self.movement,
+                voice=self.voice,
+                voice_count=self.voice_count,
+                total_movements=total_movements,
+            ),
         })
 
         # Score-location anchor: the resolved directory holding this score

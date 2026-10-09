@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 from marianne.core.config import JobConfig
-from marianne.core.constants import SHEET_NUM_KEY
+from marianne.core.constants import SHEET_NUM_KEY, TERMINOLOGY_ALIASES
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml
 
@@ -20,16 +20,9 @@ _BUILTIN_NAMES: frozenset[str] = frozenset({
     "start_item",
     "end_item",
     "instrument_name",
-    # Old terminology (kept forever)
-    "stage",
-    "instance",
-    "fan_count",
-    "total_stages",
-    # New terminology (aliases)
-    "movement",
-    "voice",
-    "voice_count",
-    "total_movements",
+    # movement/voice vocabulary and its legacy aliases, from the shared table
+    *TERMINOLOGY_ALIASES.keys(),
+    *TERMINOLOGY_ALIASES.values(),
 })
 
 

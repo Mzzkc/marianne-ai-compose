@@ -2075,8 +2075,7 @@ def _render_compact_stats(job: CheckpointState) -> None:
     console.print("  " + _SEP.join(exec_parts))
 
     # F-068: Show completed timestamp for terminal jobs
-    _TERMINAL_JOB_STATUSES = {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
-    if job.completed_at and job.status in _TERMINAL_JOB_STATUSES:
+    if job.completed_at and job.status.is_terminal:
         console.print(f"  Completed: {format_relative_time(job.completed_at)}")
 
 

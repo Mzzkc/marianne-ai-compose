@@ -17,7 +17,7 @@ from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, She
 from marianne.dashboard.services.job_control import JobActionResult, ProcessHealth
 from marianne.mcp.resources import ConfigResources
 from marianne.mcp.server import MCPServer
-from marianne.mcp.tools import ArtifactTools, ControlTools, JobTools, ScoreTools
+from marianne.mcp.tools import ArtifactTools, ControlTools, JobTools
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -651,50 +651,6 @@ class TestArtifactTools:
 
     async def test_unknown_artifact_tool(self, tmp_path: Path) -> None:
         tools = ArtifactTools(tmp_path)
-        result = await tools.call_tool("nonexistent", {})
-        assert result.get("isError") is True
-
-
-# ===========================================================================
-# ScoreTools tests
-# ===========================================================================
-
-
-class TestScoreTools:
-    """Tests for MCP score tools (stub implementation, hidden from discovery)."""
-
-    async def test_list_tools_empty_for_stubs(self, tmp_path: Path) -> None:
-        """Stub tools should not be discoverable by MCP clients."""
-        tools = ScoreTools(tmp_path)
-        result = await tools.list_tools()
-        assert result == [], "Stub tools should not be registered for discovery"
-
-    async def test_validate_score(self, tmp_path: Path) -> None:
-        tools = ScoreTools(tmp_path)
-        result = await tools.call_tool("validate_score", {"workspace": str(tmp_path)})
-        assert not result.get("isError")
-        text = result["content"][0]["text"]
-        assert "STUB" in text or "Quality Score" in text
-
-    async def test_validate_score_workspace_not_found(self, tmp_path: Path) -> None:
-        tools = ScoreTools(tmp_path)
-        result = await tools.call_tool(
-            "validate_score",
-            {
-                "workspace": str(tmp_path / "nonexistent"),
-            },
-        )
-        assert result.get("isError") is True
-
-    async def test_generate_score(self, tmp_path: Path) -> None:
-        tools = ScoreTools(tmp_path)
-        result = await tools.call_tool("generate_score", {"workspace": str(tmp_path)})
-        assert not result.get("isError")
-        text = result["content"][0]["text"]
-        assert "STUB" in text or "Quality Score" in text
-
-    async def test_unknown_score_tool(self, tmp_path: Path) -> None:
-        tools = ScoreTools(tmp_path)
         result = await tools.call_tool("nonexistent", {})
         assert result.get("isError") is True
 

@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from marianne.core.checkpoint import CheckpointState, JobStatus, SheetStatus
+from marianne.core.checkpoint import TERMINAL_JOB_STATUSES, CheckpointState, JobStatus, SheetStatus
 from marianne.dashboard.app import get_state_backend
 from marianne.state.base import StateBackend
 
@@ -27,9 +27,6 @@ ACTIVE_OR_BLOCKED_SHEET_STATUSES = frozenset(
     }
 )
 QUEUED_SHEET_STATUSES = frozenset({SheetStatus.PENDING, SheetStatus.READY})
-TERMINAL_JOB_STATUSES = frozenset(
-    {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
-)
 
 
 class ActiveWorkSelection(BaseModel):

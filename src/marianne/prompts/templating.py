@@ -15,7 +15,7 @@ import jinja2.meta
 
 from marianne.core.config import PromptConfig, ValidationRule
 from marianne.core.config.spec import SpecFragment
-from marianne.core.constants import SHEET_NUM_KEY
+from marianne.core.constants import SHEET_NUM_KEY, positional_template_variables
 
 if TYPE_CHECKING:
     from marianne.execution.validation import HistoricalFailure, ValidationResult
@@ -132,16 +132,14 @@ class SheetContext:
             "workspace": str(self.workspace),
             "score_dir": self.score_dir,
             "instrument_name": self.instrument_name,
-            # Old terminology (backward compat)
-            "stage": effective_stage,
-            "instance": self.instance,
-            "fan_count": self.fan_count,
-            "total_stages": effective_total,
-            # New terminology aliases (movement/voice vocabulary)
-            "movement": effective_stage,
-            "voice": self.instance,
-            "voice_count": self.fan_count,
-            "total_movements": effective_total,
+            # movement/voice vocabulary + legacy stage/instance aliases, from
+            # the one shared table (GH #267)
+            **positional_template_variables(
+                movement=effective_stage,
+                voice=self.instance,
+                voice_count=self.fan_count,
+                total_movements=effective_total,
+            ),
             # Cross-sheet context
             "previous_outputs": self.previous_outputs,
             "previous_files": self.previous_files,

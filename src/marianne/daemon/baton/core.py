@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from marianne.daemon.baton.dispatch import DispatchConfig
 
 from marianne.core.constants import SHEET_NUM_KEY
+from marianne.core.errors.codes import ErrorCode
 from marianne.core.logging import get_logger
 from marianne.daemon.baton.events import (
     BatonEvent,
@@ -759,7 +760,7 @@ class BatonCore:
                     f"Sheet cost ${sheet.total_cost_usd:.2f} exceeded limit ${limit:.2f}"
                 )
             if not sheet.error_code:
-                sheet.error_code = "E999"
+                sheet.error_code = ErrorCode.UNKNOWN.value
             self._state_dirty = True
             _logger.warning(
                 "baton.sheet.cost_limit_exceeded",
@@ -927,7 +928,7 @@ class BatonCore:
             sheet.status = BatonSheetStatus.FAILED
             sheet.clear_dispatch_block()
             sheet.error_message = f"Job '{job_id}' not found during exhaustion handling"
-            sheet.error_code = "E999"
+            sheet.error_code = ErrorCode.UNKNOWN.value
             self._state_dirty = True
             return
 
@@ -1077,7 +1078,7 @@ class BatonCore:
                     f"completion={sheet.completion_attempts}/{sheet.max_completion})"
                 )
         if not sheet.error_code:
-            sheet.error_code = "E999"
+            sheet.error_code = ErrorCode.UNKNOWN.value
         self._state_dirty = True
         _logger.warning(
             "baton.sheet.retries_exhausted",
@@ -1793,7 +1794,7 @@ class BatonCore:
                 sheet.status = BatonSheetStatus.FAILED
                 sheet.clear_dispatch_block()
                 sheet.error_message = event.error_message or "Authentication failure"
-                sheet.error_code = "E502"
+                sheet.error_code = ErrorCode.BACKEND_AUTH.value
                 self._state_dirty = True
                 _logger.error(
                     "baton.sheet.auth_failure",
@@ -2074,7 +2075,7 @@ class BatonCore:
                 sheet.status = BatonSheetStatus.FAILED
                 sheet.clear_dispatch_block()
                 sheet.error_message = f"Escalation resolved with decision: {event.decision}"
-                sheet.error_code = "E999"
+                sheet.error_code = ErrorCode.UNKNOWN.value
                 self._propagate_failure_to_dependents(event.job_id, event.sheet_num)
         # F-066: Only unpause if no sheets are still in FERMATA.
         # F-067: Re-check cost limits after unpausing.
@@ -2101,7 +2102,7 @@ class BatonCore:
         if sheet is not None and sheet.status == BatonSheetStatus.FERMATA:
             sheet.status = BatonSheetStatus.FAILED
             sheet.error_message = "Escalation timed out with no response"
-            sheet.error_code = "E999"
+            sheet.error_code = ErrorCode.UNKNOWN.value
             self._propagate_failure_to_dependents(event.job_id, event.sheet_num)
         # F-066: Only unpause if no sheets are still in FERMATA.
         # F-067: Re-check cost limits after unpausing.
@@ -2432,7 +2433,7 @@ class BatonCore:
                 )
                 if fail_fast_sheet.status == BatonSheetStatus.SKIPPED:
                     fail_fast_sheet.error_message = reason
-                    fail_fast_sheet.error_code = "E999"
+                    fail_fast_sheet.error_code = ErrorCode.UNKNOWN.value
                     fail_fast_skipped = True
 
         # Build a reverse dependency map: sheet_num → list of sheets
@@ -2506,7 +2507,7 @@ class BatonCore:
                 )
             )
             sheet.error_message = reason
-            sheet.error_code = "E999"
+            sheet.error_code = ErrorCode.UNKNOWN.value
             _logger.info(
                 "baton.sheet.dependency_blocked",
                 extra={

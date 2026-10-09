@@ -15,6 +15,36 @@ SHEET_NUM_KEY = "sheet_num"
 
 STATE_DB_FILENAME = ".marianne-state.db"
 
+# Movement/voice vocabulary and its legacy stage/instance aliases. Both
+# names are emitted for every template context (prompts, validations,
+# skip_when) — kept forever for backward compatibility. Any new positional
+# built-in is added HERE once, never to the two emitters separately (GH #267).
+TERMINOLOGY_ALIASES: dict[str, str] = {
+    "movement": "stage",
+    "voice": "instance",
+    "voice_count": "fan_count",
+    "total_movements": "total_stages",
+}
+"""New-vocabulary key -> legacy alias key for sheet position built-ins."""
+
+
+def positional_template_variables(
+    *, movement: int, voice: int | None, voice_count: int, total_movements: int
+) -> dict[str, int | None]:
+    """Build the positional built-ins under BOTH vocabularies (GH #267).
+
+    The single place that knows the new names and their legacy aliases, so
+    ``Sheet.template_variables`` and ``SheetContext.to_dict`` cannot drift.
+    """
+    new = {
+        "movement": movement,
+        "voice": voice,
+        "voice_count": voice_count,
+        "total_movements": total_movements,
+    }
+    return {**new, **{TERMINOLOGY_ALIASES[k]: v for k, v in new.items()}}
+
+
 # The instrument used when a score names none. Claude Code is Marianne's
 # reference instrument (and runs interactively by default).
 DEFAULT_INSTRUMENT_NAME = "claude-code"
