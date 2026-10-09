@@ -618,7 +618,22 @@ prompt:
 
     {% if stage == 1 %}
     {{ strict() }}
-    mkdir -p data voices scripts audio dist
+    mkdir -p data voices scripts audio dist run
+    # Validation commands are shell, not Jinja. Persist the rendered inputs
+    # once so every later gate reads the same values as the movements.
+    cat > run/relay-config.json <<'CONFIG'
+    {"github_owner": {{ github_owner | tojson }}, "repo_name": {{ repo_name | tojson }},
+     "identity_cap_bytes": {{ identity_cap_bytes }}, "identity_min_chars": {{ identity_min_chars }},
+     "words_lo": {{ words_lo }}, "words_hi": {{ words_hi }},
+     "piper_model_name": {{ piper_model_name | tojson }},
+     "piper_onnx_sha256": {{ piper_onnx_sha256 | tojson }},
+     "piper_json_sha256": {{ piper_json_sha256 | tojson }},
+     "n_episodes": {{ n_episodes }}, "lufs_target": {{ lufs_target }},
+     "lufs_tol": {{ lufs_tol }}, "tp_ceiling": {{ tp_ceiling }},
+     "cold_open_s": {{ cold_open_s }}, "dead_air_s": {{ dead_air_s }},
+     "dur_lo_s": {{ dur_lo_s }}, "dur_hi_s": {{ dur_hi_s }},
+     "wpm_lo": {{ wpm_lo }}, "wpm_hi": {{ wpm_hi }}}
+    CONFIG
     command -v uv >/dev/null 2>&1 || { echo "FAIL: uv not on PATH"; exit 1; }
     test -x "{{ system_python }}" || { echo "FAIL: system_python {{ system_python }} not executable — set the variable for this host (ambient python3 is the conductor's venv, deliberately not used)"; exit 1; }
     cat > requirements.lock <<'LOCK'
@@ -2108,13 +2123,16 @@ validations:
     description: "Pinned stack importable in the dedicated venv (never the ambient interpreter)"
   - type: command_succeeds
     command: |
+      model="$(python3 -c "import json; print(json.load(open('{workspace}/run/relay-config.json'))['piper_model_name'])")"
+      onnx_sha="$(python3 -c "import json; print(json.load(open('{workspace}/run/relay-config.json'))['piper_onnx_sha256'])")"
+      json_sha="$(python3 -c "import json; print(json.load(open('{workspace}/run/relay-config.json'))['piper_json_sha256'])")"
       for pkg in numpy scipy Pillow PyYAML jsonschema edge-tts piper-tts defusedxml; do
         grep -q "^${pkg}==" {workspace}/data/requirements.freeze
       done
       test -s {workspace}/voices/MANIFEST.sha256
-      test -s "{workspace}/voices/{piper_model_name}.onnx"
-      echo "{piper_onnx_sha256}  {workspace}/voices/{piper_model_name}.onnx" | sha256sum -c -
-      echo "{piper_json_sha256}  {workspace}/voices/{piper_model_name}.onnx.json" | sha256sum -c -
+      test -s "{workspace}/voices/$model.onnx"
+      echo "$onnx_sha  {workspace}/voices/$model.onnx" | sha256sum -c -
+      echo "$json_sha  {workspace}/voices/$model.onnx.json" | sha256sum -c -
     condition: "sheet_num == 1"
     stage: 1
     description: "Every load-bearing package pinned in the freeze; voice model bytes match the composition-time digests (source authenticity)"
@@ -2122,20 +2140,22 @@ validations:
   # ── M2 · self-canary: identity and calibration, not command success ──────
   - type: command_succeeds
     command: |
-      test "$(gh api user -q .login)" = {github_owner}
+      owner="$(python3 -c "import json; print(json.load(open('{workspace}/run/relay-config.json'))['github_owner'])")"
+      test "$(gh api user -q .login)" = "$owner"
       command -v jq >/dev/null
       {workspace}/.venv/bin/python -c "
       import json
+      cfg = json.load(open('{workspace}/run/relay-config.json'))
       r = json.load(open('{workspace}/canary-report.json'))
-      assert r['gh_user'] == '{github_owner}', r['gh_user']
+      assert r['gh_user'] == cfg['github_owner'], r['gh_user']
       assert r['jq'] == 'ready', r['jq']
       for k in ('claude-code', 'codex-cli', 'opencode'):
           assert r['instruments'][k] == 'ready', (k, r['instruments'])
       assert r['edge_tts']['duration_s'] >= 1.0, r['edge_tts']
       assert r['piper']['duration_s'] >= 1.0, r['piper']
       m = r['master_landing']
-      assert abs(m['lufs'] - ({lufs_target})) <= {lufs_tol}, m
-      assert m['true_peak_dbfs'] <= {tp_ceiling}, m
+      assert abs(m['lufs'] - cfg['lufs_target']) <= cfg['lufs_tol'], m
+      assert m['true_peak_dbfs'] <= cfg['tp_ceiling'], m
       print('canary evidence ok: owner, instruments, jq, both TTS paths, measured master landing')
       "
     condition: "sheet_num == 2"
@@ -2157,12 +2177,13 @@ validations:
     command: |
       {workspace}/.venv/bin/python -c "
       from pathlib import Path
-      import yaml
+      import json, yaml
       ident = Path('{workspace}/performance-identity.md')
       size = ident.stat().st_size
       text = ident.read_text(encoding='utf-8')
-      assert size <= {identity_cap_bytes}, '%d bytes over the Identity-as-script cap' % size
-      assert len(text.strip()) >= {identity_min_chars}, 'identity too thin'
+      cfg = json.load(open('{workspace}/run/relay-config.json'))
+      assert size <= cfg['identity_cap_bytes'], '%d bytes over the Identity-as-script cap' % size
+      assert len(text.strip()) >= cfg['identity_min_chars'], 'identity too thin'
       assert text.lstrip().startswith('# '), 'identity must open with the title heading'
       p = yaml.safe_load(Path('{workspace}/relay-packet-0.yaml').read_text())
       assert isinstance(p, dict) and p.get('beat') == 0, repr(p.get('beat'))
@@ -2189,7 +2210,7 @@ validations:
     stage: 1
     description: "Identity verdict admitted by the deterministic gate"
   - type: command_succeeds
-    command: '{workspace}/.venv/bin/python {workspace}/scripts/check_identity.py {workspace} {identity_cap_bytes} {identity_min_chars} && {workspace}/.venv/bin/python -c "import ast; [ast.parse(open(''{workspace}/scripts/'' + f).read()) for f in (''check_identity.py'', ''check_episode.py'')]; print(''gate re-run reproduces the verdict; episode gate staged and parseable'')"'
+    command: '{workspace}/.venv/bin/python -c "import json, subprocess; from pathlib import Path; w=Path(''{workspace}''); c=json.loads((w/''run/relay-config.json'').read_text()); subprocess.run([str(w/''.venv/bin/python''), str(w/''scripts/check_identity.py''), str(w), str(c[''identity_cap_bytes'']), str(c[''identity_min_chars''])], check=True); import ast; [ast.parse((w/''scripts''/f).read_text()) for f in (''check_identity.py'', ''check_episode.py'')]; print(''gate re-run reproduces the verdict; episode gate staged and parseable'')"'
     condition: "sheet_num == 4"
     stage: 2
     description: "Gate re-run reproduces the verdict; the typed episode gate is staged and parseable; rotation/count consistency asserted in the movement"
@@ -2198,7 +2219,7 @@ validations:
   # (attribution joins the declared rotation; stepwise handoff + closed-loop
   # pickup prove consumption; method is never graded — Mission Command)
   - type: command_succeeds
-    command: '{workspace}/.venv/bin/python {workspace}/scripts/check_episode.py {workspace} {sheet_num} {words_lo} {words_hi}'
+    command: '{workspace}/.venv/bin/python -c "import json, subprocess; from pathlib import Path; w=Path(''{workspace}''); c=json.loads((w/''run/relay-config.json'').read_text()); subprocess.run([str(w/''.venv/bin/python''), str(w/''scripts/check_episode.py''), str(w), ''{sheet_num}'', str(c[''words_lo'']), str(c[''words_hi''])], check=True)"'
     condition: "sheet_num >= 5 and sheet_num <= 9"
     stage: 1
     description: "Episode gate: attribution matches the rotation, calibrated word window, >=2 chapters, open question in the final fifth, outgoing beat == incoming + 1, every incoming motif carried, an incoming motif played by name"
@@ -2300,8 +2321,9 @@ validations:
   - type: command_succeeds
     command: |
       cd {workspace}
+      read -r dead_air cold_open dur_lo dur_hi wpm_lo wpm_hi < <(python3 -c "import json; c=json.load(open('run/relay-config.json')); print(*(c[k] for k in ('dead_air_s','cold_open_s','dur_lo_s','dur_hi_s','wpm_lo','wpm_hi')))")
       for n in 1 2 3 4 5; do
-        .venv/bin/python scripts/check_audio.py "audio/episode-$n.voice.audio" "audio/episode-$n.txt" {dead_air_s} {cold_open_s} {dur_lo_s} {dur_hi_s} {wpm_lo} {wpm_hi}
+        .venv/bin/python scripts/check_audio.py "audio/episode-$n.voice.audio" "audio/episode-$n.txt" "$dead_air" "$cold_open" "$dur_lo" "$dur_hi" "$wpm_lo" "$wpm_hi"
         test -s "audio/episode-$n.pauses.json"
       done
       test "$(jq length audio/tts-choices.json)" -eq 5
@@ -2346,14 +2368,15 @@ validations:
       import json, subprocess
       from pathlib import Path
       ws = Path('{workspace}')
+      cfg = json.loads((ws / 'run/relay-config.json').read_text())
       loud = json.loads((ws / 'dist' / 'loudness.json').read_text())
-      LO = {lufs_target} - {lufs_tol}
-      HI = {lufs_target} + {lufs_tol}
+      LO = cfg['lufs_target'] - cfg['lufs_tol']
+      HI = cfg['lufs_target'] + cfg['lufs_tol']
       for n in range(1, 6):
           key = 'dist/episode-%d.m4a' % n
           assert key in loud, key
           assert LO <= loud[key]['lufs'] <= HI, (key, loud[key]['lufs'])
-          assert loud[key]['true_peak_dbfs'] <= {tp_ceiling}, (key, loud[key]['true_peak_dbfs'])
+          assert loud[key]['true_peak_dbfs'] <= cfg['tp_ceiling'], (key, loud[key]['true_peak_dbfs'])
           r = subprocess.run(['ffprobe', '-v', 'error', '-show_chapters', '-of', 'json',
                               str(ws / key)], capture_output=True, text=True)
           chapters = json.loads(r.stdout)['chapters']
@@ -2389,7 +2412,9 @@ validations:
   # ── M17 · repo: ours, guarded at the push, assembly published ─────────────
   - type: command_succeeds
     command: |
-      test "$(gh api repos/{github_owner}/{repo_name} --jq .owner.login)" = {github_owner}
+      owner="$(python3 -c "import json; print(json.load(open('{workspace}/run/relay-config.json'))['github_owner'])")"
+      repo="$(python3 -c "import json; print(json.load(open('{workspace}/run/relay-config.json'))['repo_name'])")"
+      test "$(gh api "repos/$owner/$repo" --jq .owner.login)" = "$owner"
       test -s {workspace}/publish/evidence/performance.md
       cd {workspace}/publish && test -z "$(git status --porcelain)"
     condition: "sheet_num == 17"
@@ -2398,14 +2423,14 @@ validations:
 
   # ── M18 · feed: byte-exact enclosures ─────────────────────────────────────
   - type: command_succeeds
-    command: '{workspace}/.venv/bin/python {workspace}/scripts/build_feed.py {workspace} check https://{github_owner}.github.io/{repo_name}/ {n_episodes}'
+    command: '{workspace}/.venv/bin/python -c "import json, subprocess; from pathlib import Path; w=Path(''{workspace}''); c=json.loads((w/''run/relay-config.json'').read_text()); subprocess.run([str(w/''.venv/bin/python''), str(w/''scripts/build_feed.py''), str(w), ''check'', ''https://%s.github.io/%s/'' % (c[''github_owner''], c[''repo_name'']), str(c[''n_episodes''])], check=True)"'
     condition: "sheet_num == 18"
     stage: 1
     description: "Feed re-check: 5 items, enclosure lengths byte-exact vs on-disk files, on-origin URLs, per-item attribution"
 
   # ── M19 · deploy: Pages build bound to the pushed commit ──────────────────
   - type: command_succeeds
-    command: 'gh api "repos/{github_owner}/{repo_name}/pages" > /dev/null'
+    command: 'python3 -c "import json, subprocess; c=json.load(open(''{workspace}/run/relay-config.json'')); subprocess.run([''gh'', ''api'', ''repos/%s/%s/pages'' % (c[''github_owner''], c[''repo_name''])], stdout=subprocess.DEVNULL, check=True)"'
     condition: "sheet_num == 19"
     stage: 1
     description: "GitHub Pages is enabled on the published repo"

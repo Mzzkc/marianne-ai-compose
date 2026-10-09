@@ -58,7 +58,7 @@
 # Usage:
 #   cd /path/to/your/project
 #   mzt start
-#   mzt run examples/engineering/quality-continuous-generic.yaml
+#   mzt run examples/engineering/quality-continuous.yaml
 #   mzt status quality-continuous-generic
 #
 # Prerequisites:
@@ -68,7 +68,7 @@
 # How to Adapt:
 #   1. Set workspace to your preferred output directory
 #   2. Customize github_label for your project's issue tracking
-#   3. Update on_success.job_path to the ABSOLUTE path of this score
+#   3. Run from the project root so score_relpath resolves for the self-copy
 #   4. Adjust instrument_config.timeout_seconds if your test suite is slow
 #
 # Output:
@@ -218,6 +218,11 @@ prompt:
     fi
     echo $ITER > {{ workspace }}/.iteration
     echo "=== QUALITY ITERATION $ITER ==="
+    ```
+
+    **Step 1.5: Stage the next iteration's score**
+    ```bash
+    cp "{{ score_relpath }}" "{{ workspace }}/self-chain.yaml" || { echo "FATAL: cannot stage {{ score_relpath }} — run from the project root or set score_relpath"; exit 1; }
     ```
 
     **Step 2: Survey open GitHub issues**
@@ -1509,6 +1514,7 @@ prompt:
     {% endif %}
 
   variables:
+    score_relpath: "examples/engineering/quality-continuous.yaml"
     preamble: |
       ╔══════════════════════════════════════════════════════════════════════════╗
       ║              CONTINUOUS QUALITY IMPROVEMENT (GENERIC)                    ║
@@ -1557,6 +1563,12 @@ prompt:
 
 validations:
   # ── Stage 1: Setup ──────────────────────────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/self-chain.yaml"
+    description: "The next iteration's score copy was staged before chaining"
+    stage: 1
+    condition: "stage == 1"
+
 
   - type: file_exists
     path: "{workspace}/00-known-issues.md"
@@ -1985,12 +1997,11 @@ validations:
     stage: 2
     condition: "stage >= 14"
 
-# Self-chain for continuous improvement
-# NOTE: job_path MUST be an absolute path for reliable self-chaining.
-# Relative paths resolve from the daemon's CWD, which may differ.
+# Self-chain for continuous improvement. Sheet 1 stages this score in the
+# workspace; {workspace} resolves to an absolute path when the hook runs.
 on_success:
   - type: run_job
-    job_path: "examples/engineering/quality-continuous-generic.yaml"  # [CHANGE THIS: absolute path to this score]
+    job_path: "{workspace}/self-chain.yaml"
     description: "Chain to next quality iteration"
     detached: true
     fresh: true

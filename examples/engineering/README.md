@@ -115,12 +115,12 @@ The score does **not** chain to `issue-solver.yaml` automatically. `quality-tria
 
 1. Set `workspace` to your preferred output directory
 2. Customize `github_label` for your project's issue tracking (e.g., "technical-debt", "code-quality")
-3. Update `on_success.job_path` to the absolute path of this score (enables self-chaining iterations)
+3. Run from the project root, or set `prompt.variables.score_relpath` to the score's path from the current directory. Sheet 1 copies the score to `{workspace}/self-chain.yaml`, which the success hook runs by absolute workspace path.
 4. Adjust `instrument_config.timeout_seconds` if your test suite takes longer than 40 minutes per sheet
 
 **Prerequisites:** Source code to review, gh CLI authenticated (optional — only needed for GitHub issue filing in stage 14)
 
-The score is language-agnostic — it generates test/typecheck/lint runner scripts by examining your project structure and tooling, then uses those scripts throughout the pipeline. Works with Python, TypeScript, Go, Rust, Java, or any project with verifiable quality commands.
+The score is language-agnostic — it generates test/typecheck/lint runner scripts by examining your project structure and tooling, then uses those scripts throughout the pipeline. Works with Python, TypeScript, Go, Rust, Java, or any project with verifiable quality commands. The concert caps chaining at 10 jobs, with a 120-second cooldown; a fresh iteration archives the previous workspace. Sheet 1 must stage the self-copy successfully before any iteration can chain.
 
 ### score-composer.yaml
 

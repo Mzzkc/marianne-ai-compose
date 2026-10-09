@@ -1,0 +1,27 @@
+# Rosetta proof scores
+
+These scores demonstrate a pattern through artifacts and validation gates. Eleven are copied into this examples directory; six earlier proofs live only in the [corpus](../../scores/rosetta-corpus/proof-scores/). A passing `mzt validate` checks score structure, not provider credentials, API access, publication rights, or the proof's live result. Run from the repository root, read the score's header and variables, and budget for the named external services before starting.
+
+The short proofs below carry their authors' approximate times. Long scores have no dependable wall-time estimate: provider queues, external APIs, builds, and deployment waits determine elapsed time. A paid model route is required wherever a score names Claude Code, Codex CLI, OpenCode, or another paid backend; configure and verify the routes it actually selects.
+
+| Proof score | Pattern and claim | Prerequisites | Run time |
+| --- | --- | --- | --- |
+| [cathedral-construction](cathedral-construction.yaml) | Cathedral Construction: a large artifact is built through staged, checked lineage. | Authenticated `gh`, reachable external sources, configured agent routes. | Variable; 21 movements plus external checks. |
+| [condorcet-s-premise](condorcet-s-premise.yaml) | Condorcet's Premise: independent reviewers must come from distinct model families. | Multiple genuinely distinct configured routes, `gh`, network APIs. | Variable; 15 movements and external checks. |
+| [dead-letter-quarantine](../../scores/rosetta-corpus/proof-scores/dead-letter-quarantine.yaml) | Dead Letter Quarantine: failed work is isolated and re-entered under a checked rule. | Claude Code route and local CLI tools. | About 35 minutes (score estimate). |
+| [echelon-repair](../../scores/rosetta-corpus/proof-scores/echelon-repair.yaml) | Echelon Repair: classify security findings before routing effort by tier. | A codebase to audit and configured Claude Code route. | About 30 minutes (score estimate). |
+| [firing-the-pass](firing-the-pass.yaml) | Firing the Pass: a deadline-bound dispatch has a dated, auditable handoff. | `gh` access, reachable services, configured agent routes. | Variable; 19 movements plus dated external work. |
+| [immune-cascade](../../scores/rosetta-corpus/proof-scores/immune-cascade.yaml) | Immune Cascade: a broad screen narrows work before deeper repair. | Project to inspect and Claude Code route. | Variable; six declared movements. |
+| [join-semilattice-merge](join-semilattice-merge.yaml) | Join-Semilattice Merge: independently gathered occurrence records merge without losing provenance. | Reachable public APIs, `gh`, configured agent routes. | Variable; 24 movements and API calls. |
+| [live-relay](live-relay.yaml) | Live Relay: five isolated voices pass typed continuity packets into a published audio serial. | Claude Code, Codex CLI, OpenCode, `gh` publishing access, `uv`, audio/TTS stack and network. | Variable; 24 movements, synthesis and Pages deployment. |
+| [negative-treatment-watch](negative-treatment-watch.yaml) | Negative-Treatment Watch: a negative finding receives repeatable evidence checks rather than silent acceptance. | `gh`, external services and configured agent routes. | Up to the score's 8-hour wall bound. |
+| [prefabrication](../../scores/rosetta-corpus/proof-scores/prefabrication.yaml) | Prefabrication: parallel API and CLI tracks join against a shared contract. | Claude Code route and local app build tools. | About 20 minutes (score estimate). |
+| [rashomon-gate](rashomon-gate.yaml) | Rashomon Gate: separate analytical frames must survive a common evidence gate. | Network source APIs, `gh`, configured agent routes. | Variable; 15 movements and external probes. |
+| [shipyard-sequence](../../scores/rosetta-corpus/proof-scores/shipyard-sequence.yaml) | Shipyard Sequence: a foundation gate precedes later assembly. | Claude Code route and local build tools. | About 4 minutes (score estimate). |
+| [source-triangulation](../../scores/rosetta-corpus/proof-scores/source-triangulation.yaml) | Source Triangulation: a technical claim needs independent corroboration. | Claude Code route and accessible sources. | About 3 minutes (score estimate). |
+| [the-attested-merge-gate](the-attested-merge-gate.yaml) | Attested Merge Gate: independently written pieces merge only after interface and provenance checks. | Multiple configured agent routes, `gh`, network access. | Variable; 18 movements and external checks. |
+| [the-economic-injury-line](the-economic-injury-line.yaml) | Economic Injury Line: a precommitted threshold yields a reproducible one-bit decision. | Configured agent routes, `gh`, reachable external evidence. | Variable; 15 movements and external checks. |
+| [the-precedent-bench](the-precedent-bench.yaml) | Precedent Bench: a jurisdiction pin and typed campaign configuration govern the evidence bench. | `CL_TOKEN` with the required API entitlement, `gh`, multiple configured agent routes; OpenAI API access where selected. | Variable; 18 movements, API and deployment waits. |
+| [the-unprimed-falsifier](the-unprimed-falsifier.yaml) | Unprimed Falsifier: blinded makers and an independent judge test a claim before reveal. | Configured agent routes, `gh`, external API access including OpenAI where selected. | Variable; 15 movements and external checks. |
+
+The corpus-only links are source proofs, not copied examples. `CL_TOKEN` and publishing credentials cannot be inferred from a passing local validation; read each score's admission gate before committing to a long run.
