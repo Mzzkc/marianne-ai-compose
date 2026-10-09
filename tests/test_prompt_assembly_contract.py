@@ -428,6 +428,41 @@ class TestVariableMergingContract:
         prompt = b.build_sheet_prompt(basic_context)
         assert "Think: step by step" in prompt
 
+    def test_stakes_from_prompt_variables_survives_when_top_level_unset_416(
+        self, basic_context: SheetContext
+    ) -> None:
+        """GH #416: a score declaring stakes/thinking_method only under
+        prompt.variables (every stock persistent-agent score does) must have
+        them rendered, not blanked by the top-level fields' None default."""
+        config = PromptConfig(
+            template=(
+                "{% if stakes %}## Stakes\n{{ stakes }}{% endif %}"
+                "{% if thinking_method %}## Thinking method\n{{ thinking_method }}{% endif %}"
+            ),
+            variables={"stakes": "craft, custody", "thinking_method": "trace every writer"},
+        )
+        prompt = PromptBuilder(config).build_sheet_prompt(basic_context)
+        assert "## Stakes\ncraft, custody" in prompt
+        assert "## Thinking method\ntrace every writer" in prompt
+
+    def test_top_level_stakes_still_wins_over_variable_416(
+        self, basic_context: SheetContext
+    ) -> None:
+        config = PromptConfig(
+            template="S={{ stakes }};T={{ thinking_method }}",
+            variables={"stakes": "from-vars", "thinking_method": "from-vars"},
+            stakes="from-top",
+            thinking_method="",  # set but empty: still wins (explicit)
+        )
+        prompt = PromptBuilder(config).build_sheet_prompt(basic_context)
+        assert "S=from-top;T=" in prompt
+
+    def test_stakes_absent_everywhere_renders_empty_416(
+        self, basic_context: SheetContext
+    ) -> None:
+        config = PromptConfig(template="[{{ stakes }}][{{ thinking_method }}]", variables={})
+        assert "[][]" in PromptBuilder(config).build_sheet_prompt(basic_context)
+
     def test_integer_key_normalization_after_json_roundtrip(self) -> None:
         """String keys that look like integers are restored to int after JSON roundtrip.
 

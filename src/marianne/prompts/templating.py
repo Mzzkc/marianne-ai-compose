@@ -342,9 +342,18 @@ class PromptBuilder:
             template_context["native_execution"] = dict(context.native_execution)
         template_context.update(normalized_vars)
 
-        # Add stakes and thinking method
-        template_context["stakes"] = self.config.stakes or ""
-        template_context["thinking_method"] = self.config.thinking_method or ""
+        # Add stakes and thinking method. The top-level prompt fields win when
+        # they are SET; a score that declares them only under prompt.variables
+        # keeps its values (GH #416: the unconditional overwrite blanked both
+        # in all 102 stock agent scores, so their Stakes / Thinking-method
+        # sections never rendered). Absent everywhere → "" so templates that
+        # gate on truthiness behave as before.
+        for name in ("stakes", "thinking_method"):
+            configured = getattr(self.config, name)
+            if configured is not None:
+                template_context[name] = configured
+            elif name not in template_context:
+                template_context[name] = ""
 
         # #331: resolve variables that reference other variables (or context).
         # Jinja's single-pass render inserts a variable's VALUE verbatim, so a
