@@ -3448,6 +3448,45 @@ class BatonAdapter:
         )
 
     # =========================================================================
+    # Hot reload (#408) — live-resize surface used by reload_configuration
+    # =========================================================================
+
+    @property
+    def max_concurrent_sheets(self) -> int:
+        """Live global sheet-dispatch ceiling."""
+        return self._max_concurrent_sheets
+
+    def set_max_concurrent_sheets(self, limit: int) -> None:
+        """Live-resize the global sheet-dispatch ceiling (#408, #231 pattern).
+
+        The run loop rebuilds ``DispatchConfig`` from this attribute every
+        cycle, so an in-place update takes effect on the next dispatch pass —
+        no object replacement, no baton restart. Lowering never cancels
+        in-flight sheets: running executions drain, new dispatch waits until
+        the global running count drops below the new limit. Raising enqueues a
+        coalesced ``DispatchRetry`` so waiting sheets dispatch immediately
+        instead of idling until an unrelated event.
+        """
+        self._max_concurrent_sheets = limit
+        self._baton.enqueue_dispatch_retry()
+
+    def sync_model_concurrency(self, caps: dict[str, int]) -> dict[str, list[str]]:
+        """Replace the live per-model cap map from fresh profiles (#408).
+
+        Delegates to ``BatonCore.sync_model_concurrency`` (atomic swap with
+        removal) and wakes the dispatch loop so a raised cap releases
+        waiting sheets without waiting for an unrelated event.
+        """
+        diff = self._baton.sync_model_concurrency(caps)
+        if diff["added"] or diff["changed"] or diff["removed"]:
+            self._baton.enqueue_dispatch_retry()
+        return diff
+
+    def model_concurrency_snapshot(self) -> dict[str, int]:
+        """Live per-model cap map copy (for status exposure, #408)."""
+        return self._baton.model_concurrency_snapshot()
+
+    # =========================================================================
     # Main Loop
     # =========================================================================
 

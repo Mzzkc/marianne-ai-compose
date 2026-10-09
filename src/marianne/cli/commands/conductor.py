@@ -15,6 +15,13 @@ import typer
 
 from ..output import output_error
 
+# #408: ``mzt conductor reload`` — sub-app so the conductor namespace can
+# grow without flattening more names onto the root CLI.
+conductor_app = typer.Typer(
+    help="Conductor runtime commands (hot reload).",
+    no_args_is_help=True,
+)
+
 
 def start(
     config_file: Path | None = typer.Option(None, "--config", "-c", help="YAML config file"),
@@ -202,6 +209,9 @@ def restart(
 def conductor_status(
     pid_file: Path | None = typer.Option(None, "--pid-file", help="PID file path"),
     socket_path: Path | None = typer.Option(None, "--socket", help="Unix socket path"),
+    as_json: bool = typer.Option(
+        False, "--json", help="Emit the raw daemon.status payload as JSON"
+    ),
 ) -> None:
     """Check Marianne conductor status."""
     from marianne.daemon.clone import get_clone_name, is_clone_active
@@ -217,4 +227,89 @@ def conductor_status(
         if socket_path is None:
             socket_path = clone_paths.socket
 
-    get_conductor_status(pid_file=pid_file, socket_path=socket_path)
+    get_conductor_status(pid_file=pid_file, socket_path=socket_path, as_json=as_json)
+
+
+@conductor_app.command("reload")
+def conductor_reload(
+    socket_path: Path | None = typer.Option(None, "--socket", help="Unix socket path"),
+    reason: str = typer.Option("cli", "--reason", help="Trigger reason recorded in the reload log"),
+) -> None:
+    """Hot-reload conductor config + instrument profiles (#408, GH 408).
+
+    Re-reads the config file and instrument profile directories on the
+    RUNNING conductor — same path as SIGHUP — and prints what was
+    applied and what was declined (restart-only fields).
+    """
+    import asyncio
+    import json as _json
+    from typing import Any
+
+    from marianne.daemon.clone import get_clone_name, is_clone_active
+    from marianne.daemon.config import DaemonConfig
+
+    resolved_socket: Path | None = socket_path
+    if resolved_socket is None:
+        if is_clone_active():
+            from marianne.daemon.clone import resolve_clone_paths
+
+            resolved_socket = resolve_clone_paths(get_clone_name()).socket
+        else:
+            resolved_socket = DaemonConfig().socket.path
+            # #227 transitional: a pre-move conductor serves on the legacy socket.
+            if not resolved_socket.exists():
+                from marianne.daemon.config import LEGACY_SOCKET_PATH
+
+                if LEGACY_SOCKET_PATH.exists():
+                    resolved_socket = LEGACY_SOCKET_PATH
+
+    if resolved_socket is None or not resolved_socket.exists():
+        output_error(
+            f"No conductor socket at {resolved_socket or socket_path} — is the conductor running?",
+            hints=["Start it with: mzt start", "Or pass --socket explicitly."],
+        )
+        raise typer.Exit(1)
+
+    from marianne.daemon.exceptions import DaemonError
+    from marianne.daemon.ipc.client import DaemonClient
+
+    async def _reload() -> dict[str, Any]:
+        client = DaemonClient(resolved_socket)
+        try:
+            return await client.reload_config(reason=reason)
+        finally:
+            await client.close()
+
+    try:
+        result = asyncio.run(_reload())
+    except (OSError, DaemonError) as exc:
+        output_error(
+            f"Conductor reload IPC failed: {exc}",
+            hints=["Check that the conductor is healthy: mzt conductor-status"],
+        )
+        raise typer.Exit(1) from None
+
+    if not result.get("success"):
+        output_error(
+            f"Reload declined — running config unchanged: {result.get('error')}",
+            hints=[f"Declined: {result.get('declined')}"],
+        )
+        raise typer.Exit(1)
+
+    typer.echo(
+        f"Config generation {result.get('config_generation')} "
+        f"(loaded {result.get('config_loaded_at')})"
+    )
+    applied = result.get("applied") or []
+    declined = result.get("declined") or []
+    if applied:
+        typer.echo("Applied:")
+        for entry in applied:
+            typer.echo(f"  + {entry}")
+    else:
+        typer.echo("Applied: (nothing changed)")
+    if declined:
+        typer.echo("Declined (restart required, running values kept):")
+        for entry in declined:
+            typer.echo(f"  - {entry}")
+    typer.echo(_json.dumps(result))

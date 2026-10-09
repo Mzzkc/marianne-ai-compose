@@ -589,6 +589,17 @@ class DaemonClient:
         """Get the conductor's live running configuration."""
         return cast(dict[str, Any], await self.call("daemon.config"))
 
+    async def reload_config(self, reason: str = "cli") -> dict[str, Any]:
+        """Trigger the conductor's single config reload path (#408).
+
+        Not in ``_SAFE_RETRY_METHODS``: a reload is a mutation, so a
+        response lost after send has an unknown outcome and is never
+        blindly retried.
+        """
+        return cast(
+            dict[str, Any], await self.call("daemon.reload", {"reason": reason})
+        )
+
     async def health(self) -> dict[str, Any]:
         """Liveness probe independent of busy pooled request connections."""
         async def probe() -> dict[str, Any]:

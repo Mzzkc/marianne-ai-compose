@@ -49,6 +49,7 @@ and constraints are extracted directly from the Pydantic v2 config models in
 - [feedback](#feedback)
 - [State and Misc](#state-and-misc)
 - [DaemonConfig (Conductor)](#daemonconfig-conductor)
+  - [Hot Reload](#hot-reload)
   - [Socket Sub-Config](#socket-sub-config)
   - [Resource Limits Sub-Config](#resource-limits-sub-config)
   - [Semantic Learning Sub-Config](#semantic-learning-sub-config)
@@ -1261,7 +1262,8 @@ Available but rarely need changing:
 | `observer` | `ObserverConfig` | *(see sub-config)* | | Observer and event bus configuration |
 | `profiler` | `ProfilerConfig` | *(see sub-config)* | | System profiler (strace off by default, GPU probing off by default) |
 | `preflight` | `PreflightConfig` | *(see sub-config)* | | Preflight prompt analysis thresholds. Controls when prompts are warned or rejected based on estimated token count. |
-| `config_file` | `Path \| None` | `None` | | Path to the YAML config file. Set automatically on startup; used by SIGHUP reload to re-read config from disk. |
+| `hot_reload` | `HotReloadConfig` | *(see [Hot Reload](#hot-reload))* | | Opt-in watcher that hot-applies config and instrument profile changes without a restart |
+| `config_file` | `Path \| None` | `None` | | Path to the YAML config file. Set automatically on startup; used by reload to re-read config from disk. |
 
 ### Daemon Operational Profiles
 
@@ -1279,10 +1281,82 @@ Profiles are partial overrides merged on top of your config file. Resolution ord
 **Built-in profiles:**
 
 | Profile | Description | Key Settings |
-|---------|-------------|-------------|
+|---------|-------------|--------------|
 | `dev` | Marianne development / debugging | `log_level: debug`, `max_concurrent_jobs: 2`, `strace_enabled: true`, `interval_seconds: 2.0` |
 | `intensive` | Long-running production work | `job_timeout_seconds: 172800` (48h), `max_memory_mb: 16384`, `max_processes: 100` |
 | `minimal` | Low-resource environments | `max_concurrent_jobs: 2`, `profiler.enabled: false`, `learning.enabled: false` |
+
+### Hot Reload
+
+*GH #408 — config and instrument-profile changes without a conductor restart.*
+
+A running conductor can re-read its config file and all instrument profile
+directories (built-ins, `~/.marianne/instruments/`, `.marianne/instruments/`)
+through a single fail-closed reload path. Triggers:
+
+| Trigger | How |
+|---------|-----|
+| CLI | `mzt conductor reload` (prints applied/declined) |
+| IPC | `daemon.reload` JSON-RPC method |
+| Signal | `kill -HUP <conductor-pid>` |
+| Watcher | automatic, on file content change (see `hot_reload` below) |
+
+Every reload validates the ENTIRE new config plus all profiles before
+applying anything. On any error the running config, profile registry, and
+per-model caps are untouched and `config_generation` does not advance.
+Instrument profiles swap in place (#171 semantics: in-flight executions
+finish on their loaded profile), and per-model caps update with removal of
+entries whose profiles disappeared. A raised cap wakes waiting sheets on
+the next dispatch cycle; a lowered cap never cancels in-flight work — new
+dispatch waits for the running count to drain below the new limit (#231).
+
+`mzt conductor-status --json` exposes `config_generation`,
+`config_loaded_at`, the last reload outcome (`last_config_reload`), and the
+live per-model caps (`model_concurrency`).
+
+**Field reloadability** — what a reload applies vs. what needs a restart
+(changed restart-only fields are reported in `declined` and the running
+value is kept):
+
+| Field | Reload behavior |
+|-------|-----------------|
+| `max_concurrent_jobs` | Hot — concurrency gate resized in place (#231) |
+| `max_concurrent_sheets` | Hot — live baton dispatch ceiling + scheduler resized |
+| per-model caps (`max_concurrent` in instrument profiles) | Hot — set/changed/removed atomically |
+| instrument profiles (new/edited/removed files) | Hot — registry swap + backend pool invalidation |
+| `resource_limits` | Hot — monitor limits updated |
+| `preflight` (token thresholds) | Hot — applied to new admissions |
+| `job_timeout_seconds` | Hot — live read at job admission |
+| `shutdown_timeout_seconds` | Hot — live read at shutdown |
+| `max_job_history` | Hot — live read at eviction |
+| `default_thinking_method` | Hot — live read at prompt build |
+| `log_level` | Hot — logging level reconfigured |
+| `hot_reload` | Hot — watcher reads live settings each cycle |
+| `socket.*` | Restart-only |
+| `pid_file` | Restart-only |
+| `state_db_path` | Restart-only |
+| `state_backend_type` | Restart-only (frozen to `sqlite`) |
+| `config_file` | Restart-only (reload anchor identity) |
+| `logging` / `log_file` (destination) | Restart-only — file handles held at boot |
+| `observer` | Restart-only — recorder built at boot |
+| `learning` | Restart-only — semantic analyzer built at boot |
+| `profiler` | Restart-only — collector built at boot |
+| `mcp_pool` | Restart-only — server pool started at boot |
+| `keyring` | Restart-only — key holders built at boot |
+| `monitor_interval_seconds` | Restart-only — monitor loop cadence set at boot |
+
+**Watcher sub-config** (`hot_reload`):
+
+| Field | Type | Default | Constraints | Description |
+|-------|------|---------|-------------|-------------|
+| `hot_reload.enabled` | `bool` | `true` | | Watch the config file and profile directories; apply changes through the reload path automatically |
+| `hot_reload.debounce_seconds` | `float` | `2.0` | `>= 0.1` | Settle window after a detected change before the reload fires |
+
+The watcher polls file CONTENT hashes (stdlib only — no new dependency),
+so editors' atomic rename-saves register correctly, and a mid-save parse
+failure is harmless: the reload declines, and the settled content re-fires
+on the next poll. A conductor started with `--profile` reloads with the
+same profile overlay.
 
 ### Socket Sub-Config
 

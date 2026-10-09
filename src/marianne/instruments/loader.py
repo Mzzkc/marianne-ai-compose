@@ -227,6 +227,27 @@ class InstrumentProfileLoader:
         return profile
 
 
+def profile_source_dirs(
+    *, organization_dir: Path | None = None, venue_dir: Path | None = None,
+) -> tuple[Path, Path, Path]:
+    """Resolve the three instrument profile source directories (#408).
+
+    Single source of truth for both ``load_all_profiles`` and the config
+    hot-reload watcher: built-ins, organization (~/.marianne/instruments),
+    venue (.marianne/instruments). Explicit arguments override the defaults
+    (used by tests and by callers that recorded their boot-time dirs).
+    """
+    builtins_dir = Path(__file__).resolve().parent / "builtins"
+    org_dir = (
+        organization_dir if organization_dir is not None
+        else Path.home() / ".marianne" / "instruments"
+    )
+    resolved_venue_dir = (
+        venue_dir if venue_dir is not None else Path(".marianne") / "instruments"
+    )
+    return builtins_dir, org_dir, resolved_venue_dir
+
+
 def load_all_profiles(
     *, organization_dir: Path | None = None, venue_dir: Path | None = None,
 ) -> dict[str, InstrumentProfile]:
@@ -244,12 +265,9 @@ def load_all_profiles(
     """
     profiles: dict[str, InstrumentProfile] = {}
 
-    builtins_dir = Path(__file__).resolve().parent / "builtins"
-    org_dir = (
-        organization_dir if organization_dir is not None
-        else Path.home() / ".marianne" / "instruments"
+    builtins_dir, org_dir, venue_dir = profile_source_dirs(
+        organization_dir=organization_dir, venue_dir=venue_dir,
     )
-    venue_dir = venue_dir if venue_dir is not None else Path(".marianne") / "instruments"
 
     yaml_profiles = InstrumentProfileLoader.load_directories(
         [builtins_dir, org_dir, venue_dir]

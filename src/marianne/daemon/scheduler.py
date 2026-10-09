@@ -181,6 +181,17 @@ class GlobalSheetScheduler:
         """Wire up the backpressure controller (called once during init)."""
         self._backpressure = backpressure
 
+    def set_max_concurrent(self, limit: int) -> None:
+        """Live-resize the sheet ceiling (#408, #231 in-place pattern).
+
+        The constructor snapshots ``max_concurrent_sheets`` from the config;
+        a config hot-reload must reach this live object rather than rely on
+        the manager's config reference being rebound. In-flight sheets are
+        never cancelled — a lowered limit takes effect as running sheets
+        drain (``next_sheet`` admits below the new ceiling only).
+        """
+        self._max_concurrent = limit
+
     # ─── Public API ────────────────────────────────────────────────
 
     async def register_job(

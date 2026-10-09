@@ -287,6 +287,44 @@ class ObserverEvent(TypedDict):
     timestamp: float
 
 
+class ConfigReloadResult(BaseModel):
+    """Outcome of one ``reload_configuration`` cycle (#408).
+
+    Returned by the single reload path (SIGHUP, ``daemon.reload`` IPC,
+    ``mzt conductor reload``, and the file watcher all funnel through
+    ``JobManager.reload_configuration``). A failed reload applies
+    nothing: the running config, instrument registry, and per-model
+    caps are untouched and ``config_generation`` does not advance.
+    """
+
+    success: bool = Field(
+        description="Whether the reload applied. False means nothing changed.",
+    )
+    reason: str = Field(
+        description="Trigger origin (sighup, ipc, cli, watcher).",
+    )
+    config_generation: int = Field(
+        description="Config generation AFTER this reload (unchanged on failure).",
+    )
+    config_loaded_at: str | None = Field(
+        default=None,
+        description="ISO-8601 UTC timestamp of the last successful load.",
+    )
+    applied: list[str] = Field(
+        default_factory=list,
+        description="Fields/effects that were hot-applied by this reload.",
+    )
+    declined: list[str] = Field(
+        default_factory=list,
+        description="Requested changes refused because they require a restart "
+        "(running values kept) or because validation failed.",
+    )
+    error: str | None = Field(
+        default=None,
+        description="Failure detail when success is False.",
+    )
+
+
 class DaemonStatus(BaseModel):
     """Current status snapshot of the running daemon.
 
@@ -319,5 +357,28 @@ class DaemonStatus(BaseModel):
             "(#265). 0 means a pre-versioning conductor that did not send "
             "the field. Clients compare against their own PROTOCOL_VERSION "
             "to detect CLI/conductor skew."
+        ),
+    )
+    config_generation: int = Field(
+        default=0,
+        description=(
+            "Conductor config generation (#408). 0 means a pre-hot-reload "
+            "conductor that did not send the field. Increments once per "
+            "successful reload; unchanged by failed reloads."
+        ),
+    )
+    config_loaded_at: str | None = Field(
+        default=None,
+        description="ISO-8601 UTC timestamp of the last successful config load.",
+    )
+    last_config_reload: ConfigReloadResult | None = Field(
+        default=None,
+        description="Outcome of the most recent reload attempt (any trigger).",
+    )
+    model_concurrency: dict[str, int] = Field(
+        default_factory=dict,
+        description=(
+            "Live per-model dispatch caps (#408). Keys are "
+            "'instrument:model' strings; values are max concurrent sheets."
         ),
     )
