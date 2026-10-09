@@ -433,7 +433,7 @@ async def test_availability_and_run_preserve_unresponsive_health_error(tmp_path)
 
     with (
         patch("marianne.daemon.ipc.client.DaemonClient") as cls,
-        patch("marianne.cli.commands.run.output_error") as output,
+        patch("marianne.cli.output.output_error") as output,
     ):
         client = cls.return_value
         client.close = AsyncMock()

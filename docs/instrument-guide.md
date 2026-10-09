@@ -304,13 +304,16 @@ When a score is submitted, the instrument is resolved:
 The resolved profile produces a shared execution-contract instance that the
 conductor uses to execute sheets.
 
-### Optional reviewed local HTTP routes
+### Optional reviewed local HTTP and separately reviewed remote routes
 
 Embedding clients may submit `JobRequest.expected_route`, a frozen
 `InstrumentRouteBinding`. It is not a score field and grants no permission to
 send data. Absence retains ordinary dispatch and retry behavior. The current
-guarded arm supports observable organization/venue HTTP profiles on loopback,
-without movement, instrument-map, per-sheet instrument or fallback alternatives.
+local guarded arm supports observable HTTP profiles on loopback. A separately
+reviewed remote arm supports HTTPS HTTP profiles and configured CLI profiles
+with an explicit provider and model flag. Neither arm supports movement,
+instrument-map, per-sheet instrument or fallback alternatives. Local review is
+not authorization for remote processing; the caller owns that separate purpose.
 
 `marianne.instruments.loader.capture_instrument_route_binding` accepts the
 score path, instrument, reviewed score SHA-256, and an aware `now` timestamp.
@@ -329,7 +332,7 @@ prompt custody, consent, or a reservation of model work.
 kind, profile origin/digest, effective model/provider, their declaration
 sources, and HTTP scheme/host/port/endpoint. `None` is a value, not a wildcard.
 Only `resolved_at` is excluded. The immutable expectation persists through
-job/sheet checkpoints and is rechecked on resume. Immediately before POST,
+job/sheet checkpoints and is rechecked on resume. Immediately before HTTP POST,
 the backend captures current resolver state off the event loop, compares it
 to both the expectation and its loaded profile, and verifies the actual
 outbound model and endpoint. Capture must precede request start by at most
@@ -342,6 +345,15 @@ validated guarded attempts are terminal, including rate limits; they do not
 automatically retry, heal, or fall back. Unguarded requests retain their
 existing pooled-client and retry behavior.
 
+For guarded CLI execution the same resolver compares the reviewed raw profile
+and loaded command at entry and again immediately before subprocess spawn,
+after command preparation and any awaited workspace MCP lock/config work.
+The reviewed binding must be between zero and sixty seconds old at both checks;
+the actual argv must select the exact reviewed model once. Drift returns a
+terminal `attempt_route_drift` without spawning the CLI. Configured provider,
+profile and model are command-selection evidence only, not service identity,
+CLI executable-byte attestation, or server-model attestation.
+
 ### HTTP model-echo evidence
 
 The legacy `model` value may fall back to the requested model; it is not proof
@@ -350,7 +362,9 @@ that the service echoed a model. HTTP results now separately retain
 musician into the authoritative sheet checkpoint. Status is `observed` for a
 nonempty response string (preserved verbatim), `absent` for a missing key,
 `malformed` for a non-string, or `empty` for an empty/whitespace-only string.
-Old checkpoints and non-HTTP results default all three fields to `None`.
+Old checkpoints and unguarded non-HTTP results default all three fields to `None`.
+Guarded CLI results retain `model_requested` from the reviewed command, while
+`model_observed` and `model_echo_status` remain `None`: no HTTP echo was observed.
 Observer events expose the status only, not the observed/requested strings.
 
 Consumers requiring model provenance must read the completed job's retained

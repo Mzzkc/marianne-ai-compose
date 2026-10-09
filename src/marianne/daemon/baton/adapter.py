@@ -2846,10 +2846,11 @@ class BatonAdapter:
             )
         sheet_response_format: ResponseFormatResolution = RESPONSE_FORMAT_UNSET
         if state.expected_route is not None:
+            from marianne.execution.instruments.cli_backend import PluginCliBackend
             from marianne.execution.instruments.openai_compat_backend import OpenAICompatibleBackend
 
-            if not isinstance(backend, OpenAICompatibleBackend):
-                raise ValueError("attempt_route_drift: backend cannot verify guarded HTTP route")
+            if not isinstance(backend, (OpenAICompatibleBackend, PluginCliBackend)):
+                raise ValueError("attempt_route_drift: backend cannot verify guarded route")
 
         if "response_format" in _icfg_rf:
             if hasattr(backend, "set_response_format"):

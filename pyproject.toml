@@ -54,6 +54,7 @@ dependencies = [
 
     # Structured logging
     "structlog>=24.1.0",
+    "psutil>=5.9",
 
     # Security minimum versions — transitive deps with known CVEs (F-061, F-137)
     "cryptography>=50.0.0",   # GHSA-537c-gmf6-5ccf, CVE-2026-34073 (F-061); PYSEC-2026-3552
@@ -64,7 +65,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-daemon = ["psutil>=5.9", "watchfiles>=0.21"]
+daemon = ["watchfiles>=0.21"]
 # Terminal UI (`mzt top`). Lazily imported, so the core CLI works without it.
 tui = ["textual>=7,<8"]
 docs = [

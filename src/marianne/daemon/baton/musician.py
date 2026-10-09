@@ -180,6 +180,8 @@ async def sheet_task(
         # build through the request, never through mutable backend
         # attributes another dispatch may have written or may write.
         request_state = SheetRequestState(
+            job_id=job_id,
+            sheet_num=sheet.num,
             response_format=attempt_context.response_format,
             model=attempt_context.model,
             max_tokens=attempt_context.max_tokens,
