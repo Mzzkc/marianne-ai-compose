@@ -71,6 +71,8 @@ class SheetRequestState:
     expected_route: InstrumentRouteBinding | None = None
     route_model_override: str | None = None
     route_provider_override: str | None = None
+    job_id: str | None = None
+    sheet_num: int | None = None
 
 
 @dataclass

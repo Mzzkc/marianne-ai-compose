@@ -102,24 +102,41 @@ async def _drain_stream(
             on_chunk(chunk)
 
 
+async def _wait_for_parent_exit(proc: asyncio.subprocess.Process) -> int:
+    """Observe the direct child without waiting for inherited pipes to close.
+
+    asyncio's ``Process.wait()`` can itself wait for pipe transports after the
+    child exits, so it cannot be the parent-exit signal for #406.
+    """
+    while proc.returncode is None:
+        await asyncio.sleep(0.01)
+    return proc.returncode
+
+
 async def kill_process_group_if_alive(
     proc: asyncio.subprocess.Process | None,
     pgid: int | None,
+    *,
+    reap_exited_group: bool = False,
 ) -> None:
     """Terminate a spawned subprocess: SIGTERM -> grace -> SIGKILL.
 
     Runs idempotently on every exit path (clean completion, timeout,
     CancelledError, arbitrary exceptions). Does nothing if the process
-    has already exited. Falls back to ``proc.kill()`` when no process
-    group was captured (``start_new_session`` was not active).
+    has already exited unless a held-pipe descendant was observed. Falls back
+    to ``proc.kill()`` when no group was captured.
 
     Part of Process Lifecycle Phase 1 — ensures subprocesses die on
     cancellation rather than surviving as orphans.
     """
-    if proc is None or proc.returncode is not None:
+    if proc is None:
+        return
+    if proc.returncode is not None and not reap_exited_group:
         return
 
     if pgid is None:
+        if proc.returncode is not None:
+            return
         try:
             proc.kill()
         except ProcessLookupError:
@@ -139,26 +156,34 @@ async def kill_process_group_if_alive(
     try:
         await asyncio.wait_for(proc.wait(), timeout=_KILL_GRACE_SECONDS)
     except TimeoutError:
-        # Grace expired — SIGKILL the entire group.
+        pass
+    except ProcessLookupError:
+        pass
+
+    # The parent can exit while a descendant still owns its process group.
+    # Give the whole group the same TERM grace before escalating.
+    deadline = time.monotonic() + _KILL_GRACE_SECONDS
+    while time.monotonic() < deadline:
         try:
-            _safe_killpg(pgid, signal.SIGKILL, context="cli_backend.kill_force")
-        except (ProcessLookupError, PermissionError):
-            pass
+            _safe_killpg(pgid, 0, context="cli_backend.group_probe")
+        except ProcessLookupError:
+            return
+        await asyncio.sleep(0.05)
+    try:
+        _safe_killpg(pgid, signal.SIGKILL, context="cli_backend.kill_force")
+    except (ProcessLookupError, PermissionError):
+        pass
+    if proc.returncode is None:
         try:
             await asyncio.wait_for(proc.wait(), timeout=_KILL_GRACE_SECONDS)
         except TimeoutError:
-            # The group kill didn't land (e.g. killpg guard-refused an
-            # own-pgroup id, #376). Kill the direct child as the last
-            # resort rather than awaiting an unkilled process forever.
+            # The group guard may have refused; kill only the direct child.
             try:
                 proc.kill()
             except ProcessLookupError:
                 pass
-            try:
-                await proc.wait()
-            except ProcessLookupError:
-                pass
-        except ProcessLookupError:
+            await proc.wait()
+        except (ProcessLookupError, PermissionError):
             pass
 
 
@@ -1202,6 +1227,8 @@ class PluginCliBackend(Backend):
             return refusal
 
         effective_timeout = timeout_seconds or self._profile.default_timeout_seconds
+        job_id = request.job_id if request is not None else None
+        sheet_num = request.sheet_num if request is not None else None
 
         # Request-local per-sheet prompt state (W-F3): when a dispatch
         # resolved SheetRequestState, its preamble/extensions are the ONLY
@@ -1297,6 +1324,10 @@ class PluginCliBackend(Backend):
         stderr_data = ""
         exit_code: int | None = None
         exit_reason = "completed"
+        returncode_at_timeout: int | None = None
+        post_exit_grace_fired = False
+        stdout_chunks: list[bytes] = []
+        stderr_chunks: list[bytes] = []
         proc: asyncio.subprocess.Process | None = None
         pgid: int | None = None
         workspace_mcp_target = self._workspace_mcp_config_target()
@@ -1370,8 +1401,8 @@ class PluginCliBackend(Backend):
                 try:
                     pgid = os.getpgid(proc.pid)
                 except ProcessLookupError:
-                    # Process already died; nothing to kill later.
-                    pgid = None
+                    # The parent may have exited while children retain its group.
+                    pgid = proc.pid
 
             # Daemon-own-group safety: never kill the daemon's own group.
             # If start_new_session failed or the kernel ignored it, abort
@@ -1421,14 +1452,9 @@ class PluginCliBackend(Backend):
                 await proc.stdin.drain()
                 proc.stdin.close()
 
-            # #352 inc-2: both pipes drained CONCURRENTLY (the deadlock
-            # avoidance communicate() provided), with wait() gathered so
-            # buffered output after exit is still read to EOF. Decode
-            # happens after capture so a chunk boundary can never split
-            # a multibyte sequence.
-            stdout_chunks: list[bytes] = []
-            stderr_chunks: list[bytes] = []
-
+            # Drain both pipes concurrently. Observe the direct parent's
+            # returncode independently of pipe EOF, then bound remaining
+            # reads by the profile's post-exit grace. Decode after capture.
             def _safe_emit(stream_name: str) -> Callable[[bytes], None] | None:
                 callback = self._on_output
                 if callback is None:
@@ -1446,36 +1472,52 @@ class PluginCliBackend(Backend):
 
                 return emit
 
+            drains = [
+                asyncio.create_task(_drain_stream(
+                    proc.stdout, stdout_chunks, on_chunk=_safe_emit("stdout"),
+                )),
+                asyncio.create_task(_drain_stream(
+                    proc.stderr, stderr_chunks, on_chunk=_safe_emit("stderr"),
+                )),
+            ]
             try:
                 try:
-                    await asyncio.wait_for(
-                        asyncio.gather(
-                            _drain_stream(
-                                proc.stdout, stdout_chunks,
-                                on_chunk=_safe_emit("stdout"),
-                            ),
-                            _drain_stream(
-                                proc.stderr, stderr_chunks,
-                                on_chunk=_safe_emit("stderr"),
-                            ),
-                            proc.wait(),
-                        ),
-                        timeout=effective_timeout,
+                    exit_code = await asyncio.wait_for(
+                        _wait_for_parent_exit(proc), timeout=effective_timeout,
                     )
-                    exit_code = proc.returncode
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.gather(*drains),
+                            timeout=self._cli.post_exit_drain_grace_seconds,
+                        )
+                    except TimeoutError:
+                        post_exit_grace_fired = True
+                        returncode_at_timeout = exit_code
                 except TimeoutError:
+                    returncode_at_timeout = proc.returncode
                     _logger.warning(
                         "plugin_cli_timeout",
                         instrument=self._profile.name,
                         timeout=effective_timeout,
+                        job_id=job_id,
+                        sheet_num=sheet_num,
+                        returncode_at_timeout=returncode_at_timeout,
+                        stdout_bytes=sum(map(len, stdout_chunks)),
+                        stderr_bytes=sum(map(len, stderr_chunks)),
+                        post_exit_grace_fired=post_exit_grace_fired,
                     )
                     exit_reason = "timeout"
             finally:
-                # Kill-on-exit: runs on clean completion (idempotent — noop
-                # when returncode is already set), TimeoutError, CancelledError,
-                # and arbitrary exceptions. SIGTERM -> 2s grace -> SIGKILL of
-                # the process group. Closes RC-2 from the spec.
-                await _kill_process_group_if_alive(proc, pgid)
+                for drain in drains:
+                    if not drain.done():
+                        drain.cancel()
+                await asyncio.gather(*drains, return_exceptions=True)
+                # Kill-on-exit: clean exits are a noop unless the grace
+                # expired with a surviving pipe owner. Timeouts and
+                # cancellation retain SIGTERM -> grace -> SIGKILL.
+                await _kill_process_group_if_alive(
+                    proc, pgid, reap_exited_group=post_exit_grace_fired,
+                )
                 # Decode AFTER the try so partial output survives timeout
                 # and cancellation — the drain appends chunks in place
                 # precisely so the cancelled gather can't discard them,
@@ -1540,6 +1582,12 @@ class PluginCliBackend(Backend):
         _logger.info(
             "plugin_cli_execute_complete",
             instrument=self._profile.name,
+            job_id=job_id,
+            sheet_num=sheet_num,
+            returncode_at_timeout=returncode_at_timeout,
+            stdout_bytes=sum(map(len, stdout_chunks)),
+            stderr_bytes=sum(map(len, stderr_chunks)),
+            post_exit_grace_fired=post_exit_grace_fired,
             success=result.success,
             duration=f"{duration:.2f}s",
             exit_code=exit_code,

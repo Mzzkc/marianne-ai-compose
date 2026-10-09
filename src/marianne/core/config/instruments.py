@@ -648,6 +648,12 @@ class CliProfile(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    post_exit_drain_grace_seconds: float = Field(
+        default=3.0,
+        gt=0,
+        description="Maximum time to drain inherited pipes after the CLI parent exits",
+    )
+
     command: CliCommand = Field(
         description="How to build the CLI command",
     )

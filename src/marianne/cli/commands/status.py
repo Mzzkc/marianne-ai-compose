@@ -537,20 +537,21 @@ async def _status_overview(json_output: bool) -> None:
         jobs_routed, jobs_data = await try_daemon_route("job.list", {})
         if not jobs_routed or not isinstance(jobs_data, list):
             raise ValueError("Conductor job list is unavailable or invalid")
-    except DaemonAccessDeniedError as exc:
-        report_daemon_access_denied(exc, json_output=json_output)
     except Exception as exc:
+        detail = "access denied" if isinstance(exc, DaemonAccessDeniedError) else str(exc)
         if json_output:
             output_json({
                 "conductor": "running",
                 "jobs_known": False,
                 "active_count": None,
                 "recent_count": None,
-                "error": f"Cannot read conductor job list: {exc}",
+                "error": f"Cannot read conductor job list: {detail}",
                 "error_type": type(exc).__name__,
             })
         else:
-            output_error(f"Conductor responded to health, but job status is unknown: {exc}")
+            output_error(
+                f"Conductor responded to health, but job status is unknown: {detail}"
+            )
         raise typer.Exit(1) from None
 
     jobs: list[dict[str, Any]] = jobs_data

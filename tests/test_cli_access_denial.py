@@ -13,6 +13,38 @@ from marianne.daemon import detect
 from marianne.daemon.ipc.client import DaemonClient
 
 
+@pytest.mark.parametrize("json_output", [True, False])
+def test_status_health_then_denied_list_keeps_known_health(monkeypatch, json_output):
+    from marianne.daemon.exceptions import DaemonAccessDeniedError
+
+    calls = []
+
+    async def route(method, params):
+        calls.append(method)
+        if method == "daemon.health":
+            return True, {"status": "healthy"}
+        raise DaemonAccessDeniedError()
+
+    monkeypatch.setattr(detect, "try_daemon_route", route)
+    result = CliRunner().invoke(app, ["status", *(["--json"] if json_output else [])])
+    assert result.exit_code == 1
+    assert calls == ["daemon.health", "job.list"]
+    assert "mzt restart" not in result.output
+    assert "mzt start" not in result.output
+    if json_output:
+        payload = json.loads(result.output)
+        assert payload["conductor"] == "running"
+        assert payload["jobs_known"] is False
+        assert payload["active_count"] is None
+        assert payload["recent_count"] is None
+        assert payload["error_type"] == "DaemonAccessDeniedError"
+    else:
+        assert "conductor responded to health" in result.output.lower()
+        assert "job status is unknown" in result.output.lower()
+        assert "access denied" in result.output.lower()
+        assert "running state is unknown" not in result.output.lower()
+
+
 @pytest.mark.parametrize("command", ["list", "status", "run"])
 @pytest.mark.parametrize("json_output", [True, False])
 @pytest.mark.parametrize("failure", ["unresponsive", "protocol", "absent"])
