@@ -158,13 +158,13 @@ class TestFormatErrorCodeForDisplay:
         )
         assert result == "E002"
 
-    def test_maps_network_category_to_e003(self) -> None:
-        """When error_code is None and category is network, display E003."""
+    def test_maps_network_category_to_e901(self) -> None:
+        """Network maps to the retriable E9xx family, not E003 (crash) — GH #269."""
         result = format_error_code_for_display(
             error_code=None,
             error_category=ErrorCategory.NETWORK,
         )
-        assert result == "E003"
+        assert result == "E901"
 
     def test_maps_validation_category_to_e201(self) -> None:
         """When error_code is None and category is validation, display E201."""
@@ -190,13 +190,13 @@ class TestFormatErrorCodeForDisplay:
         )
         assert result == "E999"
 
-    def test_maps_transient_category_to_e004(self) -> None:
-        """When error_code is None and category is transient, display E004."""
+    def test_maps_transient_category_to_e904(self) -> None:
+        """Transient maps to the retriable E9xx family, not E004 (interrupt) — GH #269."""
         result = format_error_code_for_display(
             error_code=None,
             error_category=ErrorCategory.TRANSIENT,
         )
-        assert result == "E004"
+        assert result == "E904"
 
     def test_none_category_returns_e999(self) -> None:
         """When both error_code and category are None, display E999."""

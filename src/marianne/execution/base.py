@@ -13,11 +13,9 @@ if TYPE_CHECKING:
     import httpx
 
 from marianne.core.config.instruments import InstrumentRouteBinding
-from marianne.core.errors import ErrorCategory, ErrorClassifier, ExitReason
+from marianne.core.errors import ErrorCategory, ErrorClassifier
+from marianne.core.errors import ExitReason as ExitReason  # explicit re-export (GH #247)
 from marianne.utils.time import utc_now
-
-# ``ExitReason`` is defined once in ``marianne.core.errors.codes`` (GH #247) and
-# re-exported here for the instrument layer's existing import sites.
 
 
 class _ResponseFormatUnset:

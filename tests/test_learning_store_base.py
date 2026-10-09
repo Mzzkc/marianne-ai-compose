@@ -684,3 +684,13 @@ class TestClearAll:
         with store._get_connection() as conn:
             row = conn.execute("SELECT * FROM patterns WHERE id = 'new_p'").fetchone()
         assert row is not None
+
+
+def test_global_learning_store_base_is_last_in_mro() -> None:
+    """GH #262: the base class must be the last real base so every mixin's
+    ``super()`` chain reaches the connection/schema machinery; the package
+    asserts this at import time, and this test pins the contract."""
+    from marianne.learning.store import GlobalLearningStore
+
+    assert GlobalLearningStore.__mro__[-2] is GlobalLearningStoreBase
+    assert GlobalLearningStore.__mro__[-1] is object

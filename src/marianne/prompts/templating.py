@@ -1054,9 +1054,8 @@ Focus on completing the missing items. Do not start over from scratch."""
         available. Uses per-type formatters for readability.
         """
         expanded_path = result.expected_value or result.actual_value
-        fmt = _LEGACY_FORMATTERS.get(rule.type)
-        if fmt is not None:
-            fmt(lines, index, desc, result, rule, expanded_path)
+        fmt = _LEGACY_FORMATTERS.get(rule.type, _fmt_generic)
+        fmt(lines, index, desc, result, rule, expanded_path)
 
 
 def _fmt_file_exists(
@@ -1127,7 +1126,29 @@ def _fmt_command_succeeds(
     lines.append("     Action: Fix the command errors")
 
 
+def _fmt_generic(
+    lines: list[str], index: int, desc: str,
+    result: "ValidationResult", rule: "ValidationRule",
+    expanded_path: str | None,
+) -> None:
+    """Fallback for validation types without a dedicated formatter (GH #261).
+
+    A type missing from ``_LEGACY_FORMATTERS`` must still produce prompt text,
+    otherwise the completion prompt silently lists nothing for that failure.
+    """
+    lines.append(f"  {index}. [FAILED:{rule.type}] {desc}")
+    if expanded_path:
+        lines.append(f"     Target: {expanded_path}")
+    if result.error_message:
+        err_summary = result.error_message[:200]
+        if len(result.error_message) > 200:
+            err_summary += "..."
+        lines.append(f"     Error: {err_summary}")
+    lines.append("     Action: Satisfy this validation")
+
+
 # Dispatch table for legacy validation formatters — avoids nested if/elif chain.
+# Types without an entry fall back to ``_fmt_generic`` (never dropped).
 _LEGACY_FORMATTERS = {
     "file_exists": _fmt_file_exists,
     "file_modified": _fmt_file_modified,

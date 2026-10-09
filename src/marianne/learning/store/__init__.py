@@ -162,6 +162,13 @@ class GlobalLearningStore(  # type: ignore[misc]
 import threading
 
 _global_store: GlobalLearningStore | None = None
+# GH #262: the base class MUST be last so every mixin's ``super()`` chain
+# reaches the SQLite connection/schema machinery. Assert it at import time
+# instead of trusting a comment.
+assert GlobalLearningStore.__mro__[-2] is GlobalLearningStoreBase, (
+    "GlobalLearningStoreBase must be the last base of GlobalLearningStore"
+)
+
 _global_store_lock = threading.Lock()
 
 

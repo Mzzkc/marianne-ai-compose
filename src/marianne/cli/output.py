@@ -313,8 +313,10 @@ def format_validation_status(passed: bool | None) -> str:
 _CATEGORY_TO_ERROR_CODE: dict[str, str] = {
     "timeout": "E001",
     "signal": "E002",
-    "network": "E003",
-    "transient": "E004",
+    # Network and transient failures belong to the retriable E9xx family
+    # (GH #269); E003/E004 are crash/interrupt, which are not retriable.
+    "network": "E901",
+    "transient": "E904",
     "rate_limit": "E101",
     "validation": "E201",
     "configuration": "E301",
@@ -376,7 +378,8 @@ def infer_error_type(
     Error code ranges:
         E0xx (execution): transient — timeouts, kills, crashes, stale
         E1xx (rate/capacity): rate_limit — API limits, CLI limits, quota
-        E2xx+ (validation/auth/config/unknown): permanent
+        E9xx (network/transient): transient — retriable connectivity failures
+        E2xx-E6xx (validation/auth/config/preflight): permanent
 
     Args:
         error_category: Error category or error code from sheet state.
@@ -396,7 +399,9 @@ def infer_error_type(
             return "transient"  # E0xx: execution errors
         if code_class == 1:
             return "rate_limit"  # E1xx: rate limit / capacity
-        return "permanent"  # E2xx+: validation, auth, config, unknown
+        if code_class == 9 and category_lower != "e999":
+            return "transient"  # E901-E904: network / transient (retriable, GH #269)
+        return "permanent"  # E2xx-E6xx + E999: validation, auth, config, preflight, unknown
 
     # Category string matching (backward compat)
     if "rate" in category_lower or "limit" in category_lower:

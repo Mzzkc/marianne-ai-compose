@@ -1372,7 +1372,7 @@ class JobManager:
         # 2. In-memory metadata (always available for active jobs).
         meta = self._job_meta.get(job_id)
         if meta is not None:
-            object.__setattr__(meta, "status", status)
+            meta.status = status
             if error_message is not None:
                 meta.error_message = error_message
             if status not in {
@@ -1389,7 +1389,7 @@ class JobManager:
         if live is not None:
             cp_status = _DAEMON_TO_CHECKPOINT_STATUS.get(status)
             if cp_status is not None:
-                object.__setattr__(live, "status", cp_status)
+                live.status = cp_status
                 if status not in {
                     DaemonJobStatus.COMPLETED,
                     DaemonJobStatus.FAILED,
@@ -1567,7 +1567,7 @@ class JobManager:
         sheet_state = live.sheets[sheet_num]
 
         # Update status for ALL states (the full 11-state enum)
-        object.__setattr__(sheet_state, "status", status)
+        sheet_state.status = status
         live.updated_at = utc_now()
 
         # State-specific field updates

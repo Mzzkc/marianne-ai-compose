@@ -156,6 +156,8 @@ class TestInferErrorType:
         assert infer_error_type("transient") == "transient"
         assert infer_error_type("timeout") == "transient"
         assert infer_error_type("network") == "transient"
+        assert infer_error_type("E901") == "transient"  # GH #269: E9xx is retriable
+        assert infer_error_type("E904") == "transient"
 
     def test_unknown_is_permanent(self) -> None:
         assert infer_error_type("something_weird") == "permanent"
