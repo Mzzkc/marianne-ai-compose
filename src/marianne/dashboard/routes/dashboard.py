@@ -6,7 +6,6 @@ dashboard landing page.
 
 from __future__ import annotations
 
-import logging
 import time
 from datetime import datetime
 from pathlib import Path
@@ -18,11 +17,11 @@ from pydantic import BaseModel
 from starlette.requests import Request
 
 from marianne.core.checkpoint import JobStatus
+from marianne.core.logging import get_logger
 from marianne.dashboard.app import get_state_backend, get_templates
 from marianne.state.base import StateBackend
 
-_logger = logging.getLogger(__name__)
-
+_logger = get_logger("dashboard.routes")
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
 

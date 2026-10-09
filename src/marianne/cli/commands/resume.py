@@ -21,10 +21,11 @@ execution of paused or failed jobs.
 from __future__ import annotations
 
 import asyncio
-import logging
 from pathlib import Path
 
 import typer
+
+from marianne.core.logging import get_logger
 
 from ..helpers import (
     configure_global_logging,
@@ -32,9 +33,7 @@ from ..helpers import (
 )
 from ..output import console, output_error
 
-_logger = logging.getLogger(__name__)
-
-
+_logger = get_logger("cli.resume")
 def resume(
     job_id: str = typer.Argument(..., help="Score ID to resume"),
     config_file: Path | None = typer.Option(

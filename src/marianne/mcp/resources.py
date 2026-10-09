@@ -9,17 +9,16 @@ Resources are organized by category:
 """
 
 import json
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from marianne.core.config import JobConfig
 from marianne.core.constants import SHEET_NUM_KEY
+from marianne.core.logging import get_logger
 from marianne.state.base import StateBackend
 
-logger = logging.getLogger(__name__)
-
+logger = get_logger("mcp.resources")
 # Content type constant to avoid magic string repetition
 _CONTENT_TYPE_JSON = "application/json"
 
@@ -130,7 +129,7 @@ class ConfigResources:
             raise ValueError(f"Unknown resource URI: {uri}")
 
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
-            logger.warning("Error reading resource %s: %s", uri, e)
+            logger.warning("mcp.resource_read_error", uri=uri, error=str(e))
             return {
                 "contents": [
                     {
@@ -459,7 +458,7 @@ notifications:
         try:
             state = await self.state_backend.load(job_id)
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
-            logger.warning("Skipping invalid state file %s: %s", job_id, e)
+            logger.warning("mcp.invalid_state_file_skipped", job_id=job_id, error=str(e))
             return None
 
         if not state:

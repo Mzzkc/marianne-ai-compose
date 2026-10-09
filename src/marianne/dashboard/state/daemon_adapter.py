@@ -8,17 +8,16 @@ All write methods raise ``NotImplementedError`` — the dashboard is read-only.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any
 
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetStatus
+from marianne.core.logging import get_logger
 from marianne.daemon.exceptions import DaemonError
 from marianne.daemon.ipc.client import DaemonClient
 from marianne.state.base import StateBackend
 from marianne.utils.time import utc_now
 
-_logger = logging.getLogger(__name__)
-
+_logger = get_logger("dashboard.daemon_adapter")
 DAEMON_STATE_READ_TIMEOUT_SECONDS = 2.0
 DAEMON_STATE_ENRICH_TIMEOUT_SECONDS = 0.5
 DAEMON_STATE_MAX_ENRICHED_JOBS = 10
@@ -57,7 +56,7 @@ class DaemonStateAdapter(StateBackend):
             }
             return CheckpointState(**data)
         except (DaemonError, ConnectionError, TimeoutError, OSError):
-            _logger.debug("load_job_not_found", extra={"job_id": job_id})
+            _logger.debug("load_job_not_found", job_id=job_id)
             return None
 
     async def list_jobs(self) -> list[CheckpointState]:
@@ -68,10 +67,7 @@ class DaemonStateAdapter(StateBackend):
                 timeout=DAEMON_STATE_READ_TIMEOUT_SECONDS,
             )
         except (DaemonError, ConnectionError, TimeoutError, OSError) as exc:
-            _logger.warning(
-                "list_jobs_daemon_unavailable",
-                extra={"error_type": type(exc).__name__},
-            )
+            _logger.warning("list_jobs_daemon_unavailable", error_type=type(exc).__name__)
             raise DaemonError("Conductor job roster is unavailable; job status is unknown") from exc
 
         if not isinstance(roster, list):
@@ -93,10 +89,7 @@ class DaemonStateAdapter(StateBackend):
                     results.append(CheckpointState(**data))
                     continue
                 except (DaemonError, ConnectionError, TimeoutError, OSError):
-                    _logger.debug(
-                        "list_jobs_fallback",
-                        extra={"job_id": job_id},
-                    )
+                    _logger.debug("list_jobs_fallback", job_id=job_id)
 
             reason = (
                 "enrichment_cap"

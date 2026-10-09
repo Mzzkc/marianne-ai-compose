@@ -8,17 +8,16 @@ The server implements JSON-RPC 2.0 over HTTP/SSE transport and follows the
 MCP specification for capability negotiation, tool execution, and resource access.
 """
 
-import logging
 from pathlib import Path
 from typing import Any
+
+from marianne.core.logging import get_logger
 
 from ..daemon.registry_backend import RegistryFirstReadBackend
 from .resources import ConfigResources
 from .tools import ArtifactTools, ControlTools, JobTools
 
-logger = logging.getLogger(__name__)
-
-
+logger = get_logger("mcp.server")
 class MCPServer:
     """Marianne MCP Server - Exposes Marianne capabilities via Model Context Protocol.
 
@@ -99,7 +98,7 @@ class MCPServer:
         self.initialized = True
 
         client_name = self.client_info.get('name', 'unknown')
-        logger.info(f"MCP Server initialized with client: {client_name}")
+        logger.info("mcp.server_initialized", client_name=client_name)
 
         return {
             "capabilities": self.capabilities,
@@ -203,7 +202,7 @@ class MCPServer:
 
     async def shutdown(self) -> None:
         """Shutdown the server and cleanup resources."""
-        logger.info("MCP Server shutting down")
+        logger.info("mcp.server_shutdown")
 
         # Cleanup any running operations
         await self.job_tools.shutdown()

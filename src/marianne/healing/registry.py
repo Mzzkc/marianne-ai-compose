@@ -5,11 +5,11 @@ The create_default_registry() factory returns a registry with
 all built-in remedies pre-registered.
 """
 
-import logging
 from typing import TYPE_CHECKING
 
-_logger = logging.getLogger(__name__)
+from marianne.core.logging import get_logger
 
+_logger = get_logger("healing.registry")
 if TYPE_CHECKING:
     from marianne.healing.context import ErrorContext
     from marianne.healing.diagnosis import Diagnosis
@@ -100,11 +100,7 @@ class RemedyRegistry:
                 # Individual remedy failures shouldn't block finding others,
                 # but we must record them so the HealingReport doesn't show
                 # "NO ACTION NEEDED" when a remedy actually crashed.
-                _logger.warning(
-                    "Remedy %s.diagnose() raised exception",
-                    remedy.name,
-                    exc_info=True,
-                )
+                _logger.warning("healing.remedy_diagnose_raised", remedy=remedy.name, exc_info=True)
                 self.diagnosis_errors.append((remedy.name, str(exc)))
 
         # Sort by diagnosis confidence, highest first

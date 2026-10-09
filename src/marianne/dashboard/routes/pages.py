@@ -3,18 +3,17 @@
 Handles HTML page rendering (non-API endpoints).
 """
 
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from marianne.core.checkpoint import JobStatus
+from marianne.core.logging import get_logger
 from marianne.dashboard.app import get_state_backend, get_templates
 from marianne.state.base import StateBackend
 
-_logger = logging.getLogger(__name__)
-
+_logger = get_logger("dashboard.pages")
 router = APIRouter(tags=["Pages"])
 
 
@@ -247,7 +246,7 @@ async def templates_list_partial(
                 filtered_templates.append(tmpl.model_dump())
 
             except Exception:
-                _logger.warning("Failed to load template, skipping", exc_info=True)
+                _logger.warning("dashboard.template_load_failed", exc_info=True)
                 continue
 
         return templates.TemplateResponse(request,

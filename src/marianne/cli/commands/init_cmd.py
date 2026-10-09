@@ -10,16 +10,16 @@ field.  Users edit it with their task, then run it.
 
 from __future__ import annotations
 
-import logging
 import re
 from pathlib import Path
 
 import typer
 
+from marianne.core.logging import get_logger
+
 from ..output import console, output_error, output_json
 
-_logger = logging.getLogger(__name__)
-
+_logger = get_logger("cli.init")
 # Score names must be safe for file paths and YAML identifiers.
 # Allowed: alphanumeric, hyphens, underscores.  Must not start with dot.
 _VALID_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
@@ -205,7 +205,7 @@ def init(
     score_content = _generate_starter_score(name)
     score_file.write_text(score_content)
 
-    _logger.info("init.complete", extra={"target_path": str(target), "score_name": name})
+    _logger.info("init.complete", target_path=str(target), score_name=name)
 
     # Output
     if json_output:

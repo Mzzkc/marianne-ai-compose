@@ -1,14 +1,12 @@
 """Abstract base for state backends."""
 
-import logging
 from abc import ABC, abstractmethod
 
 from marianne.core.checkpoint import CheckpointState, SheetStatus
 from marianne.core.constants import SHEET_NUM_KEY
+from marianne.core.logging import get_logger
 
-_logger = logging.getLogger(__name__)
-
-
+_logger = get_logger("state")
 class StateBackend(ABC):
     """Abstract base class for state storage backends.
 
@@ -133,10 +131,7 @@ class StateBackend(ABC):
         Returns:
             The ID of the inserted record, or None if not supported.
         """
-        _logger.warning(
-            "record_execution_noop",
-            extra={"job_id": job_id, SHEET_NUM_KEY: sheet_num},
-        )
+        _logger.warning("record_execution_noop", job_id=job_id, **{SHEET_NUM_KEY: sheet_num})
         return None
 
     async def infer_state_from_artifacts(

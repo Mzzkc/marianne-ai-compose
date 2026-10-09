@@ -12,12 +12,13 @@ Tools leverage the existing JobControlService for consistent behavior with the d
 """
 
 import asyncio
-import logging
 import re
 from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from marianne.core.logging import get_logger
 
 from ..core.log_sources import LogSource, discover_job_log_sources
 from ..daemon.detect import _resolve_socket_path
@@ -26,8 +27,7 @@ from ..daemon.ipc.client import DaemonClient
 from ..dashboard.services.job_control import JobControlService
 from ..state.base import StateBackend
 
-logger = logging.getLogger(__name__)
-
+logger = get_logger("mcp.tools")
 MCP_LOG_STREAM_ONLY_BYTES = 50 * 1024 * 1024
 
 
@@ -198,7 +198,7 @@ class JobTools:
             OSError,
             ConnectionError,
         ) as e:
-            logger.exception("Error executing tool %s", name)
+            logger.exception("mcp.tool_error", tool=name)
             return _make_error_response(e)
 
     async def _list_jobs(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -377,7 +377,7 @@ class JobTools:
             return {"content": [{"type": "text", "text": response_text}]}
 
         except (FileNotFoundError, ValueError, RuntimeError, OSError) as e:
-            logger.exception("Failed to submit score from %s", config_path)
+            logger.exception("mcp.submit_failed", config_path=str(config_path))
             raise RuntimeError(f"Failed to submit score: {e}") from e
 
     async def shutdown(self) -> None:
@@ -467,7 +467,7 @@ class ControlTools:
                 raise ValueError(f"Unknown control tool: {name}")
 
         except (DaemonError, KeyError, ValueError, RuntimeError, OSError, ConnectionError) as e:
-            logger.exception("Error executing control tool %s", name)
+            logger.exception("mcp.control_tool_error", tool=name)
             return _make_error_response(e)
 
     async def _pause_job(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -494,7 +494,7 @@ class ControlTools:
             return {"content": [{"type": "text", "text": response_text}]}
 
         except (RuntimeError, OSError, ConnectionError) as e:
-            logger.exception("Error pausing job %s", job_id)
+            logger.exception("mcp.pause_failed", job_id=job_id)
             raise RuntimeError(f"Failed to pause submitted score: {e}") from e
 
     async def _resume_job(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -518,7 +518,7 @@ class ControlTools:
             return {"content": [{"type": "text", "text": response_text}]}
 
         except (RuntimeError, OSError, ConnectionError) as e:
-            logger.exception("Error resuming job %s", job_id)
+            logger.exception("mcp.resume_failed", job_id=job_id)
             raise RuntimeError(f"Failed to resume submitted score: {e}") from e
 
     async def _cancel_job(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -543,7 +543,7 @@ class ControlTools:
             return {"content": [{"type": "text", "text": response_text}]}
 
         except (RuntimeError, OSError, ConnectionError) as e:
-            logger.exception("Error cancelling job %s", job_id)
+            logger.exception("mcp.cancel_failed", job_id=job_id)
             raise RuntimeError(f"Failed to cancel submitted score: {e}") from e
 
     async def shutdown(self) -> None:
@@ -757,7 +757,7 @@ class ArtifactTools:
             PermissionError,
             OSError,
         ) as e:
-            logger.exception("Error executing artifact tool %s", name)
+            logger.exception("mcp.artifact_tool_error", tool=name)
             return _make_error_response(e)
 
     def _validate_workspace_path(self, workspace: Path, target: Path) -> tuple[Path, Path]:

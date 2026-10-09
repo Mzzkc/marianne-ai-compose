@@ -12,7 +12,6 @@ Subcommands:
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any
 
@@ -20,10 +19,11 @@ import typer
 import yaml
 from rich.table import Table
 
+from marianne.core.logging import get_logger
+
 from ..output import console, output_error
 
-_logger = logging.getLogger(__name__)
-
+_logger = get_logger("cli.config")
 # Keys shown by default (without --all).  Matches the "Essential Fields"
 # section in docs/configuration-reference.md.
 #
@@ -145,7 +145,7 @@ def _try_live_config() -> dict[str, Any] | None:
         try:
             return await client.config()
         except Exception:
-            _logger.debug("live config fetch failed", exc_info=True)
+            _logger.debug("config.live_fetch_failed", exc_info=True)
             return None
 
     return asyncio.run(_fetch())
@@ -194,7 +194,7 @@ def show(
             effective = DaemonConfig.model_validate(live_data)
             is_live = True
         except Exception:
-            _logger.warning("live config validation failed, falling back to disk", exc_info=True)
+            _logger.warning("config.live_validation_failed_fallback_disk", exc_info=True)
 
     if is_live:
         source_label = "[bold green][live][/bold green] from running conductor"

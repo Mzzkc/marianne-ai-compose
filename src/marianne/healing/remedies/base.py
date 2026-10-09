@@ -4,14 +4,14 @@ Defines the Remedy protocol and supporting types that all
 concrete remedy implementations must follow.
 """
 
-import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
-logger = logging.getLogger(__name__)
+from marianne.core.logging import get_logger
 
+logger = get_logger("healing.remedies")
 if TYPE_CHECKING:
     from marianne.healing.context import ErrorContext
     from marianne.healing.diagnosis import Diagnosis
@@ -233,7 +233,7 @@ class BaseRemedy:
                     else:
                         all_removed = False
             except OSError as exc:
-                logger.warning("Rollback failed for path %s: %s", path, exc)
+                logger.warning("healing.rollback_failed", path=str(path), error=str(exc))
                 all_removed = False
 
         return all_removed

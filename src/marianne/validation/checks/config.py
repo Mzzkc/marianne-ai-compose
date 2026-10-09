@@ -6,18 +6,16 @@ validation rule completeness, and instrument name resolution.
 
 from __future__ import annotations
 
-import logging
 import re
 import shutil
 from pathlib import Path
 
 from marianne.core.config import JobConfig
+from marianne.core.logging import get_logger
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml
 
-_logger = logging.getLogger(__name__)
-
-
+_logger = get_logger("validation.config")
 class RegexPatternCheck:
     """Check that regex patterns in validations compile (V007).
 
@@ -583,7 +581,7 @@ class InteractiveSupportCheck:
 
             profiles = load_all_profiles()
         except Exception:
-            _logger.debug("V211: could not load instrument profiles, skipping check")
+            _logger.debug("validation.profiles_unavailable_skip", check="V211")
             return issues
 
         for location, name in opt_ins:
@@ -660,7 +658,7 @@ class InstrumentNameCheck:
 
             known = set(load_all_profiles().keys())
         except Exception:
-            _logger.debug("V210: could not load instrument profiles, skipping check")
+            _logger.debug("validation.profiles_unavailable_skip", check="V210")
             return []
 
         if not known:
@@ -783,7 +781,7 @@ class InstrumentFallbackCheck:
 
             known = set(load_all_profiles().keys())
         except Exception:
-            _logger.debug("V211: could not load instrument profiles, skipping check")
+            _logger.debug("validation.profiles_unavailable_skip", check="V211")
             return []
 
         if not known:
@@ -1027,7 +1025,7 @@ class NoUsableInstrumentCheck:
 
             profiles = load_all_profiles()
         except Exception:
-            _logger.debug("V212: could not load instrument profiles, skipping check")
+            _logger.debug("validation.profiles_unavailable_skip", check="V212")
             return []
         if not profiles:
             return []

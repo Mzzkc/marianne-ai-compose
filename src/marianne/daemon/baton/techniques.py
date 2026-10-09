@@ -29,19 +29,17 @@ Usage::
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from marianne.core.config.techniques import TechniqueConfig, TechniqueKind
+from marianne.core.logging import get_logger
 
 if TYPE_CHECKING:
     from marianne.daemon.mcp_pool import McpPoolManager
 
-_logger = logging.getLogger(__name__)
-
-
+_logger = get_logger("daemon.baton.techniques")
 @dataclass(frozen=True)
 class ResolvedTechniques:
     """Resolved techniques for a specific phase.
@@ -172,15 +170,11 @@ def discover_technique_doc(
         if path.is_file():
             try:
                 content = path.read_text(encoding="utf-8")
-                _logger.debug(
-                    "technique_doc_found",
-                    extra={"technique": name, "path": str(path)},
-                )
+                _logger.debug("technique_doc_found", technique=name, path=str(path))
                 return content
             except OSError as e:
                 _logger.warning(
-                    "technique_doc_read_error",
-                    extra={"technique": name, "path": str(path), "error": str(e)},
+                    "technique_doc_read_error", technique=name, path=str(path), error=str(e)
                 )
 
     return None

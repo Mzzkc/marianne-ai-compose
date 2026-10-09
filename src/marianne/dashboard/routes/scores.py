@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 import re
 from pathlib import Path
 from typing import Any
-
-_logger = logging.getLogger(__name__)
 
 import yaml
 from fastapi import APIRouter, HTTPException
@@ -15,6 +12,7 @@ from fastapi.responses import PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, Field, ValidationError
 
 from marianne.core.config import JobConfig
+from marianne.core.logging import get_logger
 from marianne.dashboard.app import get_daemon_client
 from marianne.dashboard.services.job_control import JobControlService
 from marianne.scores.templates import TEMPLATE_FILES, get_template_path, list_templates
@@ -22,6 +20,8 @@ from marianne.validation import (
     ValidationRunner,
     create_default_checks,
 )
+
+_logger = get_logger("dashboard.scores")
 
 router = APIRouter(prefix="/api/scores", tags=["Score Editor"])
 
@@ -141,7 +141,7 @@ def run_extended_validation(
         home = Path.home().resolve()
         # Allow only paths under cwd or user home directory
         if not (ws.is_relative_to(cwd) or ws.is_relative_to(home)):
-            _logger.warning("Rejected workspace_path outside allowed roots: %s", workspace_path)
+            _logger.warning("dashboard.workspace_path_rejected", workspace_path=str(workspace_path))
             workspace_path = None
 
     # Create a virtual config path for the validator
@@ -383,7 +383,7 @@ async def submit_score(
         cwd = Path.cwd().resolve()
         home = Path.home().resolve()
         if not (ws.is_relative_to(cwd) or ws.is_relative_to(home)):
-            _logger.warning("Rejected workspace outside allowed roots: %s", request.workspace)
+            _logger.warning("dashboard.workspace_rejected", workspace=str(request.workspace))
             raise HTTPException(
                 status_code=400,
                 detail="Workspace path must be under the current directory or user home",
@@ -396,7 +396,7 @@ async def submit_score(
         cwd = Path.cwd().resolve()
         home = Path.home().resolve()
         if not (cwd_path.is_relative_to(cwd) or cwd_path.is_relative_to(home)):
-            _logger.warning("Rejected client_cwd outside allowed roots: %s", request.client_cwd)
+            _logger.warning("dashboard.client_cwd_rejected", client_cwd=str(request.client_cwd))
             raise HTTPException(
                 status_code=400,
                 detail="Client working directory must be under the current directory or user home",
@@ -420,7 +420,7 @@ async def submit_score(
             runtime_variables=request.runtime_variables,
         )
     except Exception as e:
-        _logger.error("Score submission failed: %s", e)
+        _logger.error("dashboard.score_submission_failed", error=str(e))
         raise HTTPException(
             status_code=503,
             detail=f"Failed to submit score: {e}",
@@ -530,7 +530,7 @@ def analyze_template(name: str, content: str) -> TemplateResponse:
             estimated_duration=f"{sheets * 15}-{sheets * 30} min" if sheets > 1 else "5-15 min",
         )
     except (yaml.YAMLError, KeyError, TypeError, AttributeError, ValueError):
-        _logger.debug("Failed to parse template metadata for %s", name, exc_info=True)
+        _logger.debug("dashboard.template_metadata_parse_failed", template=name, exc_info=True)
         # Fallback metadata if parsing fails
         return TemplateResponse(
             name=name,
@@ -587,7 +587,7 @@ async def list_available_templates(
             categories.add(template.category)
 
         except (KeyError, OSError, ValueError, yaml.YAMLError):
-            _logger.warning("Failed to load template %s", name, exc_info=True)
+            _logger.warning("dashboard.template_load_failed", template=name, exc_info=True)
             continue
 
     return TemplateListResponse(
@@ -617,7 +617,7 @@ async def get_template(template_name: str) -> TemplateResponse:
             status_code=404, detail=f"Template '{template_name}' not found"
         ) from None
     except (OSError, ValueError, yaml.YAMLError):
-        _logger.warning("Failed to load template %s", template_name, exc_info=True)
+        _logger.warning("dashboard.template_load_failed", template=template_name, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to load template") from None
 
 
@@ -650,7 +650,7 @@ async def download_template(template_name: str) -> PlainTextResponse:
             status_code=404, detail=f"Template '{template_name}' not found"
         ) from None
     except OSError:
-        _logger.warning("Failed to download template %s", template_name, exc_info=True)
+        _logger.warning("dashboard.template_download_failed", template=template_name, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to download template") from None
 
 
@@ -678,5 +678,5 @@ async def use_template(template_name: str) -> RedirectResponse:
             status_code=404, detail=f"Template '{template_name}' not found"
         ) from None
     except OSError:
-        _logger.warning("Failed to use template %s", template_name, exc_info=True)
+        _logger.warning("dashboard.template_use_failed", template=template_name, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to use template") from None
