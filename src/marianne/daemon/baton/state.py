@@ -111,6 +111,8 @@ class AttemptContext:
     """1-based attempt number. First try = 1, first retry = 2, etc."""
 
     mode: AttemptMode
+    dispatch_epoch: int | None = None
+    flow_vars: dict[str, int] = field(default_factory=dict)
     """The execution mode for this attempt."""
 
     completion_prompt_suffix: str | None = None

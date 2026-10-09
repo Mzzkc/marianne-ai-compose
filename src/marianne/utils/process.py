@@ -143,6 +143,44 @@ def snapshot_pipe_holders(
     return tuple(captured)
 
 
+def snapshot_file_holders(
+    path: str, parent_create_time: float,
+) -> tuple[DescendantIdentity, ...]:
+    """Capture same-UID processes holding this invocation's unique log inode."""
+    if not os.path.isdir("/proc"):
+        return ()
+    try:
+        target = os.stat(path)
+    except OSError:
+        return ()
+    captured: list[DescendantIdentity] = []
+    for proc in psutil.process_iter(["pid", "create_time", "uids"]):
+        try:
+            if proc.pid == os.getpid():
+                continue
+            info = proc.info
+            uids = info["uids"]
+            born = info["create_time"]
+            if uids is None or uids.real != os.getuid() or born is None:
+                continue
+            if born < parent_create_time:
+                continue
+            fd_dir = f"/proc/{proc.pid}/fd"
+            for fd in os.listdir(fd_dir):
+                try:
+                    held = os.stat(f"{fd_dir}/{fd}")
+                except OSError:
+                    continue
+                if (held.st_dev, held.st_ino) == (target.st_dev, target.st_ino):
+                    captured.append(DescendantIdentity(
+                        proc.pid, born, uids.real, os.getpgid(proc.pid),
+                    ))
+                    break
+        except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
+            continue
+    return tuple(captured)
+
+
 def reap_descendant_trees(
     descendants: tuple[DescendantIdentity, ...],
 ) -> DescendantReapCounts:

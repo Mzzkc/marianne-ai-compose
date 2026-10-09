@@ -38,6 +38,7 @@ from marianne.core.config.flow import (
     SheetTriggerConfig,
     canonical_span,
     span_bounds,
+    span_range,
 )
 from marianne.core.config.judgment import JudgmentConfig
 from marianne.core.config.learning import (
@@ -65,6 +66,7 @@ from marianne.core.config.workspace import (
 )
 from marianne.core.constants import DEFAULT_INSTRUMENT_NAME, FLOW_RESERVED_NAMES, STATE_DB_FILENAME
 from marianne.core.expressions import ExpressionError, parse_expression
+from marianne.core.validation_condition import check_validation_condition
 
 
 class InjectionCategory(str, Enum):
@@ -1094,6 +1096,53 @@ class JobConfig(BaseModel):
         This eliminates redundant .resolve() calls scattered across consumers.
         """
         self.workspace = self.workspace.expanduser().resolve()
+        return self
+
+    @model_validator(mode="after")
+    def _validate_flow_variables(self) -> JobConfig:
+        """Reject a loop name that escapes its scope or shadows author data."""
+        if not self.sheet.loops:
+            return self
+        from marianne.core.sheet import build_sheets
+
+        issues: list[FlowIssue] = []
+        configured = {
+            loop.index: span for span, loop in self.sheet.loops.items()
+        }
+        for name, span in configured.items():
+            if name in self.prompt.variables:
+                issues.append(FlowIssue(
+                    "V-FLOW-10", span,
+                    f"loop index {name!r} collides with prompt.variables[{name!r}]",
+                ))
+
+        sheets = build_sheets(self)
+        total_movements = len({sheet.movement for sheet in sheets}) or 1
+        for rule in self.validations:
+            templates = (rule.path, rule.command, rule.working_directory, rule.pattern)
+            used = {
+                name for template in templates if template is not None
+                for name in re.findall(r"(?<!\{)\{([A-Za-z][A-Za-z0-9_]*)\}(?!\})", template)
+                if name in configured
+            }
+            for name in used:
+                span = configured[name]
+                allowed = span_range(span)
+                for sheet in sheets:
+                    context = sheet.template_variables(
+                        total_sheets=len(sheets), total_movements=total_movements
+                    )
+                    if (sheet.num not in allowed
+                            and check_validation_condition(rule.condition, context)):
+                        label = rule.description or rule.type
+                        issues.append(FlowIssue(
+                            "V-FLOW-16", span,
+                            f"validation {label!r} uses loop index {name!r} "
+                            f"but also applies to sheet {sheet.num}, outside loop {span}",
+                        ))
+                        break
+        if issues:
+            raise FlowConfigError(tuple(issues))
         return self
 
     @model_validator(mode="after")

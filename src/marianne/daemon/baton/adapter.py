@@ -48,14 +48,17 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from marianne.core.checkpoint import InstrumentIdentity
 from marianne.core.config.a2a import AgentCard
 from marianne.core.config.execution import (
     CodeExecutionConfig,
     SkipWhenCommand,
     StaleDetectionConfig,
 )
+from marianne.core.config.flow import ConcertTrigger
 from marianne.core.config.instruments import validate_openai_response_format
 from marianne.core.constants import VALIDATION_PASS_RATE_KEY
+from marianne.core.expressions import parse_expression
 from marianne.core.sheet import Sheet
 from marianne.daemon.a2a.inbox import A2AInbox
 from marianne.daemon.a2a.registry import AgentCardRegistry
@@ -66,12 +69,17 @@ from marianne.daemon.baton.events import (
     CronTick,
     EscalationResolved,
     FermataCheck,
+    FlowConcertSubmitted,
+    FlowRunFinished,
+    LoopFactsReady,
     RateLimitHit,
     SheetAttemptResult,
     SheetSkipped,
     StaleCheck,
     to_observer_event,
 )
+from marianne.daemon.baton.flow import FlowActionRequest
+from marianne.daemon.baton.flow_actions import execute_run_action, prefetch_file_facts
 from marianne.daemon.baton.musician import sheet_task
 from marianne.daemon.baton.skip import evaluate_skip_command
 from marianne.daemon.baton.state import (
@@ -88,10 +96,12 @@ from marianne.utils.process import safe_killpg as _safe_killpg
 
 if TYPE_CHECKING:
     from marianne.core.checkpoint import AppliedPatternDict, CheckpointState
+    from marianne.core.config.flow import LoopConfig, SheetTriggerConfig
     from marianne.core.config.job import PromptConfig
     from marianne.core.config.learning import LearningConfig
     from marianne.core.config.spec import SpecCorpusConfig, SpecFragment
     from marianne.core.config.workspace import CrossSheetConfig
+    from marianne.core.flow_state import FlowState
     from marianne.daemon.baton.backend_pool import BackendPool
     from marianne.daemon.baton.dispatch import DispatchConfig
     from marianne.daemon.baton.prompt import PromptRenderer
@@ -113,6 +123,10 @@ _logger = get_logger("daemon.baton.adapter")
 # two state representations. Now there's one shared SheetState —
 # persistence is all that's needed.
 PersistCallback = Callable[[str], None]
+FlowPauseCallback = Callable[[str], Awaitable[None]]
+FlowConcertCallback = Callable[
+    [str, str | ConcertTrigger], Awaitable[tuple[bool, str | None, str | None]]
+]
 
 # #206: async reporter mirroring baton rate limits to the daemon-level
 # RateLimitCoordinator. Signature: (instrument, wait_seconds, job_id,
@@ -329,6 +343,7 @@ def sheets_to_execution_states(
             fallback_configs=[dict(c) for c in sheet.instrument_fallback_configs],
             sheet_timeout_seconds=sheet.timeout_seconds,
         )
+        states[sheet.num].remember_primary_identity()
     return states
 
 
@@ -473,6 +488,8 @@ class BatonAdapter:
         learning_store: GlobalLearningStore | None = None,
         rate_limit_reporter: RateLimitReporter | None = None,
         diagnostic_snapshot_fn: DiagnosticSnapshotFn | None = None,
+        flow_pause_callback: FlowPauseCallback | None = None,
+        flow_concert_callback: FlowConcertCallback | None = None,
     ) -> None:
         """Initialize the BatonAdapter.
 
@@ -513,6 +530,9 @@ class BatonAdapter:
         self._learning_store = learning_store
         self._rate_limit_reporter = rate_limit_reporter
         self._diagnostic_snapshot_fn = diagnostic_snapshot_fn
+        self._flow_pause_callback = flow_pause_callback
+        self._flow_concert_callback = flow_concert_callback
+        self._flow_pause_announced: set[str] = set()
         # Deprecated compat attributes — tests set/read these directly
         self._state_sync_callback = state_sync_callback
         self._synced_status: dict[tuple[str, int], str] = {}
@@ -522,6 +542,9 @@ class BatonAdapter:
 
         # Active musician tasks: (job_id, sheet_num) → Task
         self._active_tasks: dict[tuple[str, int], asyncio.Task[Any]] = {}
+        self._active_dispatch_epochs: dict[tuple[str, int], int] = {}
+        self._flow_fact_tasks: dict[tuple[str, str, int], asyncio.Task[None]] = {}
+        self._flow_action_tasks: dict[tuple[str, int, int], asyncio.Task[None]] = {}
         # Acquired instrument/model for each live musician. Sheet state can be
         # relabelled WAITING or advanced to a fallback before this task exits.
         self._active_execution_details: dict[
@@ -753,6 +776,10 @@ class BatonAdapter:
         cleanup_generation: str | None = None,
         schedule_id: str | None = None,
         scheduled_due_at: float | None = None,
+        loops: dict[str, LoopConfig] | None = None,
+        triggers: dict[str, SheetTriggerConfig] | None = None,
+        flow_state: FlowState | None = None,
+        flow_variables: dict[str, Any] | None = None,
     ) -> None:
         """Register a job with the baton for event-driven execution.
 
@@ -790,6 +817,7 @@ class BatonAdapter:
                 Direct adapter registrations allocate their own local value.
         """
         self._ensure_job_state_collections()
+        self._flow_pause_announced.discard(job_id)
         self.begin_cleanup_generation(job_id, cleanup_generation)
 
         # Store sheets for prompt rendering at dispatch time
@@ -865,8 +893,9 @@ class BatonAdapter:
                 if s is not None:
                     s.instrument_name = sheet.instrument_name
                     raw_m = sheet.instrument_config.get("model")
-                    if raw_m is not None:
-                        s.model = str(raw_m)
+                    s.model = str(raw_m) if raw_m is not None else None
+                    s.instrument_model = s.model
+                    s.remember_primary_identity()
                     s.max_retries = max_retries
                     s.max_completion = max_completion
                     s.fallback_chain = list(sheet.instrument_fallbacks)
@@ -899,6 +928,10 @@ class BatonAdapter:
             stagger_delay_ms=stagger_delay_ms if parallel_enabled is not False else 0,
             event_generation=event_generation,
             workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
+            loops=loops,
+            triggers=triggers,
+            flow_state=flow_state,
+            flow_variables=flow_variables,
         )
 
         # Set cost limits if configured
@@ -998,6 +1031,8 @@ class BatonAdapter:
 
     def _ensure_job_state_collections(self) -> None:
         """Initialize late-added per-job maps for __new__ test instances."""
+        if not hasattr(self, "_flow_pause_announced"):
+            self._flow_pause_announced = set()
         if not hasattr(self, "_job_learning_configs"):
             self._job_learning_configs = {}
         if not hasattr(self, "_cleanup_generation_counter"):
@@ -1499,6 +1534,9 @@ class BatonAdapter:
         skip_when: dict[int, SkipWhenCommand] | None = None,
         code_execution: CodeExecutionConfig | None = None,
         agent_card: AgentCard | None = None,
+        loops: dict[str, LoopConfig] | None = None,
+        triggers: dict[str, SheetTriggerConfig] | None = None,
+        flow_variables: dict[str, Any] | None = None,
     ) -> None:
         """Recover a job from a checkpoint after conductor restart.
 
@@ -1531,6 +1569,7 @@ class BatonAdapter:
             cross_sheet: Optional CrossSheetConfig for cross-sheet context (F-210).
         """
         self._ensure_job_state_collections()
+        self._flow_pause_announced.discard(job_id)
 
         # Store sheets for prompt rendering
         self._job_sheets[job_id] = {s.num: s for s in sheets}
@@ -1648,8 +1687,17 @@ class BatonAdapter:
             # were never dispatched (e.g., dependency-cascaded failures).
             state.instrument_name = sheet.instrument_name
             raw_model = sheet.instrument_config.get("model")
-            if raw_model is not None:
-                state.model = str(raw_model)
+            primary_model = str(raw_model) if raw_model is not None else None
+            if baton_status not in {
+                BatonSheetStatus.COMPLETED,
+                BatonSheetStatus.SKIPPED,
+                BatonSheetStatus.CANCELLED,
+            }:
+                state.model = primary_model
+                state.instrument_model = primary_model
+            state.primary_identity = InstrumentIdentity(
+                name=sheet.instrument_name, model=primary_model
+            )
             state.max_retries = max_retries
             state.max_completion = max_completion
             state.fallback_chain = list(sheet.instrument_fallbacks)
@@ -1705,6 +1753,10 @@ class BatonAdapter:
             stagger_delay_ms=stagger_delay_ms if parallel_enabled is not False else 0,
             event_generation=event_generation,
             workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
+            loops=loops,
+            triggers=triggers,
+            flow_state=checkpoint.flow,
+            flow_variables=flow_variables,
         )
 
         # Set cost limits if configured
@@ -2380,6 +2432,7 @@ class BatonAdapter:
             instrument_name=instrument_name,
             attempt=attempt,
             event_generation=self._baton.get_job_generation(job_id),
+            dispatch_epoch=state.dispatch_epoch if state is not None else None,
             execution_success=False,
             error_classification="E505",
             error_message=error_msg,
@@ -2730,6 +2783,7 @@ class BatonAdapter:
             )
             return True
         self._active_tasks[(job_id, sheet_num)] = task
+        self._active_dispatch_epochs[(job_id, sheet_num)] = state.dispatch_epoch
         self._active_execution_details[(job_id, sheet_num)] = (
             effective_instrument,
             state.model,
@@ -2740,6 +2794,7 @@ class BatonAdapter:
                 sheet_num,
                 t,
                 event_generation=event_generation,
+                dispatch_epoch=state.dispatch_epoch,
             )
         )
 
@@ -2886,9 +2941,12 @@ class BatonAdapter:
         prev_outputs, prev_files = self._collect_cross_sheet_context(
             job_id, sheet_num
         )
+        flow = self._baton._jobs[job_id].flow
         context = AttemptContext(
             attempt_number=attempt_number,
             mode=mode,
+            dispatch_epoch=state.dispatch_epoch,
+            flow_vars=flow.indices_for(sheet_num) if flow is not None else {},
             completion_prompt_suffix=completion_suffix,
             previous_outputs=prev_outputs,
             previous_files=prev_files,
@@ -3031,10 +3089,13 @@ class BatonAdapter:
                 should_skip, reason = await evaluate_skip_command(
                     swc,
                     workspace=sheet.workspace,
-                    context=sheet.template_variables(
-                        total_sheets=total_sheets,
-                        total_movements=total_movements,
-                    ),
+                    context={
+                        **sheet.template_variables(
+                            total_sheets=total_sheets,
+                            total_movements=total_movements,
+                        ),
+                        **context.flow_vars,
+                    },
                     sheet_num=sheet.num,
                 )
                 if should_skip:
@@ -3046,6 +3107,7 @@ class BatonAdapter:
                             sheet_num=sheet.num,
                             reason=reason,
                             event_generation=event_generation,
+                            dispatch_epoch=context.dispatch_epoch,
                         )
                     )
                     return
@@ -3238,6 +3300,7 @@ class BatonAdapter:
         task: asyncio.Task[Any],
         *,
         event_generation: int | None = None,
+        dispatch_epoch: int | None = None,
     ) -> None:
         """Callback when a musician task completes.
 
@@ -3268,6 +3331,7 @@ class BatonAdapter:
             return
 
         self._active_tasks.pop(key, None)
+        self._active_dispatch_epochs.pop(key, None)
         self._active_execution_details.pop(key, None)
         # Releasing physical occupancy may make another job dispatchable even
         # when no further musician/timer event is pending. Wake the loop after
@@ -3303,6 +3367,7 @@ class BatonAdapter:
                     instrument_name=state.instrument_name or "",
                     attempt=state.normal_attempts + 1,
                     event_generation=event_generation,
+                    dispatch_epoch=dispatch_epoch,
                     execution_success=False,
                     error_classification="STALE" if is_stale else "CANCELLED",
                     error_message=(
@@ -3425,6 +3490,11 @@ class BatonAdapter:
         for event in self._baton.drain_skip_events():
             await self.publish_sheet_skipped(event)
 
+    async def _publish_flow_events(self) -> None:
+        """Publish loop and trigger transitions after their checkpoint write."""
+        for event in self._baton.drain_flow_events():
+            await self._publish_baton_observer_event(event)
+
     def _is_execution_active(self, job_id: str, sheet_num: int) -> bool:
         """Whether adapter task authority says this musician is still live."""
         task = self._active_tasks.get((job_id, sheet_num))
@@ -3538,6 +3608,7 @@ class BatonAdapter:
                 job_id=job_id,
                 sheet_num=sheet_num,
                 event_generation=event_generation,
+                dispatch_epoch=state.dispatch_epoch if state is not None else None,
             ),
         )
         cfg = self._stale_configs.get(job_id)
@@ -3551,6 +3622,7 @@ class BatonAdapter:
                     job_id=job_id,
                     sheet_num=sheet_num,
                     event_generation=event_generation,
+                    dispatch_epoch=state.dispatch_epoch if state is not None else None,
                 ),
             )
 
@@ -3650,6 +3722,10 @@ class BatonAdapter:
             event_type=type(event).__name__,
         ):
             return
+        live_state = self._baton.get_sheet_state(event.job_id, event.sheet_num)
+        if (live_state is not None and event.dispatch_epoch is not None
+                and live_state.dispatch_epoch != event.dispatch_epoch):
+            return
 
         key = (event.job_id, event.sheet_num)
         task = self._active_tasks.get(key)
@@ -3668,6 +3744,7 @@ class BatonAdapter:
                         instrument_name=state.instrument_name or "",
                         attempt=state.normal_attempts + 1,
                         event_generation=event.event_generation,
+                        dispatch_epoch=event.dispatch_epoch,
                         execution_success=False,
                         error_classification="STALE",
                         error_message=(
@@ -3693,6 +3770,7 @@ class BatonAdapter:
                     job_id=event.job_id,
                     sheet_num=event.sheet_num,
                     event_generation=event.event_generation,
+                    dispatch_epoch=event.dispatch_epoch,
                 ),
             )
             await self._baton.handle_event(event)
@@ -3742,6 +3820,7 @@ class BatonAdapter:
                                 job_id=event.job_id,
                                 sheet_num=event.sheet_num,
                                 event_generation=event.event_generation,
+                                dispatch_epoch=event.dispatch_epoch,
                             ),
                         )
                         await self._baton.handle_event(event)
@@ -3781,6 +3860,7 @@ class BatonAdapter:
                     job_id=event.job_id,
                     sheet_num=event.sheet_num,
                     event_generation=event.event_generation,
+                    dispatch_epoch=event.dispatch_epoch,
                 ),
             )
             await self._baton.handle_event(event)
@@ -3793,6 +3873,7 @@ class BatonAdapter:
                 job_id=event.job_id,
                 sheet_num=event.sheet_num,
                 event_generation=event.event_generation,
+                dispatch_epoch=event.dispatch_epoch,
             ),
         )
         await self._baton.handle_event(event)
@@ -4083,6 +4164,169 @@ class BatonAdapter:
                 },
             )
 
+    def _cancel_flow_reset_tasks(self) -> None:
+        """Cancel musicians whose dispatch epoch a loop or goto has superseded."""
+        for key, task in list(self._active_tasks.items()):
+            job_id, sheet_num = key
+            captured = self._active_dispatch_epochs.get(key)
+            state = self._baton.get_sheet_state(job_id, sheet_num)
+            if (captured is not None and state is not None
+                    and state.dispatch_epoch != captured and not task.done()):
+                task.cancel(msg=f"flow reset superseded sheet {sheet_num}")
+
+    def _start_flow_fact_tasks(self) -> None:
+        """Schedule pending file snapshots after the checkpoint write."""
+        for job_id, job in self._baton._jobs.items():
+            if job.flow is None:
+                continue
+            for span, run in job.flow.state.loops.items():
+                if run.phase != "awaiting_facts" or run.facts_request_id is None:
+                    continue
+                key = (job_id, span, run.facts_request_id)
+                if key in self._flow_fact_tasks:
+                    continue
+                task = asyncio.create_task(
+                    self._fetch_flow_facts(job_id, span, run.facts_request_id),
+                    name=f"flow-facts-{job_id}-{span}-{run.facts_request_id}",
+                )
+                self._flow_fact_tasks[key] = task
+
+                def done(
+                    finished: asyncio.Task[None],
+                    key: tuple[str, str, int] = key,
+                ) -> None:
+                    self._flow_fact_tasks.pop(key, None)
+                    if not finished.cancelled():
+                        finished.exception()
+
+                task.add_done_callback(done)
+
+    async def _announce_flow_pauses(self) -> None:
+        if self._flow_pause_callback is None:
+            return
+        for job_id, job in self._baton._jobs.items():
+            if (job.flow is None or job.flow.state.pause_reason is None
+                    or job_id in self._flow_pause_announced):
+                continue
+            try:
+                await self._flow_pause_callback(job_id)
+            except Exception:
+                _logger.error("adapter.flow_pause_failed", extra={"job_id": job_id}, exc_info=True)
+                continue
+            self._flow_pause_announced.add(job_id)
+
+    def _start_flow_action_tasks(self) -> None:
+        """Launch checkpointed off-loop effects once per chain cursor."""
+        for job_id, job in self._baton._jobs.items():
+            if job.flow is None:
+                continue
+            for request in job.flow.drain_effects():
+                key = (job_id, request.chain_id, request.cursor)
+                task = asyncio.create_task(
+                    self._execute_flow_action(job_id, request),
+                    name=f"flow-action-{job_id}-{request.chain_id}-{request.cursor}",
+                )
+                self._flow_action_tasks[key] = task
+
+                def done(
+                    finished: asyncio.Task[None],
+                    key: tuple[str, int, int] = key,
+                ) -> None:
+                    self._flow_action_tasks.pop(key, None)
+                    if not finished.cancelled():
+                        finished.exception()
+
+                task.add_done_callback(done)
+
+    async def _execute_flow_action(self, job_id: str, request: FlowActionRequest) -> None:
+        job = self._baton._jobs.get(job_id)
+        if job is None or job.flow is None:
+            return
+        action = request.action
+        if action.run is not None:
+            if job.workspace is None:
+                self._baton.inbox.put_nowait(FlowRunFinished(
+                    job_id, request.chain_id, request.cursor, None, False, None,
+                    error="flow run has no workspace", event_generation=job.event_generation,
+                ))
+                return
+            variables = dict(job.flow.plan.variables)
+            variables.update(job.flow.indices_for(request.sheet_num))
+            try:
+                outcome = await execute_run_action(
+                    action.run, workspace=job.workspace, job_id=job_id,
+                    sheet_num=request.sheet_num, fired_epoch=request.fired_epoch,
+                    chain_id=request.chain_id, cursor=request.cursor, attempt=request.attempt,
+                    variables=variables,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self._baton.inbox.put_nowait(FlowRunFinished(
+                    job_id, request.chain_id, request.cursor, None, False, None,
+                    error=f"{type(exc).__name__}: {exc}",
+                    event_generation=job.event_generation,
+                ))
+                return
+            self._baton.inbox.put_nowait(FlowRunFinished(
+                job_id, request.chain_id, request.cursor, outcome.exit_code,
+                outcome.timed_out, outcome.log_path, error=outcome.error,
+                event_generation=job.event_generation,
+            ))
+            return
+        child_id: str | None
+        message: str | None
+        if self._baton.get_job_pause_reason(job_id) == "cost_limit_exceeded":
+            accepted, child_id, message = False, None, "parent cost limit exceeded"
+        elif action.concert is None or self._flow_concert_callback is None:
+            accepted, child_id, message = False, None, "concert submission callback unavailable"
+        else:
+            try:
+                accepted, child_id, message = await self._flow_concert_callback(
+                    job_id, action.concert
+                )
+            except Exception as exc:
+                accepted, child_id, message = False, None, f"{type(exc).__name__}: {exc}"
+        self._baton.inbox.put_nowait(FlowConcertSubmitted(
+            job_id, request.chain_id, request.cursor, accepted, child_id, message,
+            event_generation=job.event_generation,
+        ))
+
+    async def _fetch_flow_facts(self, job_id: str, span: str, request_id: int) -> None:
+        job = self._baton._jobs.get(job_id)
+        if job is None or job.flow is None:
+            return
+        run = job.flow.state.loops.get(span)
+        config = job.flow.plan.loops.get(span)
+        if run is None or config is None or config.until is None:
+            return
+        templates = parse_expression(config.until).references().files
+        variables = dict(job.flow.plan.variables)
+        variables.update(job.flow.indices_for(int(span.partition("-")[0])))
+        error: str | None = None
+        files = {}
+        if job.workspace is None:
+            error = "flow file condition has no workspace"
+        else:
+            try:
+                files = await prefetch_file_facts(
+                    job.workspace, templates, variables, run.iteration_started_at,
+                )
+            except TimeoutError:
+                error = "flow file facts timed out"
+            except OSError as exc:
+                error = f"flow file facts failed: {exc}"
+            except Exception as exc:
+                error = f"flow file facts failed: {type(exc).__name__}: {exc}"
+        self._baton.inbox.put_nowait(LoopFactsReady(
+            job_id=job_id,
+            span=span,
+            request_id=request_id,
+            files=files,
+            error=error,
+            event_generation=job.event_generation,
+        ))
+
     async def run(self) -> None:
         """Run the baton's event loop with dispatch integration.
 
@@ -4144,6 +4388,8 @@ class BatonAdapter:
                 if self._persist_callback:
                     self._persist_callback(b_job_id)
             await self._publish_skip_events()
+            self._start_flow_fact_tasks()
+            self._start_flow_action_tasks()
 
             while not self._baton._shutting_down:
                 event = await self._baton.inbox.get()
@@ -4196,6 +4442,11 @@ class BatonAdapter:
                 if self._baton._state_dirty and self._persist_callback:
                     self._persist_dirty_jobs()
                     self._baton._state_dirty = False
+                self._cancel_flow_reset_tasks()
+                await self._announce_flow_pauses()
+                self._start_flow_fact_tasks()
+                self._start_flow_action_tasks()
+                await self._publish_flow_events()
 
                 # Dispatch ready sheets after every event
                 config = self._build_dispatch_config()
@@ -4229,6 +4480,7 @@ class BatonAdapter:
                 # Publish scheduler side-effect events to EventBus.
                 await self._publish_skip_events()
                 await self._publish_fallback_events()
+                await self._publish_flow_events()
 
                 # Check for job completions after dispatch
                 self._check_completions()
@@ -4237,6 +4489,16 @@ class BatonAdapter:
             _logger.info("adapter.cancelled")
             raise
         finally:
+            for task in self._flow_action_tasks.values():
+                task.cancel()
+            if self._flow_action_tasks:
+                await asyncio.gather(*self._flow_action_tasks.values(), return_exceptions=True)
+            self._flow_action_tasks.clear()
+            for task in self._flow_fact_tasks.values():
+                task.cancel()
+            if self._flow_fact_tasks:
+                await asyncio.gather(*self._flow_fact_tasks.values(), return_exceptions=True)
+            self._flow_fact_tasks.clear()
             timer_task.cancel()
             await self._timer_wheel.shutdown()
             self._running = False

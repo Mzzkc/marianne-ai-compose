@@ -6,6 +6,7 @@ Production-grade orchestration patterns from the Rosetta corpus. These scores de
 
 | Score | What It Does | Sheets | Patterns Used | Time | Cost |
 |-------|-------------|--------|--------------|------|------|
+| [convergence-loop](convergence-loop.yaml) | Repeats a CLI sheet until a file expression becomes true; escalates an attempt failure | 1, two passes | Loop, expression, trigger | <1m | $0 |
 | [dead-letter-quarantine](dead-letter-quarantine.yaml) | Batch-generate Python utilities, quarantine failures, analyze cross-failure patterns, reprocess with adapted strategy | 16 | Dead Letter Quarantine | ~35m | ~$6 |
 | [echelon-repair](echelon-repair.yaml) | Security audit with instrument-matched tiers — classify findings by severity, route to appropriate analysis depth | 6 | Echelon Repair | ~30m | ~$5 |
 | [immune-cascade](immune-cascade.yaml) | Security hardening pipeline — cheap broad sweeps feed targeted expensive investigation where it matters | 11 | Immune Cascade | ~60m | ~$5 |
