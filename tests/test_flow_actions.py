@@ -31,40 +31,64 @@ async def test_file_facts_are_bounded_and_compare_iteration_mtime(tmp_path: Path
 
 
 async def test_background_child_does_not_hold_run_open(tmp_path: Path) -> None:
-    started = time.monotonic()
-    action_a = execute_run_action(
-        RunTrigger(command="sleep 30 & echo $! > child.pid; echo done", timeout_seconds=2),
-        workspace=tmp_path, job_id="j", sheet_num=1, fired_epoch=0,
-        chain_id=1, cursor=0, attempt=1, variables={},
-    )
-    action_b = execute_run_action(
-        RunTrigger(command="echo other", timeout_seconds=2),
-        workspace=tmp_path, job_id="other", sheet_num=1, fired_epoch=0,
-        chain_id=1, cursor=0, attempt=1, variables={},
-    )
-    outcome, other = await asyncio.gather(action_a, action_b)
-    assert outcome.exit_code == 0
-    assert other.exit_code == 0
-    assert not outcome.timed_out
-    assert time.monotonic() - started < 1
-    assert outcome.log_path is not None
-    assert "done" in Path(outcome.log_path).read_text(encoding="utf-8")
-    child_pid = int((tmp_path / "child.pid").read_text().strip())
-    assert (
-        not psutil.pid_exists(child_pid)
-        or psutil.Process(child_pid).status() == psutil.STATUS_ZOMBIE
-    )
+    unrelated = await asyncio.create_subprocess_exec("sleep", "30", start_new_session=True)
+    child_pid: int | None = None
+    try:
+        started = time.monotonic()
+        action_a = execute_run_action(
+            RunTrigger(command="sleep 30 & echo $! > child.pid; echo done", timeout_seconds=2),
+            workspace=tmp_path, job_id="j", sheet_num=1, fired_epoch=0,
+            chain_id=1, cursor=0, attempt=1, variables={},
+        )
+        action_b = execute_run_action(
+            RunTrigger(command="echo other", timeout_seconds=2),
+            workspace=tmp_path, job_id="other", sheet_num=1, fired_epoch=0,
+            chain_id=1, cursor=0, attempt=1, variables={},
+        )
+        outcome, other = await asyncio.gather(action_a, action_b)
+        assert outcome.exit_code == 0
+        assert other.exit_code == 0
+        assert not outcome.timed_out
+        assert time.monotonic() - started < 1
+        assert outcome.log_path is not None
+        assert "done" in Path(outcome.log_path).read_text(encoding="utf-8")
+        child_pid = int((tmp_path / "child.pid").read_text().strip())
+        assert (
+            not psutil.pid_exists(child_pid)
+            or psutil.Process(child_pid).status() == psutil.STATUS_ZOMBIE
+        )
+        assert unrelated.returncode is None
+    finally:
+        if child_pid is not None and psutil.pid_exists(child_pid):
+            try:
+                safe_killpg(child_pid, signal.SIGKILL, context="flow_test_cleanup")
+            except (ProcessLookupError, PermissionError):
+                pass
+        if unrelated.returncode is None:
+            unrelated.kill()
+        await unrelated.wait()
 
 
 async def test_foreground_timeout_is_bounded(tmp_path: Path) -> None:
-    started = time.monotonic()
-    outcome = await execute_run_action(
-        RunTrigger(command="sleep 30", timeout_seconds=2),
-        workspace=tmp_path, job_id="j", sheet_num=1, fired_epoch=0,
-        chain_id=2, cursor=0, attempt=1, variables={},
-    )
-    assert outcome.timed_out
-    assert time.monotonic() - started < 5
+    unrelated = await asyncio.create_subprocess_exec("sleep", "30", start_new_session=True)
+    try:
+        started = time.monotonic()
+        outcome = await execute_run_action(
+            RunTrigger(command="echo $$ > parent.pid; sleep 30", timeout_seconds=2),
+            workspace=tmp_path, job_id="j", sheet_num=1, fired_epoch=0,
+            chain_id=2, cursor=0, attempt=1, variables={},
+        )
+        assert outcome.timed_out
+        assert time.monotonic() - started < 5
+        parent_pid = int((tmp_path / "parent.pid").read_text().strip())
+        assert not psutil.pid_exists(parent_pid) or (
+            psutil.Process(parent_pid).status() == psutil.STATUS_ZOMBIE
+        )
+        assert unrelated.returncode is None
+    finally:
+        if unrelated.returncode is None:
+            unrelated.kill()
+        await unrelated.wait()
 
 
 async def test_detached_log_holder_is_reaped_without_signalling_unrelated_process(
@@ -93,6 +117,7 @@ async def test_detached_log_holder_is_reaped_without_signalling_unrelated_proces
     )
     child_pid: int | None = None
     try:
+        started = time.monotonic()
         outcome = await execute_run_action(
             RunTrigger(
                 command="setsid sh -c 'echo child_pid=$$; exec sleep 30' & echo done",
@@ -103,6 +128,7 @@ async def test_detached_log_holder_is_reaped_without_signalling_unrelated_proces
         )
         assert outcome.exit_code == 0
         assert not outcome.timed_out
+        assert time.monotonic() - started < 1
         assert outcome.log_path is not None
         log = Path(outcome.log_path).read_text(encoding="utf-8")
         match = re.search(r"child_pid=(\d+)", log)
