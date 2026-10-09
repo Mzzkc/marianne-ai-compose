@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import subprocess
 import time
 
 import pytest
@@ -86,23 +87,55 @@ async def test_exited_parent_held_pipe_completes_and_reaps_group() -> None:
 
 
 @pytest.mark.asyncio
-async def test_exited_parent_reaps_detached_pipe_owner() -> None:
+@pytest.mark.parametrize("missed_ancestry", [False, True])
+async def test_exited_parent_reaps_detached_pipe_owner(
+    monkeypatch, missed_ancestry: bool,
+) -> None:
+    from marianne.execution.instruments import cli_backend
+
+    if missed_ancestry:
+        monkeypatch.setattr(cli_backend, "snapshot_descendant_trees",
+                            lambda pid, born: ())
+
+    events: list[tuple[str, dict]] = []
+
+    class Recorder:
+        def __getattr__(self, level):
+            def record(event, **fields):
+                events.append((event, fields))
+            return record
+
+    monkeypatch.setattr(cli_backend, "_logger", Recorder())
     backend = PluginCliBackend(_profile(grace=0.1))
+    unrelated = subprocess.Popen(["sleep", "30"], start_new_session=True,
+                                 stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
     child_pid: int | None = None
     try:
         start = time.monotonic()
         result = await backend.execute(
             "import subprocess, time; c=subprocess.Popen(['sleep','30'],"
-            "start_new_session=True); print(f'child={c.pid}', flush=True);"
-            "time.sleep(0.05)",
+            "start_new_session=True); print(f'child={c.pid}', flush=True)",
             timeout_seconds=3,
+            request=SheetRequestState(job_id="job-detached", sheet_num=7),
         )
         child_pid = int(result.stdout.split("child=", 1)[1].split()[0])
         assert result.exit_reason == "completed"
         assert result.exit_code == 0
         assert time.monotonic() - start < 30
         assert await _wait_dead(child_pid)
+        reaped = [fields for event, fields in events
+                  if event == "plugin_cli_descendants_reaped"]
+        assert len(reaped) == 1
+        assert reaped[0]["job_id"] == "job-detached"
+        assert reaped[0]["sheet_num"] == 7
+        assert reaped[0]["signalled"] == 1
+        assert reaped[0]["skipped_identity_mismatch"] == 0
+        assert unrelated.poll() is None
     finally:
+        if unrelated.poll() is None:
+            unrelated.terminate()
+        unrelated.wait(timeout=3)
         if child_pid is not None and _state(child_pid) not in (None, "Z"):
             try:
                 os.killpg(child_pid, signal.SIGKILL)
@@ -176,7 +209,16 @@ async def test_log_events_bind_request_bytes_and_timeout_phase(monkeypatch) -> N
     complete = [fields for event, fields in events
                 if event == "plugin_cli_execute_complete"]
     timeout = [fields for event, fields in events if event == "plugin_cli_timeout"]
+    reaped = [fields for event, fields in events
+              if event == "plugin_cli_descendants_reaped"]
     assert len(complete) == 3 and len(timeout) == 1
+    assert len(reaped) == 3
+    assert all(item["job_id"] == "job-406" and item["sheet_num"] == 3
+               for item in reaped)
+    assert all(isinstance(item["signalled"], int)
+               and isinstance(item["already_gone"], int)
+               and isinstance(item["skipped_identity_mismatch"], int)
+               for item in reaped)
     assert [item["post_exit_grace_fired"] for item in complete] == [False, True, False]
     assert [item["returncode_at_timeout"] for item in complete] == [None, 0, None]
     assert [item["stdout_bytes"] for item in complete] == [3, 5, 8]

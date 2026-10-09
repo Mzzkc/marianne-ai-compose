@@ -28,6 +28,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+import psutil
 from jsonschema.exceptions import SchemaError
 from jsonschema.validators import validator_for
 
@@ -44,7 +45,15 @@ from marianne.execution.base import (
     _ResponseFormatUnset,
 )
 from marianne.utils.json_path import extract_json_path
-from marianne.utils.process import safe_killpg as _safe_killpg
+from marianne.utils.process import (
+    DescendantIdentity,
+    reap_descendant_trees,
+    snapshot_descendant_trees,
+    snapshot_pipe_holders,
+)
+from marianne.utils.process import (
+    safe_killpg as _safe_killpg,
+)
 from marianne.utils.time import utc_now
 
 _logger = get_logger("backend.plugin_cli")
@@ -102,14 +111,30 @@ async def _drain_stream(
             on_chunk(chunk)
 
 
-async def _wait_for_parent_exit(proc: asyncio.subprocess.Process) -> int:
+async def _wait_for_parent_exit(
+    proc: asyncio.subprocess.Process,
+    descendants: dict[int, DescendantIdentity],
+    parent_create_time: float | None,
+) -> int:
     """Observe the direct child without waiting for inherited pipes to close.
 
     asyncio's ``Process.wait()`` can itself wait for pipe transports after the
     child exits, so it cannot be the parent-exit signal for #406.
     """
+    started = time.monotonic()
     while proc.returncode is None:
-        await asyncio.sleep(0.01)
+        if proc.pid is not None and parent_create_time is not None:
+            descendants.update((child.pid, child)
+                               for child in snapshot_descendant_trees(
+                                   proc.pid, parent_create_time))
+        # Poll rapidly during the short spawn/exit window, then avoid a
+        # constant psutil scan throughout hours-long CLI executions.
+        interval = 0.001 if time.monotonic() - started < 0.2 else 0.05
+        await asyncio.sleep(interval)
+    if proc.pid is not None and parent_create_time is not None:
+        descendants.update((child.pid, child)
+                           for child in snapshot_descendant_trees(
+                               proc.pid, parent_create_time))
     return proc.returncode
 
 
@@ -1390,6 +1415,21 @@ class PluginCliBackend(Backend):
                 env=env,
                 start_new_session=_force_new_session,
             )
+            try:
+                parent_create_time = psutil.Process(proc.pid).create_time()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                parent_create_time = None
+            pipe_inodes: set[int] = set()
+            for stream in (proc.stdout, proc.stderr):
+                if not isinstance(stream, asyncio.StreamReader):
+                    continue
+                transport = getattr(stream, "_transport", None)
+                pipe = transport.get_extra_info("pipe") if transport else None
+                if pipe is not None:
+                    try:
+                        pipe_inodes.add(os.fstat(pipe.fileno()).st_ino)
+                    except (OSError, ValueError):
+                        pass
 
             # Capture pgid at spawn — never re-derive from proc.pid later.
             # See docs/specs/2026-04-16-process-lifecycle-design.md (Change 1).
@@ -1455,12 +1495,23 @@ class PluginCliBackend(Backend):
             # Drain both pipes concurrently. Observe the direct parent's
             # returncode independently of pipe EOF, then bound remaining
             # reads by the profile's post-exit grace. Decode after capture.
-            def _safe_emit(stream_name: str) -> Callable[[bytes], None] | None:
+            descendants: dict[int, DescendantIdentity] = {}
+
+            def _capture_descendants() -> None:
+                if proc.pid is not None and parent_create_time is not None:
+                    descendants.update((child.pid, child)
+                                       for child in snapshot_descendant_trees(
+                                           proc.pid, parent_create_time))
+
+            def _safe_emit(stream_name: str) -> Callable[[bytes], None]:
                 callback = self._on_output
-                if callback is None:
-                    return None
 
                 def emit(chunk: bytes) -> None:
+                    # A short-lived CLI can print its child PID and exit
+                    # before the parent-exit poll gets another turn.
+                    _capture_descendants()
+                    if callback is None:
+                        return
                     try:
                         callback(stream_name, chunk)
                     except Exception:
@@ -1483,8 +1534,16 @@ class PluginCliBackend(Backend):
             try:
                 try:
                     exit_code = await asyncio.wait_for(
-                        _wait_for_parent_exit(proc), timeout=effective_timeout,
+                        _wait_for_parent_exit(proc, descendants,
+                                              parent_create_time),
+                        timeout=effective_timeout,
                     )
+                    if parent_create_time is not None:
+                        descendants.update((child.pid, child) for child in
+                                           snapshot_pipe_holders(
+                                               frozenset(pipe_inodes),
+                                               parent_create_time,
+                                           ))
                     try:
                         await asyncio.wait_for(
                             asyncio.gather(*drains),
@@ -1517,6 +1576,17 @@ class PluginCliBackend(Backend):
                 # cancellation retain SIGTERM -> grace -> SIGKILL.
                 await _kill_process_group_if_alive(
                     proc, pgid, reap_exited_group=post_exit_grace_fired,
+                )
+                reaped = reap_descendant_trees(tuple(descendants.values()))
+                _logger.info(
+                    "plugin_cli_descendants_reaped",
+                    instrument=self._profile.name,
+                    job_id=job_id,
+                    sheet_num=sheet_num,
+                    signalled=reaped.signalled,
+                    already_gone=reaped.already_gone,
+                    skipped_identity_mismatch=reaped.skipped_identity_mismatch,
+                    skipped_unsafe_group=reaped.skipped_unsafe_group,
                 )
                 # Decode AFTER the try so partial output survives timeout
                 # and cancellation — the drain appends chunks in place
