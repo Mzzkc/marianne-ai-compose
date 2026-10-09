@@ -176,14 +176,13 @@ async def test_list_jobs_caps_enrichment(
 
 
 @pytest.mark.asyncio
-async def test_list_jobs_returns_empty_when_daemon_unavailable(
+async def test_list_jobs_preserves_error_when_daemon_unavailable(
     adapter: DaemonStateAdapter, mock_client: AsyncMock
 ) -> None:
     mock_client.list_jobs.side_effect = DaemonNotRunningError("socket unavailable")
 
-    results = await adapter.list_jobs()
-
-    assert results == []
+    with pytest.raises(DaemonError, match="unavailable"):
+        await adapter.list_jobs()
 
 
 # ------------------------------------------------------------------
@@ -224,5 +223,8 @@ async def test_mark_sheet_status_raises(adapter: DaemonStateAdapter) -> None:
 
 
 @pytest.mark.asyncio
-async def test_close_is_noop(adapter: DaemonStateAdapter) -> None:
-    await adapter.close()  # Should not raise
+async def test_close_releases_client_pool(
+    adapter: DaemonStateAdapter, mock_client: AsyncMock,
+) -> None:
+    await adapter.close()
+    mock_client.close.assert_awaited_once()

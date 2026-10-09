@@ -131,7 +131,11 @@ class TestDaemonServerLifecycle:
     async def test_start_removes_stale_socket(self, tmp_path: Path):
         """Starting cleans up a leftover socket from a previous run."""
         sock = tmp_path / "test.sock"
-        sock.touch()  # Stale file
+        import socket
+
+        stale = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        stale.bind(str(sock))
+        stale.close()  # Actual stale socket; ordinary files must be preserved.
         server = DaemonServer(sock, _make_handler())
         await server.start()
         try:

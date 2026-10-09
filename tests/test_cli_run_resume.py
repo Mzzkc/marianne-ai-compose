@@ -455,15 +455,31 @@ class TestResumeCommand:
     def test_resume_job_not_found(self, tmp_path: Path) -> None:
         """Resume with job ID that doesn't exist should fail."""
         # Note: --workspace flag removed in F-502
-        result = runner.invoke(
-            app,
-            ["resume", "nonexistent-job"],
-        )
+        from marianne.daemon.exceptions import JobSubmissionError
+
+        # Bind the negative case to a deterministic conductor response;
+        # ambient live conductor health is not evidence that a job is absent.
+        with patch(
+            "marianne.daemon.detect.try_daemon_route",
+            new_callable=AsyncMock,
+            side_effect=JobSubmissionError("job not found: nonexistent-job"),
+        ):
+            result = runner.invoke(app, ["resume", "nonexistent-job"])
         assert result.exit_code == 1
-        # Either "not found" (conductor running but job missing) or
-        # "not running" (conductor not available) are valid failures.
-        output = result.stdout.lower()
-        assert "not found" in output or "not running" in output
+        assert "not found" in result.stdout.lower()
+
+    def test_resume_preserves_unresponsive_conductor(self) -> None:
+        from marianne.daemon.exceptions import DaemonUnresponsiveError
+
+        with patch(
+            "marianne.daemon.detect.try_daemon_route",
+            new_callable=AsyncMock,
+            side_effect=DaemonUnresponsiveError("Conductor did not respond"),
+        ):
+            result = runner.invoke(app, ["resume", "nonexistent-job"])
+        assert result.exit_code == 1
+        assert "did not respond" in result.stdout.lower()
+        assert "not found" not in result.stdout.lower()
 
 
 class TestSharedHelpers:

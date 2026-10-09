@@ -23,6 +23,7 @@ def _make_client_mock(
     client = MagicMock()
     call_mock = AsyncMock(side_effect=responses)
     client.call = call_mock
+    client.close = AsyncMock()
     return client
 
 
@@ -90,6 +91,7 @@ class TestAwaitEarlyFailure:
         """DaemonClient.call raises -> returns None (fail open)."""
         client = MagicMock()
         client.call = AsyncMock(side_effect=ConnectionError("refused"))
+        client.close = AsyncMock()
 
         with (
             patch("marianne.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),

@@ -333,8 +333,14 @@ class TestPriyasForgottenScore:
                 assert "Traceback" not in result.stdout
 
     @pytest.mark.adversarial
-    def test_status_with_typo_suggests_list(self) -> None:
+    def test_status_with_typo_suggests_list(self, monkeypatch) -> None:
         """A wrong score ID suggests how to find the right one."""
+        from marianne.daemon.exceptions import JobSubmissionError
+
+        async def missing_job(*args, **kwargs):
+            raise JobSubmissionError("job not found")
+
+        monkeypatch.setattr("marianne.daemon.detect.try_daemon_route", missing_job)
         result = runner.invoke(app, ["status", "my-scroe-typo-123"])
         if result.exit_code != 0:
             combined = result.stdout + result.output

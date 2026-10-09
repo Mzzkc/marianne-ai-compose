@@ -129,6 +129,7 @@ class TestTryDaemonRouteMethodNotFound:
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
+            client.close = AsyncMock()
             client.is_daemon_running = AsyncMock(return_value=True)
             client.call = AsyncMock(
                 side_effect=MethodNotFoundError("Method not found: daemon.new_feature")
@@ -144,6 +145,7 @@ class TestTryDaemonRouteMethodNotFound:
             # The wrapped message includes restart guidance
             assert "mzt restart" in str(exc_info.value)
             assert "daemon.new_feature" in str(exc_info.value)
+            client.close.assert_awaited_once()
 
     async def test_method_not_found_not_returned_as_false(self):
         """MethodNotFoundError must NOT return (False, None).
@@ -156,12 +158,14 @@ class TestTryDaemonRouteMethodNotFound:
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
+            client.close = AsyncMock()
             client.is_daemon_running = AsyncMock(return_value=True)
             client.call = AsyncMock(side_effect=MethodNotFoundError("Method not found: x"))
 
             # Must raise, not return (False, None)
             with pytest.raises(MethodNotFoundError):
                 await try_daemon_route("x", {}, socket_path=Path("/tmp/test.sock"))
+            client.close.assert_awaited_once()
 
     async def test_job_submission_error_still_reraises(self):
         """JobSubmissionError still re-raises (existing behavior preserved)."""
@@ -169,11 +173,13 @@ class TestTryDaemonRouteMethodNotFound:
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
+            client.close = AsyncMock()
             client.is_daemon_running = AsyncMock(return_value=True)
             client.call = AsyncMock(side_effect=JobSubmissionError("job not found"))
 
             with pytest.raises(JobSubmissionError):
                 await try_daemon_route("job.status", {}, socket_path=Path("/tmp/test.sock"))
+            client.close.assert_awaited_once()
 
     async def test_resource_exhausted_still_reraises(self):
         """ResourceExhaustedError still re-raises (existing behavior preserved)."""
@@ -181,51 +187,45 @@ class TestTryDaemonRouteMethodNotFound:
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
+            client.close = AsyncMock()
             client.is_daemon_running = AsyncMock(return_value=True)
             client.call = AsyncMock(side_effect=ResourceExhaustedError("rate limited"))
 
             with pytest.raises(ResourceExhaustedError):
                 await try_daemon_route("job.submit", {}, socket_path=Path("/tmp/test.sock"))
+            client.close.assert_awaited_once()
 
-    async def test_generic_daemon_error_still_returns_false(self):
-        """Generic DaemonError (not a specific subclass) still returns (False, None).
-
-        Only MethodNotFoundError gets re-raised. Plain DaemonError (e.g., from
-        a shutting-down conductor) still returns False for fallback handling.
-        """
+    async def test_generic_daemon_error_preserves_unknown_operation_state(self):
+        """A confirmed conductor failure must not authorize a direct fallback."""
         from marianne.daemon.exceptions import DaemonError
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
+            client.close = AsyncMock()
             client.is_daemon_running = AsyncMock(return_value=True)
             client.call = AsyncMock(side_effect=DaemonError("shutting down"))
 
-            routed, result = await try_daemon_route(
-                "job.status", {}, socket_path=Path("/tmp/test.sock")
-            )
+            with pytest.raises(DaemonError, match="shutting down") as exc_info:
+                await try_daemon_route("job.status", {}, socket_path=Path("/tmp/test.sock"))
+            assert "not running" not in str(exc_info.value)
+            client.close.assert_awaited_once()
+            client.call.assert_awaited_once()
 
-        assert routed is False
-        assert result is None
-
-    async def test_daemon_already_running_error_still_returns_false(self):
-        """DaemonAlreadyRunningError still returns (False, None).
-
-        This verifies we didn't accidentally change behavior for other
-        DaemonError subclasses.
-        """
+    async def test_daemon_already_running_error_preserves_actual_rejection(self):
+        """An already-running rejection cannot describe an absent conductor."""
         from marianne.daemon.exceptions import DaemonAlreadyRunningError
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
+            client.close = AsyncMock()
             client.is_daemon_running = AsyncMock(return_value=True)
             client.call = AsyncMock(side_effect=DaemonAlreadyRunningError("already running"))
 
-            routed, result = await try_daemon_route(
-                "conductor.start", {}, socket_path=Path("/tmp/test.sock")
-            )
-
-        assert routed is False
-        assert result is None
+            with pytest.raises(DaemonAlreadyRunningError, match="already running") as exc_info:
+                await try_daemon_route("conductor.start", {}, socket_path=Path("/tmp/test.sock"))
+            assert "not running" not in str(exc_info.value)
+            client.close.assert_awaited_once()
+            client.call.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

@@ -113,6 +113,11 @@ def internal_error(
     return make_error(INTERNAL_ERROR, msg, request_id)
 
 
+def resource_exhausted(request_id: int | str | None, detail: str) -> JsonRpcError:
+    """Bounded refusal when an IPC admission budget is full."""
+    return make_error(RESOURCE_EXHAUSTED, detail, request_id)
+
+
 # ---------------------------------------------------------------------------
 # Exception → JSON-RPC error mapping
 # ---------------------------------------------------------------------------
@@ -182,4 +187,5 @@ __all__ = [
     "parse_error",
     "peer_denied",
     "rpc_error_to_exception",
+    "resource_exhausted",
 ]

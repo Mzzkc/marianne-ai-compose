@@ -159,6 +159,26 @@ class SocketConfig(BaseModel):
         ge=1,
         description="Maximum pending connections in the socket listen queue",
     )
+    max_connections: int = Field(
+        default=500, ge=1,
+        description="Maximum admitted IPC connections; excess clients receive an overload error",
+    )
+    max_concurrent_requests: int = Field(
+        default=50, ge=1,
+        description="Maximum concurrent short IPC requests, excluding long-lived streams",
+    )
+    max_streams: int = Field(
+        default=50, ge=1,
+        description="Maximum concurrent IPC stream subscriptions",
+    )
+    request_timeout: float = Field(
+        default=300.0, gt=0,
+        description="Seconds allowed for a short IPC handler, excluding long-lived streams",
+    )
+    write_timeout: float = Field(
+        default=10.0, gt=0,
+        description="Seconds allowed for IPC response backpressure before closing the connection",
+    )
     enforce_peer_uid: bool = Field(
         default=True,
         description=(

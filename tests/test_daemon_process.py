@@ -307,6 +307,10 @@ class TestDaemonProcess:
 
             await dp.run()
 
+            # The listen backlog must never become the lifetime client budget.
+            assert mock_server_cls.call_args.kwargs["max_connections"] == 500
+            assert mock_server_cls.call_args.kwargs["backlog"] == 5
+
         assert signal.SIGTERM in handlers_added
         assert signal.SIGINT in handlers_added
         assert signal.SIGHUP in handlers_added

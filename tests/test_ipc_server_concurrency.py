@@ -152,54 +152,27 @@ async def test_request_semaphore_limits_concurrency(
         await server.stop()
 
 
-async def test_connection_limit_queues_excess(
-    socket_path: Path,
-) -> None:
-    """Connections beyond max_connections are queued, not crashed."""
-    max_conns = 2
-    handler = _build_echo_handler()
-    server = DaemonServer(
-        socket_path,
-        handler,
-        max_connections=max_conns,
-        max_concurrent_requests=50,
-    )
-
+async def test_connection_limit_rejects_excess(socket_path: Path) -> None:
+    """Already accepted sockets are bounded errors instead of indefinite queues."""
+    server = DaemonServer(socket_path, _build_echo_handler(), max_connections=2)
     await server.start()
+    held = []
     try:
-        # Open max_conns connections and hold them open
-        held: list[tuple[asyncio.StreamReader, asyncio.StreamWriter]] = []
-        for _ in range(max_conns):
-            r, w = await asyncio.open_unix_connection(str(socket_path))
-            held.append((r, w))
-
-        # A third connection should connect at TCP level but its handler
-        # will block on the semaphore.  The connection itself succeeds
-        # (Unix sockets accept even if the handler hasn't started yet).
-        r3, w3 = await asyncio.wait_for(
-            asyncio.open_unix_connection(str(socket_path)),
-            timeout=2.0,
-        )
-
-        # Send a request on the queued connection — it won't get a
-        # response until a slot opens
-        w3.write(_make_request("test.echo", req_id=99))
-        await w3.drain()
-
-        # Close one held connection to free a slot
-        held[0][1].close()
-        await held[0][1].wait_closed()
-
-        # Now the queued connection should get its response
-        resp = await _read_response(r3)
-        assert resp.get("id") == 99
-
-        # Cleanup
-        w3.close()
-        await w3.wait_closed()
-        held[1][1].close()
-        await held[1][1].wait_closed()
+        for _ in range(2):
+            reader, writer = await asyncio.open_unix_connection(str(socket_path))
+            held.append(writer)
+            writer.write(_make_request("test.echo"))
+            await writer.drain()
+            assert (await _read_response(reader))["result"] == {}
+        reader, writer = await asyncio.open_unix_connection(str(socket_path))
+        held.append(writer)
+        response = await asyncio.wait_for(_read_response(reader), 1)
+        assert response["id"] is None  # rejection happens before parsing a request
+        assert response["error"]["code"] == -32001
+        assert await asyncio.wait_for(reader.read(), 1) == b""
     finally:
+        for writer in held:
+            writer.close()
         await server.stop()
 
 

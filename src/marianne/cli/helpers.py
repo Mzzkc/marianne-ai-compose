@@ -329,6 +329,7 @@ async def await_early_failure(
 
     Fail-open: any exception returns ``None`` so this never blocks the CLI.
     """
+    client = None
     try:
         from marianne.daemon.detect import _resolve_socket_path
         from marianne.daemon.ipc.client import DaemonClient
@@ -339,26 +340,26 @@ async def await_early_failure(
         _terminal_states = {"failed", "cancelled"}
         _active_states = {"running", "queued"}
 
-        elapsed = 0.0
-        while elapsed < timeout:
-            await asyncio.sleep(poll_interval)
-            elapsed += poll_interval
+        # The deadline includes each RPC, not just sleeps between polls.
+        async with asyncio.timeout(timeout):
+            while True:
+                await asyncio.sleep(poll_interval)
+                result = await client.call("job.status", {"job_id": job_id})
+                if not isinstance(result, dict):
+                    continue
 
-            result = await client.call("job.status", {"job_id": job_id})
-            if not isinstance(result, dict):
-                continue
-
-            status = result.get("status", "")
-            if status in _terminal_states:
-                return result
-            if status == "completed":
-                return result
-            if status in _active_states:
-                continue
+                status = result.get("status", "")
+                if status in _terminal_states or status == "completed":
+                    return result
+                if status in _active_states:
+                    continue
 
         return None
     except Exception:
         return None
+    finally:
+        if client is not None:
+            await client.close()
 
 
 async def query_rate_limits() -> dict[str, dict[str, float]] | None:

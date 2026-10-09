@@ -121,14 +121,15 @@ class TestCallResponseParsing:
 
     @pytest.mark.asyncio
     async def test_missing_result_key(self, tmp_path: Path) -> None:
-        """Response with neither 'error' nor 'result' returns None via .get()."""
+        """An incomplete envelope is a protocol error, not a null result."""
         client = _make_client(tmp_path)
         response = {"jsonrpc": "2.0", "id": 1}
 
-        with _mock_connection(client, [_json_line(response)]):
-            result = await client.call("test.method")
-
-        assert result is None
+        with (
+            _mock_connection(client, [_json_line(response)]),
+            pytest.raises(DaemonError, match="response"),
+        ):
+            await client.call("test.method")
 
     @pytest.mark.asyncio
     async def test_error_response_raises_exception(self, tmp_path: Path) -> None:
@@ -258,15 +259,19 @@ class TestStreamResponseParsing:
 
     @pytest.mark.asyncio
     async def test_stream_connection_closes_early(self, tmp_path: Path) -> None:
-        """Connection closing before final response ends stream gracefully."""
+        """A departed peer cannot make an unfinished stream look complete."""
         client = _make_client(tmp_path)
         lines = [
             _json_line({"jsonrpc": "2.0", "method": "progress", "params": {"pct": 50}}),
         ]
 
-        with _mock_connection(client, lines):
-            notifications = [n async for n in client.stream("test.stream")]
-
+        notifications = []
+        with (
+            _mock_connection(client, lines),
+            pytest.raises(DaemonNotRunningError, match="final response"),
+        ):
+            async for item in client.stream("test.stream"):
+                notifications.append(item)
         assert len(notifications) == 1
 
     @pytest.mark.asyncio
@@ -286,10 +291,12 @@ class TestStreamResponseParsing:
         """Empty stream (immediate EOF) yields no notifications."""
         client = _make_client(tmp_path)
 
-        with _mock_connection(client, []):
-            notifications = [n async for n in client.stream("test.stream")]
-
-        assert notifications == []
+        with (
+            _mock_connection(client, []),
+            pytest.raises(DaemonNotRunningError, match="final response"),
+        ):
+            async for _ in client.stream("test.stream"):
+                pass
 
 
 # ---------------------------------------------------------------------------

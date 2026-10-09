@@ -120,6 +120,7 @@ def _cancel_source_from_peer(metadata: dict[str, Any]) -> str:
 
 
 # ─── Core Functions (used by cli/commands/conductor.py) ───────────────
+CONDUCTOR_PROBE_TIMEOUT = 2.0
 
 
 def start_conductor(
@@ -216,16 +217,23 @@ def _check_running_jobs(
     resolved = _resolve_socket_path(socket_path)
 
     async def _probe() -> dict[str, Any] | None:
+        client = None
         try:
-            client = DaemonClient(resolved, timeout=5.0)
-            ready = await client.readiness()
-            running = ready.get("running_jobs", 0)
+            client = DaemonClient(resolved, timeout=CONDUCTOR_PROBE_TIMEOUT)
+            async with asyncio.timeout(CONDUCTOR_PROBE_TIMEOUT):
+                ready = await client.readiness()
+            running = ready.get("running_jobs")
+            if type(running) is not int or running < 0:
+                return None
             return {
                 "running_jobs": running,
                 "job_ids": ready.get("job_ids", []),
             }
         except Exception:
             return None
+        finally:
+            if client is not None:
+                await client.close()
 
     try:
         return asyncio.run(_probe())
@@ -261,6 +269,12 @@ def stop_conductor(
     # Safety guard: check for running jobs unless --force (#94)
     if not force:
         running_info = _check_running_jobs(socket_path)
+        if running_info is None:
+            typer.echo(
+                "Cannot determine active work: conductor is unresponsive. "
+                "Stop refused; verify work independently before using --force."
+            )
+            raise typer.Exit(1)
         if running_info is not None and running_info["running_jobs"] > 0:
             count = running_info["running_jobs"]
             typer.echo(
@@ -312,13 +326,15 @@ def get_conductor_status(
 
     from marianne.daemon.ipc.client import DaemonClient
 
-    client = DaemonClient(resolved_socket)
+    client = DaemonClient(resolved_socket, timeout=CONDUCTOR_PROBE_TIMEOUT)
 
     from marianne.daemon.exceptions import DaemonError
 
     async def _probe(method: str) -> dict[str, Any] | None:
         try:
-            result: dict[str, Any] = await client.call(method)
+            result: dict[str, Any] = await asyncio.wait_for(
+                client.call(method), CONDUCTOR_PROBE_TIMEOUT,
+            )
             return result
         except (OSError, DaemonError) as e:
             _logger.info(f"probe.{method.split('.')[-1]}_failed", error=str(e))
@@ -329,10 +345,13 @@ def get_conductor_status(
         dict[str, Any] | None,
         dict[str, Any] | None,
     ]:
-        health = await _probe("daemon.health")
-        ready = await _probe("daemon.ready")
-        daemon_info = await _probe("daemon.status")
-        return health, ready, daemon_info
+        try:
+            health, ready, daemon_info = await asyncio.gather(
+                _probe("daemon.health"), _probe("daemon.ready"), _probe("daemon.status"),
+            )
+            return health, ready, daemon_info
+        finally:
+            await client.close()
 
     try:
         health, ready, daemon_info = asyncio.run(_get_health())
@@ -522,7 +541,12 @@ class DaemonProcess:
                 self._config.socket.path,
                 handler,
                 permissions=self._config.socket.permissions,
-                max_connections=self._config.socket.backlog,
+                backlog=self._config.socket.backlog,
+                max_connections=self._config.socket.max_connections,
+                max_concurrent_requests=self._config.socket.max_concurrent_requests,
+                max_streams=self._config.socket.max_streams,
+                request_timeout=self._config.socket.request_timeout,
+                write_timeout=self._config.socket.write_timeout,
                 enforce_peer_uid=self._config.socket.enforce_peer_uid,
             )
             await server.start()
@@ -864,7 +888,7 @@ class DaemonProcess:
                         "params": event,
                     }
                     writer.write(json.dumps(notification).encode() + b"\n")
-                    await writer.drain()
+                    await asyncio.wait_for(writer.drain(), self._config.socket.write_timeout)
             except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError):
                 pass
             finally:
@@ -901,18 +925,18 @@ class DaemonProcess:
             hub = manager.output_hub
             if hub is None:
                 _notify("[stream unavailable: conductor still starting]")
-                await writer.drain()
+                await asyncio.wait_for(writer.drain(), self._config.socket.write_timeout)
                 return
 
             sub = hub.subscribe(job_id, sheet_num)
             try:
                 for line in hub.snapshot(job_id, sheet_num):
                     _notify(line)
-                await writer.drain()
+                await asyncio.wait_for(writer.drain(), self._config.socket.write_timeout)
                 while True:
                     line = await sub.queue.get()
                     _notify(line)
-                    await writer.drain()
+                    await asyncio.wait_for(writer.drain(), self._config.socket.write_timeout)
             except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError):
                 pass
             finally:
@@ -921,8 +945,8 @@ class DaemonProcess:
         handler.register("daemon.top", handle_top)
         handler.register("daemon.top.stream", handle_top_stream)
         handler.register("daemon.events", handle_events)
-        handler.register("daemon.monitor.stream", handle_monitor_stream)
-        handler.register("job.output.stream", handle_output_stream)
+        handler.register("daemon.monitor.stream", handle_monitor_stream, streaming=True)
+        handler.register("job.output.stream", handle_output_stream, streaming=True)
 
         # Observer event recorder IPC — per-job behavioral events
         async def handle_observer_events(

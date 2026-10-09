@@ -20,6 +20,14 @@ class DaemonNotRunningError(DaemonError):
     """
 
 
+class DaemonUnresponsiveError(DaemonError):
+    """The conductor endpoint exists but did not respond within the deadline."""
+
+
+class DaemonProtocolError(DaemonError):
+    """The conductor returned a corrupt or unrelated response."""
+
+
 class DaemonAlreadyRunningError(DaemonError):
     """Raised when starting a daemon while another instance is already running.
 

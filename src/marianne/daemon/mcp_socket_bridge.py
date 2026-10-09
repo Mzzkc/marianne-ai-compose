@@ -8,6 +8,7 @@ upstream IDs, then restored on the way back to the originating client.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import shlex
 from dataclasses import dataclass
@@ -15,11 +16,16 @@ from pathlib import Path
 from typing import Any, Literal
 
 from marianne.core.logging import get_logger
+from marianne.daemon.socket_ownership import OwnedUnixSocket
 
 _logger = get_logger("daemon.mcp_socket_bridge")
 
 McpFraming = Literal["newline", "content-length"]
 _READ_CHUNK_LIMIT = 1024 * 1024
+_WRITE_TIMEOUT_SECONDS = 10.0
+_CLOSE_TIMEOUT_SECONDS = 0.5
+_UPSTREAM_STOP_TIMEOUT_SECONDS = 10.0
+_UPSTREAM_KILL_TIMEOUT_SECONDS = 2.0
 
 
 @dataclass(eq=False)
@@ -53,7 +59,10 @@ class McpSocketBridge:
 
         self.process: asyncio.subprocess.Process | None = None
         self._server: asyncio.AbstractServer | None = None
+        self._socket_owner = OwnedUnixSocket(socket_path)
         self._clients: set[_Client] = set()
+        self._client_tasks: set[asyncio.Task[None]] = set()
+        self._stop_task: asyncio.Task[None] | None = None
         self._pending: dict[int, _PendingClientResponse | asyncio.Future[dict[str, Any]]] = {}
         self._request_id = 0
         self._client_id = 0
@@ -77,42 +86,40 @@ class McpSocketBridge:
         if self.is_running:
             return
 
+        if self._stop_task is not None and not self._stop_task.done():
+            await self.stop()
+        self._stop_task = None
         self._stopping = False
-        self.socket_path.parent.mkdir(parents=True, exist_ok=True)
-        self.socket_path.unlink(missing_ok=True)
-
         cmd_parts = shlex.split(self.command)
         if not cmd_parts:
             raise ValueError("MCP server command must not be empty")
 
-        process = await asyncio.create_subprocess_exec(
-            cmd_parts[0],
-            *cmd_parts[1:],
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        if process.stdin is None or process.stdout is None:
-            raise RuntimeError(f"MCP server {self.name!r} did not expose stdio pipes")
-
-        self.process = process
-        self._upstream_reader_task = asyncio.create_task(
-            self._read_upstream_loop(),
-            name=f"mcp-bridge-{self.name}-upstream",
-        )
-        if process.stderr is not None:
-            self._stderr_task = asyncio.create_task(
-                self._drain_stderr(process.stderr),
-                name=f"mcp-bridge-{self.name}-stderr",
-            )
-
         try:
-            self._initialize_result = await self._initialize_upstream()
-            self._server = await asyncio.start_unix_server(
-                self._handle_client,
-                path=str(self.socket_path),
+            await self._socket_owner.prepare()
+            process = await asyncio.create_subprocess_exec(
+                cmd_parts[0],
+                *cmd_parts[1:],
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
-        except Exception:
+            self.process = process
+            if process.stdin is None or process.stdout is None:
+                raise RuntimeError(f"MCP server {self.name!r} did not expose stdio pipes")
+
+            self._upstream_reader_task = asyncio.create_task(
+                self._read_upstream_loop(),
+                name=f"mcp-bridge-{self.name}-upstream",
+            )
+            if process.stderr is not None:
+                self._stderr_task = asyncio.create_task(
+                    self._drain_stderr(process.stderr),
+                    name=f"mcp-bridge-{self.name}-stderr",
+                )
+
+            self._initialize_result = await self._initialize_upstream()
+            self._server = await self._socket_owner.start(self._handle_client)
+        except BaseException:
             await self.stop()
             raise
 
@@ -126,55 +133,121 @@ class McpSocketBridge:
         )
 
     async def stop(self) -> None:
-        """Stop the socket server and upstream process."""
+        """Finish owned cleanup before propagating caller cancellation."""
         self._stopping = True
-
-        if self._server is not None:
-            self._server.close()
-            await self._server.wait_closed()
-            self._server = None
-
-        for client in list(self._clients):
-            client.writer.close()
+        if self._stop_task is None:
+            self._stop_task = asyncio.create_task(
+                self._stop_resources(),
+                name=f"mcp-bridge-{self.name}-stop",
+            )
+        cleanup = self._stop_task
+        cancelled = False
+        # The pool can discard its bridge handle when stop is canceled. Keep
+        # cleanup strongly owned and shielded, and do not return until the
+        # upstream has been reaped and our socket lifetime lock released.
+        while not cleanup.done():
             try:
-                await client.writer.wait_closed()
-            except Exception:
-                pass
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                cancelled = True
+        cleanup.result()
+        if cancelled:
+            raise asyncio.CancelledError
+
+    @staticmethod
+    async def _close_client_writer(writer: asyncio.StreamWriter) -> None:
+        """Discard buffered output and bound waiting for transport closure."""
+        writer.close()
+        writer.transport.abort()
+        try:
+            await asyncio.wait_for(writer.wait_closed(), _CLOSE_TIMEOUT_SECONDS)
+        except (OSError, RuntimeError, TimeoutError):
+            pass
+
+    async def _stop_resources(self) -> None:
+        server, self._server = self._server, None
+        clients = list(self._clients)
         self._clients.clear()
+        try:
+            if server is not None:
+                server.close()
+            # Abort every client before any await: one unread client must not
+            # hold the remaining clients, upstream, or lifetime lock hostage.
+            for client in clients:
+                client.writer.close()
+                client.writer.transport.abort()
 
-        for pending in list(self._pending.values()):
-            if isinstance(pending, asyncio.Future) and not pending.done():
-                pending.cancel()
-        self._pending.clear()
+            for pending in list(self._pending.values()):
+                if isinstance(pending, asyncio.Future) and not pending.done():
+                    pending.cancel()
+            self._pending.clear()
 
-        if self._upstream_reader_task is not None:
-            self._upstream_reader_task.cancel()
-        if self._stderr_task is not None:
-            self._stderr_task.cancel()
-        tasks = [
-            task
-            for task in (self._upstream_reader_task, self._stderr_task)
-            if task is not None
-        ]
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-        self._upstream_reader_task = None
-        self._stderr_task = None
+            tasks = [
+                task
+                for task in (
+                    self._upstream_reader_task,
+                    self._stderr_task,
+                    *self._client_tasks,
+                )
+                if task is not None
+            ]
+            for task in tasks:
+                task.cancel()
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            self._upstream_reader_task = None
+            self._stderr_task = None
+            self._client_tasks.clear()
 
-        if self.process is not None:
+            closing = [self._close_client_writer(client.writer) for client in clients]
+            if server is not None:
+                closing.append(server.wait_closed())
+            if closing:
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(*closing, return_exceptions=True),
+                        _CLOSE_TIMEOUT_SECONDS,
+                    )
+                except TimeoutError:
+                    _logger.debug("mcp_bridge.close_timeout", extra={"server": self.name})
+        finally:
             try:
-                if self.process.returncode is None:
-                    self.process.terminate()
-                    try:
-                        await asyncio.wait_for(self.process.wait(), timeout=10.0)
-                    except TimeoutError:
-                        self.process.kill()
-                        await self.process.wait()
+                if self.process is not None:
+                    await self._stop_upstream(self.process)
             finally:
                 self.process = None
-
-        self.socket_path.unlink(missing_ok=True)
+                self._socket_owner.release()
         _logger.info("mcp_bridge.stopped", extra={"server": self.name})
+
+    async def _stop_upstream(self, process: asyncio.subprocess.Process) -> None:
+        """Reap the owned child while draining pipes that can delay wait()."""
+        if process.stdin is not None:
+            process.stdin.close()
+
+        async def drain(reader: asyncio.StreamReader) -> None:
+            while await reader.read(65536):
+                pass
+
+        drains = [
+            asyncio.create_task(drain(reader))
+            for reader in (process.stdout, process.stderr)
+            if reader is not None
+        ]
+        try:
+            if process.returncode is None:
+                with contextlib.suppress(ProcessLookupError):
+                    process.terminate()
+            try:
+                await asyncio.wait_for(process.wait(), _UPSTREAM_STOP_TIMEOUT_SECONDS)
+            except TimeoutError:
+                with contextlib.suppress(ProcessLookupError):
+                    process.kill()
+                await asyncio.wait_for(process.wait(), _UPSTREAM_KILL_TIMEOUT_SECONDS)
+        finally:
+            for task in drains:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*drains, return_exceptions=True)
 
     async def _initialize_upstream(self) -> dict[str, Any]:
         result = await self._send_upstream_request(
@@ -206,6 +279,9 @@ class McpSocketBridge:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
+        task = asyncio.current_task()
+        if task is not None:
+            self._client_tasks.add(task)
         self._client_id += 1
         client = _Client(client_id=self._client_id, writer=writer)
         self._clients.add(client)
@@ -219,18 +295,18 @@ class McpSocketBridge:
                 if client.framing is None:
                     client.framing = framing
                 await self._handle_client_message(client, message)
-        except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
+        except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError, TimeoutError):
             pass
         finally:
             self._clients.discard(client)
             for key, pending in list(self._pending.items()):
                 if isinstance(pending, _PendingClientResponse) and pending.client is client:
                     self._pending.pop(key, None)
-            writer.close()
             try:
-                await writer.wait_closed()
-            except Exception:
-                pass
+                await self._close_client_writer(writer)
+            finally:
+                if task is not None:
+                    self._client_tasks.discard(task)
 
     async def _handle_client_message(
         self,
@@ -282,7 +358,7 @@ class McpSocketBridge:
             raise RuntimeError(f"MCP bridge {self.name!r} has no upstream stdin")
         async with self._write_lock:
             self.process.stdin.write(_encode_jsonrpc_message(message, self.upstream_framing))
-            await self.process.stdin.drain()
+            await asyncio.wait_for(self.process.stdin.drain(), _WRITE_TIMEOUT_SECONDS)
 
     async def _read_upstream_loop(self) -> None:
         if self.process is None or self.process.stdout is None:
@@ -334,9 +410,10 @@ class McpSocketBridge:
         framing = client.framing or "content-length"
         try:
             client.writer.write(_encode_jsonrpc_message(message, framing))
-            await client.writer.drain()
-        except (ConnectionResetError, BrokenPipeError):
+            await asyncio.wait_for(client.writer.drain(), _WRITE_TIMEOUT_SECONDS)
+        except (ConnectionResetError, BrokenPipeError, TimeoutError):
             self._clients.discard(client)
+            await self._close_client_writer(client.writer)
 
     async def _drain_stderr(self, reader: asyncio.StreamReader) -> None:
         try:

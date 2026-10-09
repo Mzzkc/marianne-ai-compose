@@ -4,9 +4,9 @@ This module is used by CLI commands to auto-detect a running Marianne
 conductor and route operations through it. When no conductor is detected,
 the caller falls back to direct execution (existing behavior).
 
-SAFETY: Every public function catches ALL exceptions and returns a
-"not routed" result. This ensures that conductor bugs never break the CLI.
-The CLI wiring wraps calls in try/except as a second layer.
+Missing or refused endpoints return a "not routed" result. A conductor that
+accepts connections but cannot answer is an error, not permission to execute
+an operation again through a direct fallback.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from typing import Any
 
 from marianne.core.logging import get_logger
 from marianne.daemon.config import LEGACY_SOCKET_PATH
+from marianne.daemon.exceptions import DaemonError, DaemonUnresponsiveError
 
 _logger = get_logger("daemon.detect")
 
@@ -57,13 +58,18 @@ def _resolve_socket_path(socket_path: Path | None) -> Path:
 
 
 async def is_daemon_available(socket_path: Path | None = None) -> bool:
-    """Check if the Marianne conductor is running. Safe: returns False on any error."""
+    """Return False for missing/refused IPC; preserve an unresponsive endpoint."""
     resolved = _resolve_socket_path(socket_path)
+    client = None
     try:
         from marianne.daemon.ipc.client import DaemonClient
 
         client = DaemonClient(resolved)
         return await client.is_daemon_running()
+    except TimeoutError as exc:
+        raise DaemonUnresponsiveError("Conductor did not respond to the health probe") from exc
+    except DaemonError:
+        raise
     except (OSError, ConnectionError) as e:
         # Connection/socket errors — conductor not reachable.
         level = "info" if resolved.exists() else "debug"
@@ -72,20 +78,12 @@ async def is_daemon_available(socket_path: Path | None = None) -> bool:
     except ImportError:
         _logger.debug("daemon_detection_import_error")
         return False
-    except Exception as e:
-        # Check if this is a known DaemonError (guard against missing module)
-        is_daemon_error = False
-        try:
-            from marianne.daemon.exceptions import DaemonError
-            is_daemon_error = isinstance(e, DaemonError)
-        except ImportError:
-            pass
-
-        if is_daemon_error:
-            _logger.debug("daemon_detection_failed", error=str(e))
-        else:
-            _logger.warning("daemon_detection_unexpected", error=str(e), exc_info=True)
+    except Exception as exc:
+        _logger.warning("daemon_detection_unexpected", error=str(exc), exc_info=True)
         return False
+    finally:
+        if client is not None:
+            await client.close()
 
 
 async def try_daemon_route(
@@ -105,104 +103,69 @@ async def try_daemon_route(
             a running conductor are re-raised so callers can handle them
             (e.g., "job not found" is different from "daemon not running").
 
-    Connection-level errors never raise — they return (False, None).
-    Response-level timeouts (daemon confirmed running but slow to respond)
-    raise ``DaemonError`` so callers can show an accurate message instead
-    of the misleading "conductor not running."
+    Missing/refused endpoints return (False, None). Unresponsive endpoints,
+    protocol errors and failures after a healthy probe raise ``DaemonError``.
+    An uncertain operation must never fall back to direct execution.
     """
+    from marianne.daemon.exceptions import (
+        DaemonError,
+        DaemonNotRunningError,
+        DaemonProtocolError,
+        DaemonUnresponsiveError,
+        MethodNotFoundError,
+    )
+    from marianne.daemon.ipc.client import _SAFE_RETRY_METHODS, DaemonClient
+
     resolved = _resolve_socket_path(socket_path)
-    # Track whether the daemon was confirmed alive so we can distinguish
-    # "daemon not reachable" from "daemon running but slow" on timeout.
+    client = None
     daemon_confirmed_running = False
     try:
-        from marianne.daemon.ipc.client import DaemonClient
-
         client = DaemonClient(resolved)
         if not await client.is_daemon_running():
             return False, None
         daemon_confirmed_running = True
-        result = await client.call(method, params)
+        result = (
+            await client.health() if method == "daemon.health"
+            else await client.call(method, params)
+        )
         return True, result
-    except TimeoutError:
-        if daemon_confirmed_running:
-            # Daemon IS running but didn't respond in time — raise so
-            # callers show "conductor busy" instead of "not running".
-            from marianne.daemon.exceptions import DaemonError
-
-            raise DaemonError(
-                f"Conductor is running but did not respond to '{method}' "
-                f"in time. The conductor may be busy with a long operation."
-            ) from None
-        # Timeout during is_daemon_running() itself — genuinely unreachable.
-        _logger.debug("daemon_route_failed", method=method, error="connection timeout")
-        return False, None
-    except (OSError, ConnectionError) as e:
-        _logger.debug("daemon_route_failed", method=method, error=str(e))
-        return False, None
-    except json.JSONDecodeError as e:
-        # Malformed JSON from a running daemon — genuine protocol error.
-        # Logged at WARNING because the daemon IS running but
-        # misbehaving — operators should notice.
-        _logger.warning(
-            "daemon_route_protocol_error", method=method, error=str(e),
-        )
-        return False, None
-    except ValueError as e:
-        # ValueErrors from readline() indicate response exceeded the
-        # StreamReader buffer limit (e.g. large CheckpointState payload).
-        # The daemon IS running — re-raise as DaemonError so callers
-        # don't fall through to "conductor not running" messaging.
-        error_msg = str(e)
-        is_limit_error = "chunk exceed the limit" in error_msg
-        _logger.warning(
-            "daemon_route_protocol_error",
-            method=method,
-            error=error_msg,
-            error_type="ValueError",
-            is_limit_error=is_limit_error,
-        )
-        if is_limit_error:
-            from marianne.daemon.exceptions import DaemonError
-
-            raise DaemonError(
-                f"Response too large for '{method}' — the job's checkpoint "
-                f"exceeds the IPC buffer limit"
-            ) from e
-        return False, {"error": error_msg, "error_type": type(e).__name__}
-    except Exception as e:
-        from marianne.daemon.exceptions import JobSubmissionError, ResourceExhaustedError
-
-        if isinstance(e, (JobSubmissionError, ResourceExhaustedError)):
-            # Business logic errors from a *running* conductor — re-raise so
-            # callers can distinguish "daemon unavailable" from "daemon rejected
-            # the request" (e.g., "job not found" vs "conductor not running").
-            raise
-
-        from marianne.daemon.exceptions import MethodNotFoundError
-
-        if isinstance(e, MethodNotFoundError):
-            # F-450: The conductor IS running but doesn't recognize this
-            # method. Re-raise with restart guidance instead of the
-            # misleading "conductor not running."
-            raise MethodNotFoundError(
-                f"Conductor does not support '{method}'. "
-                f"Restart the conductor to pick up code changes: "
-                f"mzt restart"
-            ) from e
-
-        from marianne.daemon.exceptions import DaemonError
-
-        if isinstance(e, DaemonError):
-            # All other daemon errors (not running, already running, unknown
-            # method, protocol errors) — treat as "daemon not reachable".
-            _logger.debug("daemon_route_failed", method=method, error=str(e))
+    except MethodNotFoundError as exc:
+        raise MethodNotFoundError(
+            f"Conductor does not support '{method}'. "
+            "Restart the conductor to pick up code changes: mzt restart"
+        ) from exc
+    except TimeoutError as exc:
+        raise DaemonUnresponsiveError(
+            f"Conductor did not respond to '{method}' in time. "
+            + ("The operation outcome is unknown; do not blindly repeat it."
+               if method not in _SAFE_RETRY_METHODS else "The conductor may be busy.")
+        ) from exc
+    except (OSError, DaemonNotRunningError) as exc:
+        if not daemon_confirmed_running:
+            _logger.debug("daemon_route_failed", method=method, error=str(exc))
             return False, None
-
-        _logger.warning(
-            "daemon_route_unexpected_error",
-            method=method,
-            error=str(e),
-            error_type=type(e).__name__,
-            exc_info=True,
-        )
+        raise DaemonError(
+            f"Conductor connection failed during '{method}': {exc}. "
+            + ("The operation outcome is unknown; do not blindly repeat it."
+               if method not in _SAFE_RETRY_METHODS else "The requested data is unavailable.")
+        ) from exc
+    except DaemonError:
+        # Protocol, admission, unresponsive probe and application errors remain
+        # errors. In particular, none authorizes a direct-execution fallback.
+        raise
+    except (json.JSONDecodeError, ValueError) as exc:
+        message = str(exc)
+        if "chunk exceed the limit" in message:
+            raise DaemonProtocolError(
+                f"Response too large for '{method}' — the job's checkpoint "
+                "exceeds the IPC buffer limit"
+            ) from exc
+        raise DaemonProtocolError(f"Invalid conductor response for '{method}': {message}") from exc
+    except Exception as exc:
+        if daemon_confirmed_running:
+            raise DaemonError(f"Conductor request '{method}' failed: {exc}") from exc
+        _logger.warning("daemon_route_unexpected_error", method=method, error=str(exc))
         return False, None
+    finally:
+        if client is not None:
+            await client.close()

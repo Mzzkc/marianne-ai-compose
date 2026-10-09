@@ -72,8 +72,10 @@ class DaemonStateAdapter(StateBackend):
                 "list_jobs_daemon_unavailable",
                 extra={"error_type": type(exc).__name__},
             )
-            return []
+            raise DaemonError("Conductor job roster is unavailable; job status is unknown") from exc
 
+        if not isinstance(roster, list):
+            raise DaemonError("Conductor returned an invalid job roster; job status is unknown")
         results: list[CheckpointState] = []
 
         for index, entry in enumerate(roster):
@@ -142,7 +144,8 @@ class DaemonStateAdapter(StateBackend):
         raise NotImplementedError("Dashboard is read-only")
 
     async def close(self) -> None:
-        """No-op — DaemonClient uses per-request connections."""
+        """Release the client connection pool when the backend is closed."""
+        await self._client.close()
 
 
 def _checkpoint_from_roster_entry(entry: dict[str, Any]) -> CheckpointState:

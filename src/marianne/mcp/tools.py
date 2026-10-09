@@ -21,7 +21,7 @@ from typing import Any
 
 from ..core.log_sources import LogSource, discover_job_log_sources
 from ..daemon.detect import _resolve_socket_path
-from ..daemon.exceptions import DaemonNotRunningError
+from ..daemon.exceptions import DaemonError
 from ..daemon.ipc.client import DaemonClient
 from ..dashboard.services.job_control import JobControlService
 from ..state.base import StateBackend
@@ -190,6 +190,7 @@ class JobTools:
                 raise ValueError(f"Unknown job tool: {name}")
 
         except (
+            DaemonError,
             KeyError,
             ValueError,
             FileNotFoundError,
@@ -210,39 +211,33 @@ class JobTools:
         limit = args.get("limit", 50)
 
         # Try daemon for comprehensive job listing
-        try:
-            if await self._daemon_client.is_daemon_running():
-                jobs = await self._daemon_client.list_jobs()
+        if await self._daemon_client.is_daemon_running():
+            jobs = await self._daemon_client.list_jobs()
 
-                # Apply status filter
+            # Apply status filter
+            if status_filter:
+                jobs = [j for j in jobs if j.get("status") == status_filter]
+
+            # Apply limit
+            jobs = jobs[:limit]
+
+            result = "Marianne MCP Submitted Scores (via conductor)\n"
+            result += "=" * 40 + "\n\n"
+
+            if not jobs:
+                result += "No submitted scores found"
                 if status_filter:
-                    jobs = [j for j in jobs if j.get("status") == status_filter]
+                    result += f" with status '{status_filter}'"
+                result += ".\n"
+            else:
+                result += f"Showing {len(jobs)} submitted score(s):\n\n"
+                for job in jobs:
+                    job_id = job.get("job_id", "unknown")
+                    status = job.get("status", "unknown")
+                    name = job.get("job_name", job_id)
+                    result += f"  [{status}] {name} (id: {job_id})\n"
 
-                # Apply limit
-                jobs = jobs[:limit]
-
-                result = "Marianne MCP Submitted Scores (via conductor)\n"
-                result += "=" * 40 + "\n\n"
-
-                if not jobs:
-                    result += "No submitted scores found"
-                    if status_filter:
-                        result += f" with status '{status_filter}'"
-                    result += ".\n"
-                else:
-                    result += f"Showing {len(jobs)} submitted score(s):\n\n"
-                    for job in jobs:
-                        job_id = job.get("job_id", "unknown")
-                        status = job.get("status", "unknown")
-                        name = job.get("job_name", job_id)
-                        result += f"  [{status}] {name} (id: {job_id})\n"
-
-                return {"content": [{"type": "text", "text": result}]}
-        except DaemonNotRunningError:
-            logger.info("daemon_not_running for list_jobs")
-        except (OSError, ConnectionError, TimeoutError):
-            logger.warning("daemon_list_jobs_failed", exc_info=True)
-
+            return {"content": [{"type": "text", "text": result}]}
         # Fallback: daemon not available
         result = "Marianne MCP Submitted Scores\n"
         result += "=" * 40 + "\n\n"
@@ -387,7 +382,7 @@ class JobTools:
 
     async def shutdown(self) -> None:
         """Cleanup job tools."""
-        pass  # No persistent resources to cleanup
+        await self._daemon_client.close()
 
 
 class ControlTools:
@@ -401,8 +396,8 @@ class ControlTools:
 
     def __init__(self, state_backend: StateBackend, workspace_root: Path):
         self.state_backend = state_backend
-        daemon_client = DaemonClient(_resolve_socket_path(None))
-        self.job_control = JobControlService(daemon_client)
+        self._daemon_client = DaemonClient(_resolve_socket_path(None))
+        self.job_control = JobControlService(self._daemon_client)
 
     async def list_tools(self) -> list[dict[str, Any]]:
         """List all job control tools."""
@@ -471,7 +466,7 @@ class ControlTools:
             else:
                 raise ValueError(f"Unknown control tool: {name}")
 
-        except (KeyError, ValueError, RuntimeError, OSError, ConnectionError) as e:
+        except (DaemonError, KeyError, ValueError, RuntimeError, OSError, ConnectionError) as e:
             logger.exception("Error executing control tool %s", name)
             return _make_error_response(e)
 
@@ -553,7 +548,7 @@ class ControlTools:
 
     async def shutdown(self) -> None:
         """Cleanup control tools."""
-        pass
+        await self._daemon_client.close()
 
 
 # Artifact tool schemas — extracted from ArtifactTools.list_tools() for readability.

@@ -533,3 +533,11 @@ class TestScoreToolsBasic:
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+@pytest.fixture(autouse=True)
+def isolate_mcp_conductor_path(monkeypatch, tmp_path):
+    """Unit tools use an absent task-owned endpoint, never the live conductor."""
+    monkeypatch.setattr(
+        "marianne.mcp.tools._resolve_socket_path", lambda _: tmp_path / "absent.sock"
+    )

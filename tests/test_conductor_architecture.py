@@ -388,83 +388,50 @@ class TestBug4SubmitJobUsesLock:
 
 
 class TestBug5IsDaemonRunningShortCircuit:
-    """BUG-5: is_daemon_running() uses bare socket connect without a
-    health check, so it returns True for stale sockets left by
-    crashed daemon processes. A stale socket that still exists on
-    disk will pass the path.exists() check and may succeed at
-    connect (kernel buffers the connection), but the daemon isn't
-    actually processing requests.
-
-    The correct behavior is to perform a lightweight RPC health
-    check (e.g., "daemon.health") instead of bare connect, so
-    stale sockets are properly detected.
-
-    FAILS because is_daemon_running returns True for a socket that
-    accepts connections but has no functioning daemon behind it.
-    """
+    """Health requires a complete response; accepted EOF is not daemon absence."""
 
     @pytest.mark.asyncio
-    async def test_is_daemon_running_skips_connect_on_missing_path(
-        self,
-    ) -> None:
+    async def test_accepted_socket_without_health_response_is_not_absence(self) -> None:
+        from marianne.daemon.exceptions import DaemonUnresponsiveError
         from marianne.daemon.ipc.client import DaemonClient
 
-        # Simulate a stale socket: path exists, connection succeeds,
-        # but no daemon handler is processing requests.
         client = DaemonClient(Path("/tmp/stale-marianne-test-socket"))
-
-        mock_writer = MagicMock()
-        mock_writer.close = MagicMock()
-        mock_writer.wait_closed = AsyncMock()
+        reader = asyncio.StreamReader()
+        reader.feed_eof()
+        writer = MagicMock()
+        writer.drain = AsyncMock()
+        writer.wait_closed = AsyncMock()
 
         with (
             patch.object(Path, "exists", return_value=True),
             patch(
                 "asyncio.open_unix_connection",
                 new_callable=AsyncMock,
-                return_value=(MagicMock(), mock_writer),
+                return_value=(reader, writer),
             ),
+            pytest.raises(DaemonUnresponsiveError, match="health probe") as exc_info,
         ):
-            result = await client.is_daemon_running()
-
-        # BUG: is_daemon_running returns True even though the daemon
-        # isn't actually running — it only checks TCP connectivity,
-        # not whether the daemon can process requests.
-        # A lightweight health check RPC would detect the stale socket.
-        assert result is False, (
-            "is_daemon_running() returned True for a socket that accepts "
-            "connections but has no functioning daemon. It should perform "
-            "a health check RPC instead of bare connect to distinguish "
-            "live daemons from stale sockets."
-        )
+            await client.is_daemon_running()
+        assert "not running" not in str(exc_info.value)
+        assert b'"method":"daemon.health"' in writer.write.call_args.args[0]
+        writer.drain.assert_awaited_once()
+        writer.wait_closed.assert_awaited_once()
 
 
-# ─── BUG-6: ValueError must be logged at warning, not debug ───────────
+# ─── BUG-6: Invalid response details must reach the caller ───────────
 
 
 class TestBug6TryDaemonRouteValueErrorHandling:
-    """BUG-6: try_daemon_route catches broad ValueError, but
-    ValueError can come from multiple sources: json.JSONDecodeError
-    (genuine protocol error), Pydantic validation, config parsing,
-    internal validation, etc. Catching all ValueErrors as "protocol
-    error" is too broad — it masks real bugs.
-
-    A Pydantic ValidationError (which is a ValueError subclass)
-    from model construction inside the daemon should NOT be caught
-    as a protocol error — it indicates a daemon-side bug that needs
-    to propagate.
-
-    FAILS because a Pydantic ValidationError is caught and swallowed
-    as "daemon_route_protocol_error" instead of propagating.
-    """
+    """A response validation failure preserves its detail and refuses fallback."""
 
     @pytest.mark.asyncio
-    async def test_try_daemon_route_valueerror_logged_as_warning(
+    async def test_try_daemon_route_invalid_response_preserves_validation_detail(
         self,
     ) -> None:
         from pydantic import ValidationError
 
         from marianne.daemon.detect import try_daemon_route
+        from marianne.daemon.exceptions import DaemonProtocolError
 
         # Simulate a Pydantic ValidationError (a subclass of ValueError)
         # from inside client.call() — e.g., when deserializing a daemon
@@ -490,21 +457,16 @@ class TestBug6TryDaemonRouteValueErrorHandling:
             mock_client = MagicMock()
             MockClientClass.return_value = mock_client
             mock_client.is_daemon_running = AsyncMock(return_value=True)
+            mock_client.close = AsyncMock()
             mock_client.call = AsyncMock(
                 side_effect=pydantic_error,
             )
 
-            routed, result = await try_daemon_route("test.method", {})
+            with pytest.raises(DaemonProtocolError, match="Invalid conductor response") as exc_info:
+                await try_daemon_route("test.method", {})
 
-        # BUG: Pydantic ValidationError (a ValueError subclass) is caught
-        # by the broad "except ValueError" handler and logged as
-        # "daemon_route_protocol_error". This masks a real daemon-side bug.
-        # The handler should only catch json.JSONDecodeError for genuine
-        # protocol errors, and let other ValueErrors propagate.
-        assert routed is not False or result is not None, (
-            "Pydantic ValidationError was caught as a protocol error "
-            "by the broad 'except ValueError' handler in try_daemon_route. "
-            "Only json.JSONDecodeError should be caught here — other "
-            "ValueError subclasses indicate real daemon-side bugs "
-            "that should propagate to the caller."
-        )
+        assert "required_field" in str(exc_info.value)
+        assert "not-an-int" in str(exc_info.value)
+        assert "not running" not in str(exc_info.value)
+        mock_client.close.assert_awaited_once()
+        mock_client.call.assert_awaited_once()

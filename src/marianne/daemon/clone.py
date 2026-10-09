@@ -2,7 +2,8 @@
 
 When --conductor-clone is passed to any Marianne CLI command, all daemon
 interactions are routed to a clone conductor instead of the production
-one. The clone has its own socket, PID file, state DB, and log file.
+one. The clone owns its IPC and stdio MCP sockets, PID file, state DB,
+profiler files, and log file.
 
 This enables safe testing of Marianne CLI commands and daemon features
 without risking the production conductor. The production conductor
@@ -166,7 +167,9 @@ def build_clone_config(
     """Build a DaemonConfig with clone-specific paths.
 
     Inherits all non-path settings from base_config (or defaults).
-    Overrides socket, PID file, and log paths with clone-specific values.
+    Overrides owned runtime, state, and profiler paths with clone-specific values.
+    Configured stdio MCP sockets move into a conductor-specific directory;
+    external transports retain their configured endpoints.
 
     Args:
         name: Clone name (None for default clone).
@@ -176,29 +179,32 @@ def build_clone_config(
         A DaemonConfig with isolated clone paths.
     """
     # Deferred import to avoid circular dependency
-    from marianne.daemon.config import DaemonConfig, DaemonLoggingConfig, SocketConfig
+    import hashlib
+
+    from marianne.daemon.config import DaemonConfig
 
     paths = resolve_clone_paths(name)
-
-    if base_config is not None:
-        # Clone from existing config — inherit non-path fields
-        config_dict = base_config.model_dump()
-        config_dict["socket"] = {"path": str(paths.socket)}
-        config_dict["pid_file"] = str(paths.pid_file)
-        config_dict["state_db_path"] = str(paths.state_db)
-        config_dict["logging"] = {
-            **config_dict.get("logging", {}),
-            "root": str(paths.log_root),
-            "event_log_name": paths.log_name,
-        }
-        config_dict["log_file"] = str(paths.log_file)
-        return DaemonConfig.model_validate(config_dict)
-
-    # Build from defaults with clone paths — all isolation fields must be set.
-    # Missing state_db_path here caused F-132 (clone opened production DB).
-    return DaemonConfig(
-        socket=SocketConfig(path=paths.socket),
-        pid_file=paths.pid_file,
-        state_db_path=paths.state_db,
-        logging=DaemonLoggingConfig(root=paths.log_root, event_log_name=paths.log_name),
-    )
+    config_dict = (base_config or DaemonConfig()).model_dump()
+    config_dict["socket"]["path"] = paths.socket
+    config_dict["pid_file"] = paths.pid_file
+    config_dict["state_db_path"] = paths.state_db
+    config_dict["logging"] = {
+        **config_dict["logging"],
+        "root": paths.log_root,
+        "event_log_name": paths.log_name,
+    }
+    config_dict["log_file"] = paths.log_file
+    config_dict["profiler"] = {
+        **config_dict["profiler"],
+        "storage_path": paths.state_db.with_name(paths.state_db.stem + "-monitor.db"),
+        "jsonl_path": paths.state_db.with_name(paths.state_db.stem + "-monitor.jsonl"),
+    }
+    conductor_component = hashlib.sha256(paths.socket.stem.encode()).hexdigest()[:16]
+    mcp_dir = paths.socket.parent / f"clone-mcp-{conductor_component}"
+    for server_name, entry in config_dict["mcp_pool"]["servers"].items():
+        if entry["transport"] == "stdio":
+            # Names are untrusted dictionary keys. A fixed hash component keeps
+            # sockets inside their conductor directory without lossy sanitizing.
+            component = hashlib.sha256(server_name.encode()).hexdigest()[:16]
+            entry["socket"] = str(mcp_dir / f"{component}.sock")
+    return DaemonConfig.model_validate(config_dict)

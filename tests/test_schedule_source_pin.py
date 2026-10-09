@@ -9,7 +9,6 @@ cadence, or identity upsert and before job submission.
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import random
 from collections.abc import AsyncIterator

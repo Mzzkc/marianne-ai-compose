@@ -332,7 +332,7 @@ async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
     """Generated sheets may not pass with stale claimed cadenza rows.
 
     Fixtures and assertions follow the pinned compiler's current canonical
-    cadenza contract: ``shared/active/02-status.md`` as free text that must
+    cadenza contract: the compiled validator's ``02-status.md`` as free text that must
     bind the agent and phase to the phase artifact's evidence. The retired
     ``02-agent-status.md`` table contract and its ``missing complete
     agent-status row`` refusal are gone. The former future-timestamp
@@ -365,7 +365,21 @@ async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
         "RISKS:\nStale cadenza state.\n\n"
         "VALIDATION:\nRun the generated cadenza validation.\n"
     )
-    task_board = workspace / "shared" / "active" / "01-task-board.md"
+    # Follow the compiled validator's authority. New compiler capabilities bind
+    # persistent agents to their canonical attachment; older pinned compilers
+    # validate the workspace board. Exercise all the same refusal controls at
+    # the path actually consumed, without copying canonical data into workspace.
+    if "AGENT_DIR=" in (rules[0].command or ""):
+        active_dir = (
+            Path(score.prompt.variables["agent_identity_dir"]) / "cadenzas" / "personal" / "active"
+        )
+    else:
+        active_dir = workspace / "shared" / "active"
+    active_dir.mkdir(parents=True, exist_ok=True)
+    for filename in ("03-urgent-directives.md", "04-handoffs.md"):
+        # Canonical compiler validates that all four attached records exist.
+        (active_dir / filename).write_text("# No pending coordination records\n")
+    task_board = active_dir / "01-task-board.md"
     task_board.write_text(
         "# Task Board\n\n"
         "| id | owner | status | task | evidence |\n"
@@ -373,7 +387,7 @@ async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
         "| bedrock-T-002 | bedrock | claimed | Write cycle plan. | "
         "`cycle-state/bedrock-plan.md` |\n"
     )
-    status_board = workspace / "shared" / "active" / "02-status.md"
+    status_board = active_dir / "02-status.md"
     current_utc = datetime.now(UTC).isoformat(timespec="minutes")
     status_board.write_text(
         "# Cohort Status\n\n"
@@ -401,7 +415,7 @@ async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
     )
 
     result = await engine.run_validations(rules)
-    assert result.all_passed is True
+    assert result.all_passed is True, result.results[0].error_message
 
     task_board.write_text(
         "# Task Board\n\n"
@@ -442,7 +456,7 @@ async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
         "  `cycle-state/bedrock-plan.md`.\n"
     )
     result = await engine.run_validations(rules)
-    assert result.all_passed is True
+    assert result.all_passed is True, result.results[0].error_message
 
     task_board.write_text("# Task Board\n\n")
     status_board.write_text("# Cohort Status\n\n")
@@ -453,4 +467,4 @@ async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
         "owner-scoped rows.\n"
     )
     result = await engine.run_validations(rules)
-    assert result.all_passed is True
+    assert result.all_passed is True, result.results[0].error_message

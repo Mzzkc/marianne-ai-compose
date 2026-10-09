@@ -3,13 +3,13 @@
 When jobs are actively running, ``mzt stop`` must warn the user and
 ask for confirmation before proceeding.  The ``--force`` flag skips
 the safety check entirely.  If the IPC probe fails (conductor
-unresponsive), stop proceeds without blocking.
+unresponsive), normal stop refuses unknown work.
 
 Covers:
 1. _check_running_jobs: IPC probe returns running job count
 2. stop_conductor: warns when jobs running, proceeds when none
 3. --force skips safety check
-4. IPC failure falls through gracefully
+4. IPC failure refuses unsafe normal stop
 """
 
 from __future__ import annotations
@@ -32,7 +32,8 @@ class TestCheckRunningJobs:
         """Returns running_jobs count from readiness probe."""
         from marianne.daemon.process import _check_running_jobs
 
-        mock_client = MagicMock(spec=["readiness"])
+        mock_client = MagicMock(spec=["readiness", "close"])
+        mock_client.close = AsyncMock()
         mock_client.readiness = AsyncMock(
             return_value={"running_jobs": 3, "job_ids": ["a", "b", "c"]},
         )
@@ -74,7 +75,8 @@ class TestCheckRunningJobs:
         """Returns running_jobs=0 when conductor has no running jobs."""
         from marianne.daemon.process import _check_running_jobs
 
-        mock_client = MagicMock(spec=["readiness"])
+        mock_client = MagicMock(spec=["readiness", "close"])
+        mock_client.close = AsyncMock()
         mock_client.readiness = AsyncMock(
             return_value={"running_jobs": 0, "job_ids": []},
         )
@@ -183,8 +185,8 @@ class TestStopConductorSafety:
         mock_check.assert_not_called()
         mock_kill.assert_called_once()
 
-    def test_ipc_failure_proceeds(self) -> None:
-        """When IPC check fails (returns None), stop proceeds."""
+    def test_ipc_failure_refuses_unknown_work(self) -> None:
+        """Unknown work needs an explicit force operation after operator verification."""
         from marianne.daemon.process import stop_conductor
 
         with (
@@ -195,9 +197,11 @@ class TestStopConductorSafety:
             patch("marianne.daemon.process.os.kill") as mock_kill,
             patch("marianne.daemon.process.typer.confirm") as mock_confirm,
         ):
-            stop_conductor()
+            with pytest.raises(Exception) as exc:
+                stop_conductor()
+            assert exc.value.exit_code == 1
 
-        mock_kill.assert_called_once()
+        mock_kill.assert_not_called()
         mock_confirm.assert_not_called()
 
     def test_force_sends_sigkill(self) -> None:

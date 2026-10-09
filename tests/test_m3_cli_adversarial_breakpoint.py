@@ -285,14 +285,10 @@ class TestStopSafetyGuardAdversarial:
     """Adversarial conditions for the conductor stop safety check."""
 
     @pytest.mark.adversarial
-    def test_ipc_failure_proceeds_without_warning(self) -> None:
-        """When IPC probe fails (returns None), stop proceeds without asking.
+    def test_ipc_failure_refuses_unknown_work(self) -> None:
+        """Normal stop refuses unknown work; explicit force remains available."""
+        from typer import Exit
 
-        This is the design: if we can't reach the conductor to check for
-        running jobs, we still allow the stop. The alternative (blocking stop
-        when IPC is down) would be worse — you'd never be able to stop a
-        stuck conductor.
-        """
         from marianne.daemon.process import stop_conductor
 
         with (
@@ -301,9 +297,9 @@ class TestStopSafetyGuardAdversarial:
             patch("marianne.daemon.process._check_running_jobs", return_value=None),
             patch("marianne.daemon.process.os.kill") as mock_kill,
         ):
-            # No SystemExit on success — function returns normally after sending signal
-            stop_conductor()
-            mock_kill.assert_called_once_with(12345, signal.SIGTERM)
+            with pytest.raises(Exit):
+                stop_conductor()
+            mock_kill.assert_not_called()
 
     @pytest.mark.adversarial
     def test_zero_running_jobs_proceeds_without_warning(self) -> None:

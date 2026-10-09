@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import typer
 
 from marianne.cli.commands.status import (
     _format_uptime,
@@ -203,7 +204,7 @@ class TestStatusOverview:
             await _status_overview(json_output=False)
 
     async def test_overview_handles_job_list_error(self) -> None:
-        """If job.list fails after health succeeds, show empty overview."""
+        """Failed job discovery cannot claim there are zero active jobs."""
         call_count = 0
 
         async def mock_route(method: str, params: dict) -> tuple[bool, object]:  # noqa: ARG001
@@ -221,13 +222,16 @@ class TestStatusOverview:
 
         with (
             patch(_ROUTE_PATCH, side_effect=mock_route),
-            patch(_JSON_PATCH, side_effect=capture_json),
+            patch(_JSON_PATCH, side_effect=capture_json),pytest.raises(typer.Exit) as exc
         ):
             await _status_overview(json_output=True)
 
+        assert exc.value.exit_code == 1
         assert captured is not None
-        assert captured["active_count"] == 0
-        assert captured["recent_count"] == 0
+        assert captured["jobs_known"] is False
+        assert captured["active_count"] is None
+        assert captured["recent_count"] is None
+        assert "lost connection" in captured["error"]
 
 
 # ---------------------------------------------------------------------------

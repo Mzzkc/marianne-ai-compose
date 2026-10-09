@@ -1293,6 +1293,11 @@ Profiles are partial overrides merged on top of your config file. Resolution ord
 | `path` | `Path` | `~/.config/mzt/mzt.sock` | | Unix domain socket path |
 | `permissions` | `int` | `0o660` | | Socket file permissions (owner+group read/write) |
 | `backlog` | `int` | `5` | `>= 1` | Maximum pending connections in listen queue |
+| `max_connections` | `int` | `500` | `>= 1` | Admitted clients; surplus connections receive a bounded capacity error |
+| `max_concurrent_requests` | `int` | `50` | `>= 1` | Concurrent ordinary RPCs, separate from streams |
+| `max_streams` | `int` | `50` | `>= 1` | Concurrent output and monitor subscriptions; peer EOF cancels them |
+| `request_timeout` | `float` | `300.0` | `> 0` | Seconds for ordinary dispatch, including capacity wait; a mutation timeout can leave its outcome uncertain |
+| `write_timeout` | `float` | `10.0` | `> 0` | Seconds to drain replies or stream output and close stalled transports |
 
 ### Resource Limits Sub-Config
 

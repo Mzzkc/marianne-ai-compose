@@ -316,3 +316,11 @@ class TestMCPToolSchemas:
 # ✓ Schema validation testing
 # ✓ Proper mock usage for external dependencies
 # ✓ Realistic test scenarios with file system operations
+
+
+@pytest.fixture(autouse=True)
+def isolate_mcp_conductor_path(monkeypatch, tmp_path):
+    """Unit tools use an absent task-owned endpoint, never the live conductor."""
+    monkeypatch.setattr(
+        "marianne.mcp.tools._resolve_socket_path", lambda _: tmp_path / "absent.sock"
+    )

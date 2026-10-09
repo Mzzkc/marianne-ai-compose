@@ -51,10 +51,18 @@ class RequestHandler:
 
     def __init__(self) -> None:
         self._methods: dict[str, MethodHandler] = {}
+        self._streaming_methods: set[str] = set()
 
-    def register(self, method: str, handler: MethodHandler) -> None:
+    def register(self, method: str, handler: MethodHandler, *, streaming: bool = False) -> None:
         """Register a handler for the given RPC method name."""
         self._methods[method] = handler
+        self._streaming_methods.discard(method)
+        if streaming:
+            self._streaming_methods.add(method)
+
+    def is_streaming(self, method: str) -> bool:
+        """Whether dispatch owns a dedicated, long-lived subscription connection."""
+        return method in self._streaming_methods
 
     @property
     def methods(self) -> list[str]:

@@ -23,8 +23,14 @@ from typing import Any, cast
 
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
-from marianne.daemon.exceptions import DaemonNotRunningError
-from marianne.daemon.ipc.errors import rpc_error_to_exception
+from marianne.daemon.exceptions import (
+    DaemonError,
+    DaemonNotRunningError,
+    DaemonProtocolError,
+    DaemonUnresponsiveError,
+    ResourceExhaustedError,
+)
+from marianne.daemon.ipc.errors import RESOURCE_EXHAUSTED, rpc_error_to_exception
 from marianne.daemon.ipc.protocol import JsonRpcRequest
 from marianne.daemon.types import DaemonStatus, JobRequest, JobResponse
 
@@ -35,8 +41,15 @@ _logger = get_logger("daemon.ipc.client")
 # StreamReader.  See server.py for rationale on the 16 MiB value.
 _MAX_MESSAGE_BYTES = 16_777_216  # 16 MiB — same as server.MAX_MESSAGE_BYTES
 
-# I/O errors that indicate a broken connection worth retrying.
-_RETRYABLE_IO_ERRORS = (BrokenPipeError, ConnectionResetError, OSError)
+# A response lost after sending a mutation has an unknown outcome. Only
+# these explicitly read-only methods may reconnect and resend once.
+_SAFE_RETRY_METHODS = frozenset({
+    "daemon.health", "daemon.status", "daemon.config", "daemon.ready",
+    "daemon.rate_limits", "daemon.learning.patterns", "job.list", "job.status",
+    "job.errors", "job.diagnose", "job.history",
+})
+_HEALTH_TIMEOUT_SECONDS = 2.0
+_CLOSE_TIMEOUT_SECONDS = 0.05
 
 # Default pool parameters.
 _DEFAULT_POOL_SIZE = 8
@@ -93,6 +106,7 @@ class ConnectionPool:
         self._idle: list[tuple[asyncio.StreamReader, asyncio.StreamWriter, float]] = []
         self._semaphore = asyncio.Semaphore(max_size)
         self._closed = False
+        self._leased: set[asyncio.StreamWriter] = set()
 
     @property
     def closed(self) -> bool:
@@ -123,28 +137,30 @@ class ConnectionPool:
                 f"Pool exhausted: all {self._max_size} connections in use"
             ) from exc
 
-        # Try idle connections (LIFO — hot connections first)
-        now = time.monotonic()
-        while self._idle:
-            reader, writer, idle_since = self._idle.pop()
+        # Ownership of the slot starts here, even while opening a socket.
+        # CancelledError is a BaseException and must return that capacity.
+        try:
+            if self._closed:
+                raise DaemonNotRunningError("Connection pool is closed")
+            now = time.monotonic()
+            while self._idle:
+                reader, writer, idle_since = self._idle.pop()
+                if ((now - idle_since) > self._max_idle_seconds
+                        or writer.is_closing() or reader.at_eof()):
+                    self._close_writer(writer)
+                    continue
+                self._leased.add(writer)
+                return reader, writer
 
-            # Skip stale connections
-            if (now - idle_since) > self._max_idle_seconds:
-                _logger.debug("pool_discard_stale")
+            reader, writer = await self._open_connection()
+            if self._closed:
                 self._close_writer(writer)
-                continue
-
-            # Skip broken connections
-            if writer.is_closing() or reader.at_eof():
-                _logger.debug("pool_discard_broken")
-                self._close_writer(writer)
-                continue
-
-            _logger.debug("pool_reuse_connection")
+                raise DaemonNotRunningError("Connection pool is closed")
+            self._leased.add(writer)
             return reader, writer
-
-        # No usable idle connection — open a fresh one
-        return await self._open_connection()
+        except BaseException:
+            self._semaphore.release()
+            raise
 
     def release(
         self,
@@ -152,37 +168,43 @@ class ConnectionPool:
         writer: asyncio.StreamWriter,
     ) -> None:
         """Return a healthy connection to the idle stack."""
+        if writer not in self._leased:
+            self._close_writer(writer)
+            return
+        self._leased.remove(writer)
         if self._closed or writer.is_closing() or reader.at_eof():
             self._close_writer(writer)
-            self._semaphore.release()
-            return
-
-        if len(self._idle) >= self._max_size:
-            # Idle stack full — discard this connection
-            self._close_writer(writer)
-            self._semaphore.release()
-            return
-
-        self._idle.append((reader, writer, time.monotonic()))
+        else:
+            self._idle.append((reader, writer, time.monotonic()))
         self._semaphore.release()
-        _logger.debug("pool_release_connection", idle_count=len(self._idle))
 
     def discard(self, writer: asyncio.StreamWriter) -> None:
-        """Discard a broken connection and release its semaphore slot."""
+        """Discard a checked-out connection and return its slot once."""
         self._close_writer(writer)
-        self._semaphore.release()
-        _logger.debug("pool_discard_connection")
+        if writer in self._leased:
+            self._leased.remove(writer)
+            self._semaphore.release()
 
     async def close(self) -> None:
-        """Close the pool and all idle connections.  Idempotent."""
+        """Close idle and checked-out connections and wake waiting callers."""
         if self._closed:
             return
         self._closed = True
-
-        while self._idle:
-            _, writer, _ = self._idle.pop()
+        writers = [writer for _, writer, _ in self._idle]
+        self._idle.clear()
+        writers.extend(self._leased)
+        for writer in list(self._leased):
+            self.discard(writer)
+        for writer in writers:
             self._close_writer(writer)
-
+        if writers:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*(w.wait_closed() for w in writers), return_exceptions=True),
+                    timeout=_CLOSE_TIMEOUT_SECONDS,
+                )
+            except TimeoutError:
+                _logger.debug("pool_close_timeout")
         _logger.debug("pool_closed")
 
     async def _open_connection(
@@ -190,7 +212,6 @@ class ConnectionPool:
     ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         """Open a new Unix socket connection."""
         if not self._socket_path.exists():
-            self._semaphore.release()
             raise DaemonNotRunningError(
                 f"Daemon socket not found: {self._socket_path}"
             )
@@ -203,12 +224,10 @@ class ConnectionPool:
                 timeout=self._connect_timeout,
             )
         except TimeoutError as exc:
-            self._semaphore.release()
-            raise DaemonNotRunningError(
+            raise DaemonUnresponsiveError(
                 f"Timeout connecting to daemon at {self._socket_path}"
             ) from exc
         except (ConnectionRefusedError, FileNotFoundError, OSError) as exc:
-            self._semaphore.release()
             raise DaemonNotRunningError(
                 f"Cannot connect to daemon at {self._socket_path}: {exc}"
             ) from exc
@@ -222,6 +241,10 @@ class ConnectionPool:
         try:
             if not writer.is_closing():
                 writer.close()
+            # close() alone flushes buffered requests and can keep an FD alive
+            # indefinitely under peer backpressure. A discarded lease must end
+            # now; its unfinished operation already has an uncertain outcome.
+            writer.transport.abort()
         except (OSError, RuntimeError) as exc:
             # A failed close can leak the fd. These errors are usually benign
             # (already-reset peer), so debug level — but #254: not silent, so
@@ -267,6 +290,7 @@ class DaemonClient:
                 self._socket_path,
                 max_size=self._pool_size,
                 acquire_timeout=self._timeout,
+                connect_timeout=min(self._timeout, _DEFAULT_CONNECT_TIMEOUT),
             )
         return self._pool
 
@@ -276,9 +300,9 @@ class DaemonClient:
 
     async def close(self) -> None:
         """Close the connection pool.  Safe to call multiple times."""
-        if self._pool is not None:
-            await self._pool.close()
-            self._pool = None
+        pool, self._pool = self._pool, None
+        if pool is not None:
+            await pool.close()
 
     async def __aenter__(self) -> DaemonClient:
         return self
@@ -301,7 +325,7 @@ class DaemonClient:
     ) -> AsyncIterator[tuple[asyncio.StreamReader, asyncio.StreamWriter]]:
         """Open a fresh (unpooled) connection to the daemon socket.
 
-        Used by ``stream()`` and ``is_daemon_running()`` which need
+        Used by ``stream()`` and health probes which need
         dedicated connections that are not returned to the pool.
 
         Raises ``DaemonNotRunningError`` if the socket doesn't exist or
@@ -320,7 +344,7 @@ class DaemonClient:
                 timeout=5.0,
             )
         except TimeoutError as exc:
-            raise DaemonNotRunningError(
+            raise DaemonUnresponsiveError(
                 f"Timeout connecting to daemon at {self._socket_path}"
             ) from exc
         except (ConnectionRefusedError, FileNotFoundError, OSError) as exc:
@@ -332,8 +356,8 @@ class DaemonClient:
             yield reader, writer
         finally:
             try:
-                writer.close()
-                await writer.wait_closed()
+                ConnectionPool._close_writer(writer)
+                await asyncio.wait_for(writer.wait_closed(), timeout=_CLOSE_TIMEOUT_SECONDS)
             except Exception:
                 _logger.debug("writer_close_failed", exc_info=True)
 
@@ -348,78 +372,74 @@ class DaemonClient:
         request: JsonRpcRequest,
     ) -> Any:
         """Send a request and read the response on an existing connection."""
-        writer.write(request.model_dump_json().encode() + b"\n")
-        await writer.drain()
-
-        line = await asyncio.wait_for(
-            reader.readline(), timeout=self._timeout,
-        )
+        async with asyncio.timeout(self._timeout):
+            writer.write(request.model_dump_json().encode() + b"\n")
+            await writer.drain()
+            line = await reader.readline()
         if not line:
             raise DaemonNotRunningError("Daemon closed connection")
 
         response = json.loads(line)
+        self._validate_response(response, request.id)
         if "error" in response:
             raise rpc_error_to_exception(response["error"])
-        return response.get("result")
+        return response["result"]
+
+    @staticmethod
+    def _validate_response(response: Any, request_id: int | str | None) -> None:
+        """Refuse corrupt or unrelated envelopes before reusing a connection."""
+        if not isinstance(response, dict) or response.get("jsonrpc") != "2.0":
+            raise DaemonProtocolError("Invalid JSON-RPC response envelope")
+        if ("result" in response) == ("error" in response):
+            raise DaemonProtocolError("Invalid response: expected exactly one result or error")
+        if "error" in response and not isinstance(response["error"], dict):
+            raise DaemonProtocolError("Invalid response error object")
+        # Admission refusal precedes reading the request, so no ID is known.
+        if (response.get("id") is None and "error" in response
+                and response["error"].get("code") == RESOURCE_EXHAUSTED):
+            raise rpc_error_to_exception(response["error"])
+        if (type(response.get("id")) is not type(request_id)
+                or response.get("id") != request_id):
+            raise DaemonProtocolError("Invalid response: request ID does not match")
 
     async def call(
         self,
         method: str,
         params: dict[str, Any] | None = None,
     ) -> Any:
-        """Send a JSON-RPC request and return the result.
+        """Send an RPC; retry transport failures only for known safe reads.
 
-        Uses the connection pool.  If a pooled connection is stale (server
-        closed it, daemon restarted), discards it and retries once with a
-        fresh connection.
-
-        Raises:
-            DaemonNotRunningError: socket unreachable
-            DaemonError (subclass): server returned an error response
-            TimeoutError: no response within ``self._timeout``
+        A timeout never retries: the daemon may still be doing the operation.
+        Cancellation and corrupt responses discard the connection, preventing
+        late replies from contaminating the next request.
         """
-        request = JsonRpcRequest(
-            method=method,
-            params=params,
-            id=self._next_request_id(),
-        )
-
+        request = JsonRpcRequest(method=method, params=params, id=self._next_request_id())
         pool = self._get_pool()
-        reader, writer = await pool.acquire()
-
-        try:
-            result = await self._send_and_receive(reader, writer, request)
-        except _RETRYABLE_IO_ERRORS:
-            # Stale or broken connection — discard and retry once
-            pool.discard(writer)
-            _logger.debug("pool_retry_on_stale", method=method)
+        attempts = 2 if method in _SAFE_RETRY_METHODS else 1
+        for attempt in range(attempts):
             reader, writer = await pool.acquire()
             try:
                 result = await self._send_and_receive(reader, writer, request)
-            except _RETRYABLE_IO_ERRORS:
+            except (
+                asyncio.CancelledError, TimeoutError, DaemonProtocolError, ResourceExhaustedError,
+            ):
                 pool.discard(writer)
                 raise
-            except Exception:
+            except (OSError, DaemonNotRunningError):
+                pool.discard(writer)
+                if attempt + 1 == attempts:
+                    raise
+                _logger.debug("pool_retry_safe_read", method=method)
+            except DaemonError:
+                # A valid application error is a complete matching response.
+                pool.release(reader, writer)
+                raise
+            except BaseException:
                 pool.discard(writer)
                 raise
-        except DaemonNotRunningError:
-            # Empty readline — server closed the connection
-            pool.discard(writer)
-            _logger.debug("pool_retry_on_disconnect", method=method)
-            reader, writer = await pool.acquire()
-            try:
-                result = await self._send_and_receive(reader, writer, request)
-            except Exception:
-                pool.discard(writer)
-                raise
-        except Exception:
-            # Application-level errors (DaemonError from JSON-RPC error)
-            # — the connection is healthy, release it
-            pool.release(reader, writer)
-            raise
-
-        pool.release(reader, writer)
-        return result
+            else:
+                pool.release(reader, writer)
+                return result
 
     # ------------------------------------------------------------------
     # Streaming RPC (request → notifications* → final response)
@@ -445,8 +465,9 @@ class DaemonClient:
         )
 
         async with self._connect() as (reader, writer):
-            writer.write(request.model_dump_json().encode() + b"\n")
-            await writer.drain()
+            async with asyncio.timeout(self._timeout):
+                writer.write(request.model_dump_json().encode() + b"\n")
+                await writer.drain()
 
             async for raw_line in reader:
                 if not raw_line:
@@ -454,16 +475,20 @@ class DaemonClient:
 
                 msg = json.loads(raw_line)
 
-                # Check if this is the final response (has our request id)
-                msg_id = msg.get("id")
-                if msg_id is not None:
-                    # Final response — stream is done
+                if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0":
+                    raise DaemonProtocolError("Invalid streaming response envelope")
+                if "id" in msg or "error" in msg or "result" in msg:
+                    self._validate_response(msg, request.id)
                     if "error" in msg:
                         raise rpc_error_to_exception(msg["error"])
                     return
-
-                # Notification — yield params to caller
-                yield msg.get("params", {})
+                if not isinstance(msg.get("method"), str):
+                    raise DaemonProtocolError("Invalid streaming response notification")
+                params = msg.get("params", {})
+                if not isinstance(params, dict):
+                    raise DaemonProtocolError("Invalid streaming response notification params")
+                yield params
+            raise DaemonNotRunningError("Daemon closed stream before final response")
 
     # ------------------------------------------------------------------
     # Typed convenience methods
@@ -472,23 +497,34 @@ class DaemonClient:
     async def is_daemon_running(self) -> bool:
         """Check if daemon is running by performing a lightweight health RPC.
 
-        Uses ``daemon.health`` instead of bare socket connect so stale
-        sockets left by crashed daemons are properly detected.
-
-        Short-circuits immediately if the socket path doesn't exist,
-        consistent with ``_connect()``'s guard.
+        Uses a dedicated connection with a short deadline. Missing/refused
+        sockets return False; an endpoint that accepts but does not respond
+        raises DaemonUnresponsiveError, preserving the difference from absence.
         """
         if not self._socket_path.exists():
             return False
+
+        async def probe() -> None:
+            request = JsonRpcRequest(method="daemon.health", id=self._next_request_id())
+            async with self._connect() as (reader, writer):
+                try:
+                    await self._send_and_receive(reader, writer, request)
+                except DaemonNotRunningError as exc:
+                    raise DaemonUnresponsiveError(
+                        "Conductor accepted the health probe but closed before responding"
+                    ) from exc
+
         try:
-            await self.call("daemon.health")
-            return True
-        except (ConnectionRefusedError, FileNotFoundError, TimeoutError, OSError):
+            await asyncio.wait_for(probe(), timeout=_HEALTH_TIMEOUT_SECONDS)
+        except DaemonNotRunningError:
             return False
-        except Exception:
-            # Any other failure (malformed response, protocol error, etc.)
-            # means the daemon is not functional.
-            return False
+        except TimeoutError as exc:
+            raise DaemonUnresponsiveError(
+                "Conductor socket exists but did not respond to the health probe"
+            ) from exc
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise DaemonProtocolError(f"Invalid conductor health response: {exc}") from exc
+        return True
 
     async def status(self) -> DaemonStatus:
         """Get daemon status."""
@@ -554,8 +590,15 @@ class DaemonClient:
         return cast(dict[str, Any], await self.call("daemon.config"))
 
     async def health(self) -> dict[str, Any]:
-        """Liveness probe — is the daemon process alive?"""
-        return cast(dict[str, Any], await self.call("daemon.health"))
+        """Liveness probe independent of busy pooled request connections."""
+        async def probe() -> dict[str, Any]:
+            request = JsonRpcRequest(method="daemon.health", id=self._next_request_id())
+            async with self._connect() as (reader, writer):
+                return cast(dict[str, Any], await self._send_and_receive(reader, writer, request))
+
+        return await asyncio.wait_for(
+            probe(), timeout=min(self._timeout, _HEALTH_TIMEOUT_SECONDS),
+        )
 
     async def readiness(self) -> dict[str, Any]:
         """Readiness probe — is the daemon accepting new jobs?"""

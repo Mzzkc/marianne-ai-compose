@@ -508,9 +508,12 @@ async def _status_overview(json_output: bool) -> None:
     # Check conductor
     try:
         routed, result = await try_daemon_route("daemon.health", {})
-    except Exception:
-        routed = False
-        result = None
+    except Exception as exc:
+        output_error(
+            f"Cannot read conductor health: {exc}",
+            json_output=json_output,
+        )
+        raise typer.Exit(1) from None
 
     if not routed:
         output_error(
@@ -522,11 +525,23 @@ async def _status_overview(json_output: bool) -> None:
 
     # Get job list
     try:
-        _, jobs_data = await try_daemon_route("job.list", {})
-    except Exception:
-        jobs_data = []
+        jobs_routed, jobs_data = await try_daemon_route("job.list", {})
+        if not jobs_routed or not isinstance(jobs_data, list):
+            raise ValueError("Conductor job list is unavailable or invalid")
+    except Exception as exc:
+        if json_output:
+            output_json({
+                "conductor": "running",
+                "jobs_known": False,
+                "active_count": None,
+                "recent_count": None,
+                "error": f"Cannot read conductor job list: {exc}",
+            })
+        else:
+            output_error(f"Conductor responded to health, but job status is unknown: {exc}")
+        raise typer.Exit(1) from None
 
-    jobs: list[dict[str, Any]] = jobs_data if isinstance(jobs_data, list) else []
+    jobs: list[dict[str, Any]] = jobs_data
 
     # Split into active and recent
     active = [
@@ -553,6 +568,7 @@ async def _status_overview(json_output: bool) -> None:
     if json_output:
         output_json({
             "conductor": "running",
+            "jobs_known": True,
             "active_count": len(active),
             "active": active,
             "recent_count": len(recent),

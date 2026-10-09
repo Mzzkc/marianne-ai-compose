@@ -851,3 +851,11 @@ class TestResourceURIParametrized:
         content = result["contents"][0]
         data = json.loads(content["text"])
         assert expected_key in data or "$defs" in data
+
+
+@pytest.fixture(autouse=True)
+def isolate_mcp_conductor_path(monkeypatch, tmp_path):
+    """Unit tools use an absent task-owned endpoint, never the live conductor."""
+    monkeypatch.setattr(
+        "marianne.mcp.tools._resolve_socket_path", lambda _: tmp_path / "absent.sock"
+    )

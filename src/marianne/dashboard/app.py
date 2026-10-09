@@ -12,12 +12,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from marianne.core.logging import get_logger
+from marianne.daemon.exceptions import DaemonError
 from marianne.daemon.ipc.client import DaemonClient
 from marianne.daemon.registry_backend import RegistryFirstReadBackend
 from marianne.state.base import StateBackend
@@ -71,8 +73,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         yield
     finally:
-        if bridge is not None:
-            await bridge.stop()
+        try:
+            if bridge is not None:
+                await bridge.stop()
+        finally:
+            client = getattr(app.state, "daemon_client", None)
+            if client is not None:
+                await client.close()
 
 
 def _create_daemon_client() -> DaemonClient | None:
@@ -140,6 +147,11 @@ def create_app(
         description="REST API for Marianne score orchestration",
         lifespan=lifespan,
     )
+
+    @app.exception_handler(DaemonError)
+    async def conductor_unavailable(request: Request, exc: DaemonError) -> JSONResponse:
+        # Failed discovery is unknown state, never a successful empty roster.
+        return JSONResponse(status_code=503, content={"detail": str(exc)})
 
     app.state.backend = _state_backend
     app.state.connects_daemon = daemon_client is not None

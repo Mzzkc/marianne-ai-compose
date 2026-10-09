@@ -129,13 +129,17 @@ class TestStatusCommand:
     but still routes through the conductor by default (F-502).
     """
 
-    def test_status_workspace_is_hidden_debug_override(self):
+    def test_status_workspace_is_hidden_debug_override(self, monkeypatch):
         """Status --workspace is accepted but only as a hidden debug override.
 
         Unlike pause/resume/recover (which fully removed --workspace),
         the status command keeps it as a hidden option for debug use.
         The command still routes through the conductor first.
         """
+        async def absent_conductor(*args, **kwargs):
+            return False, None
+
+        monkeypatch.setattr("marianne.daemon.detect.try_daemon_route", absent_conductor)
         runner = CliRunner()
         result = runner.invoke(app, ["status", "test-job", "--workspace", "/tmp/test"])
 

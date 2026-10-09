@@ -532,7 +532,7 @@ async def test_ten_concurrent_sheets_mixed_tri_states_one_instrument() -> None:
         for i in range(10)
     }
     adapter = _adapter_with(pool, sheets)
-    for job, sheet in sheets.items():
+    for job in sheets:
         state = SheetExecutionState(sheet_num=1, instrument_name=INSTRUMENT)
         await adapter._dispatch_callback(job, 1, state)
     await _drain(adapter, tuple((job, 1) for job in sheets))
