@@ -27,13 +27,15 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from marianne.daemon.baton.dispatch import DispatchConfig
 
+from marianne.core.config.flow import LoopConfig, SheetTriggerConfig
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.errors.codes import ErrorCode
+from marianne.core.flow_state import FlowState
 from marianne.core.logging import get_logger
 from marianne.daemon.baton.events import (
     BatonEvent,
@@ -45,8 +47,11 @@ from marianne.daemon.baton.events import (
     EscalationNeeded,
     EscalationResolved,
     EscalationTimeout,
+    FlowConcertSubmitted,
+    FlowRunFinished,
     InstrumentFallback,
     JobTimeout,
+    LoopFactsReady,
     PacingComplete,
     PauseJob,
     ProcessExited,
@@ -61,6 +66,7 @@ from marianne.daemon.baton.events import (
     ShutdownRequested,
     StaleCheck,
 )
+from marianne.daemon.baton.flow import FlowEngine, FlowPlan
 from marianne.daemon.baton.state import (
     _DISPATCHABLE_BATON_STATUSES,
     _TERMINAL_BATON_STATUSES,
@@ -105,6 +111,7 @@ class _JobRecord:
     # these). Set at register time; immutable for the job's lifetime.
     workspace: Path | None = None
     config_path: Path | None = None
+    flow: FlowEngine | None = None
     created_at: float = field(default_factory=time.time)
 
 
@@ -292,6 +299,14 @@ class BatonCore:
         """Return and clear canonical sheet-skip observer events."""
         events = list(self._skip_events)
         self._skip_events.clear()
+        return events
+
+    def drain_flow_events(self) -> list[BatonEvent]:
+        """Drain flow transitions after checkpoint persistence."""
+        events: list[BatonEvent] = []
+        for job in self._jobs.values():
+            if job.flow is not None:
+                events.extend(job.flow.drain_events())
         return events
 
     @property
@@ -851,6 +866,7 @@ class BatonCore:
                 job_id=job_id,
                 sheet_num=sheet_num,
                 event_generation=job.event_generation,
+                dispatch_epoch=sheet.dispatch_epoch,
             )
             self._timer.schedule(delay, event)
             sheet.next_retry_at = time.monotonic() + delay
@@ -1236,6 +1252,10 @@ class BatonCore:
         event_generation: int | None = None,
         workspace: Path | None = None,
         config_path: Path | None = None,
+        loops: dict[str, LoopConfig] | None = None,
+        triggers: dict[str, SheetTriggerConfig] | None = None,
+        flow_state: FlowState | None = None,
+        flow_variables: dict[str, Any] | None = None,
     ) -> None:
         """Register a job's sheets with the baton for scheduling.
 
@@ -1267,6 +1287,12 @@ class BatonCore:
         self._registration_token_counter = (
             getattr(self, "_registration_token_counter", 0) + 1
         )
+        flow = FlowEngine(
+            job_id,
+            FlowPlan(loops or {}, triggers or {}, flow_variables or {}),
+            flow_state if flow_state is not None else FlowState(),
+            event_generation=event_generation,
+        ) if loops or triggers else None
         self._jobs[job_id] = _JobRecord(
             job_id=job_id,
             sheets=sheets,
@@ -1281,7 +1307,11 @@ class BatonCore:
             stagger_delay_ms=stagger_delay_ms,
             registration_token=self._registration_token_counter,
             event_generation=event_generation,
+            flow=flow,
         )
+        if flow is not None and flow.state.pause_reason is not None:
+            self._jobs[job_id].paused = True
+            self._jobs[job_id].user_paused = True
         self._state_dirty = True
 
         # F-440: Re-propagate failure for any sheet that's already FAILED.
@@ -1294,8 +1324,12 @@ class BatonCore:
         # sheets) and fixes the sync gap for both fresh registration and
         # recovery.
         for sheet_num, sheet in sheets.items():
-            if sheet.status == BatonSheetStatus.FAILED:
+            if (sheet.status == BatonSheetStatus.FAILED
+                    and not (flow and flow.state.chains)):
                 self._propagate_failure_to_dependents(job_id, sheet_num)
+
+        if flow is not None and flow.settle(sheets):
+            self._state_dirty = True
 
         _logger.info(
             "baton.job_registered",
@@ -1305,6 +1339,39 @@ class BatonCore:
                 "dependency_count": len(dependencies),
             },
         )
+
+    def _on_sheet_terminal(
+        self,
+        job_id: str,
+        sheet_num: int,
+        outcome: Literal["success", "fail"] | None = None,
+    ) -> None:
+        job = self._jobs.get(job_id)
+        if job is None or job.flow is None:
+            return
+        if job.flow.on_terminal(job.sheets, sheet_num, outcome):
+            self._state_dirty = True
+            self.enqueue_dispatch_retry()
+        if job.flow.state.pause_reason is not None:
+            job.paused = job.user_paused = True
+            self._state_dirty = True
+        if job.sheets[sheet_num].status == BatonSheetStatus.FAILED and not job.flow.busy():
+            self._propagate_failure_to_dependents(job_id, sheet_num)
+
+    def _settle_flow(self, job_id: str) -> None:
+        job = self._jobs.get(job_id)
+        if job is None or job.flow is None:
+            return
+        if job.flow.settle(job.sheets):
+            self._state_dirty = True
+            self.enqueue_dispatch_retry()
+        if job.flow.state.pause_reason is not None:
+            job.paused = job.user_paused = True
+            self._state_dirty = True
+        if not job.flow.busy():
+            for sheet_num, sheet in job.sheets.items():
+                if sheet.status == BatonSheetStatus.FAILED:
+                    self._propagate_failure_to_dependents(job_id, sheet_num)
 
     def deregister_job(self, job_id: str) -> None:
         """Remove a job from the baton's tracking.
@@ -1348,6 +1415,13 @@ class BatonCore:
         job = self._jobs.get(job_id)
         if job is None:
             return False
+        if job.user_paused:
+            return False
+        if job.flow is not None and (
+            job.flow.busy() or job.flow.boundary_pending(job.sheets)
+            or job.flow.state.pause_reason is not None
+        ):
+            return False
         return all(sheet.status in _TERMINAL_BATON_STATUSES for sheet in job.sheets.values())
 
     def has_job(self, job_id: str) -> bool:
@@ -1375,6 +1449,8 @@ class BatonCore:
         job = self._jobs.get(job_id)
         if job is None or job.paused or job.pacing_active:
             return []
+        if job.flow is not None and job.flow.busy():
+            return []
 
         ready: list[SheetExecutionState] = []
         for sheet_num, sheet in job.sheets.items():
@@ -1383,7 +1459,9 @@ class BatonCore:
 
             # Check dependencies
             deps = job.dependencies.get(sheet_num, [])
-            deps_satisfied = all(self._is_dependency_satisfied(job, dep) for dep in deps)
+            deps_satisfied = (
+                job.flow is not None and sheet_num in job.flow.state.goto_bypass
+            ) or all(self._is_dependency_satisfied(job, dep) for dep in deps)
             if deps_satisfied:
                 ready.append(sheet)
 
@@ -1471,6 +1549,35 @@ class BatonCore:
 
                 case StaleCheck():
                     self._handle_stale_check(event)
+
+                case LoopFactsReady():
+                    job = self._jobs.get(event.job_id)
+                    if job is not None and job.flow is not None:
+                        if job.flow.facts_ready(
+                            job.sheets, event.span, event.request_id,
+                            event.files, event.error,
+                        ):
+                            self._state_dirty = True
+
+                case FlowRunFinished():
+                    job = self._jobs.get(event.job_id)
+                    if job is not None and job.flow is not None:
+                        if job.flow.action_finished(
+                            job.sheets, event.chain_id, event.cursor,
+                            {"exit_code": event.exit_code, "timed_out": event.timed_out,
+                             "log_path": event.log_path, "error": event.error},
+                        ):
+                            self._state_dirty = True
+
+                case FlowConcertSubmitted():
+                    job = self._jobs.get(event.job_id)
+                    if job is not None and job.flow is not None:
+                        if job.flow.action_finished(
+                            job.sheets, event.chain_id, event.cursor,
+                            {"accepted": event.accepted, "child_job_id": event.child_job_id,
+                             "message": event.message},
+                        ):
+                            self._state_dirty = True
 
                 case CronTick():
                     if self._cron_handler is None:
@@ -1565,6 +1672,10 @@ class BatonCore:
                         extra={"event_type": type(event).__name__},
                     )
 
+            event_job_id = getattr(event, "job_id", None)
+            if isinstance(event_job_id, str):
+                self._settle_flow(event_job_id)
+
         except Exception:
             # #317: include the job/sheet context (when the event carries it)
             # so a handler traceback can be correlated to a specific job in a
@@ -1607,6 +1718,22 @@ class BatonCore:
                 "baton.attempt_result.unknown_sheet",
                 extra={"job_id": event.job_id, SHEET_NUM_KEY: event.sheet_num},
             )
+            return
+
+        if (event.dispatch_epoch is not None
+                and event.dispatch_epoch != sheet.dispatch_epoch):
+            # An old attempt cannot decide the new iteration, but the money
+            # was spent and must still count against the job backstop.
+            sheet.total_cost_usd += event.cost_usd
+            sheet.cost_uncertain = sheet.cost_uncertain or event.cost_uncertain
+            self._state_dirty = True
+            _logger.info("baton.attempt_result.stale_epoch", extra={
+                "job_id": event.job_id,
+                SHEET_NUM_KEY: event.sheet_num,
+                "event_epoch": event.dispatch_epoch,
+                "current_epoch": sheet.dispatch_epoch,
+            })
+            self._check_job_cost_limit(event.job_id)
             return
 
         # Terminal guard: once a sheet reaches a terminal state, no event
@@ -1693,12 +1820,32 @@ class BatonCore:
         if event.execution_success and event.validations_total == 0 and effective_pass_rate < 100.0:
             effective_pass_rate = 100.0
 
+        if (job.flow is not None and sheet.expected_route is None
+                and job.flow.has_on_fail(event.sheet_num)
+                and not (event.execution_success and effective_pass_rate >= 100.0)):
+            if event.execution_success and effective_pass_rate > 0:
+                self._update_instrument_on_success(event.instrument_name)
+            elif not event.execution_success:
+                self._update_instrument_on_failure(event.instrument_name)
+            if self._check_sheet_cost_limit(event.job_id, event.sheet_num, sheet):
+                return
+            sheet.status = BatonSheetStatus.FAILED
+            sheet.clear_dispatch_block()
+            self._state_dirty = True
+            self._on_sheet_terminal(event.job_id, event.sheet_num, "fail")
+            self._check_job_cost_limit(event.job_id)
+            return
+
         if event.execution_success and effective_pass_rate >= 100.0:
             # Perfect execution — mark complete
             sheet.status = BatonSheetStatus.COMPLETED
             sheet.clear_dispatch_block()
             self._update_instrument_on_success(event.instrument_name)
             self._state_dirty = True
+            self._on_sheet_terminal(
+                event.job_id, event.sheet_num,
+                None if sheet.expected_route is not None else "success",
+            )
             _logger.info(
                 "baton.sheet.completed",
                 extra={
@@ -1844,6 +1991,9 @@ class BatonCore:
             return
         sheet = job.sheets.get(event.sheet_num)
         if sheet is None:
+            return
+        if (event.dispatch_epoch is not None
+                and event.dispatch_epoch != sheet.dispatch_epoch):
             return
         if sheet.status in _TERMINAL_BATON_STATUSES:
             _logger.debug(
@@ -2006,6 +2156,9 @@ class BatonCore:
         ):
             return
         sheet = job.sheets.get(event.sheet_num)
+        if (sheet is not None and event.dispatch_epoch is not None
+                and event.dispatch_epoch != sheet.dispatch_epoch):
+            return
         if sheet is not None and sheet.status == BatonSheetStatus.RETRY_SCHEDULED:
             sheet.status = BatonSheetStatus.PENDING
             self._state_dirty = True

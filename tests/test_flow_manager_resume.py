@@ -1,0 +1,133 @@
+"""Resume and restart preserve the operator's durable pause decision."""
+
+import asyncio
+import time
+from pathlib import Path
+
+import pytest
+
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState
+from marianne.daemon.config import DaemonConfig
+from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
+from marianne.daemon.types import JobRequest
+
+
+@pytest.mark.asyncio
+async def test_resume_rejects_changed_wall_limit_before_transition(tmp_path: Path) -> None:
+    score = tmp_path / "changed.yaml"
+    score.write_text(
+        "name: Changed\n"
+        f"workspace: {tmp_path}\n"
+        "instrument: cli\n"
+        "sheet:\n  size: 1\n  total_items: 1\n"
+        "prompt:\n  template: test\n"
+        "max_wall_seconds: 120\n",
+        encoding="utf-8",
+    )
+    manager = JobManager(DaemonConfig(state_db_path=tmp_path / "jobs.db"))
+    manager._job_meta["j"] = JobMeta(
+        job_id="j", config_path=score, workspace=tmp_path,
+        status=DaemonJobStatus.PAUSED, max_wall_seconds=60.0,
+        wall_deadline_at=1234.0,
+    )
+
+    with pytest.raises(Exception, match="max_wall_seconds is immutable on resume"):
+        await manager._resume_active_job("j", config_path=score)
+    assert manager._job_meta["j"].status == DaemonJobStatus.PAUSED
+    assert manager._job_meta["j"].wall_deadline_at == 1234.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("flow_pause", [False, True])
+async def test_paused_job_survives_real_manager_restart(
+    tmp_path: Path, flow_pause: bool,
+) -> None:
+    score = tmp_path / "paused.yaml"
+    score.write_text(
+        "name: paused-flow\n"
+        f"workspace: {tmp_path / 'workspace'}\n"
+        "instrument: cli\n"
+        "sheet:\n  size: 1\n  total_items: 1\n"
+        "prompt:\n  template: echo ok\n",
+        encoding="utf-8",
+    )
+    config = DaemonConfig(
+        pid_file=tmp_path / "conductor.pid",
+        state_db_path=tmp_path / "jobs.db",
+    )
+    seed = JobManager(config)
+    await seed._registry.open()
+    try:
+        await seed._registry.register_job("paused-flow", score, tmp_path / "workspace")
+        checkpoint = CheckpointState(
+            job_id="paused-flow", job_name="paused-flow", total_sheets=1,
+            status=JobStatus.PAUSED, sheets={1: SheetState(sheet_num=1)},
+        )
+        if flow_pause:
+            checkpoint.flow.pause_reason = "trigger on sheet 1"
+        await seed._registry.save_checkpoint("paused-flow", checkpoint.model_dump_json())
+        await seed._registry.update_status("paused-flow", DaemonJobStatus.PAUSED.value)
+    finally:
+        await seed._registry.close()
+
+    manager = JobManager(config)
+    await manager.start()
+    try:
+        assert manager._job_meta["paused-flow"].status == DaemonJobStatus.PAUSED
+        assert "paused-flow" not in manager._jobs
+        persisted = await manager._registry.load_checkpoint("paused-flow")
+        assert persisted is not None
+        restored = CheckpointState.model_validate_json(persisted)
+        assert restored.status == JobStatus.PAUSED
+        assert restored.flow.pause_reason == (
+            "trigger on sheet 1" if flow_pause else None
+        )
+    finally:
+        await manager.shutdown(graceful=False)
+
+
+@pytest.mark.asyncio
+async def test_operator_pause_survives_restart_after_real_submission(tmp_path: Path) -> None:
+    score = tmp_path / "operator-paused.yaml"
+    score.write_text(
+        "name: operator-paused\n"
+        f"workspace: {tmp_path / 'workspace'}\n"
+        "instrument: cli\n"
+        "sheet:\n  size: 1\n  total_items: 1\n"
+        "prompt:\n  template: sleep 1\n",
+        encoding="utf-8",
+    )
+    config = DaemonConfig(
+        pid_file=tmp_path / "conductor.pid",
+        state_db_path=tmp_path / "jobs.db",
+    )
+    first = JobManager(config)
+    await first.start()
+    try:
+        response = await first.submit_job(JobRequest(config_path=score))
+        assert response.status == "accepted"
+        def registered() -> bool:
+            return (
+                first._job_meta[response.job_id].status == DaemonJobStatus.RUNNING
+                and first._baton_adapter is not None
+                and response.job_id in first._baton_adapter._baton._jobs
+            )
+        deadline = time.monotonic() + 3
+        while not registered() and time.monotonic() < deadline:
+            await asyncio.sleep(0.01)
+        assert registered()
+        assert await first.pause_job(response.job_id)
+        assert first._job_meta[response.job_id].status == DaemonJobStatus.PAUSED
+    finally:
+        await first.shutdown(graceful=False)
+
+    second = JobManager(config)
+    await second.start()
+    try:
+        assert second._job_meta[response.job_id].status == DaemonJobStatus.PAUSED
+        assert response.job_id not in second._jobs
+        checkpoint_json = await second._registry.load_checkpoint(response.job_id)
+        assert checkpoint_json is not None
+        assert CheckpointState.model_validate_json(checkpoint_json).status == JobStatus.PAUSED
+    finally:
+        await second.shutdown(graceful=False)

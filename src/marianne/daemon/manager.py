@@ -34,6 +34,7 @@ from marianne.core.checkpoint import (
     SheetState,
     SheetStatus,
 )
+from marianne.core.config.flow import ConcertTrigger
 from marianne.core.config.spec import SpecCorpusConfig
 from marianne.core.constants import STATE_DB_FILENAME
 from marianne.core.logging import get_logger
@@ -821,6 +822,8 @@ class JobManager:
             # #133: runtime diagnostics (observer events + resource state)
             # for retry failure-evidence enrichment.
             diagnostic_snapshot_fn=self._diagnostic_snapshot,
+            flow_pause_callback=self._on_flow_pause,
+            flow_concert_callback=self._submit_flow_concert,
         )
         self._baton_adapter.set_backend_pool(BackendPool(registry, pgroup=self._pgroup))
 
@@ -882,8 +885,10 @@ class JobManager:
         # gone. An overdue latest-policy tick may submit immediately.
         await recurrence_controller.restore()
 
-        # Recover paused orphans through the baton.
-        await self._recover_baton_orphans()
+        # A persisted PAUSED job is an operator/flow hold, not an invitation
+        # to resume on conductor restart (#409). Explicit mzt resume is the
+        # only transition back to RUNNING.
+        await self._recover_baton_orphans(candidate_ids=set())
 
         # A conductor may restart after the registry committed FAILED but
         # before the in-process callback claimed its failure hooks. Reconcile
@@ -1509,6 +1514,49 @@ class JobManager:
                 exc_info=True,
             )
 
+    async def _on_flow_pause(self, job_id: str) -> None:
+        """Durably publish a trigger pause after its flow checkpoint is written."""
+        live = self._live_states.get(job_id)
+        meta = self._job_meta.get(job_id)
+        if live is None or meta is None:
+            raise RuntimeError(f"flow pause has no live job: {job_id}")
+        if meta.status == DaemonJobStatus.PAUSED:
+            return
+        snapshot = live.model_dump_json()
+        writer = self._checkpoint_writer
+        if writer is not None and writer.running:
+            await writer.write_and_wait(job_id, snapshot)
+        else:
+            await self._registry.save_checkpoint(job_id, snapshot)
+        await self._set_job_status(job_id, DaemonJobStatus.PAUSED)
+
+    async def _submit_flow_concert(
+        self, parent_job_id: str, action: str | ConcertTrigger
+    ) -> tuple[bool, str | None, str | None]:
+        """Submit a trigger child through the same admission and depth guard as hooks."""
+        parent = self._job_meta.get(parent_job_id)
+        if parent is None:
+            return False, None, "parent job is unavailable"
+        spec = action if isinstance(action, ConcertTrigger) else ConcertTrigger(score=action)
+        current_depth = parent.chain_depth or 0
+        concert = parent.concert_config or {}
+        max_depth = int(concert.get("max_chain_depth", 5))
+        if current_depth >= max_depth:
+            return False, None, f"concert chain depth limit reached ({max_depth})"
+        score_path = Path(spec.score)
+        if not score_path.is_absolute():
+            score_path = (parent.config_path.parent / score_path).resolve()
+        if not score_path.is_file():
+            return False, None, f"child score not found: {score_path}"
+        request = JobRequest(
+            config_path=score_path,
+            workspace=parent.workspace if spec.inherit_workspace else None,
+            fresh=spec.fresh,
+            chain_depth=current_depth + 1,
+        )
+        response = await self.submit_job(request)
+        return response.status == "accepted", response.job_id, response.message
+
     def _on_baton_state_sync(
         self,
         job_id: str,
@@ -1669,7 +1717,9 @@ class JobManager:
                     sheet_num=sheet_num,
                 )
 
-    async def _recover_baton_orphans(self) -> None:
+    async def _recover_baton_orphans(
+        self, *, candidate_ids: set[str] | None = None
+    ) -> None:
         """Recover paused orphan jobs through the baton after restart.
 
         Step 29: Called during start() after the baton adapter is initialized.
@@ -1685,6 +1735,8 @@ class JobManager:
         recovered = 0
         for job_id, meta in list(self._job_meta.items()):
             if meta.status != DaemonJobStatus.PAUSED:
+                continue
+            if candidate_ids is not None and job_id not in candidate_ids:
                 continue
 
             # Skip if there's already a running task for this job
@@ -1709,7 +1761,9 @@ class JobManager:
                 # recovery task may wait at the concurrency gate, but same-ID
                 # submissions must already reject before recurrence mutation.
                 await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
-                resume_coro = self._resume_job_task(job_id, meta.workspace)
+                resume_coro = self._resume_job_task(
+                    job_id, meta.workspace, operator_resume=False
+                )
                 try:
                     task = asyncio.create_task(
                         resume_coro,
@@ -3712,6 +3766,28 @@ class JobManager:
                 "only PAUSED, PAUSED_AT_CHAIN, FAILED, or CANCELLED scores can be resumed"
             )
 
+        # The persisted registration owns the wall deadline. Reloading a score
+        # with a different limit must fail before any status or task transition;
+        # otherwise the new YAML appears accepted while the old deadline runs.
+        resume_config_path = config_path or meta.config_path
+        if not no_reload and resume_config_path.is_file():
+            from marianne.core.config import JobConfig
+
+            try:
+                resumed_wall_limit = JobConfig.from_yaml(
+                    resume_config_path
+                ).max_wall_seconds
+            except (OSError, ValueError) as exc:
+                raise JobSubmissionError(
+                    f"Score '{job_id}' resume config could not be loaded: {exc}"
+                ) from exc
+            if resumed_wall_limit != meta.max_wall_seconds:
+                raise JobSubmissionError(
+                    "max_wall_seconds is immutable on resume; "
+                    f"registered={meta.max_wall_seconds}, "
+                    f"reloaded={resumed_wall_limit}"
+                )
+
         # Own this terminal -> active transition before any awaited resume I/O.
         # Scheduled submission acquires the same synchronous reservation before
         # recurrence publication, preserving recurrence lifecycle -> manager
@@ -5414,7 +5490,12 @@ class JobManager:
                 except asyncio.CancelledError as cancel_exc:
                     # cancel_job() already called _set_job_status(CANCELLED).
                     # Only update if it wasn't set yet (e.g. external cancel).
-                    if meta.status != DaemonJobStatus.CANCELLED:
+                    if self._shutting_down and meta.status == DaemonJobStatus.PAUSED:
+                        _logger.info(
+                            "job.paused_during_shutdown",
+                            job_id=job_id,
+                        )
+                    elif meta.status != DaemonJobStatus.CANCELLED:
                         await self._set_job_status(
                             job_id,
                             DaemonJobStatus.CANCELLED,
@@ -5814,6 +5895,10 @@ class JobManager:
             live_sheets=initial_state.sheets,
             schedule_id=initial_state.schedule_id,
             scheduled_due_at=initial_state.scheduled_due_at,
+            loops=config.sheet.loops,
+            triggers=config.sheet.triggers,
+            flow_state=initial_state.flow,
+            flow_variables=config.prompt.variables or {},
             techniques=config.techniques or None,
             stale_detection=config.stale_detection,
             spec_config=spec_config,  # #204
@@ -5900,6 +5985,7 @@ class JobManager:
         from_sheet: int | None = None,
         escalation: bool = False,
         self_healing: bool = False,
+        operator_resume: bool = False,
     ) -> DaemonJobStatus:
         """Resume a job through the baton adapter using checkpoint recovery.
 
@@ -5943,6 +6029,8 @@ class JobManager:
                 workspace=str(workspace),
             )
             return DaemonJobStatus.FAILED
+        if operator_resume:
+            checkpoint.flow.pause_reason = None
 
         # Registry registration is the primary deadline authority. A valid
         # checkpoint deadline remains authoritative for databases created by
@@ -6143,6 +6231,9 @@ class JobManager:
             skip_when=config.sheet.skip_when or None,  # #360/#119
             code_execution=config.code_execution,  # #209
             agent_card=config.agent_card,
+            loops=config.sheet.loops,
+            triggers=config.sheet.triggers,
+            flow_variables=config.prompt.variables or {},
         )
 
         # #196: re-thread retry backoff on resume too — BatonCore is in-memory
@@ -6246,6 +6337,7 @@ class JobManager:
         from_sheet: int | None = None,
         escalation: bool = False,
         self_healing: bool = False,
+        operator_resume: bool = True,
     ) -> None:
         """Task coroutine that resumes a paused job."""
 
@@ -6259,6 +6351,7 @@ class JobManager:
                 from_sheet=from_sheet,
                 escalation=escalation,
                 self_healing=self_healing,
+                operator_resume=operator_resume,
             )
 
         await self._run_managed_task(

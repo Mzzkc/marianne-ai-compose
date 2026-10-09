@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
 from marianne.core.config.flow import FlowConfigError, TriggerAction
-from marianne.core.config.job import SheetConfig
+from marianne.core.config.job import JobConfig, SheetConfig
 
 
 def sheet(**extra: object) -> SheetConfig:
@@ -81,3 +83,30 @@ def test_absent_flow_preserves_legacy_dump_and_descriptions() -> None:
     assert "loops" not in parsed.model_dump()
     assert "triggers" not in parsed.model_dump()
     assert all(field.description for field in SheetConfig.model_fields.values())
+
+
+def test_validation_loop_index_must_be_scoped_to_its_span(tmp_path: Path) -> None:
+    base = {
+        "name": "flow-scope", "workspace": tmp_path, "instrument": "cli",
+        "sheet": {"size": 1, "total_items": 3,
+                  "loops": {"1-2": {"count": 2, "index": "pass_no"}}},
+        "prompt": {"template": "echo ok"},
+    }
+    with pytest.raises(ValidationError, match="outside loop 1-2"):
+        JobConfig.model_validate({**base, "validations": [
+            {"type": "file_exists", "path": "{workspace}/{pass_no}.txt"}
+        ]})
+    scoped = JobConfig.model_validate({**base, "validations": [
+        {"type": "file_exists", "path": "{workspace}/{pass_no}.txt", "sheet": 2}
+    ]})
+    assert scoped.validations[0].condition == "sheet_num == 2"
+
+
+def test_loop_index_cannot_shadow_prompt_variable(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="prompt.variables"):
+        JobConfig.model_validate({
+            "name": "flow-shadow", "workspace": tmp_path, "instrument": "cli",
+            "sheet": {"size": 1, "total_items": 1,
+                      "loops": {1: {"count": 2, "index": "pass_no"}}},
+            "prompt": {"template": "echo ok", "variables": {"pass_no": 9}},
+        })

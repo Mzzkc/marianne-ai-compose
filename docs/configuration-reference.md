@@ -1478,3 +1478,59 @@ preflight:
   token_warning_threshold: 200000
   token_error_threshold: 800000
 ```
+
+## Flow control: expressions, loops, and triggers
+
+`sheet.loops` and `sheet.triggers` use inclusive sheet spans (`1` or `2-5`). Under
+`fan_out`, authored spans name stages and expand to concrete sheets at load time.
+Old scores without these keys keep their existing behavior.
+
+```yaml
+sheet:
+  size: 1
+  total_items: 2
+  loops:
+    1:
+      index: pass_no
+      until: 'file("done.txt").exists'
+      max_iterations: 5
+  triggers:
+    1:
+      on_fail:
+        - escalate: Inspect the first sheet before continuing.
+    2:
+      on_success:
+        - continue: true
+```
+
+A loop runs its range at least once and evaluates `until` after every complete
+iteration. `count` requests an exact number of passes; `count` with `until`
+acts as a cap. `max_iterations` defaults to 50. `cost_limit_usd` caps spend
+inside the span. When an `until` condition remains false at a cap, the loop
+ends with a warning and the job proceeds; use a validation for a required
+artifact. Loop spans may be separate or nested, and index names must be unique.
+Use `{{ loops.pass_no }}` or `{{ pass_no }}` in prompts, `{pass_no}` in validations
+scoped to the loop, and `loop.pass_no` in expressions. A global validation
+cannot use a loop index that is unavailable on another sheet.
+
+Expressions support booleans, comparisons, arithmetic, parentheses, `var.name`,
+`loop.name`, `sheet(N)`/`sheet.current`, and `file("path")` facts. File facts
+include `.exists`, `.modified`, `.contains("text")`, and `.matches("regex")`.
+File paths can use known template variables. File reads are bounded and happen
+off the baton loop. Invalid expression syntax fails score load; an undefined
+runtime variable fails the loop condition at its boundary. The legacy
+`validation(...)` and `output(...)` expression forms are reserved.
+
+`on_success` runs after a successful attempt. `on_fail` replaces retry,
+fallback, completion mode, and healing for that sheet. Each action object has
+exactly one key: `goto`, `skip`, `pause`, `escalate`, `run`, `concert`, or
+`continue`. Several actions form an ordered list. A backward `goto` reopens
+sheets from its target through the current sheet; a forward `goto` deliberately
+skips unrun sheets in between. `pause` persists a hold until `mzt resume`.
+`run` executes a bounded shell command in the job workspace; `concert` submits
+a child score and does not wait for that child. Commands may repeat after a
+conductor crash, so make their effects idempotent using `MARIANNE_FLOW_ATTEMPT`.
+Loop and trigger state is saved in the same checkpoint as sheet state.
+
+See [convergence-loop](../examples/patterns/convergence-loop.yaml) for a
+CLI-only score with a file expression and failure escalation.

@@ -12,7 +12,6 @@ import csv
 import hashlib
 import json
 import logging
-import operator
 import os
 import re
 import shlex
@@ -30,8 +29,10 @@ from marianne.core.constants import (
     VALIDATION_COMMAND_TIMEOUT_SECONDS,
     VALIDATION_OUTPUT_TRUNCATE_CHARS,
 )
+from marianne.core.validation_condition import check_validation_condition
 from marianne.utils.process import run_bounded_command
 
+from .expansion import expand_known
 from .models import (
     FileModificationTracker,
     SheetValidationResult,
@@ -230,51 +231,11 @@ class ValidationEngine:
 
     def _check_condition(self, condition: str | None) -> bool:
         """Check if a validation condition is satisfied."""
-        if condition is None:
-            return True
-
-        condition = condition.strip()
-
-        if " and " in condition:
-            parts = condition.split(" and ")
-            return all(self._check_single_condition(p.strip()) for p in parts)
-
-        return self._check_single_condition(condition)
-
-    _CONDITION_OPS: dict[str, Any] = {
-        ">=": operator.ge,
-        "<=": operator.le,
-        "==": operator.eq,
-        "!=": operator.ne,
-        ">": operator.gt,
-        "<": operator.lt,
-    }
+        return check_validation_condition(condition, self.sheet_context)
 
     def _check_single_condition(self, condition: str) -> bool:
         """Check a single comparison condition."""
-        match = re.match(r"(\w+)\s*(>=|<=|==|!=|>|<)\s*(-?\d+)", condition)
-        if not match:
-            return True
-
-        var_name, op_str, value_str = match.groups()
-        value = int(value_str)
-
-        ctx_value = self.sheet_context.get(
-            SHEET_NUM_KEY if var_name == SHEET_NUM_KEY else var_name
-        )
-        if ctx_value is None:
-            return False
-        if isinstance(ctx_value, str) and ctx_value.strip().lstrip("-").isdigit():
-            var_value = int(ctx_value.strip())
-        elif type(ctx_value) is int:
-            var_value = ctx_value
-        else:
-            return False
-
-        op_fn = self._CONDITION_OPS.get(op_str)
-        if op_fn is None:
-            return True
-        return bool(op_fn(var_value, value))
+        return check_validation_condition(condition, self.sheet_context)
 
     def get_applicable_rules(
         self, rules: list[ValidationRule]
@@ -532,6 +493,7 @@ class ValidationEngine:
             return self._missing_field_result(rule, "path")
         if not rule.pattern:
             return self._missing_field_result(rule, "pattern")
+        pattern = expand_known(rule.pattern, self.sheet_context)
 
         path = self.expand_path(rule.path)
         display_path = self._display_path(path)
@@ -539,34 +501,34 @@ class ValidationEngine:
         if not path.exists():
             return ValidationResult(
                 rule=rule, passed=False,
-                actual_value=None, expected_value=rule.pattern,
+                actual_value=None, expected_value=pattern,
                 error_message=f"File not found: {path}",
                 failure_reason=f"File '{display_path}' does not exist (cannot check content)",
                 failure_category="missing",
-                suggested_fix=f"Create file '{display_path}' containing '{rule.pattern}'",
+                suggested_fix=f"Create file '{display_path}' containing '{pattern}'",
             )
 
         content = self._read_file_text(path)
-        contains = rule.pattern in content
+        contains = pattern in content
 
         if contains:
             return ValidationResult(
                 rule=rule, passed=True,
-                actual_value=f"contains={contains}", expected_value=rule.pattern,
+                actual_value=f"contains={contains}", expected_value=pattern,
             )
 
         display_pattern = (
-            rule.pattern[:50] + "..." if len(rule.pattern) > 50 else rule.pattern
+            pattern[:50] + "..." if len(pattern) > 50 else pattern
         )
 
         return ValidationResult(
             rule=rule, passed=False,
-            actual_value=f"contains={contains}", expected_value=rule.pattern,
-            error_message=f"Pattern not found in {path}: {rule.pattern}",
+            actual_value=f"contains={contains}", expected_value=pattern,
+            error_message=f"Pattern not found in {path}: {pattern}",
             failure_reason=f"File '{display_path}' missing expected content: '{display_pattern}'",
             failure_category="incomplete",
             suggested_fix=(
-                f"Add exactly '{rule.pattern}' to the file"
+                f"Add exactly '{pattern}' to the file"
                 f" (this exact text is validated)"
             ),
         )
@@ -577,6 +539,7 @@ class ValidationEngine:
             return self._missing_field_result(rule, "path")
         if not rule.pattern:
             return self._missing_field_result(rule, "pattern")
+        pattern = expand_known(rule.pattern, self.sheet_context)
 
         path = self.expand_path(rule.path)
         display_path = self._display_path(path)
@@ -584,7 +547,7 @@ class ValidationEngine:
         if not path.exists():
             return ValidationResult(
                 rule=rule, passed=False,
-                actual_value=None, expected_value=rule.pattern,
+                actual_value=None, expected_value=pattern,
                 error_message=f"File not found: {path}",
                 failure_reason=f"File '{display_path}' does not exist (cannot check content)",
                 failure_category="missing",
@@ -594,7 +557,7 @@ class ValidationEngine:
         content = self._read_file_text(path)
 
         try:
-            regex_match = re.search(rule.pattern, content, re.MULTILINE)
+            regex_match = re.search(pattern, content, re.MULTILINE)
         except re.error as e:
             return ValidationResult(
                 rule=rule, passed=False,
@@ -607,17 +570,17 @@ class ValidationEngine:
         if regex_match:
             return ValidationResult(
                 rule=rule, passed=True,
-                actual_value=regex_match.group(0), expected_value=rule.pattern,
+                actual_value=regex_match.group(0), expected_value=pattern,
             )
 
         display_pattern = (
-            rule.pattern[:50] + "..." if len(rule.pattern) > 50 else rule.pattern
+            pattern[:50] + "..." if len(pattern) > 50 else pattern
         )
 
         return ValidationResult(
             rule=rule, passed=False,
-            actual_value=None, expected_value=rule.pattern,
-            error_message=f"Regex not matched in {path}: {rule.pattern}",
+            actual_value=None, expected_value=pattern,
+            error_message=f"Regex not matched in {path}: {pattern}",
             failure_reason=(
                 f"File '{display_path}' doesn't match pattern: {display_pattern}"
             ),
