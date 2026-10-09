@@ -3,613 +3,715 @@
   "files": {
     "agents:adversary/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:adversary/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:adversary/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:atlas/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:atlas/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:atlas/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:axiom/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:axiom/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:axiom/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:bedrock/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:bedrock/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:bedrock/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:blueprint/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:blueprint/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:blueprint/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:breakpoint/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:breakpoint/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:breakpoint/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:canyon/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:canyon/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:canyon/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:captain/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:captain/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:captain/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:circuit/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:circuit/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:circuit/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:compass/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:compass/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:compass/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:dash/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:dash/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:dash/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:ember/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:ember/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:ember/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:forge/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:forge/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:forge/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:foundation/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:foundation/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:foundation/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:ghost/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:ghost/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:ghost/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:guide/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:guide/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:guide/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:harper/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:harper/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:harper/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:journey/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:journey/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:journey/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:keystone/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:keystone/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:keystone/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:lens/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:lens/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:lens/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:litmus/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:litmus/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:litmus/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:maverick/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:maverick/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:maverick/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:newcomer/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:newcomer/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:newcomer/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:north/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:north/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:north/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:oracle/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:oracle/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:oracle/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:prism/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:prism/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:prism/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:scribe/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:scribe/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:scribe/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:sentinel/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:sentinel/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:sentinel/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:spark/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:spark/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:spark/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:tempo/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:tempo/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:tempo/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:theorem/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:theorem/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:theorem/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:warden/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:warden/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:warden/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:weaver/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:weaver/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:weaver/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 23
+        "V004": 23,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:world-designer/scores/full-lifecycle.yaml": {
       "issues": {
-        "V004": 30
+        "V004": 30,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:world-designer/scores/lifecycle-integration.yaml": {
       "issues": {
-        "V004": 30
+        "V004": 30,
+        "V208": 2
       },
       "parse": "ok"
     },
     "agents:world-designer/scores/targeted-work.yaml": {
       "issues": {
-        "V004": 30
+        "V004": 30,
+        "V208": 2
       },
       "parse": "ok"
     },
@@ -765,6 +867,12 @@
     },
     "venue:examples/getting-started/worktree-isolation.yaml": {
       "issues": {},
+      "parse": "ok"
+    },
+    "venue:examples/patterns/convergence-loop.yaml": {
+      "issues": {
+        "V205": 1
+      },
       "parse": "ok"
     },
     "venue:examples/patterns/dead-letter-quarantine.yaml": {

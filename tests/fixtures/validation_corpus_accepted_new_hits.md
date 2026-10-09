@@ -18,3 +18,19 @@ The first V105 sweep found shell `${name}` and embedded Python f-string local
 variables, so that check was narrowed before this refresh. V218's first sweep
 matched directory arguments to `find` and `gh`; it was narrowed to explicit
 file-extension paths. Neither false-positive class was added to the baseline.
+
+Forge's flow branch adds `examples/patterns/convergence-loop.yaml` after the
+Sentinel capture. It was read and appended to the fixture inventory with its
+single V205 INFO finding (a file_exists-only validation); the sweep inventory
+now requires every current venue example and score YAML to have a fixture row.
+
+The flow join also introduced `FLOW_RESERVED_NAMES`, the shared built-in-name
+source required by Blueprint A7. Rebinding V208 to that source exposed exactly
+**204 WARN findings in 102 persistent-agent stock scores**: every file declares
+`stakes` and `thinking_method` under `prompt.variables`, while the prompt
+renderer overwrites both from separate `prompt.stakes` and
+`prompt.thinking_method` fields. This is a proved content-delivery defect,
+filed as `shared/findings/P1-bedrock-stock-prompt-variables-shadow-stakes.md`
+in the S3 Work workspace. The 102 rows each gain V208 ×2 in the baseline;
+the warnings remain visible and are not suppressed. T6 score migration owns
+their correction and a different agent must verify it.
