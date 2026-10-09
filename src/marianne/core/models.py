@@ -10,11 +10,29 @@ backward compatibility.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetStatus
+
+
+@dataclass(frozen=True)
+class CodeBlock:
+    """An extracted code block from agent output.
+
+    Owned by ``core`` so both the conductor's technique router (``daemon``)
+    and the musician-side code executor (``execution``) can share the shape
+    without ``execution`` importing from ``daemon`` (GH #226).
+
+    Attributes:
+        language: The language tag from the code fence (e.g., "python").
+        code: The code content between the fences.
+    """
+
+    language: str
+    code: str
 
 
 class JobCompletionSummary(BaseModel):

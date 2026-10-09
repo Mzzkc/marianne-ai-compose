@@ -13,11 +13,11 @@ if TYPE_CHECKING:
     import httpx
 
 from marianne.core.config.instruments import InstrumentRouteBinding
-from marianne.core.errors import ErrorCategory, ErrorClassifier
+from marianne.core.errors import ErrorCategory, ErrorClassifier, ExitReason
 from marianne.utils.time import utc_now
 
-# Type alias for exit reasons - provides exhaustive pattern matching
-ExitReason = Literal["completed", "timeout", "killed", "error"]
+# ``ExitReason`` is defined once in ``marianne.core.errors.codes`` (GH #247) and
+# re-exported here for the instrument layer's existing import sites.
 
 
 class _ResponseFormatUnset:

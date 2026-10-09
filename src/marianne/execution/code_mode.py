@@ -35,7 +35,7 @@ from enum import Enum
 from pathlib import Path
 
 from marianne.core.logging import get_logger
-from marianne.daemon.technique_router import CodeBlock
+from marianne.core.models import CodeBlock
 
 _logger = get_logger("execution.code_mode")
 

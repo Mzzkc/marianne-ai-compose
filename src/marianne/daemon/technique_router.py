@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from marianne.core.logging import get_logger
+from marianne.core.models import CodeBlock
 
 _logger = get_logger("daemon.technique_router")
 
@@ -64,18 +65,6 @@ class ClassifiedOutput:
     tool_calls: list[ToolCallRequest] = field(default_factory=list)
     a2a_requests: list[A2ARoutingRequest] = field(default_factory=list)
 
-
-@dataclass(frozen=True)
-class CodeBlock:
-    """An extracted code block from agent output.
-
-    Attributes:
-        language: The language tag from the code fence (e.g., "python").
-        code: The code content between the fences.
-    """
-
-    language: str
-    code: str
 
 
 @dataclass(frozen=True)
