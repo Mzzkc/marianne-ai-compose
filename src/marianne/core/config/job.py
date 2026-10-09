@@ -5,6 +5,7 @@ Defines the top-level JobConfig, SheetConfig, and PromptConfig models.
 
 from __future__ import annotations
 
+import re
 import warnings
 from enum import Enum
 from pathlib import Path
@@ -28,6 +29,15 @@ from marianne.core.config.execution import (
     SkipWhenCommand,
     StaleDetectionConfig,
     ValidationRule,
+)
+from marianne.core.config.flow import (
+    FlowConfigError,
+    FlowIssue,
+    LoopConfig,
+    SheetSpan,
+    SheetTriggerConfig,
+    canonical_span,
+    span_bounds,
 )
 from marianne.core.config.judgment import JudgmentConfig
 from marianne.core.config.learning import (
@@ -53,7 +63,8 @@ from marianne.core.config.workspace import (
     WorkspaceLifecycleConfig,
     default_workspace_for,
 )
-from marianne.core.constants import DEFAULT_INSTRUMENT_NAME, STATE_DB_FILENAME
+from marianne.core.constants import DEFAULT_INSTRUMENT_NAME, FLOW_RESERVED_NAMES, STATE_DB_FILENAME
+from marianne.core.expressions import ExpressionError, parse_expression
 
 
 class InjectionCategory(str, Enum):
@@ -268,6 +279,17 @@ class SheetConfig(BaseModel):
         ),
     )
 
+    loops: dict[SheetSpan, LoopConfig] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        description="Do-while loops keyed by inclusive sheet span, or by stage span under fan-out.",
+    )
+    triggers: dict[SheetSpan, SheetTriggerConfig] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        description="Per-attempt actions keyed by sheet or fan-out stage span.",
+    )
+
     # Per-sheet prompt extensions (GH#76) — additional directives for specific sheets
     prompt_extensions: dict[int, list[str]] = Field(
         default_factory=dict,
@@ -376,6 +398,34 @@ class SheetConfig(BaseModel):
         LOUDLY with the fix, instead of a generic pydantic error.
         """
         if isinstance(data, dict):
+            for section in ("loops", "triggers"):
+                mapping = data.get(section)
+                if not isinstance(mapping, dict):
+                    continue
+                normalized: dict[str, Any] = {}
+                original: dict[str, object] = {}
+                for raw, value in mapping.items():
+                    try:
+                        span = canonical_span(raw)
+                    except ValueError:
+                        # Pydantic reports the invalid key at its normal location.
+                        continue
+                    if span in normalized:
+                        raise FlowConfigError(
+                            (
+                                FlowIssue(
+                                    "V-FLOW-07",
+                                    span,
+                                    f"{section} keys {original[span]!r} and {raw!r} "
+                                    "name the same span",
+                                    "merge the two declarations",
+                                ),
+                            )
+                        )
+                    normalized[span] = value
+                    original[span] = raw
+                if len(normalized) == len(mapping):
+                    data[section] = normalized
             if "total_sheets" in data:
                 data.pop("total_sheets")
             if "skip_when_command" in data:
@@ -385,9 +435,7 @@ class SheetConfig(BaseModel):
                     "({sheet_num: {command: ..., description: ...}})."
                 )
             skip_when = data.get("skip_when")
-            if isinstance(skip_when, dict) and any(
-                isinstance(v, str) for v in skip_when.values()
-            ):
+            if isinstance(skip_when, dict) and any(isinstance(v, str) for v in skip_when.values()):
                 raise ValueError(
                     "Expression-based skip_when was removed (#119) — it was "
                     "never evaluated at runtime. skip_when now takes a "
@@ -399,48 +447,46 @@ class SheetConfig(BaseModel):
     @field_validator("per_sheet_instruments")
     @classmethod
     def validate_per_sheet_instruments(
-        cls, v: dict[int, str],
+        cls,
+        v: dict[int, str],
     ) -> dict[int, str]:
         """Validate per-sheet instrument assignments."""
         for sheet_num, instrument in v.items():
             if not isinstance(sheet_num, int) or sheet_num < 1:
                 raise ValueError(
-                    f"Per-sheet instrument key must be a positive integer, "
-                    f"got {sheet_num}"
+                    f"Per-sheet instrument key must be a positive integer, got {sheet_num}"
                 )
             if not instrument:
                 raise ValueError(
-                    f"Per-sheet instrument name for sheet {sheet_num} "
-                    f"must not be empty"
+                    f"Per-sheet instrument name for sheet {sheet_num} must not be empty"
                 )
         return v
 
     @field_validator("per_sheet_fallbacks")
     @classmethod
     def validate_per_sheet_fallbacks(
-        cls, v: dict[int, list[str]],
+        cls,
+        v: dict[int, list[str]],
     ) -> dict[int, list[str]]:
         """Validate per-sheet fallback chain keys are positive integers."""
         for sheet_num in v:
             if not isinstance(sheet_num, int) or sheet_num < 1:
                 raise ValueError(
-                    f"Per-sheet fallback key must be a positive integer, "
-                    f"got {sheet_num}"
+                    f"Per-sheet fallback key must be a positive integer, got {sheet_num}"
                 )
         return v
 
     @field_validator("instrument_map")
     @classmethod
     def validate_instrument_map(
-        cls, v: dict[str, list[int]],
+        cls,
+        v: dict[str, list[int]],
     ) -> dict[str, list[int]]:
         """Validate instrument_map: no duplicate sheets, valid names."""
         seen_sheets: dict[int, str] = {}
         for instrument, sheets in v.items():
             if not instrument:
-                raise ValueError(
-                    "Instrument name in instrument_map must not be empty"
-                )
+                raise ValueError("Instrument name in instrument_map must not be empty")
             for sheet_num in sheets:
                 if not isinstance(sheet_num, int) or sheet_num < 1:
                     raise ValueError(
@@ -470,9 +516,7 @@ class SheetConfig(BaseModel):
         When no fan-out was used, total_stages == total_sheets (identity).
         """
         if self.fan_out_stage_map:
-            return max(
-                meta["stage"] for meta in self.fan_out_stage_map.values()
-            )
+            return max(meta["stage"] for meta in self.fan_out_stage_map.values())
         return self.total_sheets
 
     def get_fan_out_metadata(self, sheet_num: int) -> FanOutMetadata:  # noqa: F821
@@ -503,13 +547,9 @@ class SheetConfig(BaseModel):
         """Validate fan_out field values."""
         for stage, count in v.items():
             if not isinstance(stage, int) or stage < 1:
-                raise ValueError(
-                    f"Fan-out stage must be positive integer, got {stage}"
-                )
+                raise ValueError(f"Fan-out stage must be positive integer, got {stage}")
             if not isinstance(count, int) or count < 1:
-                raise ValueError(
-                    f"Fan-out count for stage {stage} must be >= 1, got {count}"
-                )
+                raise ValueError(f"Fan-out count for stage {stage} must be >= 1, got {count}")
         return v
 
     @field_validator("dependencies")
@@ -583,6 +623,32 @@ class SheetConfig(BaseModel):
                     expanded_skip_when[sheet_num] = cmd
             self.skip_when = expanded_skip_when
 
+        def concrete_span(span: str) -> str:
+            first_stage, last_stage = span_bounds(span)
+            first = expansion.stage_sheets.get(first_stage)
+            last = expansion.stage_sheets.get(last_stage)
+            if not first or not last:
+                return span  # the positioned range check below reports it
+            start, end = first[0], last[-1]
+            return str(start) if start == end else f"{start}-{end}"
+
+        if self.loops:
+            self.loops = {concrete_span(span): loop for span, loop in self.loops.items()}
+        if self.triggers:
+            expanded_triggers: dict[str, SheetTriggerConfig] = {}
+            for span, trigger in self.triggers.items():
+                copied = trigger.model_copy(deep=True)
+                for actions in (copied.on_success, copied.on_fail):
+                    for action in actions or ():
+                        if action.goto is not None:
+                            stage_sheets = expansion.stage_sheets.get(action.goto)
+                            if stage_sheets:
+                                action.goto = stage_sheets[0]
+                        if action.skip is not None:
+                            action.skip = concrete_span(action.skip)
+                expanded_triggers[concrete_span(span)] = copied
+            self.triggers = expanded_triggers
+
         # Store serializable metadata for resume
         self.fan_out_stage_map = {
             sheet_num: {
@@ -599,6 +665,108 @@ class SheetConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def validate_flow(self) -> SheetConfig:
+        """Collect flow load errors once, after stage keys are concrete."""
+        if not self.loops and not self.triggers:
+            return self
+        issues: list[FlowIssue] = []
+        total = self.total_sheets
+        spans: dict[str, tuple[int, int]] = {}
+        names: dict[str, str] = {}
+        for section, mapping in (("loops", self.loops), ("triggers", self.triggers)):
+            for span in mapping or {}:
+                start, end = span_bounds(span)
+                if start < 1 or end > total:
+                    issues.append(
+                        FlowIssue("V-FLOW-06", span, f"{section} span {span} is outside 1-{total}")
+                    )
+                if section == "loops":
+                    spans[span] = (start, end)
+        for span, loop in (self.loops or {}).items():
+            if loop.count is None and loop.until is None:
+                issues.append(
+                    FlowIssue("V-FLOW-22", span, f"loop {span} needs until, count, or both")
+                )
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", loop.index):
+                issues.append(
+                    FlowIssue(
+                        "V-FLOW-10", span, f"loop index {loop.index!r} must be lowercase ASCII"
+                    )
+                )
+            if loop.index in FLOW_RESERVED_NAMES:
+                issues.append(
+                    FlowIssue(
+                        "V-FLOW-10", span, f"loop index {loop.index!r} collides with a built-in"
+                    )
+                )
+            if loop.index in names:
+                issues.append(
+                    FlowIssue(
+                        "V-FLOW-09",
+                        span,
+                        f"loop index {loop.index!r} is also used by loop {names[loop.index]}",
+                    )
+                )
+            names[loop.index] = span
+        for left, (a, b) in spans.items():
+            for right, (c, d) in spans.items():
+                if left >= right:
+                    continue
+                if max(a, c) <= min(b, d) and not ((a <= c and d <= b) or (c <= a and b <= d)):
+                    issues.append(
+                        FlowIssue(
+                            "V-FLOW-11", left, f"loops {left} and {right} overlap without nesting"
+                        )
+                    )
+        for span, loop in (self.loops or {}).items():
+            if loop.until is None:
+                continue
+            try:
+                refs = parse_expression(loop.until).references()
+            except ExpressionError as exc:
+                issues.append(FlowIssue("V-FLOW-01", span, f"loop {span}: {exc}", exc.hint))
+                continue
+            for reserved in refs.reserved:
+                issues.append(
+                    FlowIssue("V-FLOW-02", span, f"{reserved}() is reserved for a future release")
+                )
+            own_start, own_end = spans[span]
+            for name in refs.loops:
+                owner = names.get(name)
+                if owner is None or not (
+                    spans[owner][0] <= own_start and own_end <= spans[owner][1]
+                ):
+                    issues.append(
+                        FlowIssue("V-FLOW-04", span, f"loop.{name} is unavailable in loop {span}")
+                    )
+            for num in refs.sheets:
+                if not 1 <= num <= total:
+                    issues.append(FlowIssue("V-FLOW-05", span, f"sheet({num}) does not exist"))
+        for span, trigger in (self.triggers or {}).items():
+            for action in (trigger.on_success or []) + (trigger.on_fail or []):
+                if action.goto is not None and not 1 <= action.goto <= total:
+                    issues.append(
+                        FlowIssue(
+                            "V-FLOW-08",
+                            span,
+                            f"goto {action.goto} targets a sheet that does not exist",
+                        )
+                    )
+                if action.skip is not None:
+                    start, end = span_bounds(action.skip)
+                    if start < 1 or end > total:
+                        issues.append(
+                            FlowIssue(
+                                "V-FLOW-08",
+                                span,
+                                f"skip {action.skip} targets a sheet that does not exist",
+                            )
+                        )
+        if issues:
+            raise FlowConfigError(tuple(issues))
+        return self
+
+    @model_validator(mode="after")
     def validate_dependency_range(self) -> SheetConfig:
         """Validate that dependency sheet numbers are within the valid range.
 
@@ -610,8 +778,7 @@ class SheetConfig(BaseModel):
         for sheet_num, deps in self.dependencies.items():
             if sheet_num < 1 or sheet_num > max_sheet:
                 raise ValueError(
-                    f"Dependency key sheet {sheet_num} is out of range "
-                    f"(valid: 1-{max_sheet})"
+                    f"Dependency key sheet {sheet_num} is out of range (valid: 1-{max_sheet})"
                 )
             for dep in deps:
                 if dep < 1 or dep > max_sheet:
@@ -663,9 +830,7 @@ class PromptConfig(BaseModel):
     def at_least_one_template(self) -> PromptConfig:
         """Warn when no template source is provided (falls back to default prompt)."""
         if self.template is not None and self.template_file is not None:
-            raise ValueError(
-                "PromptConfig accepts 'template' or 'template_file', not both"
-            )
+            raise ValueError("PromptConfig accepts 'template' or 'template_file', not both")
         if self.template is None and self.template_file is None:
             warnings.warn(
                 "PromptConfig has neither 'template' nor 'template_file'. "
@@ -913,15 +1078,13 @@ class JobConfig(BaseModel):
     @field_validator("movements")
     @classmethod
     def _validate_movement_keys(
-        cls, v: dict[int, MovementDef],
+        cls,
+        v: dict[int, MovementDef],
     ) -> dict[int, MovementDef]:
         """Validate movement numbers are positive integers."""
         for movement_num in v:
             if not isinstance(movement_num, int) or movement_num < 1:
-                raise ValueError(
-                    f"Movement number must be a positive integer, "
-                    f"got {movement_num}"
-                )
+                raise ValueError(f"Movement number must be a positive integer, got {movement_num}")
         return v
 
     @model_validator(mode="after")
@@ -1009,9 +1172,7 @@ class JobConfig(BaseModel):
         return config
 
     @classmethod
-    def from_yaml_bytes(
-        cls, data: bytes, *, source_path: Path | str
-    ) -> JobConfig:
+    def from_yaml_bytes(cls, data: bytes, *, source_path: Path | str) -> JobConfig:
         """Load job configuration from exact bytes, attributed to ``source_path``.
 
         Semantics match :meth:`from_yaml` (workspace pre-resolution relative

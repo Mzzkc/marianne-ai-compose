@@ -45,6 +45,67 @@ def positional_template_variables(
     return {**new, **{TERMINOLOGY_ALIASES[k]: v for k, v in new.items()}}
 
 
+# The same source of positional names feeds both emitters. Keep non-positional
+# emitters and expression/Jinja roots here so loop indices cannot shadow them.
+FLOW_RESERVED_NAMES = frozenset(
+    positional_template_variables(
+        movement=1,
+        voice=1,
+        voice_count=1,
+        total_movements=1,
+    )
+) | frozenset(
+    {
+        "workspace",
+        "sheet_num",
+        "total_sheets",
+        "instrument_name",
+        "score_dir",
+        "start_item",
+        "end_item",
+        "stakes",
+        "thinking_method",
+        "native_execution",
+        "previous_outputs",
+        "previous_files",
+        "injected_context",
+        "injected_skills",
+        "injected_tools",
+        "skipped_upstream",
+        "loop",
+        "loops",
+        "var",
+        "sheet",
+        "file",
+        "validation",
+        "output",
+        "and",
+        "or",
+        "not",
+        "in",
+        "is",
+        "if",
+        "else",
+        "elif",
+        "for",
+        "true",
+        "false",
+        "none",
+        "null",
+        "self",
+        "caller",
+        "varargs",
+        "kwargs",
+        "range",
+        "dict",
+        "lipsum",
+        "cycler",
+        "joiner",
+        "namespace",
+    }
+)
+
+
 # The instrument used when a score names none. Claude Code is Marianne's
 # reference instrument (and runs interactively by default).
 DEFAULT_INSTRUMENT_NAME = "claude-code"
@@ -83,6 +144,7 @@ def active_registry_db_path() -> Path:
     if is_clone_active():
         return resolve_clone_paths(get_clone_name()).state_db.expanduser()
     return DAEMON_STATE_DB_PATH.expanduser()
+
 
 VALIDATION_PASS_RATE_KEY = "validation_pass_rate"
 """Standard key for validation pass rate in checkpoint/job data."""
