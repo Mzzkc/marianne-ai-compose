@@ -1278,7 +1278,7 @@ Per-sheet fallbacks **replace** inherited chains rather than merging with them.
 If sheet 4 specifies `[aider]`, it will only fall back to aider — not to the
 movement-level or score-level chain.
 
-`mzt validate` warns (V211) when a fallback name doesn't match a known instrument
+`mzt validate` reports V211 ERROR when a fallback name doesn't match a known instrument
 profile or score alias.
 
 ---
@@ -1808,7 +1808,7 @@ a file through `prelude` or `cadenzas` when its contents should be injected.
 
 ### Validation
 
-`mzt validate` checks static prelude/cadenza file paths (V108 warning)
+`mzt validate` checks static prelude/cadenza file paths (V108 ERROR)
 but skips Jinja-templated paths that can't be resolved before execution.
 
 ---
@@ -2049,8 +2049,14 @@ mzt validate my-score.yaml
 
 Exit codes:
 - `0`: Valid (warnings/info are OK)
-- `1`: Invalid (errors found)
-- `2`: Cannot validate (file not found, YAML unparseable)
+- `1`: Invalid (errors found, or unsuppressed warnings with `--strict`)
+- `2`: Cannot validate (unreadable/non-score YAML, malformed YAML, genuine schema failure)
+
+Unknown score YAML fields are reported as V010 WARNING with a suggested field
+when the name is close, or V011 INFO otherwise. `mzt run` also warns when it
+ignores an unknown field. Add `validate: {suppress: [Vxxx]}` only for reviewed
+WARN/INFO codes; ERROR codes cannot be suppressed. `--errors-only` filters the
+display without changing exit behavior, while `--verbose` shows INFO findings.
 
 For JSON output (CI/CD integration):
 
@@ -2331,8 +2337,8 @@ behavior it no longer has.
   assignment. `backend:` did not.
 - **Plugin instruments.** Custom CLI tools can be added as YAML profiles in
   `~/.marianne/instruments/` or `.marianne/instruments/`.
-- **Validation.** `mzt validate` warns when an instrument name is not recognized
-  (V210). `backend.type` typos failed silently at runtime.
+- **Validation.** `mzt validate` reports V210 ERROR when an instrument name
+  cannot resolve. `backend.type` typos failed silently at runtime.
 - **Named aliases.** The `instruments:` key lets you declare reusable instrument
   configurations referenced by name across your score.
 - **Interactive execution.** Instruments with verified TUI support (claude-code

@@ -533,65 +533,44 @@ Performs comprehensive validation including YAML syntax, Pydantic schema validat
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--json` | `-j` | false | Output validation results as JSON |
-| `--verbose` | `-v` | false | Show detailed validation output |
+| `--verbose` | `-v` | false | Include INFO findings and a fuller rendering preview |
+| `--strict` | | false | Exit 1 for any unsuppressed WARNING |
+| `--errors-only` | | false | Show only ERROR findings; exit behavior is unchanged |
 
 #### Exit Codes
 
 | Code | Meaning |
 |------|---------|
-| 0 | Valid (warnings/info OK) |
-| 1 | Invalid (one or more errors) |
-| 2 | Cannot validate (file not found, YAML unparseable) |
+| 0 | No ERROR findings; warnings are allowed unless `--strict` is set |
+| 1 | ERROR findings, or unsuppressed WARNING findings with `--strict` |
+| 2 | Cannot validate: unreadable/non-score YAML, malformed YAML, or genuine schema failure |
 
 #### Validation Checks
 
-**Errors** (block execution):
+Existing checks keep their V-codes. S3 adds these findings and changes the
+tiers shown below. The complete emitted set is exercised by the validator's
+code-registry and corpus-sweep tests.
 
-| Code | Description |
-|------|-------------|
-| V001 | Jinja syntax errors in templates |
-| V002 | Workspace parent directory missing |
-| V003 | Template file missing |
-| V005 | Working directory invalid |
-| V007 | Invalid regex patterns in validations |
-| V008 | Validation rules missing required fields |
-| V009 | Evolved score references previous version paths |
-| V305 | Bash `${#...}` length syntax in Jinja templates |
-| V306 | `path_in_scope` static preflight escape |
-| V307 | Raw `cli` prompt renders markdown/prose or invalid bash |
+| Tier | Codes | Meaning |
+|------|-------|---------|
+| ERROR | V012 | Invalid `validate.suppress` entry (unknown code or ERROR-tier code) |
+| ERROR | V105, V108 | Undefined validation variable; missing static prelude/cadenza input |
+| ERROR | V209, V214, V216, V217 | Dependency cycle; expanded-sheet incoherence; missing cadenza target; missing or invalid static concert target |
+| ERROR | V210, V211 | Instrument or fallback name cannot resolve to a known profile or score alias |
+| ERROR | V221–V223, V227, V229, V312–V314, V316–V317, V320 | Flow load errors and invalid flow references, reported with a code and hint rather than a raw schema trace |
+| WARNING | V010, V208, V219–V220, V224, V226, V228, V231–V232, V315 | Likely typo; built-in shadowing (deprecation); advisory structure and flow risks |
+| INFO | V011, V104, V110, V218, V225 | Distant unknown field; timeout above 7200 seconds (2 hours); unused variable; ambiguous file reference; mixed fan-out keying |
 
-**Warnings** (flag potential issues):
+V107's warning on validation output paths is retired: an output need not exist
+before a job runs. INFO findings appear in terminal output only with
+`--verbose`. `--json` includes them by default.
 
-| Code | Description |
-|------|-------------|
-| V101 | Undefined template variables |
-| V102 | Fan-out template uses string filters Jinja cannot apply |
-| V103 | Very short timeout (< 60s) |
-| V106 | Empty pattern in validation rule |
-| V107 | Referenced skill files missing |
-| V108 | Prelude/cadenza file paths missing |
-| V201 | Jinja `{{ }}` syntax in validation paths (should use `{ }`) |
-| V202 | Format-string `{var}` syntax in Jinja templates (should use `{{ var }}`) |
-| V206 | Fan-out without dependencies defined |
-| V208 | User variable shadows a built-in template variable |
-| V210 | Instrument name not found in known profiles |
-| V211 | Instrument fallback name not found in known profiles |
-| V213 | `interactive: true` set on an instrument without interactive support |
-| V212 | `skip_when` keys reference out-of-range sheets |
-| V307 | Raw shell sheet can fall back to non-raw LLM-style instruments |
-| V308 | Fan-out movement has partial concrete instrument assignment coverage |
-| V309 | Exact section-label validation is absent from the prompt template |
-| V004 | Absolute path under the user's home directory (use `~`, `{score_dir}`, `{workspace}`, or relative) |
-| V215 | No usable instrument after fallback resolution |
-
-**Info** (suggestions):
-
-| Code | Description |
-|------|-------------|
-| V104 | Very long timeout (> 4h) |
-| V203 | No validation rules defined |
-| V205 | Only `file_exists` validations (weak acceptance criteria) |
-| V207 | Fan-out without parallel execution enabled |
+`validate.suppress: [Vxxx]` may hide WARN and INFO findings. Suppressed findings
+leave `issues` and the visible counts and appear as `{check_id, count}` entries
+in `suppressed`. Suppressing an ERROR or unknown code raises V012 ERROR, so it
+cannot make an invalid score pass. `--strict` ignores suppressed warnings.
+The JSON keys `valid`, `error_count`, `warning_count`, `info_count`, `issues`,
+and `rendering` retain their meanings; `summary` and `suppressed` are additive.
 
 #### Examples
 
@@ -604,6 +583,9 @@ mzt validate job.yaml --verbose
 
 # JSON output for CI/CD
 mzt validate job.yaml --json
+
+# Fail CI on new warnings while acknowledging reviewed advisory codes
+mzt validate job.yaml --strict
 ```
 
 ---

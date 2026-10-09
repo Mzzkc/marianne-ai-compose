@@ -547,7 +547,7 @@ class TestValidateYamlAdversarial:
 
     @pytest.mark.adversarial
     def test_validate_with_unknown_extra_fields(self, tmp_path: Path) -> None:
-        """Extra unrecognized fields must be rejected (extra='forbid')."""
+        """Unknown score fields surface through the tolerant validation walk."""
         score = tmp_path / "extra.yaml"
         score.write_text(
             "name: test\n"
@@ -560,9 +560,10 @@ class TestValidateYamlAdversarial:
             "unknown_field: some_value\n"
             "another_random_key: 42\n"
         )
-        result = runner.invoke(app, ["validate", str(score)])
+        result = runner.invoke(app, ["validate", str(score), "--verbose"])
         assert "Traceback" not in result.stdout
-        assert result.exit_code == 2  # Unknown fields are now errors
+        assert result.exit_code == 0
+        assert "V011" in result.stdout
 
 
 # =============================================================================

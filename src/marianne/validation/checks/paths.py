@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from marianne.core.config import JobConfig
-from marianne.core.config.job import InjectionCategory, InjectionItem
+from marianne.core.config.job import InjectionItem
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml, resolve_path
 
@@ -80,8 +80,7 @@ class ValidationPathScopeCheck:
                         check_id=self.check_id,
                         severity=self.severity,
                         message=(
-                            "path_in_scope validation resolves outside its "
-                            f"allowed scope: {path}"
+                            f"path_in_scope validation resolves outside its allowed scope: {path}"
                         ),
                         line=find_line_in_yaml(raw_yaml, rule.path),
                         suggestion=(
@@ -362,7 +361,7 @@ class PreludeCadenzaFileCheck:
 
     Only checks non-templated paths (no Jinja ``{{``). Templated paths
     are resolved at execution time and cannot be validated statically.
-    This is a WARNING because files might be created before execution.
+    Definite input files must exist before execution.
     """
 
     @property
@@ -371,7 +370,7 @@ class PreludeCadenzaFileCheck:
 
     @property
     def severity(self) -> ValidationSeverity:
-        return ValidationSeverity.WARNING
+        return ValidationSeverity.ERROR
 
     @property
     def description(self) -> str:
@@ -430,16 +429,10 @@ class PreludeCadenzaFileCheck:
                 return issues  # Skip templated paths
             dir_path = resolve_path(Path(directory), config_path)
             if not dir_path.is_dir():
-                # INFO for context (demo mode), WARNING for skill/tool
-                severity = (
-                    ValidationSeverity.INFO
-                    if item.as_ == InjectionCategory.CONTEXT
-                    else ValidationSeverity.WARNING
-                )
                 issues.append(
                     ValidationIssue(
                         check_id=self.check_id,
-                        severity=severity,
+                        severity=self.severity,
                         message=f"Injection directory from {source} not found: {dir_path}",
                         line=find_line_in_yaml(raw_yaml, directory),
                         suggestion="Create the directory or fix the path",
@@ -519,8 +512,7 @@ class SkillFilesExistCheck:
                             check_id=self.check_id,
                             severity=self.severity,
                             message=(
-                                f"File referenced in validation {i + 1}"
-                                f" does not exist: {file_path}"
+                                f"File referenced in validation {i + 1} does not exist: {file_path}"
                             ),
                             suggestion="Ensure file will be created before this validation runs",
                             metadata={

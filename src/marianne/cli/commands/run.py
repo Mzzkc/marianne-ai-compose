@@ -185,6 +185,13 @@ def run(
             )
         raise typer.Exit(1) from None
 
+    if config.unknown_fields:
+        names = ", ".join(
+            f"{field.path + '.' if field.path else ''}{field.key}"
+            for field in config.unknown_fields
+        )
+        typer.echo(f"Warning: ignored unknown score field(s): {names}", err=True)
+
     # Validate start_sheet (must be positive if provided)
     start_sheet = validate_start_sheet(start_sheet)
 
@@ -196,15 +203,17 @@ def run(
     if not is_quiet() and not json_output:
         instrument_display = config.effective_instrument_name
         recurring_label = " \\[recurring]" if config.schedule is not None else ""
-        console.print(Panel(
-            f"[bold]{config.name}[/bold]{recurring_label}\n"
-            f"{config.description or 'No description'}\n\n"
-            f"Instrument: {instrument_display}\n"
-            f"Sheets: {config.sheet.total_sheets} "
-            f"({config.sheet.size} items each)\n"
-            f"Workspace: {config.workspace}",
-            title="Score Configuration",
-        ))
+        console.print(
+            Panel(
+                f"[bold]{config.name}[/bold]{recurring_label}\n"
+                f"{config.description or 'No description'}\n\n"
+                f"Instrument: {instrument_display}\n"
+                f"Sheets: {config.sheet.total_sheets} "
+                f"({config.sheet.size} items each)\n"
+                f"Workspace: {config.workspace}",
+                title="Score Configuration",
+            )
+        )
 
     # Cost warning — alert users when cost tracking is disabled
     if not is_quiet() and not json_output and not config.cost_limits.enabled:
@@ -222,18 +231,25 @@ def run(
             console.print("\n[yellow]Dry run - not executing[/yellow]")
             _show_dry_run(config, config_file)
         else:
-            output_json({
-                "dry_run": True,
-                "job_name": config.name,
-                "total_sheets": config.sheet.total_sheets,
-                "workspace": str(config.workspace),
-            })
+            output_json(
+                {
+                    "dry_run": True,
+                    "job_name": config.name,
+                    "total_sheets": config.sheet.total_sheets,
+                    "workspace": str(config.workspace),
+                }
+            )
         return
 
     # Route through daemon (required)
     routed = asyncio.run(
         _try_daemon_submit(
-            config_file, workspace, fresh, self_healing, yes, json_output,
+            config_file,
+            workspace,
+            fresh,
+            self_healing,
+            yes,
+            json_output,
             start_sheet=start_sheet,
             escalation=escalation,
             runtime_vars=runtime_vars,
@@ -244,11 +260,13 @@ def run(
 
     # Daemon not available or submission failed
     if json_output:
-        output_json({
-            "error": "Marianne conductor is not running. Start with: mzt start",
-            "error_type": "DaemonNotRunningError",
-            "running_state": "absent",
-        })
+        output_json(
+            {
+                "error": "Marianne conductor is not running. Start with: mzt start",
+                "error_type": "DaemonNotRunningError",
+                "running_state": "absent",
+            }
+        )
     else:
         output_error(
             "Marianne conductor is not running.",
@@ -320,9 +338,7 @@ async def _try_daemon_submit(
                 output_json(result)
             else:
                 rejection = (
-                    f"Conductor rejected score: {msg}"
-                    if msg
-                    else "Conductor rejected score."
+                    f"Conductor rejected score: {msg}" if msg else "Conductor rejected score."
                 )
                 output_error(
                     rejection,
@@ -338,9 +354,7 @@ async def _try_daemon_submit(
         early: dict[str, Any] | None = None
         if not fresh:
             early = await await_early_failure(job_id)
-        early_status = (
-            early.get("status", "") if isinstance(early, dict) else ""
-        )
+        early_status = early.get("status", "") if isinstance(early, dict) else ""
         early_failed = early_status in ("failed", "cancelled")
 
         if json_output:
@@ -362,9 +376,7 @@ async def _try_daemon_submit(
             console.print(f"[green]Score submitted to conductor:[/green] {job_id}")
             if msg:
                 console.print(f"  {msg}")
-            console.print(
-                f"\n[dim]Monitor with:[/dim] mzt status {job_id} --watch"
-            )
+            console.print(f"\n[dim]Monitor with:[/dim] mzt status {job_id} --watch")
 
         return True
     except DaemonAccessDeniedError as exc:
@@ -411,17 +423,13 @@ def _rejection_hints(msg: str, *, fresh: bool = False) -> list[str]:
             "Wait for running jobs to complete or reduce concurrent work.",
         ]
 
-    if "already" in msg_lower and (
-        "running" in msg_lower or "queued" in msg_lower
-    ):
+    if "already" in msg_lower and ("running" in msg_lower or "queued" in msg_lower):
         hints = [
             "A score with this name is already active.",
             "Pause or cancel it first: mzt pause <id> / mzt cancel <id>",
         ]
         if fresh:
-            hints.append(
-                "Clear the stale entry: mzt clear --score <id>"
-            )
+            hints.append("Clear the stale entry: mzt clear --score <id>")
         else:
             hints.append("Or wait for it to finish.")
         return hints
@@ -432,9 +440,7 @@ def _rejection_hints(msg: str, *, fresh: bool = False) -> list[str]:
             "Validate it with: mzt validate <file>",
         ]
 
-    if "workspace" in msg_lower and (
-        "not exist" in msg_lower or "not writable" in msg_lower
-    ):
+    if "workspace" in msg_lower and ("not exist" in msg_lower or "not writable" in msg_lower):
         return [
             "The workspace path is invalid.",
             "Create the directory or use --workspace to override.",
@@ -466,21 +472,19 @@ def _handle_pending_response(
     start automatically when rate limits clear.
     """
     if json_output:
-        output_json({
-            "job_id": job_id,
-            "status": "pending",
-            "message": message,
-        })
+        output_json(
+            {
+                "job_id": job_id,
+                "status": "pending",
+                "message": message,
+            }
+        )
     else:
         display_msg = message or "Score queued as pending — starts when rate limits clear."
         console.print(f"[yellow]Score queued as pending:[/yellow] {job_id}")
         console.print(f"  {display_msg}")
-        console.print(
-            f"\n[dim]Monitor with:[/dim] mzt status {job_id} --watch"
-        )
-        console.print(
-            "[dim]Cancel with:[/dim]  mzt cancel " + job_id
-        )
+        console.print(f"\n[dim]Monitor with:[/dim] mzt status {job_id} --watch")
+        console.print("[dim]Cancel with:[/dim]  mzt cancel " + job_id)
 
 
 def _run_fleet(
@@ -514,10 +518,7 @@ def _run_fleet(
         unsupported.append("--escalation")
 
     if unsupported:
-        message = (
-            "Fleet runs do not yet support score-specific options: "
-            + ", ".join(unsupported)
-        )
+        message = "Fleet runs do not yet support score-specific options: " + ", ".join(unsupported)
         if json_output:
             output_json({"error": message})
         else:
@@ -556,16 +557,15 @@ def _run_fleet(
 
     if dry_run:
         if json_output:
-            output_json({
-                "dry_run": True,
-                "type": "fleet",
-                "fleet_name": fleet_config.name,
-                "scores": len(fleet_config.scores),
-                "groups": {
-                    name: cfg.depends_on
-                    for name, cfg in fleet_config.groups.items()
-                },
-            })
+            output_json(
+                {
+                    "dry_run": True,
+                    "type": "fleet",
+                    "fleet_name": fleet_config.name,
+                    "scores": len(fleet_config.scores),
+                    "groups": {name: cfg.depends_on for name, cfg in fleet_config.groups.items()},
+                }
+            )
         else:
             console.print("\n[yellow]Dry run - not executing[/yellow]")
             _show_fleet_dry_run(fleet_config, config_file)
@@ -588,11 +588,13 @@ def _run_fleet(
         return
 
     if json_output:
-        output_json({
-            "error": "Marianne conductor is not running. Start with: mzt start",
-            "error_type": "DaemonNotRunningError",
-            "running_state": "absent",
-        })
+        output_json(
+            {
+                "error": "Marianne conductor is not running. Start with: mzt start",
+                "error_type": "DaemonNotRunningError",
+                "running_state": "absent",
+            }
+        )
     else:
         output_error(
             "Marianne conductor is not running.",
@@ -612,12 +614,14 @@ def _load_fleet_config(config_file: Path) -> FleetConfig:
 
 def _show_fleet_dry_run(fleet_config: FleetConfig, config_path: Path) -> None:
     """Show what would be submitted for a fleet config."""
-    console.print(Panel(
-        f"[bold]{fleet_config.name}[/bold]\n"
-        f"Scores: {len(fleet_config.scores)}\n"
-        f"Config: {config_path}",
-        title="Fleet Configuration",
-    ))
+    console.print(
+        Panel(
+            f"[bold]{fleet_config.name}[/bold]\n"
+            f"Scores: {len(fleet_config.scores)}\n"
+            f"Config: {config_path}",
+            title="Fleet Configuration",
+        )
+    )
 
     table = Table(title="Fleet Plan")
     table.add_column("Score", style="cyan")

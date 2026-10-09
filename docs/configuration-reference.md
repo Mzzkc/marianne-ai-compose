@@ -170,8 +170,8 @@ sheet:
 2. `movements.N.instrument_fallbacks` — per-movement default
 3. Top-level `instrument_fallbacks` — score default
 
-The `mzt validate` command checks fallback names against known profiles (V211)
-and warns if any name doesn't match a registered instrument.
+The `mzt validate` command checks fallback names against known profiles and
+score aliases (V211 ERROR). An unresolvable fallback blocks validation.
 
 ---
 
@@ -429,7 +429,7 @@ sheet:
 - A common pattern: a small `cli` preflight stage curates/copies relevant files into one flat directory that a later sheet's `directory:` cadenza points at.
 - Missing files for `context` category log a warning and are skipped — unless `required: true`, which fails the sheet before execution.
 - Missing files for `skill` or `tool` category log an error and are skipped — set `required: true` to make the failure terminal.
-- `mzt validate` checks static file paths (V108 warning) but skips Jinja-templated paths that can't be resolved at validation time.
+- `mzt validate` checks static prelude/cadenza input paths (V108 ERROR) but skips Jinja-templated paths that cannot be resolved at validation time.
 
 ---
 
@@ -698,6 +698,23 @@ cross_sheet:
 ```
 
 ---
+
+## validate
+
+*Source: `src/marianne/core/config/job.py` — `ValidateConfig`*
+
+Score-local acknowledgement of advisory validation findings:
+
+```yaml
+validate:
+  suppress: [V101, V208]
+```
+
+Only known WARN and INFO codes may be suppressed. Listing an ERROR code or an
+unknown code emits V012 ERROR. Suppressed warnings do not fail `mzt validate
+--strict`; they are listed in JSON `suppressed` while the existing `valid` and
+issue-count keys retain their meanings. Use suppression only after reading the
+finding in the score's context.
 
 ## validations
 

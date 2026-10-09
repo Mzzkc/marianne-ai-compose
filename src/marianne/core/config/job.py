@@ -12,7 +12,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 if TYPE_CHECKING:
     from marianne.core.fan_out import FanOutMetadata  # noqa: F401
@@ -53,6 +61,7 @@ from marianne.core.config.orchestration import (
     PostSuccessHookConfig,
     ScheduleConfig,
 )
+from marianne.core.config.schema_walk import UnknownScoreField, strip_unknown_score_fields
 from marianne.core.config.spec import SpecCorpusConfig
 from marianne.core.config.techniques import TechniqueConfig
 from marianne.core.config.workspace import (
@@ -882,10 +891,25 @@ def _apply_default_workspace(data: dict[str, Any]) -> None:
         data["workspace"] = str(ws)
 
 
+class ValidateConfig(BaseModel):
+    """Score-local acknowledgement of advisory validator findings."""
+
+    model_config = ConfigDict(extra="forbid")
+    suppress: list[str] = Field(default_factory=list)
+
+
 class JobConfig(BaseModel):
     """Complete configuration for an orchestration job."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    _unknown_fields: list[UnknownScoreField] = PrivateAttr(default_factory=list)
+
+    @property
+    def unknown_fields(self) -> tuple[UnknownScoreField, ...]:
+        """Fields removed by the tolerant score-file loader."""
+        return tuple(self._unknown_fields)
+
+    validation_settings: ValidateConfig = Field(default_factory=ValidateConfig, alias="validate")
 
     name: str = Field(description="Unique job name")
     description: str | None = Field(default=None, description="Human-readable description")
@@ -1216,7 +1240,9 @@ class JobConfig(BaseModel):
             # A loaded score that omits workspace gets a conductor-managed one
             # under ~/workspaces/<name> (#58) — workspaces "just work".
             _apply_default_workspace(data)
-        config = cls.model_validate(data)
+        clean, unknown = strip_unknown_score_fields(data, cls)
+        config = cls.model_validate(clean)
+        config._unknown_fields = unknown
         config.source_path = path.resolve()
         return config
 
@@ -1247,7 +1273,9 @@ class JobConfig(BaseModel):
                 parsed["workspace"] = str((path.resolve().parent / ws).resolve())
         else:
             _apply_default_workspace(parsed)
-        config = cls.model_validate(parsed)
+        clean, unknown = strip_unknown_score_fields(parsed, cls)
+        config = cls.model_validate(clean)
+        config._unknown_fields = unknown
         config.source_path = path.resolve()
         return config
 
@@ -1264,7 +1292,10 @@ class JobConfig(BaseModel):
         # under ~/workspaces/<name> (#58). Explicit relative paths are left to
         # the model's _resolve_workspace (resolved against CWD), as before.
         _apply_default_workspace(data)
-        return cls.model_validate(data)
+        clean, unknown = strip_unknown_score_fields(data, cls)
+        config = cls.model_validate(clean)
+        config._unknown_fields = unknown
+        return config
 
     def get_state_path(self) -> Path:
         """Get the resolved state path."""

@@ -500,8 +500,8 @@ class TestInstrumentFallbackCheckProperties:
     def test_check_id(self, fallback_check: InstrumentFallbackCheck) -> None:
         assert fallback_check.check_id == "V211"
 
-    def test_severity_is_warning(self, fallback_check: InstrumentFallbackCheck) -> None:
-        assert fallback_check.severity == ValidationSeverity.WARNING
+    def test_severity_is_error(self, fallback_check: InstrumentFallbackCheck) -> None:
+        assert fallback_check.severity == ValidationSeverity.ERROR
 
     def test_description_mentions_fallback(self, fallback_check: InstrumentFallbackCheck) -> None:
         assert "fallback" in fallback_check.description.lower()
@@ -574,7 +574,7 @@ class TestInstrumentFallbackCheckUnknown:
         issues = fallback_check.check(config, config_path, yaml_text)
         assert len(issues) == 1
         assert issues[0].check_id == "V211"
-        assert issues[0].severity == ValidationSeverity.WARNING
+        assert issues[0].severity == ValidationSeverity.ERROR
         assert "nonexistent-instrument" in issues[0].message
 
     def test_unknown_movement_level_fallback(

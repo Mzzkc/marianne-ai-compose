@@ -72,6 +72,8 @@ class ValidationReporter:
         issues: list[ValidationIssue],
         config_name: str,
         show_passed: bool = True,
+        verbose: bool = True,
+        errors_only: bool = False,
     ) -> None:
         """Output validation results to terminal with formatting.
 
@@ -84,11 +86,17 @@ class ValidationReporter:
 
         # Count by severity
         errors = [i for i in issues if i.severity == ValidationSeverity.ERROR]
-        warnings = [i for i in issues if i.severity == ValidationSeverity.WARNING]
-        infos = [i for i in issues if i.severity == ValidationSeverity.INFO]
+        warnings = (
+            [] if errors_only else [i for i in issues if i.severity == ValidationSeverity.WARNING]
+        )
+        infos = (
+            []
+            if errors_only or not verbose
+            else [i for i in issues if i.severity == ValidationSeverity.INFO]
+        )
 
         # Print header based on results
-        if not issues:
+        if not (errors or warnings or infos):
             self.console.print(
                 Panel(
                     f"[green]✓ Configuration valid:[/green] {config_name}",
@@ -112,20 +120,13 @@ class ValidationReporter:
         summary_parts = []
         if errors:
             err_s = "s" if len(errors) > 1 else ""
-            summary_parts.append(
-                f"[red]{len(errors)} error{err_s} (must fix)[/red]"
-            )
+            summary_parts.append(f"[red]{len(errors)} error{err_s} (must fix)[/red]")
         if warnings:
             warn_s = "s" if len(warnings) > 1 else ""
-            summary_parts.append(
-                f"[yellow]{len(warnings)} warning{warn_s}"
-                f" (should fix)[/yellow]"
-            )
+            summary_parts.append(f"[yellow]{len(warnings)} warning{warn_s} (should fix)[/yellow]")
         if infos:
             info_s = "s" if len(infos) > 1 else ""
-            summary_parts.append(
-                f"[blue]{len(infos)} info note{info_s}[/blue]"
-            )
+            summary_parts.append(f"[blue]{len(infos)} info note{info_s}[/blue]")
 
         self.console.print(f"Summary: {', '.join(summary_parts)}")
 
@@ -133,7 +134,8 @@ class ValidationReporter:
         if errors:
             self.console.print("\n[bold red]Validation: FAILED[/bold red]")
         else:
-            self.console.print("\n[bold green]Validation: PASSED[/bold green] (with warnings)")
+            suffix = " (with warnings)" if warnings else ""
+            self.console.print(f"\n[bold green]Validation: PASSED[/bold green]{suffix}")
 
     def _print_section(
         self,
@@ -246,9 +248,7 @@ class ValidationReporter:
 
             # Validations
             if sp.expanded_validations:
-                self.console.print(
-                    f"  Validations (expanded for sheet {sp.sheet_num}):"
-                )
+                self.console.print(f"  Validations (expanded for sheet {sp.sheet_num}):")
                 for ev in sp.expanded_validations:
                     num = ev.index + 1
                     path_display = ev.expanded_path or ""
@@ -258,9 +258,7 @@ class ValidationReporter:
                             f" (not applicable: {ev.condition})[/dim]"
                         )
                     else:
-                        self.console.print(
-                            f"    {num}. {ev.type}: {path_display}"
-                        )
+                        self.console.print(f"    {num}. {ev.type}: {path_display}")
 
         # Render errors summary
         if preview.render_errors:

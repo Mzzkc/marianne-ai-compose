@@ -108,7 +108,7 @@ class TestHelpVocabulary:
         reference = Path("docs/cli-reference.md").read_text()
 
         assert "V204" not in reference
-        assert "V209" not in reference
+        assert "V209" in reference  # Dependency-cycle check now owns this code.
         assert "mzt run job.yaml --workspace" not in reference
 
     def test_active_docs_do_not_prescribe_removed_backend_keys(self) -> None:

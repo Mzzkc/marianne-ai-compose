@@ -16,6 +16,8 @@ from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml
 
 _logger = get_logger("validation.config")
+
+
 class RegexPatternCheck:
     """Check that regex patterns in validations compile (V007).
 
@@ -289,8 +291,7 @@ class TimeoutRangeCheck:
                     ),
                     line=find_line_in_yaml(raw_yaml, "timeout_seconds:"),
                     suggestion=(
-                        "Long timeouts can tie up resources;"
-                        " consider breaking into smaller tasks"
+                        "Long timeouts can tie up resources; consider breaking into smaller tasks"
                     ),
                     metadata={
                         "timeout": str(timeout),
@@ -407,7 +408,9 @@ class VersionReferenceCheck:
                 if pattern in line:
                     # Check if this is just historical documentation
                     hist_markers = [
-                        "EVOLUTION FROM", "evolved from", "LEARNINGS",
+                        "EVOLUTION FROM",
+                        "evolved from",
+                        "LEARNINGS",
                     ]
                     if any(hist in line for hist in hist_markers):
                         continue
@@ -429,9 +432,9 @@ class VersionReferenceCheck:
                             line=i,
                             context=line.strip()[:80],
                             suggestion=(
-                        f"Update to v{current_version} if this should"
-                        f" reference the current version"
-                    ),
+                                f"Update to v{current_version} if this should"
+                                f" reference the current version"
+                            ),
                             metadata={
                                 "pattern": pattern,
                                 "current_version": str(current_version),
@@ -479,8 +482,7 @@ class EmptyPatternCheck:
                         check_id=self.check_id,
                         severity=self.severity,
                         message=(
-                            f"Empty pattern in validation rule {i + 1}"
-                            f" will match any content"
+                            f"Empty pattern in validation rule {i + 1} will match any content"
                         ),
                         suggestion="Add a meaningful pattern or remove this validation",
                         metadata={
@@ -534,20 +536,24 @@ class InteractiveSupportCheck:
         if config.movements:
             for mov_num, mov_def in config.movements.items():
                 if mov_def.instrument_config.get("interactive"):
-                    opt_ins.append((
-                        f"movement {mov_num} instrument_config",
-                        mov_def.instrument or config.instrument,
-                    ))
+                    opt_ins.append(
+                        (
+                            f"movement {mov_num} instrument_config",
+                            mov_def.instrument or config.instrument,
+                        )
+                    )
         if config.sheet.per_sheet_instrument_config:
             for sheet_num, icfg in config.sheet.per_sheet_instrument_config.items():
                 if icfg.get("interactive"):
                     per_sheet = (config.sheet.per_sheet_instruments or {}).get(
                         sheet_num,
                     )
-                    opt_ins.append((
-                        f"sheet {sheet_num} instrument_config",
-                        per_sheet or config.instrument,
-                    ))
+                    opt_ins.append(
+                        (
+                            f"sheet {sheet_num} instrument_config",
+                            per_sheet or config.instrument,
+                        )
+                    )
         for alias, instr_def in config.instruments.items():
             if instr_def.config.get("interactive"):
                 opt_ins.append((f"instrument alias '{alias}'", instr_def.profile))
@@ -639,7 +645,7 @@ class InstrumentNameCheck:
 
     @property
     def severity(self) -> ValidationSeverity:
-        return ValidationSeverity.WARNING
+        return ValidationSeverity.ERROR
 
     @property
     def description(self) -> str:
@@ -676,45 +682,53 @@ class InstrumentNameCheck:
         # known (profiles only). A score can define instrument: my-alias and
         # instruments: { my-alias: { profile: claude-code } } — that's valid.
         if config.instrument and config.instrument not in all_valid:
-            issues.append(self._make_issue(
-                config.instrument,
-                "score-level instrument",
-                find_line_in_yaml(raw_yaml, "instrument:"),
-                all_valid,
-            ))
+            issues.append(
+                self._make_issue(
+                    config.instrument,
+                    "score-level instrument",
+                    find_line_in_yaml(raw_yaml, "instrument:"),
+                    all_valid,
+                )
+            )
 
         # 2. Per-sheet instruments
         if config.sheet.per_sheet_instruments:
             for sheet_num, instr_name in config.sheet.per_sheet_instruments.items():
                 if instr_name not in all_valid:
-                    issues.append(self._make_issue(
-                        instr_name,
-                        f"sheet {sheet_num} instrument",
-                        find_line_in_yaml(raw_yaml, f"{sheet_num}:"),
-                        all_valid,
-                    ))
+                    issues.append(
+                        self._make_issue(
+                            instr_name,
+                            f"sheet {sheet_num} instrument",
+                            find_line_in_yaml(raw_yaml, f"{sheet_num}:"),
+                            all_valid,
+                        )
+                    )
 
         # 3. Instrument map
         if config.sheet.instrument_map:
             for instr_name in config.sheet.instrument_map:
                 if instr_name not in all_valid:
-                    issues.append(self._make_issue(
-                        instr_name,
-                        "instrument_map entry",
-                        find_line_in_yaml(raw_yaml, f"{instr_name}:"),
-                        all_valid,
-                    ))
+                    issues.append(
+                        self._make_issue(
+                            instr_name,
+                            "instrument_map entry",
+                            find_line_in_yaml(raw_yaml, f"{instr_name}:"),
+                            all_valid,
+                        )
+                    )
 
         # 4. Movement-level instruments
         if config.movements:
             for mov_num, mov_def in config.movements.items():
                 if mov_def.instrument and mov_def.instrument not in all_valid:
-                    issues.append(self._make_issue(
-                        mov_def.instrument,
-                        f"movement {mov_num} instrument",
-                        find_line_in_yaml(raw_yaml, f"{mov_num}:"),
-                        all_valid,
-                    ))
+                    issues.append(
+                        self._make_issue(
+                            mov_def.instrument,
+                            f"movement {mov_num} instrument",
+                            find_line_in_yaml(raw_yaml, f"{mov_num}:"),
+                            all_valid,
+                        )
+                    )
 
         return issues
 
@@ -727,8 +741,12 @@ class InstrumentNameCheck:
     ) -> ValidationIssue:
         """Create a ValidationIssue for an unknown instrument name."""
         available = sorted(known)
+        from difflib import get_close_matches
+
+        close = get_close_matches(name, available, n=1, cutoff=0.7)
         suggestion = (
-            f"Available instruments: {', '.join(available)}. "
+            (f"Did you mean '{close[0]}'? " if close else "")
+            + f"Available instruments: {', '.join(available)}. "
             f"Run 'mzt instruments list' to see all instruments."
         )
         return ValidationIssue(
@@ -763,7 +781,7 @@ class InstrumentFallbackCheck:
 
     @property
     def severity(self) -> ValidationSeverity:
-        return ValidationSeverity.WARNING
+        return ValidationSeverity.ERROR
 
     @property
     def description(self) -> str:
@@ -796,34 +814,40 @@ class InstrumentFallbackCheck:
         # 1. Score-level instrument_fallbacks
         for name in config.instrument_fallbacks:
             if name not in all_valid:
-                issues.append(self._make_issue(
-                    name,
-                    "score-level instrument_fallbacks",
-                    find_line_in_yaml(raw_yaml, name),
-                    all_valid,
-                ))
+                issues.append(
+                    self._make_issue(
+                        name,
+                        "score-level instrument_fallbacks",
+                        find_line_in_yaml(raw_yaml, name),
+                        all_valid,
+                    )
+                )
 
         # 2. Movement-level instrument_fallbacks
         for mov_num, mov_def in config.movements.items():
             for name in mov_def.instrument_fallbacks:
                 if name not in all_valid:
-                    issues.append(self._make_issue(
-                        name,
-                        f"movement {mov_num} instrument_fallbacks",
-                        find_line_in_yaml(raw_yaml, name),
-                        all_valid,
-                    ))
+                    issues.append(
+                        self._make_issue(
+                            name,
+                            f"movement {mov_num} instrument_fallbacks",
+                            find_line_in_yaml(raw_yaml, name),
+                            all_valid,
+                        )
+                    )
 
         # 3. Per-sheet fallbacks
         for sheet_num, fallback_list in config.sheet.per_sheet_fallbacks.items():
             for name in fallback_list:
                 if name not in all_valid:
-                    issues.append(self._make_issue(
-                        name,
-                        f"sheet {sheet_num} per_sheet_fallbacks",
-                        find_line_in_yaml(raw_yaml, name),
-                        all_valid,
-                    ))
+                    issues.append(
+                        self._make_issue(
+                            name,
+                            f"sheet {sheet_num} per_sheet_fallbacks",
+                            find_line_in_yaml(raw_yaml, name),
+                            all_valid,
+                        )
+                    )
 
         return issues
 
@@ -836,8 +860,12 @@ class InstrumentFallbackCheck:
     ) -> ValidationIssue:
         """Create a ValidationIssue for an unknown fallback instrument name."""
         available = sorted(known)
+        from difflib import get_close_matches
+
+        close = get_close_matches(name, available, n=1, cutoff=0.7)
         suggestion = (
-            f"Available instruments: {', '.join(available)}. "
+            (f"Did you mean '{close[0]}'? " if close else "")
+            + f"Available instruments: {', '.join(available)}. "
             f"Run 'mzt instruments list' to see all instruments."
         )
         return ValidationIssue(
