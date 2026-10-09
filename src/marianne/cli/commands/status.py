@@ -49,11 +49,19 @@ from marianne.core.checkpoint import (
 )
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
+from marianne.daemon.exceptions import (
+    DaemonAccessDeniedError,
+    DaemonNotRunningError,
+    DaemonProtocolError,
+    DaemonUnresponsiveError,
+)
 from marianne.daemon.types import ScheduleStatus
 
 from ..helpers import (
     ErrorMessages,
     get_last_activity_time,
+    report_daemon_access_denied,
+    report_daemon_route_error,
     require_conductor,
 )
 from ..helpers import (
@@ -287,6 +295,8 @@ async def _status_job(
             json_output=json_output,
         )
         raise typer.Exit(1) from None
+    except (DaemonAccessDeniedError, DaemonUnresponsiveError, DaemonProtocolError) as exc:
+        report_daemon_route_error(exc, json_output=json_output)
     except Exception as exc:
         # Conductor error (crash, resource exhaustion, etc.) — report truthfully.
         error_detail = f"{type(exc).__name__}: {exc}"
@@ -383,6 +393,8 @@ async def _status_job_watch(
             except JobSubmissionError:
                 # Conductor confirmed: job not found
                 routed, result = True, None
+            except (DaemonAccessDeniedError, DaemonUnresponsiveError, DaemonProtocolError) as exc:
+                report_daemon_route_error(exc, json_output=json_output)
             except Exception as exc:
                 # Conductor error — show the real error, not "not found"
                 error_detail = f"{type(exc).__name__}: {exc}"
@@ -508,6 +520,8 @@ async def _status_overview(json_output: bool) -> None:
     # Check conductor
     try:
         routed, result = await try_daemon_route("daemon.health", {})
+    except (DaemonAccessDeniedError, DaemonUnresponsiveError, DaemonProtocolError) as exc:
+        report_daemon_route_error(exc, json_output=json_output)
     except Exception as exc:
         output_error(
             f"Cannot read conductor health: {exc}",
@@ -516,18 +530,15 @@ async def _status_overview(json_output: bool) -> None:
         raise typer.Exit(1) from None
 
     if not routed:
-        output_error(
-            "Marianne conductor is not running.",
-            hints=["Start it with: mzt start"],
-            json_output=json_output,
-        )
-        raise typer.Exit(1)
+        report_daemon_route_error(DaemonNotRunningError(), json_output=json_output)
 
     # Get job list
     try:
         jobs_routed, jobs_data = await try_daemon_route("job.list", {})
         if not jobs_routed or not isinstance(jobs_data, list):
             raise ValueError("Conductor job list is unavailable or invalid")
+    except DaemonAccessDeniedError as exc:
+        report_daemon_access_denied(exc, json_output=json_output)
     except Exception as exc:
         if json_output:
             output_json({
@@ -536,6 +547,7 @@ async def _status_overview(json_output: bool) -> None:
                 "active_count": None,
                 "recent_count": None,
                 "error": f"Cannot read conductor job list: {exc}",
+                "error_type": type(exc).__name__,
             })
         else:
             output_error(f"Conductor responded to health, but job status is unknown: {exc}")
@@ -679,14 +691,14 @@ async def _list_jobs(
 
     _ = workspace  # Reserved for future per-workspace filtering
 
-    routed, result = await try_daemon_route("job.list", {})
+    try:
+        routed, result = await try_daemon_route("job.list", {})
+    except DaemonAccessDeniedError as exc:
+        report_daemon_access_denied(exc, json_output=json_output)
+    except (DaemonUnresponsiveError, DaemonProtocolError) as exc:
+        report_daemon_route_error(exc, json_output=json_output)
     if not routed:
-        output_error(
-            "Marianne conductor is not running.",
-            hints=["Start it with: mzt start"],
-            json_output=json_output,
-        )
-        raise typer.Exit(1)
+        report_daemon_route_error(DaemonNotRunningError(), json_output=json_output)
 
     jobs: list[dict[str, Any]] = result if isinstance(result, list) else []
 
@@ -2424,6 +2436,8 @@ async def _clear_jobs(
 
     try:
         routed, result = await try_daemon_route("job.clear", params)
+    except (DaemonAccessDeniedError, DaemonUnresponsiveError, DaemonProtocolError) as exc:
+        report_daemon_route_error(exc, json_output=False)
     except Exception as exc:
         output_error(
             str(exc),

@@ -1163,7 +1163,8 @@ class PluginCliBackend(Backend):
             assert request is not None
             try:
                 from marianne.instruments.loader import (
-                    capture_resolved_instrument_route, route_identity,
+                    capture_resolved_instrument_route,
+                    route_identity,
                 )
 
                 if (guarded_binding.arm != "remote"

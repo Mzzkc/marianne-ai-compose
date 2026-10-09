@@ -452,8 +452,12 @@ class TestRunDaemonRequired:
 class TestResumeCommand:
     """Tests for resume command entry point validation."""
 
-    def test_resume_job_not_found(self, tmp_path: Path) -> None:
+    def test_resume_job_not_found(self, tmp_path: Path, monkeypatch) -> None:
         """Resume with job ID that doesn't exist should fail."""
+        # This tests absence, not access to a conductor owned by the host.
+        monkeypatch.setattr(
+            "marianne.daemon.detect.try_daemon_route", AsyncMock(return_value=(False, None)),
+        )
         # Note: --workspace flag removed in F-502
         from marianne.daemon.exceptions import JobSubmissionError
 

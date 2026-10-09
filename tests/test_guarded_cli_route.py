@@ -6,13 +6,51 @@ This is configured-command evidence, not server-side model attestation.
 import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from marianne.execution.base import SheetRequestState
 from marianne.execution.instruments.cli_backend import PluginCliBackend
 from marianne.instruments.loader import capture_resolved_instrument_route, load_all_profiles
+
+
+async def test_baton_adapter_passes_reviewed_route_to_cli_instrument(guarded_cli, tmp_path):
+    """The dispatch adapter accepts a CLI seat and passes its route to execute."""
+    from marianne.core.sheet import Sheet
+    from marianne.daemon.baton.adapter import BatonAdapter
+
+    backend, binding, _ = guarded_cli
+    adapter = BatonAdapter()
+    sheet = Sheet(
+        num=1, movement=1, voice_count=1, instrument_name="fiction-cli",
+        workspace=tmp_path, prompt_template="PUBLIC FICTION",
+        instrument_config={"provider": "Fiction Provider"},
+    )
+    adapter.register_job("reviewed-cli", [sheet], dependencies={})
+    state = adapter.baton.get_sheet_state("reviewed-cli", 1)
+    assert state is not None
+    state.expected_route = binding
+    pool = MagicMock()
+    pool.acquire = AsyncMock(return_value=backend)
+    pool.release = AsyncMock()
+    adapter.set_backend_pool(pool)
+    original_execute = backend.execute
+    outcomes = []
+
+    async def observe_execute(*args, **kwargs):
+        result = await original_execute(*args, **kwargs)
+        outcomes.append(result)
+        return result
+
+    with patch.object(backend, "execute", side_effect=observe_execute) as execute:
+        assert await adapter._dispatch_callback("reviewed-cli", 1, state)
+        await asyncio.gather(*adapter._active_tasks.values(), return_exceptions=True)
+    execute.assert_awaited_once()
+    assert len(outcomes) == 1 and outcomes[0].success
+    request = execute.await_args.kwargs["request"]
+    assert request.expected_route == binding
+    assert request.route_provider_override == "Fiction Provider"
 
 
 @pytest.fixture
@@ -25,7 +63,9 @@ def guarded_cli(tmp_path, monkeypatch):
     # backend writes stdin, yielding a connection-loss race unrelated to
     # the reviewed route; retain an actual harmless subprocess instead.
     stub = tmp_path / "fiction-cli"
-    stub.write_text("#!/usr/bin/env python3\nimport sys\nsys.stdin.read()\nprint('PUBLIC FICTION')\n")
+    stub.write_text(
+        "#!/usr/bin/env python3\nimport sys\nsys.stdin.read()\nprint('PUBLIC FICTION')\n"
+    )
     stub.chmod(0o700)
     file = venue / "fiction.yaml"
     file.write_text(

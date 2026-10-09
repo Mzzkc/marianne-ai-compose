@@ -4,7 +4,8 @@ This module is used by CLI commands to auto-detect a running Marianne
 conductor and route operations through it. When no conductor is detected,
 the caller falls back to direct execution (existing behavior).
 
-Missing or refused endpoints return a "not routed" result. A conductor that
+Missing or refused endpoints return a "not routed" result. Access denial
+propagates without inferring absence. A conductor that
 accepts connections but cannot answer is an error, not permission to execute
 an operation again through a direct fallback.
 """
@@ -52,7 +53,9 @@ def _resolve_socket_path(socket_path: Path | None) -> Path:
         return resolve_clone_paths(clone_name).socket
 
     default = _default_socket_path()
-    if not default.exists() and LEGACY_SOCKET_PATH.exists():
+    from marianne.daemon.ipc.client import _socket_exists
+
+    if not _socket_exists(default) and _socket_exists(LEGACY_SOCKET_PATH):
         return LEGACY_SOCKET_PATH
     return default
 

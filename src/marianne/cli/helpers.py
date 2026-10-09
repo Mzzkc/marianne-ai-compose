@@ -15,7 +15,7 @@ import asyncio
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, NoReturn
 
 import typer
 from rich.console import Console
@@ -30,6 +30,50 @@ if TYPE_CHECKING:
 
 
 _logger = get_logger("cli")
+
+
+def report_daemon_route_error(exc: Exception, *, json_output: bool) -> NoReturn:
+    """Report an IPC outcome once, without changing its running-state meaning."""
+    from marianne.cli.output import output_error
+    from marianne.daemon.exceptions import (
+        DaemonAccessDeniedError,
+        DaemonNotRunningError,
+        DaemonProtocolError,
+        DaemonUnresponsiveError,
+    )
+
+    if isinstance(exc, DaemonAccessDeniedError):
+        message = str(exc)
+        hints = ["Check whether your current user is permitted to access the conductor socket."]
+        running_state = "unknown"
+    elif isinstance(exc, DaemonUnresponsiveError):
+        message = f"Marianne conductor did not respond; running state is unknown: {exc}"
+        hints = ["Check the conductor logs and retry a read-only status check."]
+        running_state = "unknown"
+    elif isinstance(exc, DaemonProtocolError):
+        message = f"Marianne conductor returned an invalid response: {exc}"
+        hints = ["Check the conductor logs and CLI protocol version."]
+        running_state = "unknown"
+    elif isinstance(exc, DaemonNotRunningError):
+        message = "Marianne conductor is not running."
+        hints = ["Start it with: mzt start"]
+        running_state = "absent"
+    else:
+        raise TypeError(f"Unsupported daemon route error: {type(exc).__name__}")
+
+    output_error(
+        message,
+        hints=hints,
+        json_output=json_output,
+        error_type=type(exc).__name__,
+        running_state=running_state,
+    )
+    raise typer.Exit(1) from None
+
+
+def report_daemon_access_denied(exc: Exception, *, json_output: bool) -> NoReturn:
+    """Preserve the established denial reporting entry point."""
+    report_daemon_route_error(exc, json_output=json_output)
 
 
 class ErrorMessages:
