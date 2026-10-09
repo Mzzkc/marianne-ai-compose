@@ -1438,6 +1438,10 @@ prompt:
             if norm_digest(arch) != prov["response_sha256"]:
                 print(f"DIGEST-VERIFY REFUSED: row {r['id']} digest mismatch vs {prov['archive_path']}", file=sys.stderr); bad += 1
             if live:
+                # Token confinement: index rows are append-only but authored by
+                # earlier movements; the token goes ONLY to the pinned origin.
+                if not str(prov["query_url"]).startswith("https://www.courtlistener.com/api/rest/v4/"):
+                    print(f"DIGEST-VERIFY LIVE REFUSED: row {r['id']} query_url is off-origin — token not sent: {prov['query_url']}", file=sys.stderr); bad += 1; continue
                 out = subprocess.run(["curl", "-sf", "-H", f"Authorization: Token {os.environ['CL_TOKEN']}",
                                       prov["query_url"]], capture_output=True)
                 if out.returncode != 0:
@@ -1876,6 +1880,13 @@ prompt:
       URL=$(echo "$ROW" | jq -r '.query_url')
       WANT=$(echo "$ROW" | jq -r '.normalized_sha256')
       RID=$(echo "$ROW" | jq -r '.row')
+      # Token confinement: verify.json is fetched from a published site and
+      # query_url is attacker-influenceable there. The CL_TOKEN header is sent
+      # ONLY to the pinned CourtListener origin — never to a URL the page names.
+      case "$URL" in
+        https://www.courtlistener.com/api/rest/v4/*) ;;
+        *) echo "LIVE GATE REFUSED: row $RID query_url is off-origin ($URL) — token not sent"; exit 1;;
+      esac
       CODE=$(curl -s -o "$TMP/body.json" -w '%{http_code}' -H "Authorization: Token $CL_TOKEN" "$URL")
       [ "$CODE" = "200" ] || { echo "LIVE GATE REFUSED: row $RID query returned HTTP $CODE"; exit 1; }
       # -j (joined): NO trailing newline — jq -Sc alone appends one, which
