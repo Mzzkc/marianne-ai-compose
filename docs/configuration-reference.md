@@ -1340,7 +1340,7 @@ value is kept):
 | `max_concurrent_sheets` | Hot — live baton dispatch ceiling + scheduler resized |
 | per-model caps (`max_concurrent` in instrument profiles) | Hot — set/changed/removed atomically |
 | instrument profiles (new/edited/removed files) | Hot — registry swap + backend pool invalidation |
-| instrument profile file broken at reload (YAML/schema/read error) | Partial — previous registry entry + caps retained; file reported in `declined` with the loader's reason and `partial: true` on the result. Boot keeps skip-with-warning (no previous entry exists to keep) |
+| instrument profile file broken at reload (YAML/schema/read error) | Partial — previous registry entry + caps retained; file reported in `declined` with the loader's reason and `partial: true` on the result. If the broken file overrode a name that another healthy profile (a built-in, or a lower-precedence directory) also declares, that healthy profile takes the name instead of the stale entry. Boot keeps skip-with-warning (no previous entry exists to keep) |
 | `resource_limits` | Hot — monitor limits updated |
 | `preflight` (token thresholds) | Hot — applied to new admissions |
 | `job_timeout_seconds` | Hot — live read at job admission |
