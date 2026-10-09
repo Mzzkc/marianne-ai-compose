@@ -279,6 +279,62 @@ budget uses a conservative default.
 
 ---
 
+#### `http` — OpenAI-compatible HTTP profiles (`kind: http`)
+
+A profile with `kind: http` carries no `cli:` block. Instead it names an
+OpenAI-compatible chat-completions endpoint and the conductor dispatches
+requests through the shared HTTP executor (`execution/instruments/openai_compat_backend.py`).
+Only one wire contract exists today: `schema_family: openai`.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `base_url` | Yes | API root, e.g. `http://localhost:11434/v1` or `https://openrouter.ai/api/v1` |
+| `endpoint` | No | Path appended to `base_url` (default `/v1/chat/completions`; set `/chat/completions` when `base_url` already ends in `/v1`) |
+| `schema_family` | Yes | `openai` — the request/response contract the executor speaks |
+| `auth_env_var` | No | Name of the environment variable holding the bearer token; omit for unauthenticated local servers |
+| `response_format` | No | Opt-in structured output (`{type: json_object}` or `{type: json_schema, json_schema: {...}}`), forwarded unchanged; per-sheet `instrument_config.response_format` overrides it |
+
+The shipped `ollama` profile is the minimal shape (local, unauthenticated):
+
+```yaml
+name: ollama
+display_name: "Ollama"
+kind: http
+default_model: llama3.1:8b
+models:
+  - name: llama3.1:8b
+    context_window: 32768
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+http:
+  base_url: http://localhost:11434/v1
+  endpoint: /chat/completions
+  schema_family: openai
+```
+
+A hosted OpenAI-compatible provider adds the token variable and real pricing:
+
+```yaml
+name: openrouter
+display_name: "OpenRouter"
+kind: http
+default_model: openai/gpt-5.3-codex
+models:
+  - name: openai/gpt-5.3-codex
+    context_window: 272000
+    cost_per_1k_input: 0.002
+    cost_per_1k_output: 0.01
+http:
+  base_url: https://openrouter.ai/api/v1
+  endpoint: /chat/completions
+  schema_family: openai
+  auth_env_var: OPENROUTER_API_KEY
+```
+
+HTTP results record `model_requested`, `model_observed` and `model_echo_status`
+(see "HTTP model-echo evidence" below), so a provider that silently serves a
+different model is visible in `mzt status` and the checkpoint.
+
 ## How the Instrument System Works
 
 ### Loading Order

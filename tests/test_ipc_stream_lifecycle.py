@@ -333,3 +333,25 @@ async def test_cancelled_stop_finishes_handlers_and_releases_socket_ownership(
             await asyncio.gather(stop, return_exceptions=True)
         writer.close()
         await server.stop()
+
+
+async def test_output_stream_notifications_carry_the_stream_method_name(tmp_path: Path) -> None:
+    """GH #379: notifications pushed inside ``job.output.stream`` are named
+    ``job.output.stream`` too, so a method-routing observer sees ONE stream."""
+    handler, manager = _production_handler()
+    server = DaemonServer(tmp_path / "s", handler, max_connections=5)
+    await server.start()
+    reader, writer = await asyncio.open_unix_connection(str(tmp_path / "s"))
+    try:
+        writer.write(_request("job.output.stream", {"job_id": "named-stream"}))
+        await writer.drain()
+        assert await _until(lambda: _subscriber_count(manager, "job.output.stream") == 1)
+        manager.output_hub.make_writer("named-stream", 1)("stdout", b"hello from the hub\n")
+        line = json.loads(await asyncio.wait_for(reader.readline(), 2))
+        assert line["method"] == "job.output.stream", line
+        # Job-wide subscriptions tag each line with its sheet.
+        assert line["params"]["line"] == "[s1] hello from the hub"
+    finally:
+        writer.close()
+        await server.stop()
+        await manager.event_bus.shutdown()

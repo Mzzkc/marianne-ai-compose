@@ -902,6 +902,10 @@ class SheetState(BaseModel):
             self.model = self.fallback_configs[idx].get("model")
         else:
             self.model = None
+        # Keep the display field in step with the dispatch field, otherwise
+        # `mzt status` pairs the fallback instrument with the primary alias's
+        # model — a pairing that never ran (GH #377, #399).
+        self.instrument_model = self.model
 
         # Fresh retry budget for the new instrument
         self.normal_attempts = 0

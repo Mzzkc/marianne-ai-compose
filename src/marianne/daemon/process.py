@@ -1006,7 +1006,9 @@ class DaemonProcess:
             def _notify(line: str) -> None:
                 notification = {
                     "jsonrpc": "2.0",
-                    "method": "job.output",
+                    # Same name as the subscribed stream method (GH #379): an
+                    # observer that routes by method sees one logical stream.
+                    "method": "job.output.stream",
                     "params": {
                         "job_id": job_id,
                         "sheet_num": sheet_num,

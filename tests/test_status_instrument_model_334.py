@@ -39,3 +39,32 @@ class TestInstrumentModelDisplay:
         out = format_instrument_with_fallback(sheet)
         assert "gemini-cli (gemini-3.1-pro-preview)" in out
         assert "was claude-code: rate_limit" in out
+
+
+class TestFallbackClearsStaleModel:
+    """GH #377 / #399: after a fallback the display never shows the primary's model."""
+
+    def test_fallback_without_own_model_shows_bare_fallback_profile(self) -> None:
+        sheet = _sheet(
+            instrument_name="antigravity",
+            instrument_model="gemini-3.8-flash-high",
+            model="gemini-3.8-flash-high",
+            fallback_chain=["codex-cli"],
+            fallback_configs=[{}],
+        )
+        assert sheet.advance_fallback("execution_failed") == "codex-cli"
+        out = format_instrument_with_fallback(sheet)
+        assert out.startswith("codex-cli [dim]"), out
+        assert "gemini" not in out.split("[dim]")[0]
+
+    def test_fallback_with_own_model_shows_that_model(self) -> None:
+        sheet = _sheet(
+            instrument_name="codex-cli",
+            instrument_model="gpt-5.5",
+            model="gpt-5.5",
+            fallback_chain=["opencode"],
+            fallback_configs=[{"model": "zai-coding-plan/glm-5.3"}],
+        )
+        sheet.advance_fallback("rate_limit_exhausted")
+        out = format_instrument_with_fallback(sheet)
+        assert out.startswith("opencode (zai-coding-plan/glm-5.3)")
