@@ -380,14 +380,16 @@ async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
         # Canonical compiler validates that all four attached records exist.
         (active_dir / filename).write_text("# No pending coordination records\n")
     task_board = active_dir / "01-task-board.md"
+
     task_board.write_text(
         "# Task Board\n\n"
         "| id | owner | status | task | evidence |\n"
-        "| --- | --- | --- | --- | --- |\n"
+        "| --- | --- | --- | --- |\n"
         "| bedrock-T-002 | bedrock | claimed | Write cycle plan. | "
         "`cycle-state/bedrock-plan.md` |\n"
     )
     status_board = active_dir / "02-status.md"
+
     current_utc = datetime.now(UTC).isoformat(timespec="minutes")
     status_board.write_text(
         "# Cohort Status\n\n"
