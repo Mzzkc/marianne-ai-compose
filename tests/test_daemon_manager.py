@@ -366,6 +366,83 @@ class TestShutdown:
         assert task.cancelled() or task.done()
 
 
+# ─── Shutdown races (GH #411 / #412) ──────────────────────────────────
+
+
+class TestShutdownRaces:
+    """A resume racing SIGTERM must be rejected (#411), and shutdown must
+    reach ``_shutdown_event.set()`` even when the final flush raises (#412).
+
+    Live incident 2026-10-09 20:52Z: three ``mzt resume`` calls arrived during
+    the graceful-shutdown wait, were accepted, dispatched musicians that the
+    adapter shutdown cancelled 1–2 s later (PAUSED → CANCELLED), and the
+    concurrent ``_live_states`` mutation raised ``RuntimeError: dictionary
+    changed size during iteration`` out of ``shutdown()`` — the event was
+    never set and the conductor became a zombie (IPC answering, baton dead).
+    """
+
+    @pytest.mark.asyncio
+    async def test_resume_during_shutdown_rejected_411(self, manager: JobManager):
+        """resume_job on a PAUSED job while shutting down is rejected, not dispatched."""
+        manager._shutting_down = True
+        manager._job_meta["job-paused"] = JobMeta(
+            job_id="job-paused",
+            config_path=Path("/tmp/test.yaml"),
+            workspace=Path("/tmp/workspace"),
+            status=DaemonJobStatus.PAUSED,
+        )
+
+        response = await manager.resume_job("job-paused")
+
+        assert response.status == "rejected"
+        assert "shutting down" in (response.message or "").lower()
+        assert "job-paused" not in manager._jobs
+        assert manager._job_meta["job-paused"].status is DaemonJobStatus.PAUSED
+
+    @pytest.mark.asyncio
+    async def test_flush_iterates_snapshot_412(self, manager: JobManager, tmp_path: Path):
+        """A live-state insert during the flush must not abort it."""
+        for jid in ("a", "b"):
+            config_path = tmp_path / f"{jid}.yaml"
+            config_path.write_text(f"name: {jid}\n")
+            await manager._registry.register_job(jid, config_path, tmp_path)
+            manager._live_states[jid] = CheckpointState(
+                job_id=jid, job_name=jid, total_sheets=1, last_completed_sheet=0,
+                status=JobStatus.RUNNING, sheets={},
+            )
+
+        real_load = manager._registry.load_checkpoint
+        inserted = False
+
+        async def load_and_insert(jid: str):
+            nonlocal inserted
+            if not inserted:
+                inserted = True
+                manager._live_states["c"] = CheckpointState(
+                    job_id="c", job_name="c", total_sheets=1, last_completed_sheet=0,
+                    status=JobStatus.RUNNING, sheets={},
+                )
+            return await real_load(jid)
+
+        with patch.object(manager._registry, "load_checkpoint", side_effect=load_and_insert):
+            flushed, skipped = await manager._flush_live_checkpoints_on_shutdown()
+
+        assert flushed == 2
+        assert skipped == 0
+
+    @pytest.mark.asyncio
+    async def test_shutdown_sets_event_when_flush_raises_412(self, manager: JobManager):
+        """If the final flush raises, shutdown still sets the event and closes registries."""
+        with patch.object(
+            manager,
+            "_flush_live_checkpoints_on_shutdown",
+            side_effect=RuntimeError("dictionary changed size during iteration"),
+        ):
+            await manager.shutdown(graceful=True)
+
+        assert manager._shutdown_event.is_set()
+
+
 # ─── On Task Done ─────────────────────────────────────────────────────
 
 

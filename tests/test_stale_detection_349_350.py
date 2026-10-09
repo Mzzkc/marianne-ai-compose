@@ -142,6 +142,71 @@ def _setup(
     return adapter, ws, scheduled
 
 
+class TestIdleCensusExcludesConductorWrites:
+    """GH #413: the idle census must ignore what the conductor itself writes.
+
+    Live case 2026-10-09: a hung opencode musician sat 78 min with zero
+    writes while the baton logged 121 ``stale_check.dispatched`` lines and
+    never struck, because ``.marianne-observer.jsonl`` (observer recorder,
+    many appends a minute) and ``logs/marianne.log`` (a symlink to the daemon
+    log, followed by ``Path.stat``) kept the workspace's newest mtime at
+    "now".
+    """
+
+    def test_observer_jsonl_and_daemon_log_symlink_do_not_count(
+        self, tmp_path: Path
+    ) -> None:
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        (ws / "agent-output.md").write_text("x")
+        _backdate(ws, 500.0)
+        old = BatonAdapter._newest_workspace_mtime(ws)
+
+        # Conductor-written artifacts, all fresh.
+        (ws / ".marianne-observer.jsonl").write_text("{}\n")
+        daemon_log = tmp_path / "conductor.log"
+        daemon_log.write_text("fresh")
+        (ws / "logs").mkdir()
+        (ws / "logs" / "marianne.log").symlink_to(daemon_log)
+        receipts = ws / ".marianne" / "context-receipts"
+        receipts.mkdir(parents=True)
+        (receipts / "sheet-0001.yaml").write_text("r")
+        # Even a fresh symlink OUTSIDE the owned dirs must not import the
+        # target's mtime.
+        (ws / "latest.log").symlink_to(daemon_log)
+
+        assert BatonAdapter._newest_workspace_mtime(ws) == old
+
+    def test_musician_write_still_counts(self, tmp_path: Path) -> None:
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        (ws / "a.txt").write_text("x")
+        _backdate(ws, 500.0)
+        old = BatonAdapter._newest_workspace_mtime(ws)
+        (ws / "cycle-state").mkdir()
+        (ws / "cycle-state" / "work.md").write_text("progress")
+        assert BatonAdapter._newest_workspace_mtime(ws) > old
+
+    async def test_idle_check_strikes_despite_fresh_conductor_files(
+        self, tmp_path: Path
+    ) -> None:
+        """End to end through _handle_stale_check: alive-but-idle is deferred
+        with a strike instead of being treated as active."""
+        adapter, ws, _ = _setup(tmp_path, enabled=True, idle_timeout=60.0)
+        (ws / "out.txt").write_text("x")
+        _backdate(ws, 200.0)
+        adapter._stale_dispatch_time[_KEY] = time.time() - 200.0
+        (ws / ".marianne-observer.jsonl").write_text("{}\n")  # fresh
+        task = _alive_task()
+        adapter._active_tasks[_KEY] = task
+        adapter._active_pids[_KEY] = (os.getpid(), os.getpid())  # alive
+
+        await adapter._handle_stale_check(_stale_check(adapter))
+
+        assert adapter._stale_idle_strikes.get(_KEY) == 1
+        await _cancel_and_collect(task)
+
+
 class TestIdleEscalation:
     async def test_idle_fires_after_timeout(self, tmp_path: Path) -> None:
         adapter, ws, _ = _setup(tmp_path, enabled=True, idle_timeout=60.0)

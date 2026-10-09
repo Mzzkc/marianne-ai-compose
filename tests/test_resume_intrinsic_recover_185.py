@@ -238,6 +238,7 @@ class TestFromSheetThreading:
         mgr._pause_events = {}
         mgr._baton_adapter = None
         mgr._live_states = {}
+        mgr._shutting_down = False  # GH #411 guard reads this
         mgr.resume_job = JobManager.resume_job.__get__(mgr, JobManager)
         mgr._set_job_status = MagicMock(
             spec=lambda *a, **k: None, side_effect=_async_noop
