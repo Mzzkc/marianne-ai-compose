@@ -31,12 +31,11 @@ from __future__ import annotations
 import asyncio
 import os
 import shlex
-import signal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from marianne.core.logging import get_logger
-from marianne.utils.process import safe_killpg as _safe_killpg
+from marianne.utils.process import run_bounded_command
 
 if TYPE_CHECKING:
     from marianne.core.config.execution import SkipWhenCommand
@@ -115,7 +114,11 @@ async def evaluate_skip_command(
             try:
                 pgid = os.getpgid(proc.pid)
             except ProcessLookupError:
-                pgid = None
+                # The parent already exited (e.g. `cmd & exit 0`). It was
+                # spawned with start_new_session=True, so it led its own
+                # group and pgid == pid by construction; keep killing the
+                # group its children inherited (GH #410, Blueprint i3).
+                pgid = proc.pid
 
         # Daemon-own-group safety: if start_new_session failed and the child
         # shares the daemon's process group, a group kill would signal the
@@ -140,40 +143,16 @@ async def evaluate_skip_command(
                 )
                 return (False, "")
 
-        try:
-            try:
-                await asyncio.wait_for(proc.communicate(), timeout=swc.timeout_seconds)
-            except TimeoutError:
-                timed_out = True
-        finally:
-            # SIGTERM → 2s grace → SIGKILL of the process group on every exit
-            # path. Idempotent when the process already exited.
-            if proc is not None and proc.returncode is None:
-                if pgid is not None:
-                    try:
-                        _safe_killpg(pgid, signal.SIGTERM, context="skip_command.kill_grace")
-                    except (ProcessLookupError, PermissionError):
-                        pass
-                    try:
-                        await asyncio.wait_for(proc.wait(), timeout=2.0)
-                    except TimeoutError:
-                        try:
-                            _safe_killpg(pgid, signal.SIGKILL, context="skip_command.kill_force")
-                        except (ProcessLookupError, PermissionError):
-                            pass
-                        try:
-                            await proc.wait()
-                        except ProcessLookupError:
-                            pass
-                else:
-                    try:
-                        proc.kill()
-                    except ProcessLookupError:
-                        pass
-                    try:
-                        await proc.wait()
-                    except ProcessLookupError:
-                        pass
+        # Wait the #406-safe way (GH #410): parent exit + bounded pipe drain +
+        # group kill + descendant reap, so a backgrounded child that inherited
+        # the pipes cannot make us burn the whole timeout.
+        bounded = await run_bounded_command(
+            proc,
+            timeout_seconds=swc.timeout_seconds,
+            pgid=pgid,
+            context="skip_command",
+        )
+        timed_out = bounded.timed_out
 
         if timed_out:
             _logger.warning(

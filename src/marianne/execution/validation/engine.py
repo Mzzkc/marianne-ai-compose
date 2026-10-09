@@ -16,7 +16,6 @@ import operator
 import os
 import re
 import shlex
-import signal
 import time
 import warnings
 from collections import defaultdict
@@ -31,7 +30,7 @@ from marianne.core.constants import (
     VALIDATION_COMMAND_TIMEOUT_SECONDS,
     VALIDATION_OUTPUT_TRUNCATE_CHARS,
 )
-from marianne.utils.process import safe_killpg as _safe_killpg
+from marianne.utils.process import run_bounded_command
 
 from .models import (
     FileModificationTracker,
@@ -1039,7 +1038,11 @@ class ValidationEngine:
                 try:
                     pgid = os.getpgid(proc.pid)
                 except ProcessLookupError:
-                    pgid = None
+                    # The parent already exited (e.g. `cmd & exit 0`). It was
+                    # spawned with start_new_session=True, so it led its own
+                    # group and pgid == pid by construction; keep killing the
+                    # group its children inherited (GH #410, Blueprint i3).
+                    pgid = proc.pid
 
             # Daemon-own-group safety: abort if start_new_session failed.
             if pgid is not None:
@@ -1061,45 +1064,18 @@ class ValidationEngine:
                         "refusing to continue"
                     )
 
-            stdout_bytes = b""
-            stderr_bytes = b""
-            try:
-                try:
-                    stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                        proc.communicate(),
-                        timeout=cmd_timeout,
-                    )
-                except TimeoutError:
-                    timed_out = True
-            finally:
-                # SIGTERM -> 2s grace -> SIGKILL of the process group on
-                # every exit path. Idempotent when process already exited.
-                if proc is not None and proc.returncode is None:
-                    if pgid is not None:
-                        try:
-                            _safe_killpg(pgid, signal.SIGTERM, context="validation.kill_grace")
-                        except (ProcessLookupError, PermissionError):
-                            pass
-                        try:
-                            await asyncio.wait_for(proc.wait(), timeout=2.0)
-                        except TimeoutError:
-                            try:
-                                _safe_killpg(pgid, signal.SIGKILL, context="validation.kill_force")
-                            except (ProcessLookupError, PermissionError):
-                                pass
-                            try:
-                                await proc.wait()
-                            except ProcessLookupError:
-                                pass
-                    else:
-                        try:
-                            proc.kill()
-                        except ProcessLookupError:
-                            pass
-                        try:
-                            await proc.wait()
-                        except ProcessLookupError:
-                            pass
+            # Wait the #406-safe way (GH #410): parent exit + bounded pipe
+            # drain + group kill + descendant reap. A validation that starts a
+            # background helper no longer burns its full timeout.
+            bounded = await run_bounded_command(
+                proc,
+                timeout_seconds=cmd_timeout,
+                pgid=pgid,
+                context="validation",
+            )
+            stdout_bytes = bounded.stdout
+            stderr_bytes = bounded.stderr
+            timed_out = bounded.timed_out
 
             if timed_out:
                 return ValidationResult(

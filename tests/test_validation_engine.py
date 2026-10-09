@@ -1327,15 +1327,23 @@ class TestCommandSucceedsValidation:
         )
         engine = _make_engine(temp_workspace)
 
-        # Mock create_subprocess_exec to simulate a timeout
-        mock_proc = AsyncMock()
-        mock_proc.communicate = AsyncMock(side_effect=TimeoutError)
-        mock_proc.kill = AsyncMock()
-        mock_proc.wait = AsyncMock()
+        # Mock the spawn and the shared bounded wait (GH #410) to simulate a
+        # parent that never exits within its timeout.
+        from marianne.utils.process import BoundedCommandResult
 
-        with patch(
-            "asyncio.create_subprocess_exec",
-            return_value=mock_proc,
+        mock_proc = AsyncMock()
+        mock_proc.pid = 4242
+        mock_proc.returncode = None
+        timed_out = BoundedCommandResult(
+            returncode=None, stdout=b"", stderr=b"", timed_out=True, drain_grace_fired=False
+        )
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch("os.getpgid", side_effect=lambda pid: 4242 if pid == 4242 else 1),
+            patch(
+                "marianne.execution.validation.engine.run_bounded_command",
+                AsyncMock(return_value=timed_out),
+            ),
         ):
             result = await engine.run_validations([rule])
 

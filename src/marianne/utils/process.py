@@ -7,8 +7,10 @@ Also hosts identity-bound descendant cleanup for CLI execution.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import signal
+import time
 from dataclasses import dataclass
 
 import psutil
@@ -183,3 +185,186 @@ def reap_descendant_trees(
             skipped_unsafe_group += 1
     return DescendantReapCounts(signalled, already_gone,
                                 skipped_identity_mismatch, skipped_unsafe_group)
+
+
+def _descendant_alive(identity: DescendantIdentity) -> bool:
+    """True while the captured process still exists with the same identity."""
+    try:
+        current = psutil.Process(identity.pid)
+        return (
+            current.status() != psutil.STATUS_ZOMBIE
+            and current.create_time() == identity.create_time
+            and current.uids().real == identity.uid
+        )
+    except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
+        return False
+
+
+@dataclass(frozen=True)
+class BoundedCommandResult:
+    """Outcome of :func:`run_bounded_command`."""
+
+    returncode: int | None
+    stdout: bytes
+    stderr: bytes
+    timed_out: bool
+    """The PARENT did not exit within ``timeout_seconds``."""
+    drain_grace_fired: bool
+    """The parent exited but an inherited pipe stayed open past the grace."""
+
+
+async def _drain_pipe(stream: asyncio.StreamReader | None, chunks: list[bytes]) -> None:
+    # A mocked process (tests) carries non-StreamReader attributes; refuse to
+    # await them — same guard cli_backend applies, for the same OOM reason.
+    if not isinstance(stream, asyncio.StreamReader):
+        return
+    while True:
+        chunk = await stream.read(65536)
+        if not isinstance(chunk, bytes) or not chunk:
+            return
+        chunks.append(chunk)
+
+
+async def run_bounded_command(
+    proc: asyncio.subprocess.Process,
+    *,
+    timeout_seconds: float,
+    pgid: int | None,
+    context: str,
+    post_exit_drain_grace_seconds: float = 2.0,
+    kill_grace_seconds: float = 2.0,
+) -> BoundedCommandResult:
+    """Wait for a spawned ``bash -c`` command the #406-safe way (GH #410).
+
+    ``proc.communicate()`` waits for pipe EOF, which a backgrounded grandchild
+    that inherited stdout/stderr can hold open long after the parent exited;
+    the caller then burns its whole timeout and misreports a clean exit as a
+    failure. This helper is the one owner of the correct sequence, shared by
+    ``skip_when`` commands and ``command_succeeds`` validations (the CLI
+    instrument path has its own richer variant in ``cli_backend``):
+
+    1. drain both pipes concurrently while waiting for the PARENT's exit
+       (``proc.wait`` polled on returncode, not pipe EOF), bounded by
+       ``timeout_seconds``;
+    2. after the parent exits, give the drains ``post_exit_drain_grace_seconds``
+       to reach EOF; a pipe still open after that belongs to a descendant;
+    3. on every exit path, SIGTERM -> grace -> SIGKILL the captured group
+       (``safe_killpg`` refuses our own group) and reap identity-matched
+       descendants, so nothing outlives the call.
+
+    The returned ``stdout``/``stderr`` hold whatever was read, even on timeout.
+    """
+    out: list[bytes] = []
+    err: list[bytes] = []
+    drains = [
+        asyncio.create_task(_drain_pipe(proc.stdout, out)),
+        asyncio.create_task(_drain_pipe(proc.stderr, err)),
+    ]
+    descendants: dict[int, DescendantIdentity] = {}
+    try:
+        parent_create_time: float | None = psutil.Process(proc.pid).create_time()
+    except (psutil.NoSuchProcess, psutil.AccessDenied, ValueError, TypeError):
+        parent_create_time = None
+
+    def _capture() -> None:
+        if proc.pid is not None and parent_create_time is not None:
+            descendants.update(
+                (d.pid, d) for d in snapshot_descendant_trees(proc.pid, parent_create_time)
+            )
+
+    async def _parent_exit() -> int | None:
+        started = time.monotonic()
+        while proc.returncode is None:
+            _capture()
+            await asyncio.sleep(0.001 if time.monotonic() - started < 0.2 else 0.05)
+        _capture()
+        return proc.returncode
+
+    timed_out = False
+    grace_fired = False
+    try:
+        try:
+            await asyncio.wait_for(_parent_exit(), timeout=timeout_seconds)
+        except TimeoutError:
+            timed_out = True
+        if not timed_out:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*drains), timeout=post_exit_drain_grace_seconds
+                )
+            except TimeoutError:
+                grace_fired = True
+    finally:
+        for d in drains:
+            d.cancel()
+        await asyncio.gather(*drains, return_exceptions=True)
+        # Group kill when anything may still be alive: the parent (timeout),
+        # a descendant that held a pipe past the grace, or a captured
+        # descendant. A clean exit with EOF and no descendants signals
+        # nothing (Process Lifecycle Phase 1: no killpg after a clean exit).
+        something_alive = (
+            proc.returncode is None
+            or grace_fired
+            or any(_descendant_alive(x) for x in descendants.values())
+        )
+        if pgid is not None and something_alive:
+            try:
+                safe_killpg(pgid, signal.SIGTERM, context=f"{context}.kill_grace")
+            except (ProcessLookupError, PermissionError):
+                pass
+            if proc.returncode is None:
+                try:
+                    await asyncio.wait_for(proc.wait(), timeout=kill_grace_seconds)
+                except TimeoutError:
+                    try:
+                        safe_killpg(pgid, signal.SIGKILL, context=f"{context}.kill_force")
+                    except (ProcessLookupError, PermissionError):
+                        pass
+                    try:
+                        await proc.wait()
+                    except ProcessLookupError:
+                        pass
+            else:
+                # Parent is gone; anything left in the group had its grace above.
+                try:
+                    safe_killpg(pgid, signal.SIGKILL, context=f"{context}.kill_force")
+                except (ProcessLookupError, PermissionError):
+                    pass
+        elif pgid is None and proc.returncode is None:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            try:
+                await proc.wait()
+            except ProcessLookupError:
+                pass
+        if descendants:
+            reap_descendant_trees(tuple(descendants.values()))
+            # Signal delivery is asynchronous: give the captured descendants a
+            # bounded moment to actually disappear so the caller's "nothing
+            # outlives the call" contract holds, then SIGKILL stragglers.
+            deadline = time.monotonic() + kill_grace_seconds
+            while time.monotonic() < deadline:
+                if not any(_descendant_alive(x) for x in descendants.values()):
+                    break
+                await asyncio.sleep(0.02)
+            else:
+                for straggler in descendants.values():
+                    if _descendant_alive(straggler):
+                        try:
+                            os.kill(straggler.pid, signal.SIGKILL)
+                        except (ProcessLookupError, PermissionError):
+                            pass
+        if proc.returncode is None:
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=kill_grace_seconds)
+            except (TimeoutError, ProcessLookupError):
+                pass
+    return BoundedCommandResult(
+        returncode=proc.returncode,
+        stdout=b"".join(out),
+        stderr=b"".join(err),
+        timed_out=timed_out,
+        drain_grace_fired=grace_fired,
+    )
