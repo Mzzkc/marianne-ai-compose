@@ -396,65 +396,88 @@ class TestLoadConfig:
         assert config.config_file is None
 
 
-class TestJobManagerApplyConfig:
-    """Tests for JobManager.apply_config() hot-reload method."""
+class TestJobManagerReloadGateResize:
+    """#231 gate semantics through the #408 single reload path.
 
-    def test_apply_config_resizes_gate_in_place_on_change(self):
-        """apply_config resizes the concurrency gate IN PLACE (#231) — it does
-        NOT replace the object. Replacing it orphaned in-flight acquisitions and
-        over-admitted; the gate's limit is now adjusted via set_limit()."""
+    apply_config was absorbed into JobManager.reload_configuration(); the
+    in-place-resize guarantees live on unchanged.
+    """
+
+    async def test_reload_resizes_gate_in_place_on_change(self, tmp_path):
+        """reload resizes the concurrency gate IN PLACE (#231) — it does
+        NOT replace the object. Replacing it orphaned in-flight acquisitions
+        and over-admitted; the gate's limit is adjusted via set_limit()."""
+        import yaml
+
         from marianne.daemon.manager import JobManager
+        from marianne.daemon.process import _load_config
 
-        config = DaemonConfig(max_concurrent_jobs=5)
+        cfg_path = tmp_path / "conductor.yaml"
+        cfg_path.write_text(yaml.dump({"max_concurrent_jobs": 5}))
+        config = _load_config(cfg_path)
         manager = JobManager(config)
         old_sem = manager._concurrency_semaphore
 
-        new_config = DaemonConfig(max_concurrent_jobs=10)
-        manager.apply_config(new_config)
+        cfg_path.write_text(yaml.dump({"max_concurrent_jobs": 10}))
+        result = await manager.reload_configuration("test")
 
+        assert result.success is True
+        assert any("max_concurrent_jobs" in e for e in result.applied)
         assert manager._concurrency_semaphore is old_sem  # same object, resized
         assert manager._concurrency_semaphore.limit == 10
         assert manager._config.max_concurrent_jobs == 10
 
-    def test_apply_config_no_semaphore_change_when_unchanged(self):
-        """apply_config keeps the same semaphore when max_concurrent_jobs is unchanged."""
-        from marianne.daemon.manager import JobManager
+    async def test_reload_no_semaphore_change_when_unchanged(self, tmp_path):
+        """reload keeps the same semaphore when max_concurrent_jobs is
+        unchanged in the file."""
+        import yaml
 
-        config = DaemonConfig(max_concurrent_jobs=5)
-        manager = JobManager(config)
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.process import _load_config
+
+        cfg_path = tmp_path / "conductor.yaml"
+        cfg_path.write_text(yaml.dump({"max_concurrent_jobs": 5}))
+        manager = JobManager(_load_config(cfg_path))
         old_sem = manager._concurrency_semaphore
 
-        new_config = DaemonConfig(max_concurrent_jobs=5)
-        manager.apply_config(new_config)
+        result = await manager.reload_configuration("test")
 
+        assert result.success is True
         assert manager._concurrency_semaphore is old_sem
 
-    def test_apply_config_updates_config_reference(self):
-        """apply_config replaces the _config reference."""
+    async def test_reload_updates_config_reference(self, tmp_path):
+        """reload replaces the live _config reference for runtime reads."""
+        import yaml
+
         from marianne.daemon.manager import JobManager
+        from marianne.daemon.process import _load_config
 
-        old_config = DaemonConfig(job_timeout_seconds=3600.0)
-        manager = JobManager(old_config)
+        cfg_path = tmp_path / "conductor.yaml"
+        cfg_path.write_text(yaml.dump({"job_timeout_seconds": 3600.0}))
+        manager = JobManager(_load_config(cfg_path))
 
-        new_config = DaemonConfig(job_timeout_seconds=7200.0)
-        manager.apply_config(new_config)
+        cfg_path.write_text(yaml.dump({"job_timeout_seconds": 7200.0}))
+        await manager.reload_configuration("test")
 
-        assert manager._config is new_config
         assert manager._config.job_timeout_seconds == 7200.0
 
-    def test_apply_config_noop_when_identical(self):
-        """apply_config with identical config does not rebuild semaphore."""
-        from marianne.daemon.manager import JobManager
+    async def test_reload_noop_when_identical(self, tmp_path):
+        """reload with identical file content does not rebuild anything."""
+        import yaml
 
-        config = DaemonConfig()
-        manager = JobManager(config)
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.process import _load_config
+
+        cfg_path = tmp_path / "conductor.yaml"
+        cfg_path.write_text(yaml.dump({"max_concurrent_jobs": 5}))
+        manager = JobManager(_load_config(cfg_path))
         old_sem = manager._concurrency_semaphore
 
-        identical_config = DaemonConfig()
-        manager.apply_config(identical_config)
+        result = await manager.reload_configuration("test")
 
+        assert result.success is True
         assert manager._concurrency_semaphore is old_sem
-        assert manager._config is identical_config
+        assert manager._config.max_concurrent_jobs == 5
 
 
 class TestResourceMonitorUpdateLimits:

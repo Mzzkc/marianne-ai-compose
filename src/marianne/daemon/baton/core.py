@@ -348,6 +348,40 @@ class BatonCore:
         key = f"{instrument}:{model}"
         self._model_concurrency[key] = max_concurrent
 
+    def sync_model_concurrency(
+        self, caps: dict[str, int]
+    ) -> dict[str, list[str]]:
+        """Atomically replace the whole per-model cap map (#408).
+
+        Boot-time population used per-key ``set_model_concurrency``; a config
+        reload needs the full lifecycle: changed caps updated AND entries for
+        profiles that disappeared REMOVED. The new map is built fully and the
+        reference swapped in one step — dispatch reads a per-cycle snapshot
+        copy (``build_dispatch_config``), so it never iterates a dict that is
+        mutating under it.
+
+        Args:
+            caps: Complete desired map ``{"instrument:model": max_concurrent}``
+                from the fresh profile set. Empty dict removes all caps.
+
+        Returns:
+            Diff actually applied: ``{"added": [...], "changed": [...],
+            "removed": [...]}`` of "instrument:model" keys.
+        """
+        added = [k for k in caps if k not in self._model_concurrency]
+        changed = [
+            k
+            for k, v in caps.items()
+            if k in self._model_concurrency and self._model_concurrency[k] != v
+        ]
+        removed = [k for k in self._model_concurrency if k not in caps]
+        self._model_concurrency = dict(caps)
+        return {"added": added, "changed": changed, "removed": removed}
+
+    def model_concurrency_snapshot(self) -> dict[str, int]:
+        """Copy of the live per-model cap map (for status exposure, #408)."""
+        return dict(self._model_concurrency)
+
     def get_instrument_state(self, name: str) -> InstrumentState | None:
         """Get the tracking state for a specific instrument."""
         return self._instruments.get(name)

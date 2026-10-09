@@ -261,7 +261,9 @@ class TestConductorStatusCommand:
         assert "not running" in result.output
 
     def test_conductor_status_shows_pid(self, tmp_path: Path):
-        """conductor-status shows PID when conductor is running."""
+        """conductor-status shows PID when conductor is running (pid-file
+        only; an explicit --socket that does not answer now exits 1 —
+        #408 landing P2)."""
         pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
 
@@ -280,8 +282,6 @@ class TestConductorStatusCommand:
                     "conductor-status",
                     "--pid-file",
                     str(pid_file),
-                    "--socket",
-                    str(tmp_path / "sock"),
                 ],
             )
 

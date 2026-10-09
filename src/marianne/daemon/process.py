@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from marianne.daemon.ipc.handler import RequestHandler
     from marianne.daemon.ipc.server import DaemonServer
     from marianne.daemon.manager import JobManager
-    from marianne.daemon.types import ObserverEvent
+    from marianne.daemon.types import ConfigReloadResult, ObserverEvent
 
 _logger = get_logger("conductor")
 
@@ -199,7 +199,7 @@ def start_conductor(
             clone=clone_name,
         )
 
-    daemon = DaemonProcess(config)
+    daemon = DaemonProcess(config, start_profile=profile)
     asyncio.run(daemon.run())
 
 
@@ -296,33 +296,56 @@ def stop_conductor(
 def get_conductor_status(
     pid_file: Path | None = None,
     socket_path: Path | None = None,
+    as_json: bool = False,
 ) -> None:
     """Check Marianne conductor (daemon) status via health probes.
 
     Called by ``mzt conductor-status`` via ``cli/commands/conductor.py``.
+    With ``as_json``, stdout carries ONLY the JSON document (human
+    commentary goes to stderr) so ``mzt conductor-status --json | jq .``
+    works. With an explicit ``socket_path``, no PID file is read,
+    asserted, or unlinked — the daemon's own payload is the pid
+    authority (#408 landing fixes).
     """
     _defaults = DaemonConfig()
-    # Explicit pid_file always wins; only the default probes legacy (#227).
-    resolved_pid_file = (
-        pid_file
-        if pid_file is not None
-        else _resolve_live_pid_file(_defaults.pid_file)
+    # #408 landing P2: explicit --socket means socket-only probing — the
+    # default pid file must never be read, asserted, or UNLINKED as a
+    # side effect of inspecting a clone.
+    socket_only = socket_path is not None
+    resolved_socket: Path = (
+        socket_path if socket_path is not None else _defaults.socket.path
     )
-    resolved_socket = socket_path or _defaults.socket.path
-    # #227 transitional: a pre-move conductor serves on the legacy socket.
-    if socket_path is None and not resolved_socket.exists():
-        from marianne.daemon.config import LEGACY_SOCKET_PATH
 
-        if LEGACY_SOCKET_PATH.exists():
-            resolved_socket = LEGACY_SOCKET_PATH
+    def _note(message: str) -> None:
+        # In --json mode stdout is reserved for the JSON document alone;
+        # human commentary goes to stderr so pipes stay parseable.
+        if as_json:
+            typer.secho(message, err=True)
+        else:
+            typer.echo(message)
 
-    pid = _read_pid(resolved_pid_file)
-    if pid is None or not _pid_alive(pid):
-        typer.echo("Marianne conductor is not running")
-        resolved_pid_file.unlink(missing_ok=True)
-        raise typer.Exit(1)
+    pid: int | None = None
+    if not socket_only:
+        # Explicit pid_file always wins; only the default probes legacy (#227).
+        resolved_pid_file = (
+            pid_file
+            if pid_file is not None
+            else _resolve_live_pid_file(_defaults.pid_file)
+        )
+        # #227 transitional: a pre-move conductor serves on the legacy socket.
+        if not resolved_socket.exists():
+            from marianne.daemon.config import LEGACY_SOCKET_PATH
 
-    typer.echo(f"Marianne conductor is running (PID {pid})")
+            if LEGACY_SOCKET_PATH.exists():
+                resolved_socket = LEGACY_SOCKET_PATH
+
+        pid = _read_pid(resolved_pid_file)
+        if pid is None or not _pid_alive(pid):
+            _note("Marianne conductor is not running")
+            resolved_pid_file.unlink(missing_ok=True)
+            raise typer.Exit(1)
+
+        _note(f"Marianne conductor is running (PID {pid})")
 
     from marianne.daemon.ipc.client import DaemonClient
 
@@ -356,13 +379,43 @@ def get_conductor_status(
     try:
         health, ready, daemon_info = asyncio.run(_get_health())
     except (OSError, DaemonError):
-        typer.echo("  (Could not connect to conductor socket for details)")
+        _note("  (Could not connect to conductor socket for details)")
+        if as_json or socket_only:
+            # Machine consumers get an empty stdout plus exit 1, never a
+            # half-valid document; socket-only human mode has no pid-file
+            # fallback, so there is no honest status to print either.
+            raise typer.Exit(1) from None
+        return
+
+    if socket_only and daemon_info is None:
+        # The daemon itself did not answer — with an explicit --socket it
+        # is the only authority, so fail honestly instead of printing a
+        # payload with a foreign or missing pid.
+        _note("Could not connect to conductor socket")
+        raise typer.Exit(1)
+
+    if as_json:
+        import json
+
+        payload: dict[str, Any] = {"pid": pid}
+        if daemon_info is not None:
+            payload.update(daemon_info)
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
         return
 
     from rich.console import Console
     from rich.panel import Panel
 
     con = Console()
+
+    # Socket-only mode has no pid-file pid; the daemon payload is
+    # authoritative wherever it answered.
+    display_pid: Any = (
+        pid if pid is not None
+        else (daemon_info or {}).get("pid", "unknown")
+    )
+    if socket_only:
+        typer.echo(f"Marianne conductor is running (PID {display_pid})")
 
     # Build uptime string
     uptime_str = ""
@@ -379,7 +432,10 @@ def get_conductor_status(
 
     # Build panel content
     lines: list[str] = []
-    lines.append(f"PID {pid} [dim]\u00b7[/dim] Up {uptime_str}" if uptime_str else f"PID {pid}")
+    lines.append(
+        f"PID {display_pid} [dim]\u00b7[/dim] Up {uptime_str}"
+        if uptime_str else f"PID {display_pid}"
+    )
 
     if ready:
         status_str = ready.get("status", "unknown")
@@ -442,14 +498,19 @@ class DaemonProcess:
     and ResourceMonitor (limits) into a single lifecycle.
     """
 
-    def __init__(self, config: DaemonConfig) -> None:
+    def __init__(self, config: DaemonConfig, *, start_profile: str | None = None) -> None:
         self._config = config
+        # #408: the start-time operational profile must survive a reload —
+        # a daemon started with ``--profile dev`` reloads with the same
+        # overlay instead of silently dropping it.
+        self._start_profile = start_profile
         self._signal_received = asyncio.Event()
         self._pgroup = ProcessGroupManager()
         self._start_time = time.monotonic()
         self._signal_tasks: list[asyncio.Task[Any]] = []
         self._profiler: Any = None  # Set in run() step 8.5
         self._correlation: Any = None  # Set in run() step 8.6
+        self._config_watcher: Any = None  # Set in run() step 8.7
 
     async def run(self) -> None:
         """Main daemon lifecycle: boot, serve, shutdown."""
@@ -613,6 +674,26 @@ class DaemonProcess:
                 )
                 await self._correlation.start(self._manager.event_bus)
 
+            # 8.7. Start the config hot-reload watcher (#408) — watches the
+            # config file and the instrument profile source dirs (the same
+            # dirs the manager loaded from) and funnels changes into the
+            # single reload path. Opt-in via hot_reload.enabled (default on).
+            if self._config.hot_reload.enabled:
+                from marianne.daemon.hot_reload import ConfigWatcher
+
+                self._config_watcher = ConfigWatcher(
+                    config_file=self._config.config_file,
+                    profile_dirs=list(self._manager.profile_source_paths),
+                    reload_fn=self.reload_configuration,
+                    enabled_fn=lambda: self._config.hot_reload.enabled,
+                    debounce_fn=lambda: self._config.hot_reload.debounce_seconds,
+                )
+                await self._config_watcher.start()
+                _logger.info(
+                    "daemon.config_watcher_started",
+                    config_file=str(self._config.config_file),
+                )
+
             # 9. Run until shutdown
             _logger.info(
                 "daemon.started",
@@ -621,7 +702,10 @@ class DaemonProcess:
             )
             await self._manager.wait_for_shutdown()
 
-            # 10. Cleanup — correlation, profiler, entropy, monitor
+            # 10. Cleanup — watcher, correlation, profiler, entropy, monitor
+            if self._config_watcher is not None:
+                await self._config_watcher.stop()
+                self._config_watcher = None
             if self._correlation is not None:
                 await self._correlation.stop()
             if self._profiler is not None:
@@ -791,6 +875,14 @@ class DaemonProcess:
         async def handle_config(_p: dict[str, Any], _w: Any) -> dict[str, Any]:
             return self._config.model_dump(mode="json")
 
+        async def handle_reload(params: dict[str, Any], _w: Any) -> dict[str, Any]:
+            # #408: IPC trigger for the single reload path. Returns the
+            # applied/declined record so `mzt conductor reload` can show
+            # exactly what changed.
+            reason = str(params.get("reason") or "ipc")
+            result = await self.reload_configuration(reason)
+            return result.model_dump()
+
         async def handle_clear_jobs(params: dict[str, Any], _w: Any) -> dict[str, Any]:
             return await manager.clear_jobs(
                 statuses=params.get("statuses"),
@@ -835,6 +927,7 @@ class DaemonProcess:
         handler.register("daemon.status", handle_daemon_status)
         handler.register("daemon.shutdown", handle_shutdown)
         handler.register("daemon.config", handle_config)
+        handler.register("daemon.reload", handle_reload)
 
         # Health check probes
         if health is not None:
@@ -1046,94 +1139,56 @@ class DaemonProcess:
         _logger.info("daemon.signal_received", signal=sig.name)
         await manager.shutdown(graceful=True)
 
-    async def _handle_sighup(self) -> None:
-        """Handle SIGHUP by reloading config from disk.
+    async def reload_configuration(self, reason: str) -> ConfigReloadResult:
+        """Single process-level reload entry (#408).
 
-        Re-reads the config file and hot-applies reloadable fields to
-        running components.  Non-reloadable fields (socket.*, pid_file)
-        are detected and logged as warnings.
+        SIGHUP, the ``daemon.reload`` IPC method, and the config file
+        watcher all call this. It delegates the actual reload to
+        ``JobManager.reload_configuration`` (the one owner of config and
+        profile re-reading) and then applies the two process-owned effects:
+        syncing this process's config view and reconfiguring the log level
+        when the reload says it changed.
         """
-        config_file = self._config.config_file
-        if config_file is None:
-            _logger.warning(
-                "daemon.sighup_no_config_file",
-                message="No config file recorded — started with defaults. "
-                "SIGHUP reload has no effect.",
+        if not hasattr(self, "_manager") or self._manager is None:
+            from marianne.daemon.types import ConfigReloadResult
+
+            result = ConfigReloadResult(
+                success=False,
+                reason=reason,
+                config_generation=0,
+                error="manager not initialized",
             )
-            return
+            return result
 
-        _logger.info("daemon.sighup_reload_start", config_file=str(config_file))
-
-        try:
-            new_config = _load_config(config_file)
-        except Exception:
-            _logger.exception(
-                "daemon.sighup_reload_failed",
-                config_file=str(config_file),
-                message="Config reload failed — keeping current config.",
-            )
-            return
-
-        # Warn about non-reloadable field changes
-        _non_reloadable = [
-            ("socket.path", self._config.socket.path, new_config.socket.path),
-            ("socket.permissions", self._config.socket.permissions, new_config.socket.permissions),
-            ("socket.backlog", self._config.socket.backlog, new_config.socket.backlog),
-            (
-                "socket.enforce_peer_uid",
-                self._config.socket.enforce_peer_uid,
-                new_config.socket.enforce_peer_uid,
-            ),
-            ("pid_file", self._config.pid_file, new_config.pid_file),
-        ]
-        for field_name, old_val, new_val in _non_reloadable:
-            if old_val != new_val:
-                _logger.warning(
-                    "daemon.sighup_non_reloadable_changed",
-                    field=field_name,
-                    old_value=str(old_val),
-                    new_value=str(new_val),
-                    message=f"{field_name} changed but requires restart to take effect.",
+        result = await self._manager.reload_configuration(
+            reason, profile=self._start_profile
+        )
+        if result.success:
+            self._config = self._manager.config
+            if "log_level" in result.applied:
+                _configure_daemon_logging(
+                    self._config,
+                    format="json" if self._config.log_file is not None else "console",
                 )
+        return result
 
-        # Hot-apply reloadable fields
-        if hasattr(self, "_manager") and self._manager is not None:
-            self._manager.apply_config(new_config)
-            # #171/#332: re-read instrument profiles from disk so edited or
-            # newly-dropped-in profiles take effect without a restart.
-            try:
-                count = self._manager.reload_instrument_profiles()
-                _logger.info("daemon.sighup_instruments_reloaded", count=count)
-            except Exception:
-                _logger.warning(
-                    "daemon.sighup_instrument_reload_failed", exc_info=True
-                )
+    async def _handle_sighup(self) -> None:
+        """Handle SIGHUP by reloading config from disk (#408).
 
-        if hasattr(self, "_monitor") and self._monitor is not None:
-            self._monitor.update_limits(new_config.resource_limits)
-
-        # Reconfigure logging if log_level or log_file changed
-        if (
-            new_config.log_level != self._config.log_level
-            or new_config.logging != self._config.logging
-            or new_config.log_file != self._config.log_file
-        ):
-            _configure_daemon_logging(
-                new_config,
-                format="json" if new_config.log_file is not None else "console",
-            )
-            _logger.info(
-                "daemon.sighup_logging_changed",
-                old_level=self._config.log_level,
-                new_level=new_config.log_level,
-                old_log_file=str(self._config.log_file),
-                new_log_file=str(new_config.log_file),
-                old_log_root=str(self._config.logging.root),
-                new_log_root=str(new_config.logging.root),
-            )
-
-        self._config = new_config
-        _logger.info("daemon.sighup_reload_complete")
+        Thin delegate — the reload orchestration (config re-read, profile
+        swap, cap diff, generation bookkeeping) is owned by
+        ``JobManager.reload_configuration``; SIGHUP is just one trigger.
+        """
+        _logger.info("daemon.sighup_reload_start")
+        result = await self.reload_configuration("sighup")
+        _logger.info(
+            "daemon.sighup_reload_complete",
+            success=result.success,
+            generation=result.config_generation,
+            applied=result.applied,
+            declined=result.declined,
+            error=result.error,
+        )
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────

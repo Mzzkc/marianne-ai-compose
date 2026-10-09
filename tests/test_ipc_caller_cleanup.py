@@ -91,6 +91,10 @@ def test_normal_stop_refuses_unknown_work(tmp_path, monkeypatch):
 
 
 def test_conductor_status_bounds_probes_and_closes(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    import typer
+
     from marianne.daemon import process
 
     client = AsyncMock()
@@ -104,7 +108,10 @@ def test_conductor_status_bounds_probes_and_closes(tmp_path, monkeypatch):
     monkeypatch.setattr(process, 'CONDUCTOR_PROBE_TIMEOUT', 0.02, raising=False)
     pid = tmp_path / 'pid'
     pid.write_text('12345')
-    process.get_conductor_status(pid_file=pid, socket_path=tmp_path / 's')
+    # Explicit --socket that never answers: exit 1 (no pid-file fallback,
+    # #408 landing P2) — AND the IPC caller is still closed exactly once.
+    with pytest.raises(typer.Exit):
+        process.get_conductor_status(pid_file=pid, socket_path=tmp_path / 's')
     client.close.assert_awaited_once()
 
 

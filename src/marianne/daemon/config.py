@@ -387,6 +387,31 @@ class SemanticLearningConfig(BaseModel):
         return v
 
 
+class HotReloadConfig(BaseModel):
+    """Opt-in file watcher for conductor config + instrument profiles (#408).
+
+    When enabled, the conductor polls the config file and the instrument
+    profile source directories for content changes and applies them through
+    the same reload path as SIGHUP / ``mzt conductor reload`` — no restart.
+    Reloads themselves are always available (SIGHUP, IPC) regardless of
+    this setting; the watcher only automates the trigger.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = Field(
+        default=True,
+        description="Watch the config file and instrument profile directories "
+        "for changes and hot-apply them without a conductor restart.",
+    )
+    debounce_seconds: float = Field(
+        default=2.0,
+        ge=0.1,
+        description="Settle window after a detected change before the reload "
+        "fires. Coalesces editor atomic-rename saves and multi-file writes.",
+    )
+
+
 class DaemonConfig(BaseModel):
     """Top-level configuration for the Marianne conductor.
 
@@ -521,6 +546,11 @@ class DaemonConfig(BaseModel):
         "Per-instrument key management with least-recently-rate-limited "
         "or round-robin rotation policies. Keys are paths to files in "
         "$SECRETS_DIR/, never stored in config.",
+    )
+    hot_reload: HotReloadConfig = Field(
+        default_factory=HotReloadConfig,
+        description="Opt-in watcher that hot-applies config and instrument "
+        "profile changes without a conductor restart (#408).",
     )
 
     @model_validator(mode="after")

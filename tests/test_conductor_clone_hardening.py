@@ -205,7 +205,7 @@ class TestStartConductorCloneConfig:
 
             original_init = DaemonProcess.__init__
 
-            def capturing_init(inst: object, config: DaemonConfig) -> None:
+            def capturing_init(inst: object, config: DaemonConfig, **_kwargs: object) -> None:
                 captured_config.append(config)
                 raise SystemExit(0)  # Stop before asyncio.run
 
@@ -247,7 +247,7 @@ class TestStartConductorCloneConfig:
 
             original_init = DaemonProcess.__init__
 
-            def capturing_init(inst: object, config: DaemonConfig) -> None:
+            def capturing_init(inst: object, config: DaemonConfig, **_kwargs: object) -> None:
                 captured_config.append(config)
                 raise SystemExit(0)
 

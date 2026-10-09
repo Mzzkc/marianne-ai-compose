@@ -58,6 +58,7 @@ from marianne.daemon.semantic_analyzer import SemanticAnalyzer
 from marianne.daemon.snapshot import SnapshotManager
 from marianne.daemon.task_utils import log_task_exception
 from marianne.daemon.types import (
+    ConfigReloadResult,
     JobDeadlineStatus,
     JobRequest,
     JobResponse,
@@ -463,6 +464,7 @@ class JobManager:
         wall_clock: Callable[[], float] = time.time,
         monotonic_clock: Callable[[], float] = time.monotonic,
         recurrence_clock: Callable[[], datetime] | None = None,
+        profile_dirs: tuple[Path, Path] | None = None,
     ) -> None:
         self._config = config
         self._start_time = start_time or time.monotonic()
@@ -470,6 +472,18 @@ class JobManager:
         self._wall_clock = wall_clock
         self._monotonic_clock = monotonic_clock
         self._recurrence_clock = recurrence_clock or utc_now
+        # #408: instrument-profile source directories (organization, venue).
+        # Recorded so boot, reload, and the file watcher all resolve the
+        # SAME profile sources — one load path, no drift between boot and
+        # reload. None defers to load_all_profiles defaults at use time.
+        self._profile_dirs = profile_dirs
+        # #408: config generation bookkeeping for hot reload. Generation
+        # starts at 1 once a config LOAD has happened (construction counts
+        # as the first load); it advances only on successful reloads.
+        self._config_generation = 1
+        self._config_loaded_at = datetime.now(UTC).isoformat()
+        self._last_reload_result: ConfigReloadResult | None = None
+        self._reload_lock = asyncio.Lock()
 
         # Phase 3: Centralized learning hub.
         # Single GlobalLearningStore shared across all jobs — pattern
@@ -513,9 +527,10 @@ class JobManager:
         # Jobs queued as PENDING during rate limit backpressure.
         # Keyed by conductor job_id.  Auto-started when limits clear.
         self._pending_jobs: dict[str, JobRequest] = {}
-        # #231: a live-resizable gate, not a raw Semaphore — apply_config()
-        # adjusts the limit in place so a SIGHUP reload never orphans in-flight
-        # acquisitions (replacing the object over-admits; see ConcurrencyGate).
+        # #231: a live-resizable gate, not a raw Semaphore —
+        # reload_configuration() adjusts the limit in place so a config
+        # reload never orphans in-flight acquisitions (replacing the object
+        # over-admits; see ConcurrencyGate).
         self._concurrency_semaphore = ConcurrencyGate(
             config.max_concurrent_jobs,
         )
@@ -733,14 +748,23 @@ class JobManager:
             BackendPool,
             create_backend_for_instrument,
         )
-        from marianne.instruments.loader import load_all_profiles
+        from marianne.instruments.loader import (
+            load_all_profiles,
+            profile_source_dirs,
+        )
         from marianne.instruments.registry import InstrumentRegistry
 
-        profiles = load_all_profiles()
+        _, org_dir, venue_dir = profile_source_dirs(
+            organization_dir=self._profile_dirs[0] if self._profile_dirs else None,
+            venue_dir=self._profile_dirs[1] if self._profile_dirs else None,
+        )
+        profiles = load_all_profiles(
+            organization_dir=org_dir, venue_dir=venue_dir,
+        )
         registry = InstrumentRegistry()
         for profile in profiles.values():
             registry.register(profile, override=True)
-        # #171: retain for SIGHUP hot-reload of instrument profiles.
+        # #171: retain for hot-reload of instrument profiles.
         self._instrument_registry = registry
 
         # Start semantic analyzer after event bus (needs bus for subscription).
@@ -822,14 +846,12 @@ class JobManager:
                     _logger.warning("manager.mcp_pool_stop_after_start_failed", exc_info=True)
                 self._mcp_pool = None
 
-        # Populate per-model concurrency from instrument profiles
-        for profile in profiles.values():
-            for model in profile.models:
-                self._baton_adapter._baton.set_model_concurrency(
-                    profile.name,
-                    model.name,
-                    model.max_concurrent,
-                )
+        # Populate per-model concurrency from instrument profiles. Boot and
+        # reload share this exact mechanism (#408) so the caps lifecycle
+        # (set/change/remove) has one owner.
+        self._baton_adapter.sync_model_concurrency(
+            self._model_caps_from_profiles(profiles)
+        )
 
         # #111: start the ordered checkpoint writer BEFORE the baton loop, so
         # every persist callback (which fires from that loop) has a consumer and
@@ -950,57 +972,336 @@ class JobManager:
             raise RuntimeError("JobManager not started — call start() first")
         return self._service
 
-    def apply_config(self, new_config: DaemonConfig) -> None:
-        """Hot-apply reloadable config fields from a SIGHUP reload.
+    # ─── Config hot reload (#408) ──────────────────────────────────
 
-        Compares the new config against the current one and applies
-        changes that can be safely updated at runtime. Adjusts the
-        concurrency gate's limit in place if ``max_concurrent_jobs`` changed.
+    # Fields whose changes CANNOT take effect in a running conductor.
+    # A reload keeps the running value for these (the live config must
+    # reflect live reality) and reports the refused change in declined[].
+    _RESTART_ONLY_FIELDS: ClassVar[tuple[str, ...]] = (
+        "socket",  # server bound at boot
+        "pid_file",  # PID written at boot
+        "state_db_path",  # registries opened at boot
+        "state_backend_type",  # frozen to sqlite
+        "config_file",  # reload anchor identity
+        "logging",  # log destination: file handles held at boot
+        "log_file",  # derived from logging
+        "observer",  # recorder built at boot
+        "learning",  # semantic analyzer built at boot
+        "profiler",  # collector built at boot
+        "mcp_pool",  # server pool started at boot
+        "keyring",  # key holders built at boot
+        "monitor_interval_seconds",  # monitor loop started at boot
+    )
 
-        #231: the limit is resized via ``ConcurrencyGate.set_limit()`` — NOT by
-        replacing the object. Replacing it orphaned in-flight acquisitions (they
-        release into the dead object) while the new object started with all
-        permits free, so a lower over-admitted. In-flight jobs are unaffected by
-        a resize; a lowered limit takes effect as running jobs drain.
+    # Scalar fields that are hot-applied purely by replacing self._config:
+    # their consumers read the live config at use time.
+    _LIVE_READ_FIELDS: ClassVar[tuple[str, ...]] = (
+        "job_timeout_seconds",  # read at job admission (runtime)
+        "shutdown_timeout_seconds",  # read at shutdown
+        "max_job_history",  # read at terminal eviction
+        "default_thinking_method",  # read per job at prompt build
+        "log_level",  # process layer reconfigures the level
+        "hot_reload",  # watcher reads live settings each cycle
+    )
+
+    @property
+    def config(self) -> DaemonConfig:
+        """The live, effective conductor configuration."""
+        return self._config
+
+    @property
+    def config_generation(self) -> int:
+        """Config generation; advances once per successful reload (#408)."""
+        return self._config_generation
+
+    @property
+    def config_loaded_at(self) -> str | None:
+        """ISO-8601 UTC timestamp of the last successful config load."""
+        return self._config_loaded_at
+
+    @property
+    def last_reload_result(self) -> ConfigReloadResult | None:
+        """Outcome of the most recent reload attempt, if any."""
+        return self._last_reload_result
+
+    @property
+    def profile_source_paths(self) -> tuple[Path, Path, Path]:
+        """Resolved profile source dirs (builtins, organization, venue).
+
+        The same directories boot loaded from and reload re-reads —
+        the file watcher watches exactly these.
         """
-        old = self._config
+        from marianne.instruments.loader import profile_source_dirs
 
-        # Resize the concurrency gate in place if the limit changed.
-        if new_config.max_concurrent_jobs != old.max_concurrent_jobs:
-            _logger.info(
-                "manager.config_reloaded",
-                field="max_concurrent_jobs",
-                old_value=old.max_concurrent_jobs,
-                new_value=new_config.max_concurrent_jobs,
-            )
-            self._concurrency_semaphore.set_limit(
-                new_config.max_concurrent_jobs,
-            )
+        return profile_source_dirs(
+            organization_dir=self._profile_dirs[0] if self._profile_dirs else None,
+            venue_dir=self._profile_dirs[1] if self._profile_dirs else None,
+        )
 
-        # Log other changed reloadable fields
-        _reloadable_fields = [
-            "job_timeout_seconds",
-            "shutdown_timeout_seconds",
-            "max_job_history",
-            "monitor_interval_seconds",
-        ]
-        for field_name in _reloadable_fields:
-            old_val = getattr(old, field_name)
-            new_val = getattr(new_config, field_name)
-            if old_val != new_val:
-                _logger.info(
-                    "manager.config_reloaded",
-                    field=field_name,
-                    old_value=old_val,
-                    new_value=new_val,
+    @staticmethod
+    def _model_caps_from_profiles(
+        profiles: dict[str, Any],
+    ) -> dict[str, int]:
+        """Build the per-model cap map from an instrument profile set.
+
+        Keys are ``"instrument:model"`` — the exact key shape dispatch
+        reads (dispatch.py model_concurrency lookups).
+        """
+        caps: dict[str, int] = {}
+        for profile in profiles.values():
+            for model in profile.models:
+                caps[f"{profile.name}:{model.name}"] = model.max_concurrent
+        return caps
+
+    async def reload_configuration(
+        self, reason: str, *, profile: str | None = None
+    ) -> ConfigReloadResult:
+        """The single config/profile hot-reload path (#408).
+
+        SIGHUP (via the DaemonProcess delegate), the ``daemon.reload`` IPC
+        method, ``mzt conductor reload``, and the file watcher all funnel
+        here — nothing else re-reads config or profiles. Steps:
+
+        1. Re-read the config file (with the start profile overlay) and the
+           instrument profile directories into temporaries. A config-file
+           load or validation error is fail-closed: nothing is applied,
+           the running config/registry/caps are untouched, generation
+           does not advance. A profile FILE that exists but fails to
+           load is NOT fail-closed — its previous registry entry and
+           caps are retained and the file is reported in ``declined``
+           with ``partial=True`` (the #397 edit-accident must not
+           silently remove a live instrument).
+        2. Build the effective config: fields that cannot change in a
+           running conductor keep their running values and are reported in
+           ``declined``; everything else is applied in place (resize, never
+           replace holding objects — #231 pattern).
+        3. Swap the live registry (fresh profiles ∪ retained previous
+           entries from broken files; a healthy fresh profile always wins
+           the name), invalidate the backend pool (#171 semantics:
+           in-flight executions finish on their loaded profile), and
+           atomically replace the per-model cap map — including REMOVAL
+           of entries for profiles that disappeared.
+        4. Enqueue a dispatch retry so a raised cap releases waiting sheets
+           on the next baton cycle instead of an unrelated event. A lowered
+           cap never cancels in-flight work; new dispatch waits for drain.
+        5. Record generation/loaded_at/applied/declined and return.
+
+        Args:
+            reason: Trigger origin ("sighup", "ipc", "cli", "watcher").
+            profile: Start-time operational profile to re-apply as overlay,
+                so a reload does not silently drop ``--profile`` settings.
+
+        Returns:
+            The typed reload outcome (also exposed via daemon.status).
+        """
+        from marianne.instruments.loader import load_all_profiles_with_failures
+
+        async with self._reload_lock:
+            old = self._config
+            fail = self._record_failed_reload
+            config_file = old.config_file
+
+            if config_file is None:
+                return fail(
+                    reason,
+                    "no config file recorded — started with defaults; "
+                    "reload has no file to re-read",
+                )
+            if not Path(config_file).exists():
+                return fail(
+                    reason, f"config file missing: {config_file}"
                 )
 
-        self._config = new_config
+            # ── Load + validate everything BEFORE applying anything ──
+            try:
+                from marianne.daemon.process import _load_config
 
-        # Propagate preflight thresholds to job service for new runners
-        if self._service is not None:
-            self._service._token_warning_threshold = new_config.preflight.token_warning_threshold
-            self._service._token_error_threshold = new_config.preflight.token_error_threshold
+                new_config = _load_config(config_file, profile=profile)
+                _, org_dir, venue_dir = self.profile_source_paths
+                fresh_profiles, failed_profiles = (
+                    load_all_profiles_with_failures(
+                        organization_dir=org_dir, venue_dir=venue_dir,
+                    )
+                )
+            except Exception as exc:
+                return fail(
+                    reason,
+                    f"reload validation failed — running config kept: "
+                    f"{type(exc).__name__}: {exc}",
+                    declined=[
+                        f"reload_failed: {type(exc).__name__}: {exc}",
+                    ],
+                )
+
+            # ── Broken profile files: keep previous entries (P1, #397) ──
+            # A source file that exists but failed to load must not
+            # silently remove its live registry entry and cap keys. Merge
+            # key is the profile's recorded _source_path — never the
+            # name — so legal name overrides cannot resurrect stale
+            # entries. A healthy fresh profile owning the same name wins.
+            merged_profiles = dict(fresh_profiles)
+            retained_from: dict[Path, str] = {}
+            if failed_profiles and self._instrument_registry is not None:
+                failed_paths = {failure.path for failure in failed_profiles}
+                for previous in self._instrument_registry.list_all():
+                    source = previous._source_path
+                    if source is None or source not in failed_paths:
+                        continue
+                    if previous.name in merged_profiles:
+                        continue  # a healthy fresh profile owns the name
+                    merged_profiles[previous.name] = previous
+                    retained_from[source] = previous.name
+
+            partial_reload = bool(failed_profiles)
+
+            # ── Classify: restart-only changes keep running values ──
+            applied: list[str] = []
+            declined: list[str] = [
+                # Every failed profile file is reported — even when a
+                # healthy fresh profile now owns the name — so the
+                # operator always learns the file on disk is broken.
+                # Distinguishable prefix; ``partial`` is the machine flag.
+                (
+                    f"profile load failed ({failure.path}): "
+                    f"{failure.reason_code}: {failure.reason}"
+                    + (
+                        f" — previous entry '{retained_from[failure.path]}' retained"
+                        if failure.path in retained_from
+                        else ""
+                    )
+                )
+                for failure in failed_profiles
+            ]
+            keep_running: dict[str, Any] = {}
+            for field_name in self._RESTART_ONLY_FIELDS:
+                if getattr(new_config, field_name) != getattr(old, field_name):
+                    declined.append(
+                        f"{field_name}: restart required (running value kept)"
+                    )
+                    keep_running[field_name] = getattr(old, field_name)
+            effective = (
+                new_config.model_copy(update=keep_running)
+                if keep_running
+                else new_config
+            )
+
+            # ── Apply hot fields in place ──
+            if effective.max_concurrent_jobs != old.max_concurrent_jobs:
+                # #231: resize the live gate, never replace it — replacing
+                # orphaned in-flight acquisitions and over-admitted on lower.
+                self._concurrency_semaphore.set_limit(
+                    effective.max_concurrent_jobs,
+                )
+                applied.append(
+                    f"max_concurrent_jobs: "
+                    f"{old.max_concurrent_jobs}→{effective.max_concurrent_jobs}"
+                )
+
+            if effective.max_concurrent_sheets != old.max_concurrent_sheets:
+                if self._baton_adapter is not None:
+                    # Adapter attribute is read per dispatch cycle — in-place
+                    # update; the setter also wakes the loop.
+                    self._baton_adapter.set_max_concurrent_sheets(
+                        effective.max_concurrent_sheets,
+                    )
+                if self._scheduler_instance is not None:
+                    self._scheduler_instance.set_max_concurrent(
+                        effective.max_concurrent_sheets,
+                    )
+                applied.append(
+                    f"max_concurrent_sheets: "
+                    f"{old.max_concurrent_sheets}"
+                    f"→{effective.max_concurrent_sheets}"
+                )
+
+            if effective.resource_limits != old.resource_limits:
+                if self._monitor is not None:
+                    self._monitor.update_limits(effective.resource_limits)
+                applied.append("resource_limits")
+
+            if effective.preflight != old.preflight:
+                if self._service is not None:
+                    self._service._token_warning_threshold = (
+                        effective.preflight.token_warning_threshold
+                    )
+                    self._service._token_error_threshold = (
+                        effective.preflight.token_error_threshold
+                    )
+                applied.append("preflight")
+
+            for field_name in self._LIVE_READ_FIELDS:
+                if getattr(effective, field_name) != getattr(old, field_name):
+                    applied.append(field_name)
+
+            self._config = effective
+
+            # ── Instrument profiles: registry swap + caps diff ──
+            if self._instrument_registry is not None:
+                self._instrument_registry.replace_all(merged_profiles)
+                if (
+                    self._baton_adapter is not None
+                    and self._baton_adapter._backend_pool is not None
+                ):
+                    self._baton_adapter._backend_pool.invalidate()
+                applied.append(f"instrument_profiles: {len(merged_profiles)}")
+                if self._baton_adapter is not None:
+                    diff = self._baton_adapter.sync_model_concurrency(
+                        self._model_caps_from_profiles(merged_profiles)
+                    )
+                    if diff["added"] or diff["changed"] or diff["removed"]:
+                        applied.append(
+                            "model_concurrency: "
+                            f"+{len(diff['added'])} "
+                            f"~{len(diff['changed'])} "
+                            f"-{len(diff['removed'])}"
+                        )
+
+            # ── Commit generation ──
+            self._config_generation += 1
+            self._config_loaded_at = datetime.now(UTC).isoformat()
+            result = ConfigReloadResult(
+                success=True,
+                partial=partial_reload,
+                reason=reason,
+                config_generation=self._config_generation,
+                config_loaded_at=self._config_loaded_at,
+                applied=applied,
+                declined=declined,
+            )
+            self._last_reload_result = result
+            _logger.info(
+                "manager.config_reloaded",
+                reason=reason,
+                generation=self._config_generation,
+                partial=partial_reload,
+                applied=applied,
+                declined=declined,
+            )
+            return result
+
+    def _record_failed_reload(
+        self,
+        reason: str,
+        error: str,
+        *,
+        declined: list[str] | None = None,
+    ) -> ConfigReloadResult:
+        """Record a failed reload. Nothing applied; generation unchanged."""
+        result = ConfigReloadResult(
+            success=False,
+            reason=reason,
+            config_generation=self._config_generation,
+            config_loaded_at=self._config_loaded_at,
+            declined=declined or [f"reload_failed: {error}"],
+            error=error,
+        )
+        self._last_reload_result = result
+        _logger.warning(
+            "manager.config_reload_failed",
+            reason=reason,
+            error=error,
+        )
+        return result
 
     def update_job_config_metadata(
         self,
@@ -4206,30 +4507,10 @@ class JobManager:
             return None
         return self._baton_adapter.output_hub
 
-    def reload_instrument_profiles(self) -> int:
-        """Hot-reload instrument profiles from disk (#171/#332).
-
-        Re-runs the single ``load_all_profiles()`` flow (builtins +
-        ~/.marianne/instruments + .marianne/instruments — the only load
-        path, no duplicate), syncs the LIVE registry in place so the pool
-        and adapter keep valid references, and invalidates the pool so new
-        acquisitions build from the fresh profiles. In-flight executions
-        finish on their loaded profile. Synchronous and lock-light — safe
-        from the SIGHUP handler. Returns the profile count after reload.
-        """
-        from marianne.instruments.loader import load_all_profiles
-
-        if self._instrument_registry is None:
-            return 0
-        profiles = load_all_profiles()
-        self._instrument_registry.replace_all(profiles)
-        if (
-            self._baton_adapter is not None
-            and self._baton_adapter._backend_pool is not None
-        ):
-            self._baton_adapter._backend_pool.invalidate()
-        _logger.info("manager.instruments_reloaded", count=len(profiles))
-        return len(profiles)
+    # Instrument-profile hot reload (#171/#332/#408) is owned by
+    # reload_configuration above — registry replace + pool invalidate +
+    # per-model cap sync in one path. There is deliberately no separate
+    # public profile-reload method.
 
     async def resolve_escalation(
         self, job_id: str, sheet_num: int, decision: str
@@ -4255,6 +4536,9 @@ class JobManager:
         from marianne.daemon.ipc.protocol import PROTOCOL_VERSION
 
         mem = self._monitor.current_memory_mb()
+        model_concurrency: dict[str, int] = {}
+        if self._baton_adapter is not None:
+            model_concurrency = self._baton_adapter.model_concurrency_snapshot()
         return {
             "pid": os.getpid(),
             "uptime_seconds": round(time.monotonic() - self._start_time, 1),
@@ -4263,6 +4547,15 @@ class JobManager:
             "memory_usage_mb": round(mem, 1) if mem is not None else 0.0,
             "version": getattr(marianne, "__version__", "0.1.0"),
             "protocol_version": PROTOCOL_VERSION,
+            # #408: hot-reload observability.
+            "config_generation": self._config_generation,
+            "config_loaded_at": self._config_loaded_at,
+            "last_config_reload": (
+                self._last_reload_result.model_dump()
+                if self._last_reload_result is not None
+                else None
+            ),
+            "model_concurrency": model_concurrency,
         }
 
     # ─── Shutdown ─────────────────────────────────────────────────────

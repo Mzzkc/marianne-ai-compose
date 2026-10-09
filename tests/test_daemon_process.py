@@ -9,11 +9,13 @@ from __future__ import annotations
 import os
 import signal
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import typer
 
+from marianne.daemon.config import DaemonConfig
 from marianne.daemon.process import (
     DaemonProcess,
     _pid_alive,
@@ -224,7 +226,8 @@ class TestGetConductorStatus:
             get_conductor_status(pid_file=pid_file)
 
     def test_status_shows_pid_when_running(self, tmp_path: Path, capsys):
-        """get_conductor_status shows the PID when running."""
+        """get_conductor_status shows the PID when running (pid-file only;
+        socket details unavailable is non-fatal in human mode)."""
         pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
 
@@ -236,6 +239,25 @@ class TestGetConductorStatus:
         with (
             patch("marianne.daemon.process._pid_alive", return_value=True),
             patch("marianne.daemon.process.asyncio.run", side_effect=_mock_asyncio_run),
+        ):
+            get_conductor_status(pid_file=pid_file)
+
+        assert "PID 12345" in capsys.readouterr().out
+
+    def test_status_explicit_socket_unreachable_exits_1(self, tmp_path: Path):
+        """Explicit --socket that does not answer exits 1 — socket-only
+        probing has no pid-file fallback (#408 landing P2)."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text("12345")
+
+        def _mock_asyncio_run(coro):
+            coro.close()
+            return (None, None, None)  # probes got no answer
+
+        with (
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.asyncio.run", side_effect=_mock_asyncio_run),
+            pytest.raises(typer.Exit),
         ):
             get_conductor_status(pid_file=pid_file, socket_path=tmp_path / "sock")
 
@@ -430,6 +452,7 @@ class TestDaemonProcess:
             "daemon.status",
             "daemon.shutdown",
             "daemon.config",
+            "daemon.reload",
             "daemon.health",
             "daemon.ready",
             "daemon.top",
@@ -452,50 +475,99 @@ class TestDaemonProcess:
         assert cancel_result == {"cancelled": True}
         manager.cancel_job.assert_awaited_once_with("job-123", source="ipc")
 
+    @staticmethod
+    def _reload_manager(config: DaemonConfig, result: Any = None) -> MagicMock:
+        """Mock manager whose reload_configuration returns a real result.
+
+        #408: SIGHUP delegates to JobManager.reload_configuration; the mock
+        must behave like the real single reload path for the delegate.
+        """
+        from marianne.daemon.types import ConfigReloadResult
+
+        manager = MagicMock()
+        manager.config = config
+        manager.reload_configuration = AsyncMock(
+            return_value=result
+            or ConfigReloadResult(
+                success=True, reason="sighup", config_generation=2
+            )
+        )
+        return manager
+
     @pytest.mark.asyncio
-    async def test_handle_sighup_reloads_config(self, tmp_path: Path):
-        """_handle_sighup reloads config from disk and applies changes."""
-        # Create a config file with initial settings
+    async def test_handle_sighup_delegates_to_single_reload_path(
+        self, tmp_path: Path
+    ):
+        """_handle_sighup is a trigger: it calls manager.reload_configuration
+        and syncs the process config view from the manager (#408)."""
         import yaml
 
         from marianne.daemon.config import DaemonConfig
 
         cfg_path = tmp_path / "daemon.yaml"
-        cfg_path.write_text(yaml.dump({"max_concurrent_jobs": 3}))
+        cfg_path.write_text(yaml.dump({"max_concurrent_jobs": 8}))
 
-        config = DaemonConfig(max_concurrent_jobs=3)
+        config = DaemonConfig(max_concurrent_jobs=8)
         config.config_file = cfg_path
         dp = DaemonProcess(config)
-
-        # Simulate running state with mock manager/monitor
-        mock_manager = MagicMock()
-        mock_monitor = MagicMock()
+        mock_manager = self._reload_manager(config)
         dp._manager = mock_manager
-        dp._monitor = mock_monitor
-
-        # Update config file with new value
-        cfg_path.write_text(yaml.dump({"max_concurrent_jobs": 8}))
 
         await dp._handle_sighup()
 
-        mock_manager.apply_config.assert_called_once()
-        mock_monitor.update_limits.assert_called_once()
-        assert dp._config.max_concurrent_jobs == 8
+        mock_manager.reload_configuration.assert_awaited_once_with(
+            "sighup", profile=None
+        )
+        assert dp._config is config
 
     @pytest.mark.asyncio
     async def test_handle_sighup_no_config_file(self):
-        """_handle_sighup does nothing when no config file was recorded."""
+        """A missing manager surface is tolerated — delegate fails soft."""
         from marianne.daemon.config import DaemonConfig
 
         config = DaemonConfig()  # config_file defaults to None
         dp = DaemonProcess(config)
 
-        # Should not raise — just logs a warning
+        # No manager wired at all: should not raise, returns a failed result.
+        result = await dp.reload_configuration("sighup")
+        assert result.success is False
+
+    @pytest.mark.asyncio
+    async def test_handle_sighup_failed_reload_keeps_process_config(
+        self, tmp_path: Path
+    ):
+        """When the single path declines, the process config view is kept."""
+        import yaml
+
+        from marianne.daemon.config import DaemonConfig
+        from marianne.daemon.types import ConfigReloadResult
+
+        cfg_path = tmp_path / "daemon.yaml"
+        cfg_path.write_text(yaml.dump({"max_concurrent_jobs": 5}))
+
+        config = DaemonConfig(max_concurrent_jobs=5)
+        config.config_file = cfg_path
+        dp = DaemonProcess(config)
+        mock_manager = self._reload_manager(
+            config,
+            ConfigReloadResult(
+                success=False,
+                reason="sighup",
+                config_generation=1,
+                error="validation failed",
+            ),
+        )
+        dp._manager = mock_manager
+
         await dp._handle_sighup()
+
+        mock_manager.reload_configuration.assert_awaited_once()
+        assert dp._config.max_concurrent_jobs == 5  # unchanged view
 
     @pytest.mark.asyncio
     async def test_handle_sighup_warns_non_reloadable(self, tmp_path: Path):
-        """_handle_sighup logs warnings when non-reloadable fields change."""
+        """Restart-only decisions live in the manager; the delegate applies
+        whatever effective config the manager hands back (#408)."""
         import yaml
 
         from marianne.daemon.config import DaemonConfig, SocketConfig
@@ -514,47 +586,49 @@ class TestDaemonProcess:
         )
         config.config_file = cfg_path
         dp = DaemonProcess(config)
-        dp._manager = MagicMock()
-        dp._monitor = MagicMock()
+        # The manager's effective config keeps the RUNNING socket value —
+        # exactly what reload_configuration returns for restart-only fields.
+        dp._manager = self._reload_manager(config)
 
-        # Should not raise — applies config and logs warning for socket.path
         await dp._handle_sighup()
-        # Config is updated despite non-reloadable warning
-        assert dp._config.socket.path == Path("/tmp/new-marianne.sock")
+        assert dp._config.socket.path == Path("/tmp/old-marianne.sock")
 
     @pytest.mark.asyncio
-    async def test_handle_sighup_preserves_json_format_for_file_logging(
+    async def test_handle_sighup_reconfigures_log_level_only_when_applied(
         self,
         tmp_path: Path,
     ):
-        """SIGHUP keeps daemon file logs machine-readable when logging changes."""
+        """SIGHUP reconfigures logging only when the reload applied log_level
+        (log DESTINATION is restart-only; the level is hot)."""
         import yaml
 
         from marianne.daemon.config import DaemonConfig
+        from marianne.daemon.types import ConfigReloadResult
 
         cfg_path = tmp_path / "daemon.yaml"
-        log_path = tmp_path / "conductor.log"
-        cfg_path.write_text(
-            yaml.dump(
-                {
-                    "log_level": "debug",
-                    "log_file": str(log_path),
-                }
-            )
-        )
+        cfg_path.write_text(yaml.dump({"log_level": "debug"}))
 
         config = DaemonConfig(log_level="info")
         config.config_file = cfg_path
+        effective = config.model_copy(update={"log_level": "debug"})
         dp = DaemonProcess(config)
-        dp._manager = MagicMock()
-        dp._monitor = MagicMock()
+        dp._manager = self._reload_manager(
+            effective,
+            ConfigReloadResult(
+                success=True,
+                reason="sighup",
+                config_generation=2,
+                applied=["log_level"],
+            ),
+        )
 
         with patch("marianne.core.logging.configure_logging") as mock_configure:
             await dp._handle_sighup()
 
         mock_configure.assert_called_once()
-        assert mock_configure.call_args.kwargs["format"] == "json"
-        assert mock_configure.call_args.kwargs["file_path"] == log_path
+        assert mock_configure.call_args.kwargs["level"] == "DEBUG"
+        # Destination is restart-only: reconfigure keeps the RUNNING file.
+        assert mock_configure.call_args.kwargs["file_path"] == effective.log_file
 
     @pytest.mark.asyncio
     async def test_register_methods_without_health(self):
@@ -578,8 +652,11 @@ class TestDaemonProcess:
 
     @pytest.mark.asyncio
     async def test_handle_sighup_corrupt_yaml_keeps_current_config(self, tmp_path: Path):
-        """_handle_sighup keeps current config when the file contains invalid YAML."""
+        """A failed reload keeps the process config view — the delegate only
+        syncs on success. Real fail-closed semantics are covered in
+        test_config_hot_reload_408.py against the real manager."""
         from marianne.daemon.config import DaemonConfig
+        from marianne.daemon.types import ConfigReloadResult
 
         cfg_path = tmp_path / "daemon.yaml"
         cfg_path.write_text("max_concurrent_jobs: 5")
@@ -587,44 +664,50 @@ class TestDaemonProcess:
         config = DaemonConfig(max_concurrent_jobs=5)
         config.config_file = cfg_path
         dp = DaemonProcess(config)
-        dp._manager = MagicMock()
-        dp._monitor = MagicMock()
-
-        # Corrupt the file with invalid YAML that will cause model_validate to fail
-        cfg_path.write_text("max_concurrent_jobs: not-a-number")
+        dp._manager = self._reload_manager(
+            config,
+            ConfigReloadResult(
+                success=False,
+                reason="sighup",
+                config_generation=1,
+                error="validation failed",
+            ),
+        )
 
         await dp._handle_sighup()
 
-        # Config should be unchanged — reload failed, kept current
+        # Config view unchanged — reload failed, kept current
         assert dp._config.max_concurrent_jobs == 5
-        # Manager/monitor should NOT have been called
-        dp._manager.apply_config.assert_not_called()
-        dp._monitor.update_limits.assert_not_called()
+        dp._manager.reload_configuration.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_handle_sighup_deleted_file_keeps_current_config(self, tmp_path: Path):
-        """_handle_sighup keeps current config when the config file is deleted."""
+        """A deleted config file is a failed reload (fail-closed #408) —
+        the running config must NOT silently revert to defaults."""
         from marianne.daemon.config import DaemonConfig
+        from marianne.daemon.types import ConfigReloadResult
 
         cfg_path = tmp_path / "daemon.yaml"
-        cfg_path.write_text("max_concurrent_jobs: 5")
+        cfg_path.write_text("max_concurrent_jobs: 7")
 
-        config = DaemonConfig(max_concurrent_jobs=5)
+        config = DaemonConfig(max_concurrent_jobs=7)
         config.config_file = cfg_path
         dp = DaemonProcess(config)
-        dp._manager = MagicMock()
-        dp._monitor = MagicMock()
-
-        # Delete the config file
         cfg_path.unlink()
+        dp._manager = self._reload_manager(
+            config,
+            ConfigReloadResult(
+                success=False,
+                reason="sighup",
+                config_generation=1,
+                error=f"config file missing: {cfg_path}",
+            ),
+        )
 
         await dp._handle_sighup()
 
-        # _load_config returns defaults when file is missing — config IS replaced
-        # with defaults (max_concurrent_jobs=5 is the default anyway)
-        # But apply_config and update_limits ARE called because _load_config
-        # successfully returns a DaemonConfig (defaults).
-        dp._manager.apply_config.assert_called_once()
+        assert dp._config.max_concurrent_jobs == 7
+        dp._manager.reload_configuration.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_daemon_config_rpc_handler_returns_config(self):

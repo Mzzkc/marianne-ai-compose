@@ -33,6 +33,7 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import socket
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -47,6 +48,22 @@ _logger = get_logger("instruments.loader")
 
 # File extensions the loader recognizes as instrument profiles.
 _YAML_EXTENSIONS = frozenset({".yaml", ".yml"})
+
+
+@dataclass(frozen=True)
+class ProfileLoadFailure:
+    """One instrument profile file that exists but failed to load (#408).
+
+    Carries the exact reason the loader skipped the file — the same
+    reason already emitted as a WARNING by ``_load_file`` — so the
+    hot-reload path can keep the previous registry entry and report
+    the file instead of silently removing it (the #397 edit-accident
+    class). ``path`` is resolved to match ``InstrumentProfile._source_path``.
+    """
+
+    path: Path
+    reason_code: str
+    reason: str
 
 
 def route_identity(binding: InstrumentRouteBinding) -> tuple[str | int | None, ...]:
@@ -88,15 +105,29 @@ class InstrumentProfileLoader:
             the same directory define the same name, the last one
             (alphabetically by filename) wins.
         """
+        profiles, _failures = InstrumentProfileLoader._scan_directory(directory)
+        return profiles
+
+    @staticmethod
+    def _scan_directory(
+        directory: str | Path,
+    ) -> tuple[dict[str, InstrumentProfile], list[ProfileLoadFailure]]:
+        """Scan one directory, reporting files that failed to load.
+
+        Same scan/override semantics as ``load_directory``; additionally
+        returns one ``ProfileLoadFailure`` per file that exists but could
+        not be loaded (read/parse/validation error).
+        """
         dir_path = Path(directory)
         if not dir_path.is_dir():
             _logger.debug(
                 "instruments_dir_not_found",
                 directory=str(dir_path),
             )
-            return {}
+            return {}, []
 
         profiles: dict[str, InstrumentProfile] = {}
+        failures: list[ProfileLoadFailure] = []
 
         # Sort files alphabetically for deterministic override behavior
         yaml_files = sorted(
@@ -105,7 +136,11 @@ class InstrumentProfileLoader:
         )
 
         for yaml_file in yaml_files:
-            profile = InstrumentProfileLoader._load_file(yaml_file)
+            profile, failure = InstrumentProfileLoader._load_file_detailed(
+                yaml_file
+            )
+            if failure is not None:
+                failures.append(failure)
             if profile is not None:
                 if profile.name in profiles:
                     _logger.info(
@@ -124,7 +159,7 @@ class InstrumentProfileLoader:
                 names=sorted(profiles.keys()),
             )
 
-        return profiles
+        return profiles, failures
 
     @staticmethod
     def load_directories(
@@ -173,6 +208,21 @@ class InstrumentProfileLoader:
         Returns None on any error — parse failures, validation errors,
         unexpected structure. All errors are logged.
         """
+        profile, _failure = InstrumentProfileLoader._load_file_detailed(path)
+        return profile
+
+    @staticmethod
+    def _load_file_detailed(
+        path: Path,
+    ) -> tuple[InstrumentProfile | None, ProfileLoadFailure | None]:
+        """Load and validate one file, returning WHY it failed.
+
+        Returns ``(profile, None)`` on success and ``(None, failure)``
+        on any error — read failures, parse failures, validation
+        errors, unexpected structure. All errors are logged exactly as
+        ``_load_file`` logs them; the failure record carries the same
+        reason so reload callers can report it (#408 landing).
+        """
         try:
             raw_bytes = path.read_bytes()
             raw_text = raw_bytes.decode("utf-8")
@@ -182,7 +232,11 @@ class InstrumentProfileLoader:
                 file=str(path),
                 error=str(e),
             )
-            return None
+            return None, ProfileLoadFailure(
+                path=path.resolve(),
+                reason_code="instrument_file_read_error",
+                reason=str(e) or type(e).__name__,
+            )
 
         # Parse YAML
         try:
@@ -193,7 +247,11 @@ class InstrumentProfileLoader:
                 file=str(path),
                 error=str(e),
             )
-            return None
+            return None, ProfileLoadFailure(
+                path=path.resolve(),
+                reason_code="instrument_yaml_parse_error",
+                reason=str(e) or type(e).__name__,
+            )
 
         # Must be a dict
         if not isinstance(data, dict):
@@ -202,7 +260,11 @@ class InstrumentProfileLoader:
                 file=str(path),
                 actual_type=type(data).__name__,
             )
-            return None
+            return None, ProfileLoadFailure(
+                path=path.resolve(),
+                reason_code="instrument_yaml_not_dict",
+                reason=f"file is {type(data).__name__}, expected a mapping",
+            )
 
         # Validate through Pydantic
         try:
@@ -213,7 +275,11 @@ class InstrumentProfileLoader:
                 file=str(path),
                 error=str(e),
             )
-            return None
+            return None, ProfileLoadFailure(
+                path=path.resolve(),
+                reason_code="instrument_validation_error",
+                reason=str(e) or type(e).__name__,
+            )
 
         _logger.debug(
             "instrument_loaded",
@@ -224,7 +290,28 @@ class InstrumentProfileLoader:
 
         profile._source_path = path.resolve()
         profile._source_sha256 = hashlib.sha256(raw_bytes).hexdigest()
-        return profile
+        return profile, None
+
+
+def profile_source_dirs(
+    *, organization_dir: Path | None = None, venue_dir: Path | None = None,
+) -> tuple[Path, Path, Path]:
+    """Resolve the three instrument profile source directories (#408).
+
+    Single source of truth for both ``load_all_profiles`` and the config
+    hot-reload watcher: built-ins, organization (~/.marianne/instruments),
+    venue (.marianne/instruments). Explicit arguments override the defaults
+    (used by tests and by callers that recorded their boot-time dirs).
+    """
+    builtins_dir = Path(__file__).resolve().parent / "builtins"
+    org_dir = (
+        organization_dir if organization_dir is not None
+        else Path.home() / ".marianne" / "instruments"
+    )
+    resolved_venue_dir = (
+        venue_dir if venue_dir is not None else Path(".marianne") / "instruments"
+    )
+    return builtins_dir, org_dir, resolved_venue_dir
 
 
 def load_all_profiles(
@@ -244,12 +331,9 @@ def load_all_profiles(
     """
     profiles: dict[str, InstrumentProfile] = {}
 
-    builtins_dir = Path(__file__).resolve().parent / "builtins"
-    org_dir = (
-        organization_dir if organization_dir is not None
-        else Path.home() / ".marianne" / "instruments"
+    builtins_dir, org_dir, venue_dir = profile_source_dirs(
+        organization_dir=organization_dir, venue_dir=venue_dir,
     )
-    venue_dir = venue_dir if venue_dir is not None else Path(".marianne") / "instruments"
 
     yaml_profiles = InstrumentProfileLoader.load_directories(
         [builtins_dir, org_dir, venue_dir]
@@ -257,6 +341,51 @@ def load_all_profiles(
 
     profiles.update(yaml_profiles)
     return profiles
+
+
+def load_all_profiles_with_failures(
+    *, organization_dir: Path | None = None, venue_dir: Path | None = None,
+) -> tuple[dict[str, InstrumentProfile], list[ProfileLoadFailure]]:
+    """``load_all_profiles`` with per-file failure reporting (#408 reload).
+
+    Same sources and the same override semantics as
+    ``load_all_profiles``, but instead of only skipping files that
+    exist and fail to load, each skip is returned as a
+    ``ProfileLoadFailure`` so the hot-reload path can keep the previous
+    registry entry for that file and report it to the operator. Boot
+    callers keep the tolerant ``load_all_profiles`` contract unchanged.
+
+    Returns:
+        Tuple of (merged profiles by name, per-file load failures).
+    """
+    merged: dict[str, InstrumentProfile] = {}
+    failures: list[ProfileLoadFailure] = []
+
+    builtins_dir, org_dir, venue_dir = profile_source_dirs(
+        organization_dir=organization_dir, venue_dir=venue_dir,
+    )
+
+    for directory in (builtins_dir, org_dir, venue_dir):
+        dir_profiles, dir_failures = InstrumentProfileLoader._scan_directory(
+            directory
+        )
+        for name, profile in dir_profiles.items():
+            if name in merged:
+                _logger.info(
+                    "instrument_overridden_by_later_dir",
+                    name=name,
+                    directory=str(directory),
+                )
+            merged[name] = profile
+        failures.extend(dir_failures)
+
+    _logger.info(
+        "instruments_total_loaded",
+        count=len(merged),
+        names=sorted(merged.keys()),
+    )
+
+    return merged, failures
 
 
 def verify_single_route(document: dict[str, Any], instrument: str) -> None:

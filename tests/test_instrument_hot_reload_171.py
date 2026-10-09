@@ -12,6 +12,9 @@ stale) when released.
 
 from __future__ import annotations
 
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 from marianne.core.config.instruments import (
     CliCommand,
     CliErrorConfig,
@@ -112,15 +115,22 @@ class TestPoolInvalidate:
 
 
 class TestManagerReload:
-    """The manager's reload wires registry sync + pool invalidate through
-    the single load_all_profiles flow."""
+    """The single reload path wires registry sync + pool invalidate through
+    the one load_all_profiles flow (#408: reload_configuration absorbed
+    reload_instrument_profiles)."""
 
-    def test_reload_syncs_registry_and_invalidates_pool(self) -> None:
-        from unittest.mock import MagicMock, patch
+    async def test_reload_syncs_registry_and_invalidates_pool(
+        self, tmp_path: Path
+    ) -> None:
+        import yaml
 
         from marianne.daemon.manager import JobManager
+        from marianne.daemon.process import _load_config
 
-        mgr = JobManager.__new__(JobManager)
+        cfg_path = tmp_path / "conductor.yaml"
+        cfg_path.write_text(yaml.dump({"max_concurrent_jobs": 3}))
+
+        mgr = JobManager(_load_config(cfg_path))
         reg = InstrumentRegistry()
         reg.register(_profile("stale"))
         mgr._instrument_registry = reg
@@ -128,22 +138,40 @@ class TestManagerReload:
         pool = MagicMock()
         adapter = MagicMock()
         adapter._backend_pool = pool
+        adapter.sync_model_concurrency = MagicMock(
+            return_value={"added": [], "changed": [], "removed": []}
+        )
         mgr._baton_adapter = adapter
 
         fresh = {"fresh": _profile("fresh")}
         with patch(
-            "marianne.instruments.loader.load_all_profiles", return_value=fresh
+            "marianne.instruments.loader.load_all_profiles_with_failures",
+            return_value=(fresh, []),
         ):
-            count = mgr.reload_instrument_profiles()
+            result = await mgr.reload_configuration("test")
 
-        assert count == 1
+        assert result.success is True
         assert reg.get("fresh") is not None
         assert reg.get("stale") is None  # removed-from-disk profile dropped
         pool.invalidate.assert_called_once()
+        # The fresh profile's caps flow to the live baton map.
+        adapter.sync_model_concurrency.assert_called_once_with({"fresh:m": 4})
 
-    def test_reload_noop_without_registry(self) -> None:
+    async def test_reload_without_registry_still_reloads_config(
+        self, tmp_path: Path,
+    ) -> None:
+        import yaml
+
         from marianne.daemon.manager import JobManager
+        from marianne.daemon.process import _load_config
 
-        mgr = JobManager.__new__(JobManager)
+        cfg_path = tmp_path / "conductor.yaml"
+        cfg_path.write_text(yaml.dump({"max_concurrent_jobs": 3}))
+        mgr = JobManager(_load_config(cfg_path))
         mgr._instrument_registry = None
-        assert mgr.reload_instrument_profiles() == 0
+
+        cfg_path.write_text(yaml.dump({"max_concurrent_jobs": 6}))
+        result = await mgr.reload_configuration("test")
+
+        assert result.success is True
+        assert mgr.config.max_concurrent_jobs == 6

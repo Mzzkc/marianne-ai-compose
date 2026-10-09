@@ -90,6 +90,7 @@ from .commands import (
     watch,
 )
 from .commands.conductor import (
+    conductor_app,
     conductor_status,
     restart,
     start,
@@ -319,6 +320,9 @@ app.command(rich_help_panel="Conductor")(stop)
 app.command(rich_help_panel="Conductor")(restart)
 app.command(name="conductor-status", rich_help_panel="Conductor")(conductor_status)
 app.command(name="clear-rate-limits", rich_help_panel="Conductor")(clear_rate_limits)
+
+# #408: `mzt conductor reload` — hot-reload config + instrument profiles.
+app.add_typer(conductor_app, name="conductor", rich_help_panel="Conductor")
 
 # Daemon configuration
 app.add_typer(config_app)
