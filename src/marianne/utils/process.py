@@ -12,6 +12,7 @@ import os
 import signal
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import psutil
 
@@ -181,6 +182,26 @@ def snapshot_file_holders(
     return tuple(captured)
 
 
+def snapshot_process_group_members(
+    pgid: int, parent_pid: int, parent_create_time: float,
+) -> tuple[DescendantIdentity, ...]:
+    """Capture same-UID members of an action's private group, even with closed stdio."""
+    captured: list[DescendantIdentity] = []
+    for proc in psutil.process_iter(["pid", "create_time", "uids"]):
+        try:
+            info = proc.info
+            born = info["create_time"]
+            uids = info["uids"]
+            if (proc.pid == parent_pid or born is None or born < parent_create_time
+                    or uids is None or uids.real != os.getuid()):
+                continue
+            if os.getpgid(proc.pid) == pgid:
+                captured.append(DescendantIdentity(proc.pid, born, uids.real, pgid))
+        except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
+            continue
+    return tuple(captured)
+
+
 def reap_descendant_trees(
     descendants: tuple[DescendantIdentity, ...],
 ) -> DescendantReapCounts:
@@ -271,15 +292,18 @@ async def run_bounded_command(
     context: str,
     post_exit_drain_grace_seconds: float = 2.0,
     kill_grace_seconds: float = 2.0,
+    file_output_path: Path | None = None,
+    parent_create_time: float | None = None,
 ) -> BoundedCommandResult:
     """Wait for a spawned ``bash -c`` command the #406-safe way (GH #410).
 
     ``proc.communicate()`` waits for pipe EOF, which a backgrounded grandchild
     that inherited stdout/stderr can hold open long after the parent exited;
     the caller then burns its whole timeout and misreports a clean exit as a
-    failure. This helper is the one owner of the correct sequence, shared by
-    ``skip_when`` commands and ``command_succeeds`` validations (the CLI
-    instrument path has its own richer variant in ``cli_backend``):
+    failure. This helper owns both piped conditions and file-redirected flow
+    actions (the CLI instrument path has its own richer variant in
+    ``cli_backend``). Piped mode, used by ``skip_when`` and
+    ``command_succeeds``, follows this sequence:
 
     1. drain both pipes concurrently while waiting for the PARENT's exit
        (``proc.wait`` polled on returncode, not pipe EOF), bounded by
@@ -290,8 +314,20 @@ async def run_bounded_command(
        (``safe_killpg`` refuses our own group) and reap identity-matched
        descendants, so nothing outlives the call.
 
-    The returned ``stdout``/``stderr`` hold whatever was read, even on timeout.
+    File-output mode waits only for parent exit and captures same-group members,
+    detached descendants, and log holders by process identity. It terminates
+    survivors without waiting for a pipe drain. The returned ``stdout`` and
+    ``stderr`` are empty in that mode; the caller owns the log file.
     """
+    if file_output_path is not None:
+        if pgid is None or proc.pid is None:
+            raise ValueError("file-output mode requires a private process group")
+        return await _run_file_output_command(
+            proc, timeout_seconds=timeout_seconds, pgid=pgid,
+            context=context, file_output_path=file_output_path,
+            parent_create_time=parent_create_time,
+            kill_grace_seconds=kill_grace_seconds,
+        )
     out: list[bytes] = []
     err: list[bytes] = []
     drains = [
@@ -300,14 +336,15 @@ async def run_bounded_command(
     ]
     descendants: dict[int, DescendantIdentity] = {}
     try:
-        parent_create_time: float | None = psutil.Process(proc.pid).create_time()
+        observed_parent_create_time: float | None = psutil.Process(proc.pid).create_time()
     except (psutil.NoSuchProcess, psutil.AccessDenied, ValueError, TypeError):
-        parent_create_time = None
+        observed_parent_create_time = None
 
     def _capture() -> None:
-        if proc.pid is not None and parent_create_time is not None:
+        if proc.pid is not None and observed_parent_create_time is not None:
             descendants.update(
-                (d.pid, d) for d in snapshot_descendant_trees(proc.pid, parent_create_time)
+                (d.pid, d)
+                for d in snapshot_descendant_trees(proc.pid, observed_parent_create_time)
             )
 
     async def _parent_exit() -> int | None:
@@ -406,3 +443,84 @@ async def run_bounded_command(
         timed_out=timed_out,
         drain_grace_fired=grace_fired,
     )
+
+
+async def _run_file_output_command(
+    proc: asyncio.subprocess.Process,
+    *,
+    timeout_seconds: float,
+    pgid: int,
+    context: str,
+    file_output_path: Path,
+    parent_create_time: float | None,
+    kill_grace_seconds: float,
+) -> BoundedCommandResult:
+    """File-output mode: wait on the parent, then settle its captured process tree."""
+    captured: dict[tuple[int, float], DescendantIdentity] = {}
+    born = parent_create_time if parent_create_time is not None else 0.0
+
+    def capture() -> None:
+        if parent_create_time is not None:
+            for child in snapshot_descendant_trees(proc.pid, parent_create_time):
+                captured[(child.pid, child.create_time)] = child
+        for child in snapshot_process_group_members(pgid, proc.pid, born):
+            captured[(child.pid, child.create_time)] = child
+        for child in snapshot_file_holders(str(file_output_path), born):
+            captured[(child.pid, child.create_time)] = child
+
+    async def parent_exit() -> None:
+        started = time.monotonic()
+        while proc.returncode is None:
+            capture()
+            await asyncio.sleep(0.001 if time.monotonic() - started < 0.2 else 0.05)
+        capture()
+
+    timed_out = False
+    try:
+        try:
+            await asyncio.wait_for(parent_exit(), timeout=timeout_seconds)
+        except TimeoutError:
+            timed_out = True
+    finally:
+        capture()
+        # A successful shell can leave both same-group children with closed
+        # streams and detached children holding the log. Both belong to this
+        # invocation; neither is identified by the parent's return code.
+        group_alive = proc.returncode is None or any(
+            child.pgid == pgid and _descendant_alive(child)
+            for child in captured.values()
+        )
+        if group_alive:
+            try:
+                safe_killpg(pgid, signal.SIGTERM, context=f"{context}.kill_grace")
+            except (ProcessLookupError, PermissionError):
+                pass
+        if captured:
+            reap_descendant_trees(tuple(captured.values()))
+        deadline = time.monotonic() + kill_grace_seconds
+        while time.monotonic() < deadline:
+            if proc.returncode is not None and not any(
+                _descendant_alive(child) for child in captured.values()
+            ):
+                break
+            await asyncio.sleep(0.02)
+        if proc.returncode is None or any(
+            _descendant_alive(child) for child in captured.values()
+        ):
+            try:
+                safe_killpg(pgid, signal.SIGKILL, context=f"{context}.kill_force")
+            except (ProcessLookupError, PermissionError):
+                pass
+            for child in captured.values():
+                if _descendant_alive(child):
+                    try:
+                        os.kill(child.pid, signal.SIGKILL)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+        if proc.returncode is None:
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=kill_grace_seconds)
+            except TimeoutError:
+                proc.kill()
+                await proc.wait()
+    return BoundedCommandResult(proc.returncode, b"", b"", timed_out, False)

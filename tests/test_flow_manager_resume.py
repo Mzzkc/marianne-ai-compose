@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
 from marianne.daemon.config import DaemonConfig
 from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
 from marianne.daemon.types import JobRequest
@@ -131,3 +131,61 @@ async def test_operator_pause_survives_restart_after_real_submission(tmp_path: P
         assert CheckpointState.model_validate_json(checkpoint_json).status == JobStatus.PAUSED
     finally:
         await second.shutdown(graceful=False)
+
+
+@pytest.mark.asyncio
+async def test_trigger_pause_survives_restart_until_explicit_operator_resume(
+    tmp_path: Path,
+) -> None:
+    score = tmp_path / "trigger-paused.yaml"
+    score.write_text(
+        "name: trigger-paused\n"
+        f"workspace: {tmp_path / 'workspace'}\n"
+        "instrument: cli\n"
+        "sheet:\n  size: 1\n  total_items: 1\n"
+        "  triggers:\n    1:\n      on_success:\n        - pause: true\n"
+        "prompt:\n  template: echo done\n",
+        encoding="utf-8",
+    )
+    config = DaemonConfig(
+        pid_file=tmp_path / "conductor.pid",
+        state_db_path=tmp_path / "jobs.db",
+    )
+    seed = JobManager(config)
+    await seed._registry.open()
+    try:
+        await seed._registry.register_job("j", score, tmp_path / "workspace")
+        checkpoint = CheckpointState(
+            job_id="j", job_name="trigger-paused", total_sheets=1,
+            status=JobStatus.PAUSED,
+            sheets={1: SheetState(sheet_num=1, status=SheetStatus.COMPLETED)},
+        )
+        checkpoint.flow.pause_reason = "trigger on sheet 1"
+        await seed._registry.save_checkpoint("j", checkpoint.model_dump_json())
+        await seed._registry.update_status("j", DaemonJobStatus.PAUSED.value)
+    finally:
+        await seed._registry.close()
+
+    manager = JobManager(config)
+    await manager.start()
+    try:
+        assert manager._job_meta["j"].status == DaemonJobStatus.PAUSED
+        assert "j" not in manager._jobs
+        before_json = await manager._registry.load_checkpoint("j")
+        assert before_json is not None
+        assert CheckpointState.model_validate_json(before_json).flow.pause_reason == (
+            "trigger on sheet 1"
+        )
+        response = await manager.resume_job("j")
+        assert response.status == "accepted"
+        deadline = time.monotonic() + 3
+        while manager._job_meta["j"].status not in {
+            DaemonJobStatus.COMPLETED, DaemonJobStatus.FAILED,
+        } and time.monotonic() < deadline:
+            await asyncio.sleep(0.01)
+        after_json = await manager._registry.load_checkpoint("j")
+        assert after_json is not None
+        assert CheckpointState.model_validate_json(after_json).flow.pause_reason is None
+        assert manager._job_meta["j"].status == DaemonJobStatus.COMPLETED
+    finally:
+        await manager.shutdown(graceful=False)

@@ -3,12 +3,24 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 
+import pytest
+
 from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
 from marianne.core.config.flow import LoopConfig, SheetTriggerConfig, TriggerAction
 from marianne.core.config.instruments import InstrumentRouteBinding
 from marianne.core.expressions import FileFacts
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.daemon.baton.core import BatonCore
-from marianne.daemon.baton.events import FlowRunFinished, LoopFactsReady, SheetAttemptResult
+from marianne.daemon.baton.events import (
+    EscalationResolved,
+    FlowRunFinished,
+    LoopFactsReady,
+    PauseJob,
+    ResumeJob,
+    SheetAttemptResult,
+)
+from marianne.daemon.baton.musician import _render_template
 
 
 def _checkpoint() -> CheckpointState:
@@ -51,6 +63,24 @@ async def test_count_loop_reopens_and_survives_checkpoint_round_trip() -> None:
     assert restored.flow.loops["1"].phase == "completed"
     assert restored.flow.loops["1"].completed_reason == "count_reached"
     assert baton2.is_job_complete("j")
+
+
+async def test_loop_index_renders_inside_jinja_for_block(tmp_path) -> None:
+    checkpoint = _checkpoint()
+    baton = BatonCore()
+    baton.register_job(
+        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        loops={"1": LoopConfig(count=2, index="pass_no")},
+    )
+    await baton.handle_event(_result(0))
+    assert baton._jobs["j"].flow is not None
+    indices = baton._jobs["j"].flow.indices_for(1)
+    sheet = Sheet(
+        num=1, movement=1, voice_count=1, workspace=tmp_path,
+        instrument_name="cli",
+        prompt_template="{% for item in [1, 2] %}{{ loops.pass_no }}:{{ loop.index }};{% endfor %}",
+    )
+    assert _render_template(sheet, {**indices, "loops": indices}) == "2:1;2:2;"
 
 
 async def test_on_fail_goto_self_bypasses_retry_budget() -> None:
@@ -162,6 +192,83 @@ async def test_trigger_pause_on_last_sheet_blocks_completion() -> None:
     assert checkpoint.flow.pause_reason == "trigger on sheet 1"
     assert checkpoint.sheets[1].status == SheetStatus.COMPLETED
     assert not baton.is_job_complete("j")
+
+
+@pytest.mark.parametrize("operator_pause_first", [False, True])
+async def test_escalation_retry_clears_only_flow_owned_pause(
+    operator_pause_first: bool,
+) -> None:
+    checkpoint = _checkpoint()
+    baton = BatonCore()
+    baton.register_job(
+        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        triggers={"1": SheetTriggerConfig(on_fail=[TriggerAction(escalate="check")])},
+    )
+    if operator_pause_first:
+        await baton.handle_event(PauseJob(job_id="j"))
+    await baton.handle_event(_result(0, success=False))
+    assert checkpoint.sheets[1].status == SheetStatus.FERMATA
+    assert baton.is_job_paused("j")
+    if not operator_pause_first:
+        await baton.handle_event(PauseJob(job_id="j"))
+    await baton.handle_event(EscalationResolved(job_id="j", sheet_num=1, decision="retry"))
+    assert checkpoint.sheets[1].status == SheetStatus.PENDING
+    assert checkpoint.flow.pause_reason is None
+    assert baton.is_job_paused("j")
+    assert baton.get_ready_sheets("j") == []
+    await baton.handle_event(ResumeJob(job_id="j"))
+    assert [sheet.sheet_num for sheet in baton.get_ready_sheets("j")] == [1]
+
+
+async def test_escalation_retry_dispatches_when_operator_did_not_pause() -> None:
+    checkpoint = _checkpoint()
+    baton = BatonCore()
+    baton.register_job(
+        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        triggers={"1": SheetTriggerConfig(on_fail=[TriggerAction(escalate="check")])},
+    )
+    await baton.handle_event(_result(0, success=False))
+    assert checkpoint.sheets[1].status == SheetStatus.FERMATA
+    await baton.handle_event(EscalationResolved(job_id="j", sheet_num=1, decision="retry"))
+    assert checkpoint.flow.pause_reason is None
+    assert not baton.is_job_paused("j")
+    assert [sheet.sheet_num for sheet in baton.get_ready_sheets("j")] == [1]
+
+
+async def test_adapter_resolution_marker_reaches_flow_retry(tmp_path) -> None:
+    checkpoint = _checkpoint()
+    adapter = BatonAdapter()
+    adapter.register_job(
+        "j", [Sheet(
+            num=1, movement=1, voice_count=1, workspace=tmp_path,
+            instrument_name="cli", prompt_template="echo done",
+        )], {}, live_sheets=checkpoint.sheets, flow_state=checkpoint.flow,
+        triggers={"1": SheetTriggerConfig(on_fail=[TriggerAction(escalate="check")])},
+    )
+    generation = adapter.baton.get_job_generation("j")
+    await adapter.baton.handle_event(replace(
+        _result(0, success=False), event_generation=generation,
+    ))
+    assert checkpoint.sheets[1].status == SheetStatus.FERMATA
+    accepted, message = adapter.resolve_fermata("j", 1, "retry")
+    assert accepted, message
+    checks = []
+    while not adapter.baton.inbox.empty():
+        event = adapter.baton.inbox.get_nowait()
+        if type(event).__name__ == "FermataCheck":
+            checks.append(event)
+    assert len(checks) == 1
+    await adapter._handle_fermata_check(checks[0])
+    resolved = []
+    while not adapter.baton.inbox.empty():
+        event = adapter.baton.inbox.get_nowait()
+        if isinstance(event, EscalationResolved):
+            resolved.append(event)
+    assert len(resolved) == 1
+    await adapter.baton.handle_event(resolved[0])
+    assert checkpoint.sheets[1].status == SheetStatus.PENDING
+    assert checkpoint.flow.pause_reason is None
+    assert [sheet.sheet_num for sheet in adapter.baton.get_ready_sheets("j")] == [1]
 
 
 async def test_infinite_goto_stops_at_job_cost_limit() -> None:

@@ -1,13 +1,22 @@
 """Adversarial flow obligations against checkpoint-owned baton state."""
 
+import ast
+import inspect
 from dataclasses import replace
 from datetime import UTC, datetime
+from pathlib import Path
 
 from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
 from marianne.core.config.flow import LoopConfig, SheetTriggerConfig, TriggerAction
 from marianne.core.config.instruments import InstrumentRouteBinding
 from marianne.daemon.baton.core import BatonCore
-from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.events import (
+    CancelJob,
+    FlowConcertSubmitted,
+    JobTimeout,
+    SheetAttemptResult,
+    SheetSkipped,
+)
 
 
 def _job(size: int = 1) -> CheckpointState:
@@ -169,3 +178,140 @@ async def test_guarded_failure_cannot_fire_goto_trigger() -> None:
     assert checkpoint.sheets[1].status == SheetStatus.FAILED
     assert checkpoint.sheets[1].dispatch_epoch == 0
     assert checkpoint.flow.chains == []
+
+
+def test_terminal_status_writes_have_one_funnel_owner() -> None:
+    source_path = inspect.getsourcefile(BatonCore)
+    assert source_path is not None
+    source = ast.parse(Path(source_path).read_text())
+    writes: list[str] = []
+    terminal_calls: list[str] = []
+    terminal_names = {"COMPLETED", "FAILED", "SKIPPED", "CANCELLED"}
+    for method in (node for node in ast.walk(source) if isinstance(node, ast.FunctionDef)):
+        for node in ast.walk(method):
+            if isinstance(node, ast.Assign) and any(
+                isinstance(target, ast.Attribute) and target.attr == "status"
+                for target in node.targets
+            ) and (isinstance(node.value, ast.Attribute)
+                   and node.value.attr in terminal_names
+                   or isinstance(node.value, ast.Name) and node.value.id == "status"):
+                writes.append(method.name)
+            if isinstance(node, ast.Call) and any(
+                isinstance(arg, ast.Attribute)
+                and isinstance(arg.value, ast.Name)
+                and arg.value.id == "BatonSheetStatus"
+                and arg.attr in terminal_names
+                for arg in node.args
+            ):
+                assert isinstance(node.func, ast.Attribute)
+                terminal_calls.append(node.func.attr)
+    assert terminal_calls
+    assert set(terminal_calls) == {"_set_sheet_terminal_status"}, terminal_calls
+    assert set(writes) == {"_set_sheet_terminal_status"}, writes
+
+
+async def test_non_attempt_skip_and_cancel_settle_loop_and_queued_cleanup() -> None:
+    checkpoint = _job(2)
+    baton = BatonCore()
+    baton.register_job(
+        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        loops={"1-2": LoopConfig(count=2, index="pass_no")},
+    )
+    checkpoint.flow.queued_skips[2] = "queued in-flight skip"
+    checkpoint.flow.goto_bypass.append(2)
+    await baton.handle_event(SheetSkipped(job_id="j", sheet_num=2, reason="skip_when"))
+    assert checkpoint.flow.queued_skips == {}
+    assert checkpoint.flow.goto_bypass == []
+    assert checkpoint.sheets[2].status == SheetStatus.SKIPPED
+    await baton.handle_event(CancelJob(job_id="j"))
+    assert checkpoint.flow.loops["1-2"].completed_reason == "range_failed"
+
+
+async def test_job_wall_timeout_stops_an_infinite_goto_after_resets() -> None:
+    checkpoint = _job()
+    baton = BatonCore()
+    baton.register_job(
+        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        triggers={"1": SheetTriggerConfig(on_success=[TriggerAction(goto=1)])},
+    )
+    for epoch in range(2):
+        await baton.handle_event(_result(1, epoch, cost=0.1))
+        assert checkpoint.sheets[1].status == SheetStatus.PENDING
+    await baton.handle_event(JobTimeout(job_id="j"))
+    assert baton.get_ready_sheets("j") == []
+    assert checkpoint.sheets[1].status == SheetStatus.CANCELLED
+    await baton.handle_event(_result(1, 2, cost=0.1))
+    assert checkpoint.sheets[1].status == SheetStatus.CANCELLED
+
+
+async def test_queued_in_flight_skip_settles_when_sheet_returns() -> None:
+    checkpoint = _job(2)
+    baton = BatonCore()
+    baton.register_job(
+        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        triggers={"1": SheetTriggerConfig(on_success=[TriggerAction(skip="2")])},
+    )
+    checkpoint.sheets[2].status = SheetStatus.IN_PROGRESS
+    await baton.handle_event(_result(1))
+    assert 2 in checkpoint.flow.queued_skips
+    await baton.handle_event(_result(2))
+    assert checkpoint.flow.queued_skips == {}
+    assert checkpoint.sheets[2].status == SheetStatus.COMPLETED
+
+
+async def test_concert_action_waits_for_submission_result_before_next_action() -> None:
+    checkpoint = _job()
+    baton = BatonCore()
+    baton.register_job(
+        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        triggers={"1": SheetTriggerConfig(on_success=[
+            TriggerAction(concert="child.yaml"), TriggerAction(goto=1),
+        ])},
+    )
+    await baton.handle_event(_result(1))
+    chain = checkpoint.flow.chains[0]
+    assert chain.phase == "awaiting_concert"
+    assert checkpoint.sheets[1].status == SheetStatus.COMPLETED
+    await baton.handle_event(FlowConcertSubmitted(
+        job_id="j", chain_id=chain.chain_id, cursor=chain.cursor,
+        accepted=True, child_job_id="child-1", message=None,
+    ))
+    assert checkpoint.flow.chains == []
+    assert checkpoint.sheets[1].status == SheetStatus.PENDING
+
+
+async def test_failed_member_cascades_range_failed_without_reopening_loop() -> None:
+    checkpoint = _job(2)
+    baton = BatonCore()
+    baton.register_job(
+        "j", checkpoint.sheets, {2: [1]}, flow_state=checkpoint.flow,
+        loops={"1-2": LoopConfig(count=3, index="pass_no")},
+        triggers={"1": SheetTriggerConfig(on_fail=[TriggerAction(continue_=True)])},
+    )
+    await baton.handle_event(_result(1, success=False))
+    assert checkpoint.sheets[1].status == SheetStatus.FAILED
+    assert checkpoint.sheets[2].status == SheetStatus.SKIPPED
+    assert checkpoint.flow.loops["1-2"].completed_reason == "range_failed"
+    assert checkpoint.flow.loops["1-2"].iteration == 1
+
+
+def test_expression_core_import_boundary_is_daemon_free() -> None:
+    import marianne.core.expressions as expressions
+
+    root = Path(expressions.__file__).parent
+    files = sorted(root.rglob("*.py"))
+    assert files
+    forbidden = ("marianne.daemon", "marianne.execution", "marianne.ipc")
+    for path in files:
+        source = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(source):
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                modules = [node.module or ""]
+            else:
+                continue
+            assert not any(
+                module == prefix or module.startswith(prefix + ".")
+                for module in modules for prefix in forbidden
+            ), (path, modules)
