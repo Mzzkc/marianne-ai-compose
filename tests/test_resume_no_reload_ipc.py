@@ -122,6 +122,7 @@ class TestManagerResumeNoReload:
         mgr._pause_events = {}
         mgr._baton_adapter = None
         mgr._live_states = {}
+        mgr._shutting_down = False  # GH #411 guard reads this
         # Use real resume_job method
         mgr.resume_job = JobManager.resume_job.__get__(mgr, JobManager)
         mgr._on_task_done = MagicMock(spec=lambda job_id, task: None)

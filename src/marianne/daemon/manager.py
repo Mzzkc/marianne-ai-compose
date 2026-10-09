@@ -3697,6 +3697,17 @@ class JobManager:
             no_reload: If True, skip auto-reload from disk and use cached
                 config snapshot. Threaded from CLI ``--no-reload`` flag.
         """
+        # GH #411: a resume accepted after SIGTERM re-registers the job with
+        # the baton and dispatches a musician that the adapter shutdown then
+        # cancels seconds later, turning a PAUSED job into CANCELLED — and the
+        # concurrent mutation of _live_states crashed the shutdown flush (#412).
+        # Reject exactly like submit_job does.
+        if self._shutting_down:
+            return JobResponse(
+                job_id=job_id,
+                status="rejected",
+                message="Daemon is shutting down",
+            )
         meta = self._job_meta.get(job_id)
         if meta is None:
             raise JobSubmissionError(f"Score '{job_id}' not found")
@@ -4728,38 +4739,61 @@ class JobManager:
         # Stop centralized learning hub (final persist + cleanup)
         await self._learning_hub.stop()
 
-        # #111: stop the ordered checkpoint writer BEFORE the final flush, so
-        # the synchronous flush below is the authoritative last write. Any
-        # snapshots still queued in the writer are superseded by that flush
-        # (which serialises the latest in-memory state), so they are dropped
-        # rather than drained — preventing an older queued blob from landing
-        # after the newest one.
-        if self._checkpoint_writer is not None:
-            await self._checkpoint_writer.stop()
-            self._checkpoint_writer = None
+        # GH #412: everything from here on must not be able to strand the
+        # process. If the final flush or a registry close raises, the event
+        # is still set so DaemonProcess.run() proceeds to teardown instead of
+        # parking forever on wait_for_shutdown() with the IPC socket still
+        # answering (a zombie conductor that only SIGKILL clears).
+        try:
+            # #111: stop the ordered checkpoint writer BEFORE the final flush,
+            # so the synchronous flush below is the authoritative last write.
+            # Any snapshots still queued in the writer are superseded by that
+            # flush (which serialises the latest in-memory state), so they are
+            # dropped rather than drained — preventing an older queued blob
+            # from landing after the newest one.
+            if self._checkpoint_writer is not None:
+                await self._checkpoint_writer.stop()
+                self._checkpoint_writer = None
 
-        # Final checkpoint flush: persist live states to registry before
-        # closing. Active states preserve progress; terminal states are skipped
-        # if direct recovery already wrote a newer registry checkpoint (#391).
-        flushed, skipped_newer_registry = await self._flush_live_checkpoints_on_shutdown()
-        if flushed:
-            _logger.info("manager.shutdown_checkpoint_flush", flushed=flushed)
-        if skipped_newer_registry:
-            _logger.info(
-                "manager.shutdown_checkpoint_flush_skipped_newer_registry",
-                skipped=skipped_newer_registry,
+            # Final checkpoint flush: persist live states to registry before
+            # closing. Active states preserve progress; terminal states are
+            # skipped if direct recovery already wrote a newer registry
+            # checkpoint (#391).
+            flushed, skipped_newer_registry = (
+                await self._flush_live_checkpoints_on_shutdown()
             )
-
-        await self._schedule_registry.close()
-        await self._registry.close()
-        self._shutdown_event.set()
-        _logger.info("manager.shutdown_complete")
+            if flushed:
+                _logger.info("manager.shutdown_checkpoint_flush", flushed=flushed)
+            if skipped_newer_registry:
+                _logger.info(
+                    "manager.shutdown_checkpoint_flush_skipped_newer_registry",
+                    skipped=skipped_newer_registry,
+                )
+        except Exception:
+            _logger.error("manager.shutdown_final_flush_failed", exc_info=True)
+        finally:
+            for name, registry in (
+                ("schedule_registry", self._schedule_registry),
+                ("registry", self._registry),
+            ):
+                try:
+                    await registry.close()
+                except Exception:
+                    _logger.error(
+                        "manager.shutdown_registry_close_failed",
+                        registry=name,
+                        exc_info=True,
+                    )
+            self._shutdown_event.set()
+            _logger.info("manager.shutdown_complete")
 
     async def _flush_live_checkpoints_on_shutdown(self) -> tuple[int, int]:
         """Persist live checkpoints without overwriting newer terminal registry state."""
         flushed = 0
         skipped_newer_registry = 0
-        for jid, live in self._live_states.items():
+        # GH #412: iterate a snapshot — a resume/pause racing shutdown can
+        # mutate _live_states and a RuntimeError here used to abort shutdown.
+        for jid, live in list(self._live_states.items()):
             try:
                 registry_status, registry_updated_at = _checkpoint_status_and_updated_at(
                     await self._registry.load_checkpoint(jid)
