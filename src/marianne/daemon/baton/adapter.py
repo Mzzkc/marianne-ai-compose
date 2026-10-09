@@ -41,6 +41,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import stat as _stat
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
@@ -3553,19 +3554,45 @@ class BatonAdapter:
                 ),
             )
 
-    @staticmethod
-    def _newest_workspace_mtime(workspace: Path) -> float:
-        """Newest mtime among the workspace dir and its files (0.0 if absent)."""
-        try:
-            newest = workspace.stat().st_mtime
-        except OSError:
+    # Paths the CONDUCTOR writes inside a workspace while a sheet runs. They
+    # must not count as musician activity or the idle clock never advances
+    # (GH #413): the observer recorder appends to its jsonl many times a
+    # minute (including for its own writes), ``logs/marianne.log`` is a
+    # symlink to the daemon log that ``Path.stat`` follows, and context
+    # receipts are written by the adapter at dispatch.
+    _CONDUCTOR_OWNED_WORKSPACE_PARTS: frozenset[str] = frozenset(
+        {".marianne-observer.jsonl", ".marianne", "logs"}
+    )
+
+    @classmethod
+    def _newest_workspace_mtime(cls, workspace: Path) -> float:
+        """Newest mtime among the workspace dir and its MUSICIAN-written files.
+
+        Returns 0.0 if the workspace is absent. Skips symlinks (``lstat``, so
+        a link to the daemon log does not import the daemon's write cadence)
+        and the conductor-owned subtrees in ``_CONDUCTOR_OWNED_WORKSPACE_PARTS``
+        (GH #413). The workspace directory's OWN mtime is not a signal either:
+        the conductor creating ``logs/`` or the observer jsonl in the root
+        bumps it. The caller already floors the idle clock at dispatch time.
+        """
+        if not workspace.is_dir():
             return 0.0
+        newest = 0.0
+        owned = cls._CONDUCTOR_OWNED_WORKSPACE_PARTS
         for child in workspace.rglob("*"):
             try:
-                mtime = child.stat().st_mtime
+                rel_parts = child.relative_to(workspace).parts
+            except ValueError:
+                continue
+            if rel_parts and rel_parts[0] in owned:
+                continue
+            try:
+                stat = child.lstat()
             except OSError:
                 continue
-            newest = max(newest, mtime)
+            if _stat.S_ISLNK(stat.st_mode):
+                continue
+            newest = max(newest, stat.st_mtime)
         return newest
 
     @staticmethod
