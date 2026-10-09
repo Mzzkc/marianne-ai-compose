@@ -1076,7 +1076,6 @@ class BatonCore:
         # Preserve the error from the last attempt — it describes the actual
         # failure (validation details, execution error, etc.). Only set a
         # generic message if no attempt has left one.
-        self._set_sheet_terminal_status(job_id, sheet, BatonSheetStatus.FAILED)
         sheet.clear_dispatch_block()
         if not sheet.error_message:
             last = sheet.attempt_results[-1] if sheet.attempt_results else None
@@ -1095,6 +1094,7 @@ class BatonCore:
                 )
         if not sheet.error_code:
             sheet.error_code = ErrorCode.UNKNOWN.value
+        self._set_sheet_terminal_status(job_id, sheet, BatonSheetStatus.FAILED)
         self._state_dirty = True
         _logger.warning(
             "baton.sheet.retries_exhausted",
@@ -1104,7 +1104,8 @@ class BatonCore:
                 "attempts": sheet.normal_attempts,
             },
         )
-        self._propagate_failure_to_dependents(job_id, sheet_num)
+        if sheet.status == BatonSheetStatus.FAILED:
+            self._propagate_failure_to_dependents(job_id, sheet_num)
 
     @staticmethod
     def _derive_fallback_reason(sheet: SheetExecutionState) -> str:

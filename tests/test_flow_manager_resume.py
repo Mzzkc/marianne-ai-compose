@@ -7,6 +7,9 @@ from pathlib import Path
 import pytest
 
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.core.config.flow import SheetTriggerConfig, TriggerAction
+from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.config import DaemonConfig
 from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
 from marianne.daemon.types import JobRequest
@@ -142,7 +145,7 @@ async def test_trigger_pause_survives_restart_until_explicit_operator_resume(
         "name: trigger-paused\n"
         f"workspace: {tmp_path / 'workspace'}\n"
         "instrument: cli\n"
-        "sheet:\n  size: 1\n  total_items: 1\n"
+        "sheet:\n  size: 2\n  total_items: 2\n"
         "  triggers:\n    1:\n      on_success:\n        - pause: true\n"
         "prompt:\n  template: echo done\n",
         encoding="utf-8",
@@ -156,11 +159,25 @@ async def test_trigger_pause_survives_restart_until_explicit_operator_resume(
     try:
         await seed._registry.register_job("j", score, tmp_path / "workspace")
         checkpoint = CheckpointState(
-            job_id="j", job_name="trigger-paused", total_sheets=1,
-            status=JobStatus.PAUSED,
-            sheets={1: SheetState(sheet_num=1, status=SheetStatus.COMPLETED)},
+            job_id="j", job_name="trigger-paused", total_sheets=2,
+            sheets={
+                1: SheetState(sheet_num=1, instrument_name="cli"),
+                2: SheetState(sheet_num=2, instrument_name="cli"),
+            },
         )
-        checkpoint.flow.pause_reason = "trigger on sheet 1"
+        baton = BatonCore()
+        baton.register_job(
+            "j", checkpoint.sheets, {2: [1]}, flow_state=checkpoint.flow,
+            triggers={"1": SheetTriggerConfig(on_success=[TriggerAction(pause=True)])},
+        )
+        await baton.handle_event(SheetAttemptResult(
+            job_id="j", sheet_num=1, instrument_name="cli", attempt=1,
+            execution_success=True, validation_pass_rate=100.0,
+        ))
+        assert checkpoint.sheets[1].status == SheetStatus.COMPLETED
+        assert checkpoint.sheets[2].status == SheetStatus.PENDING
+        assert checkpoint.flow.pause_reason == "trigger on sheet 1"
+        checkpoint.status = JobStatus.PAUSED
         await seed._registry.save_checkpoint("j", checkpoint.model_dump_json())
         await seed._registry.update_status("j", DaemonJobStatus.PAUSED.value)
     finally:
@@ -187,5 +204,46 @@ async def test_trigger_pause_survives_restart_until_explicit_operator_resume(
         assert after_json is not None
         assert CheckpointState.model_validate_json(after_json).flow.pause_reason is None
         assert manager._job_meta["j"].status == DaemonJobStatus.COMPLETED
+    finally:
+        await manager.shutdown(graceful=False)
+
+
+@pytest.mark.asyncio
+async def test_concert_submission_is_fire_and_forget_and_refuses_active_duplicate(
+    tmp_path: Path,
+) -> None:
+    parent_score = tmp_path / "parent.yaml"
+    parent_score.write_text("name: parent\n", encoding="utf-8")
+    child_score = tmp_path / "child.yaml"
+    child_score.write_text(
+        "name: child\n"
+        f"workspace: {tmp_path / 'child-workspace'}\n"
+        "instrument: cli\n"
+        "sheet:\n  size: 1\n  total_items: 1\n"
+        "prompt:\n  template: sleep 30\n",
+        encoding="utf-8",
+    )
+    manager = JobManager(DaemonConfig(
+        pid_file=tmp_path / "conductor.pid",
+        state_db_path=tmp_path / "jobs.db",
+    ))
+    await manager.start()
+    try:
+        manager._job_meta["parent"] = JobMeta(
+            job_id="parent", config_path=parent_score, workspace=tmp_path,
+            status=DaemonJobStatus.RUNNING,
+        )
+        accepted, child_id, message = await manager._submit_flow_concert(
+            "parent", "child.yaml",
+        )
+        assert accepted, message
+        assert child_id == "child"
+        assert manager._job_meta["child"].chain_depth == 1
+        duplicate, duplicate_id, reason = await manager._submit_flow_concert(
+            "parent", "child.yaml",
+        )
+        assert not duplicate
+        assert duplicate_id == "child"
+        assert reason is not None and "already" in reason
     finally:
         await manager.shutdown(graceful=False)

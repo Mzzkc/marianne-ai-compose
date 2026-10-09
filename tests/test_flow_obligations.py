@@ -6,6 +6,8 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
 from marianne.core.config.flow import LoopConfig, SheetTriggerConfig, TriggerAction
 from marianne.core.config.instruments import InstrumentRouteBinding
@@ -244,19 +246,25 @@ async def test_job_wall_timeout_stops_an_infinite_goto_after_resets() -> None:
     assert checkpoint.sheets[1].status == SheetStatus.CANCELLED
 
 
-async def test_queued_in_flight_skip_settles_when_sheet_returns() -> None:
-    checkpoint = _job(2)
+@pytest.mark.parametrize("succeeds", [False, True])
+async def test_queued_in_flight_skip_settles_when_sheet_returns(succeeds: bool) -> None:
+    checkpoint = _job(3)
+    checkpoint.sheets[2].max_retries = 0
     baton = BatonCore()
     baton.register_job(
-        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        "j", checkpoint.sheets, {3: [2]}, flow_state=checkpoint.flow,
         triggers={"1": SheetTriggerConfig(on_success=[TriggerAction(skip="2")])},
     )
-    checkpoint.sheets[2].status = SheetStatus.IN_PROGRESS
+    checkpoint.sheets[2].status = SheetStatus.DISPATCHED
     await baton.handle_event(_result(1))
     assert 2 in checkpoint.flow.queued_skips
-    await baton.handle_event(_result(2))
+    await baton.handle_event(_result(2, success=succeeds))
     assert checkpoint.flow.queued_skips == {}
-    assert checkpoint.sheets[2].status == SheetStatus.COMPLETED
+    assert checkpoint.sheets[2].status == (
+        SheetStatus.COMPLETED if succeeds else SheetStatus.SKIPPED
+    )
+    assert checkpoint.sheets[2].error_code is None
+    assert [sheet.sheet_num for sheet in baton.get_ready_sheets("j")] == [3]
 
 
 async def test_concert_action_waits_for_submission_result_before_next_action() -> None:
@@ -282,11 +290,11 @@ async def test_concert_action_waits_for_submission_result_before_next_action() -
 
 async def test_failed_member_cascades_range_failed_without_reopening_loop() -> None:
     checkpoint = _job(2)
+    checkpoint.sheets[1].max_retries = 0
     baton = BatonCore()
     baton.register_job(
         "j", checkpoint.sheets, {2: [1]}, flow_state=checkpoint.flow,
         loops={"1-2": LoopConfig(count=3, index="pass_no")},
-        triggers={"1": SheetTriggerConfig(on_fail=[TriggerAction(continue_=True)])},
     )
     await baton.handle_event(_result(1, success=False))
     assert checkpoint.sheets[1].status == SheetStatus.FAILED
