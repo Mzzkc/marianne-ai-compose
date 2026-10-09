@@ -901,7 +901,7 @@ class ValidateConfig(BaseModel):
 class JobConfig(BaseModel):
     """Complete configuration for an orchestration job."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
     _unknown_fields: list[UnknownScoreField] = PrivateAttr(default_factory=list)
 
     @property

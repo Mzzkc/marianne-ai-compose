@@ -96,7 +96,7 @@ class ValidationReporter:
         )
 
         # Print header based on results
-        if not issues:
+        if not (errors or warnings or infos):
             self.console.print(
                 Panel(
                     f"[green]✓ Configuration valid:[/green] {config_name}",
@@ -134,7 +134,8 @@ class ValidationReporter:
         if errors:
             self.console.print("\n[bold red]Validation: FAILED[/bold red]")
         else:
-            self.console.print("\n[bold green]Validation: PASSED[/bold green] (with warnings)")
+            suffix = " (with warnings)" if warnings else ""
+            self.console.print(f"\n[bold green]Validation: PASSED[/bold green]{suffix}")
 
     def _print_section(
         self,

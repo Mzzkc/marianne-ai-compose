@@ -43,6 +43,15 @@ def apply_suppression(
             "V011": ValidationSeverity.INFO,
             "V104": ValidationSeverity.INFO,
             "V012": ValidationSeverity.ERROR,
+            "V221": ValidationSeverity.ERROR,
+            "V222": ValidationSeverity.ERROR,
+            "V223": ValidationSeverity.ERROR,
+            "V312": ValidationSeverity.ERROR,
+            "V313": ValidationSeverity.ERROR,
+            "V314": ValidationSeverity.ERROR,
+            "V316": ValidationSeverity.ERROR,
+            "V317": ValidationSeverity.ERROR,
+            "V320": ValidationSeverity.ERROR,
         }
     )
     visible = list(issues)

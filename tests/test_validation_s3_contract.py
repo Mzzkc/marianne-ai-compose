@@ -3,16 +3,23 @@
 import json
 from pathlib import Path
 
+from hypothesis import given
+from hypothesis import strategies as st
 from typer.testing import CliRunner
 
 from marianne.cli import app
 from marianne.core.config import JobConfig
+from marianne.core.config.job import ValidateConfig
 from marianne.validation.base import ValidationSeverity
 from marianne.validation.checks.paths import WorkspaceParentExistsCheck
 from marianne.validation.checks.structure import (
+    AmbiguousFileReferenceCheck,
     CadenzaTargetCheck,
     ConcertTargetCheck,
     DependencyCycleCheck,
+    FanOutCoherenceCheck,
+    UnreachableSheetCheck,
+    UnusedVariableCheck,
     VariableCoverageCheck,
 )
 
@@ -22,6 +29,13 @@ prompt: {template: hello}
 validations:
   - {type: file_exists, path: '{workspace}/out.txt'}
 """
+
+
+@given(st.lists(st.from_regex(r"V[0-9]{3}", fullmatch=True), max_size=12))
+def test_validate_config_round_trip(codes: list[str]) -> None:
+    """The score-local suppression declaration survives a config snapshot."""
+    config = ValidateConfig(suppress=codes)
+    assert ValidateConfig.model_validate(config.model_dump()).suppress == codes
 
 
 def _score(tmp_path: Path, extra: str = "") -> Path:
@@ -119,3 +133,49 @@ def test_chain_workspace_parent_is_advisory_only_in_target_context(tmp_path: Pat
     )
     assert target_issues and target_issues[0].check_id == "V002"
     assert target_issues[0].severity == ValidationSeverity.WARNING
+
+
+def test_other_structural_checks_on_concrete_faults(tmp_path: Path) -> None:
+    path = _score(tmp_path, "")
+    config = JobConfig.from_yaml(path)
+    config.sheet.dependencies = {2: [99]}
+    assert FanOutCoherenceCheck().check(config, path, path.read_text())[0].check_id == "V214"
+    assert UnreachableSheetCheck().check(config, path, path.read_text())[0].check_id == "V219"
+    config.validations[0].type = "command_succeeds"
+    config.validations[0].command = "cat ./input.txt"
+    assert AmbiguousFileReferenceCheck().check(config, path, path.read_text())[0].check_id == "V218"
+    config.prompt.variables = {"unused": "value", "marianne_agent": "anchor"}
+    assert UnusedVariableCheck().check(config, path, path.read_text())[0].check_id == "V110"
+
+
+def test_dependency_range_is_structural_exit_one(tmp_path: Path) -> None:
+    path = _score(tmp_path, "")
+    path.write_text(
+        BASE.replace(
+            "sheet: {size: 1, total_items: 2}",
+            "sheet: {size: 1, total_items: 2, dependencies: {2: [99]}}",
+        )
+    )
+    result = CliRunner().invoke(app, ["validate", str(path), "--json"])
+    assert result.exit_code == 1
+    assert json.loads(result.stdout)["issues"][0]["check_id"] == "V214"
+
+
+def test_info_is_verbose_only_and_run_warns_on_unknown_field(tmp_path: Path) -> None:
+    path = _score(tmp_path, "unknownthing: value\n")
+    default = CliRunner().invoke(app, ["validate", str(path)])
+    verbose = CliRunner().invoke(app, ["validate", str(path), "--verbose"])
+    assert default.exit_code == verbose.exit_code == 0
+    assert "[V011]" not in default.stdout
+    assert "[V011]" in verbose.stdout
+    run = CliRunner().invoke(app, ["run", str(path), "--dry-run"])
+    assert run.exit_code == 0
+    assert "ignored unknown score field" in run.output
+
+
+def test_nested_instrument_fields_tolerant_but_alias_is_known(tmp_path: Path) -> None:
+    path = _score(tmp_path, "instruments: {writer: {profile: cli, profilx: cli}}\n")
+    config = JobConfig.from_yaml(path)
+    assert [(field.path, field.key) for field in config.unknown_fields] == [
+        ("instruments.writer", "profilx")
+    ]

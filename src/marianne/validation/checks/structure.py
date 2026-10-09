@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from marianne.core.config import JobConfig
-from marianne.core.constants import SHEET_NUM_KEY, TERMINOLOGY_ALIASES
+from marianne.core.constants import FLOW_RESERVED_NAMES
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks.paths import WorkspaceParentExistsCheck
 
@@ -20,23 +20,7 @@ _IDENTITY_VARIABLES = frozenset(
         "agent_identity_dir",
     }
 )
-_BUILTINS = frozenset(
-    {
-        "workspace",
-        SHEET_NUM_KEY,
-        "total_sheets",
-        "score_dir",
-        "instance",
-        "stage",
-        "movement",
-        "voice",
-        "start_item",
-        "end_item",
-        "instrument_name",
-        *TERMINOLOGY_ALIASES.keys(),
-        *TERMINOLOGY_ALIASES.values(),
-    }
-)
+_BUILTINS = FLOW_RESERVED_NAMES
 _TOKEN = re.compile(r"(?<![\{$])\{([a-z][a-z0-9_]*)\}(?!\})")
 
 
@@ -160,12 +144,14 @@ class ConcertTargetCheck:
             try:
                 child = JobConfig.from_yaml(target)  # depth one: never recurse through hooks
                 for issue in WorkspaceParentExistsCheck().check(child, target, target.read_text()):
-                    issues.append(ValidationIssue(
-                        check_id=issue.check_id,
-                        severity=ValidationSeverity.WARNING,
-                        message=f"Concert target {target}: {issue.message} "
-                                "(chain may create the workspace ancestor first)",
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            check_id=issue.check_id,
+                            severity=ValidationSeverity.WARNING,
+                            message=f"Concert target {target}: {issue.message} "
+                            "(chain may create the workspace ancestor first)",
+                        )
+                    )
             except (ValueError, OSError) as exc:
                 issues.append(
                     ValidationIssue(
@@ -247,10 +233,10 @@ class AmbiguousFileReferenceCheck:
             for rule in config.validations
             if rule.type == "command_succeeds"
             and rule.command
-                and re.search(
-                    r"(?:^|\s)(?:\./|\.\./)[\w./-]+\.(?:md|txt|yaml|yml|json|csv|py|sh)\b",
-                    rule.command,
-                )
+            and re.search(
+                r"(?:^|\s)(?:\./|\.\./)[\w./-]+\.(?:md|txt|yaml|yml|json|csv|py|sh)\b",
+                rule.command,
+            )
         ]
 
 

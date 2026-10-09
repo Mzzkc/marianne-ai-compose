@@ -77,6 +77,7 @@ from marianne.core.config.job import (
     MovementDef,
     PromptConfig,
     SheetConfig,
+    ValidateConfig,
 )
 from marianne.core.config.judgment import JudgmentConfig
 from marianne.core.config.learning import (
@@ -192,6 +193,7 @@ ALL_CONFIG_MODELS: list[type[BaseModel]] = [
     SheetConfig,
     PromptConfig,
     JobConfig,
+    ValidateConfig,
     # judgment.py
     JudgmentConfig,
     # learning.py

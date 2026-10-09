@@ -16,6 +16,16 @@ FIXTURE = ROOT / "tests/fixtures/validation_corpus_baseline.json"
 AGENTS = Path("/home/emzi/Projects/AGENTS/agents")
 
 
+def test_venue_yaml_inventory_is_covered() -> None:
+    baseline = json.loads(FIXTURE.read_text())["files"]
+    actual = {f"venue:{path.relative_to(ROOT)}"
+              for root in (ROOT / "examples", ROOT / "scores")
+              for path in root.rglob("*.yaml")
+              if "rosetta-corpus" not in path.parts}
+    missing = actual - set(baseline)
+    assert not missing, f"New score YAML lacks a reviewed sweep row: {sorted(missing)}"
+
+
 @pytest.mark.parametrize("scope", ["venue", "agents"])
 def test_no_new_corpus_hits(scope: str, monkeypatch: pytest.MonkeyPatch) -> None:
     baseline = json.loads(FIXTURE.read_text())["files"]

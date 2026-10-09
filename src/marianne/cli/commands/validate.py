@@ -21,16 +21,20 @@ configuration validation before score execution.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import typer
 import yaml
+from pydantic import ValidationError
 
 from marianne.core.config import JobConfig
+from marianne.core.config.flow import FlowConfigError
 from marianne.validation import (
     ValidationReporter,
     ValidationRunner,
     create_default_checks,
 )
+from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.output_contract import apply_suppression, structural_summary
 
 from ..helpers import configure_global_logging
@@ -137,7 +141,7 @@ def validate(
             )
         raise typer.Exit(0) from None
 
-    if not all(key in parsed for key in ("name", "sheet", "prompt")):
+    if not any(key in parsed for key in ("name", "sheet", "prompt")):
         output_error(
             "This YAML is not a Marianne score (expected name, sheet, prompt).",
             json_output=json_output,
@@ -147,6 +151,31 @@ def validate(
     # Try Pydantic validation
     try:
         config = JobConfig.from_yaml(config_file)
+    except ValidationError as e:
+        load_issues = _structured_load_issues(e, raw_yaml)
+        if load_issues is not None:
+            reporter = ValidationReporter(console)
+            if json_output:
+                import json as json_mod
+
+                data = json_mod.loads(reporter.report_json(load_issues))
+                data["rendering"] = {"total_sheets": None, "sheets": [], "render_errors": []}
+                data["summary"] = _raw_score_summary(parsed)
+                data["suppressed"] = []
+                if errors_only:
+                    data["issues"] = [i for i in data["issues"] if i["severity"] == "error"]
+                console.print(json_mod.dumps(data, indent=2), soft_wrap=True, highlight=False)
+            else:
+                summary = _raw_score_summary(parsed)
+                console.print(f"Score: {summary['score']}")
+                console.print(f"Loops: {', '.join(summary['loops']) or 'none'}")
+                reporter.report_terminal(
+                    load_issues, str(summary["score"]), verbose=verbose, errors_only=errors_only
+                )
+            raise typer.Exit(1) from None
+        hints = _schema_error_hints(str(e))
+        output_error(f"Schema validation failed: {e}", hints=hints, json_output=json_output)
+        raise typer.Exit(2) from None
     except Exception as e:
         hints = _schema_error_hints(str(e))
         output_error(
@@ -244,6 +273,106 @@ def validate(
     exit_code = runner.get_exit_code(issues, strict=strict)
     if exit_code != 0:
         raise typer.Exit(exit_code) from None
+
+
+_FLOW_CODES = {
+    "V-FLOW-01": "V320",
+    "V-FLOW-02": "V320",
+    "V-FLOW-03": "V220",
+    "V-FLOW-04": "V221",
+    "V-FLOW-05": "V222",
+    "V-FLOW-06": "V312",
+    "V-FLOW-07": "V223",
+    "V-FLOW-08": "V314",
+    "V-FLOW-09": "V313",
+    "V-FLOW-10": "V313",
+    "V-FLOW-11": "V312",
+    "V-FLOW-12": "V224",
+    "V-FLOW-13": "V315",
+    "V-FLOW-14": "V225",
+    "V-FLOW-15": "V226",
+    "V-FLOW-16": "V317",
+    "V-FLOW-17": "V227",
+    "V-FLOW-18": "V208",
+    "V-FLOW-19": "V228",
+    "V-FLOW-20": "V229",
+    "V-FLOW-21": "V232",
+    "V-FLOW-22": "V316",
+    "V-FLOW-23": "V230",
+    "V-FLOW-24": "V231",
+}
+
+
+def _structured_load_issues(
+    error: ValidationError,
+    raw_yaml: str,
+) -> list[ValidationIssue] | None:
+    """Render only recognised semantic load errors as exit-1 findings."""
+    issues: list[ValidationIssue] = []
+    for detail in error.errors():
+        cause = detail.get("ctx", {}).get("error")
+        if isinstance(cause, FlowConfigError):
+            for item in cause.issues:
+                code = _FLOW_CODES.get(item.check)
+                if code is None:
+                    return None
+                line = next(
+                    (
+                        n
+                        for n, text in enumerate(raw_yaml.splitlines(), 1)
+                        if item.span and f"{item.span}:" in text
+                    ),
+                    None,
+                )
+                issues.append(
+                    ValidationIssue(
+                        check_id=code,
+                        severity=ValidationSeverity.ERROR,
+                        message=item.message,
+                        line=line,
+                        suggestion=item.hint,
+                        metadata={"flow_check": item.check, "span": item.span or ""},
+                    )
+                )
+        elif isinstance(cause, ValueError) and "out of range (valid:" in str(cause):
+            issues.append(
+                ValidationIssue(
+                    check_id="V214",
+                    severity=ValidationSeverity.ERROR,
+                    message=str(cause),
+                )
+            )
+        else:
+            return None
+    return issues or None
+
+
+def _raw_score_summary(parsed: dict[str, Any]) -> dict[str, Any]:
+    """Partial summary when a semantic flow error prevents model construction."""
+    sheet_raw, prompt_raw = parsed.get("sheet"), parsed.get("prompt")
+    sheet: dict[str, Any] = sheet_raw if isinstance(sheet_raw, dict) else {}
+    prompt: dict[str, Any] = prompt_raw if isinstance(prompt_raw, dict) else {}
+    loops_raw, triggers_raw, variables_raw = (
+        sheet.get("loops"),
+        sheet.get("triggers"),
+        prompt.get("variables"),
+    )
+    loops: dict[Any, Any] = loops_raw if isinstance(loops_raw, dict) else {}
+    triggers: dict[Any, Any] = triggers_raw if isinstance(triggers_raw, dict) else {}
+    variables: dict[Any, Any] = variables_raw if isinstance(variables_raw, dict) else {}
+    return {
+        "score": parsed.get("name"),
+        "sheets": None,
+        "stages": None,
+        "fan_out": bool(sheet.get("fan_out")),
+        "instruments": {
+            "primary": parsed.get("instrument"),
+            "fallbacks": parsed.get("instrument_fallbacks", []),
+        },
+        "loops": list(map(str, loops)),
+        "triggers": list(map(str, triggers)),
+        "variables": {"declared": len(variables)},
+    }
 
 
 def _show_dag_visualization(config: JobConfig, verbose: bool) -> None:  # noqa: ARG001

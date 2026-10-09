@@ -8,22 +8,24 @@ import re
 from pathlib import Path
 
 from marianne.core.config import JobConfig
-from marianne.core.constants import SHEET_NUM_KEY, TERMINOLOGY_ALIASES
+from marianne.core.constants import FLOW_RESERVED_NAMES, SHEET_NUM_KEY, TERMINOLOGY_ALIASES
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml
 
 # Built-in template variable names used by Marianne's rendering engine.
-_BUILTIN_NAMES: frozenset[str] = frozenset({
-    "workspace",
-    SHEET_NUM_KEY,
-    "total_sheets",
-    "start_item",
-    "end_item",
-    "instrument_name",
-    # movement/voice vocabulary and its legacy aliases, from the shared table
-    *TERMINOLOGY_ALIASES.keys(),
-    *TERMINOLOGY_ALIASES.values(),
-})
+_BUILTIN_NAMES: frozenset[str] = frozenset(
+    {
+        "workspace",
+        SHEET_NUM_KEY,
+        "total_sheets",
+        "start_item",
+        "end_item",
+        "instrument_name",
+        # movement/voice vocabulary and its legacy aliases, from the shared table
+        *TERMINOLOGY_ALIASES.keys(),
+        *TERMINOLOGY_ALIASES.values(),
+    }
+)
 
 
 class JinjaInValidationPathCheck:
@@ -62,16 +64,10 @@ class JinjaInValidationPathCheck:
                     ValidationIssue(
                         check_id=self.check_id,
                         severity=self.severity,
-                        message=(
-                            f"Validation rule {i + 1} uses Jinja syntax"
-                            f" in path: {path_val}"
-                        ),
+                        message=(f"Validation rule {i + 1} uses Jinja syntax in path: {path_val}"),
                         line=find_line_in_yaml(raw_yaml, str(path_val)),
                         context=str(path_val),
-                        suggestion=(
-                            "Use {workspace} not {{ workspace }}"
-                            " in validation paths"
-                        ),
+                        suggestion=("Use {workspace} not {{ workspace }} in validation paths"),
                         metadata={
                             "validation_index": str(i),
                             "path": str(path_val),
@@ -90,9 +86,7 @@ class FormatSyntaxInTemplateCheck:
     """
 
     # Matches {name} but NOT {{name}} — single-brace references to built-ins.
-    _PATTERN = re.compile(
-        r"(?<!\{)\{(" + "|".join(_BUILTIN_NAMES) + r")\}(?!\})"
-    )
+    _PATTERN = re.compile(r"(?<!\{)\{(" + "|".join(_BUILTIN_NAMES) + r")\}(?!\})")
 
     @property
     def check_id(self) -> str:
@@ -131,10 +125,7 @@ class FormatSyntaxInTemplateCheck:
                     ),
                     line=find_line_in_yaml(raw_yaml, f"{{{name}}}"),
                     context=match.group(0),
-                    suggestion=(
-                        f"Use {{{{ {name} }}}} not {{{name}}}"
-                        f" in Jinja templates"
-                    ),
+                    suggestion=(f"Use {{{{ {name} }}}} not {{{name}}} in Jinja templates"),
                     metadata={
                         "variable": name,
                     },
@@ -177,8 +168,7 @@ class NoValidationsCheck:
                     severity=self.severity,
                     message="No validation rules configured",
                     suggestion=(
-                        "Add at least one validation rule"
-                        " — see docs/score-writing-guide.md"
+                        "Add at least one validation rule — see docs/score-writing-guide.md"
                     ),
                     metadata={},
                 )
@@ -216,21 +206,17 @@ class FileExistsOnlyCheck:
         if not config.validations:
             return []
 
-        all_file_exists = all(
-            v.type == "file_exists" for v in config.validations
-        )
+        all_file_exists = all(v.type == "file_exists" for v in config.validations)
         if all_file_exists:
             return [
                 ValidationIssue(
                     check_id=self.check_id,
                     severity=self.severity,
                     message=(
-                        "All validations are file_exists"
-                        " — stale files from previous runs will pass"
+                        "All validations are file_exists — stale files from previous runs will pass"
                     ),
                     suggestion=(
-                        "Consider adding file_modified or content checks"
-                        " to detect stale files"
+                        "Consider adding file_modified or content checks to detect stale files"
                     ),
                     metadata={
                         "validation_count": str(len(config.validations)),
@@ -266,10 +252,7 @@ class FanOutWithoutDependenciesCheck:
         raw_yaml: str,
     ) -> list[ValidationIssue]:
         """Fire when fan-out is configured without dependencies."""
-        if (
-            config.sheet.fan_out_stage_map is not None
-            and not config.sheet.dependencies
-        ):
+        if config.sheet.fan_out_stage_map is not None and not config.sheet.dependencies:
             return [
                 ValidationIssue(
                     check_id=self.check_id,
@@ -279,10 +262,7 @@ class FanOutWithoutDependenciesCheck:
                         " are declared — stages may run out of order"
                     ),
                     line=find_line_in_yaml(raw_yaml, "fan_out"),
-                    suggestion=(
-                        "Add sheet.dependencies to control"
-                        " stage execution order"
-                    ),
+                    suggestion=("Add sheet.dependencies to control stage execution order"),
                     metadata={},
                 )
             ]
@@ -315,10 +295,7 @@ class FanOutWithoutParallelCheck:
         raw_yaml: str,
     ) -> list[ValidationIssue]:
         """Fire when fan-out is configured without parallel."""
-        if (
-            config.sheet.fan_out_stage_map is not None
-            and config.parallel.enabled is False
-        ):
+        if config.sheet.fan_out_stage_map is not None and config.parallel.enabled is False:
             return [
                 ValidationIssue(
                     check_id=self.check_id,
@@ -329,8 +306,7 @@ class FanOutWithoutParallelCheck:
                     ),
                     line=find_line_in_yaml(raw_yaml, "parallel"),
                     suggestion=(
-                        "Enable parallel.enabled: true to run"
-                        " fan-out instances concurrently"
+                        "Enable parallel.enabled: true to run fan-out instances concurrently"
                     ),
                     metadata={},
                 )
@@ -368,19 +344,17 @@ class VariableShadowingCheck:
         issues: list[ValidationIssue] = []
 
         for name in config.prompt.variables:
-            if name in _BUILTIN_NAMES:
+            if name in FLOW_RESERVED_NAMES:
                 issues.append(
                     ValidationIssue(
                         check_id=self.check_id,
                         severity=self.severity,
-                        message=(
-                            f"Variable '{name}' shadows the"
-                            f" built-in {name}"
-                        ),
+                        message=(f"Variable '{name}' shadows the built-in {name}"),
                         line=find_line_in_yaml(raw_yaml, f"{name}:"),
                         suggestion=(
                             f"Rename variable '{name}'"
-                            f" — it shadows the built-in {name}"
+                            f" — it shadows the built-in {name}."
+                            " This becomes an error in a later release."
                         ),
                         metadata={
                             "variable": name,
@@ -432,13 +406,9 @@ class SkipWhenSheetRangeCheck:
                             f"skip_when key {k} is out of range "
                             f"(valid: 1\u2013{total}); this rule will never fire"
                         ),
-                        suggestion=(
-                            f"Remove sheet {k} or adjust total_sheets / fan-out"
-                        ),
+                        suggestion=(f"Remove sheet {k} or adjust total_sheets / fan-out"),
                         metadata={SHEET_NUM_KEY: str(k), "source": "skip_when"},
                     )
                 )
 
         return issues
-
-

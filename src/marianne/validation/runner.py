@@ -42,6 +42,18 @@ from marianne.validation.checks import (
     VersionReferenceCheck,
     WorkspaceParentExistsCheck,
 )
+from marianne.validation.checks.flow import (
+    BypassedRecoveryCheck,
+    ConstantUntilCheck,
+    FlowConcertTargetCheck,
+    ForwardGotoFanOutCheck,
+    GotoCycleCheck,
+    JinjaLoopCollisionCheck,
+    LegacyConditionCheck,
+    MixedFanOutKeyingCheck,
+    UndefinedFlowVariableCheck,
+    ZeroCostLoopLimitCheck,
+)
 from marianne.validation.checks.schema import UnknownFieldCheck
 from marianne.validation.checks.structure import (
     AmbiguousFileReferenceCheck,
@@ -156,6 +168,16 @@ def create_default_checks() -> list[ValidationCheck]:
     # The type checker sees these as ValidationCheck protocol implementations
     checks: list[ValidationCheck] = [
         UnknownFieldCheck(),
+        UndefinedFlowVariableCheck(),
+        BypassedRecoveryCheck(),
+        MixedFanOutKeyingCheck(),
+        ConstantUntilCheck(),
+        JinjaLoopCollisionCheck(),
+        ZeroCostLoopLimitCheck(),
+        FlowConcertTargetCheck(),
+        ForwardGotoFanOutCheck(),
+        GotoCycleCheck(),
+        LegacyConditionCheck(),
         DependencyCycleCheck(),
         FanOutCoherenceCheck(),
         CadenzaTargetCheck(),
