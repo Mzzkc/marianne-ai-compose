@@ -86,6 +86,31 @@ async def test_exited_parent_held_pipe_completes_and_reaps_group() -> None:
 
 
 @pytest.mark.asyncio
+async def test_exited_parent_reaps_detached_pipe_owner() -> None:
+    backend = PluginCliBackend(_profile(grace=0.1))
+    child_pid: int | None = None
+    try:
+        start = time.monotonic()
+        result = await backend.execute(
+            "import subprocess, time; c=subprocess.Popen(['sleep','30'],"
+            "start_new_session=True); print(f'child={c.pid}', flush=True);"
+            "time.sleep(0.05)",
+            timeout_seconds=3,
+        )
+        child_pid = int(result.stdout.split("child=", 1)[1].split()[0])
+        assert result.exit_reason == "completed"
+        assert result.exit_code == 0
+        assert time.monotonic() - start < 30
+        assert await _wait_dead(child_pid)
+    finally:
+        if child_pid is not None and _state(child_pid) not in (None, "Z"):
+            try:
+                os.killpg(child_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+
+@pytest.mark.asyncio
 async def test_live_parent_still_times_out_with_partial_output() -> None:
     backend = PluginCliBackend(_profile())
     start = time.monotonic()
