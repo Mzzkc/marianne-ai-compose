@@ -44,7 +44,7 @@ import jinja2
 from marianne.core.config.job import InjectionCategory, InjectionItem
 from marianne.core.constants import SHEET_NUM_KEY, TRUNCATE_STDOUT_TAIL_CHARS
 from marianne.core.errors.classifier import ErrorClassifier
-from marianne.core.errors.codes import ErrorCategory
+from marianne.core.errors.codes import ErrorCategory, ErrorCode
 from marianne.core.logging import get_logger
 from marianne.core.sheet import Sheet
 from marianne.core.tokens import estimate_tokens, get_effective_window_size
@@ -1208,6 +1208,8 @@ def _classify_error(exec_result: ExecutionResult) -> _ErrorClassification:
 
     Classifications:
         AUTH_FAILURE — authentication/authorization failure (drives fallback)
+        INSTRUMENT_UNAVAILABLE — binary absent / endpoint unreachable (drives
+            immediate fallback without consuming a retry, GH #418)
         TRANSIENT — retriable: timeout, signal kill, network, generic-unknown
         EXECUTION_ERROR — validation / fatal / configuration / preflight / etc.
     """
@@ -1227,6 +1229,22 @@ def _classify_error(exec_result: ExecutionResult) -> _ErrorClassification:
     if exec_result.rate_limited:
         return _ErrorClassification(None, None, None)
 
+    # GH #418: an instrument that cannot be reached at all — its binary is not
+    # on PATH, or its HTTP endpoint refuses the connection — is not a transient
+    # failure of THIS attempt; retrying it is pure waste. Surface a distinct
+    # bucket so the baton advances the fallback chain immediately instead of
+    # spending the whole retry budget (3 dispatches per sheet, measured).
+    stderr_text = exec_result.stderr or ""
+    if exec_result.error_type == "connection" or (
+        exec_result.exit_reason == "error"
+        and stderr_text.startswith(("Executable not found", "Failed to start process"))
+    ):
+        return _ErrorClassification(
+            "INSTRUMENT_UNAVAILABLE",
+            exec_result.error_message or stderr_text,
+            ErrorCode.BACKEND_NOT_FOUND.value,
+        )
+
     classified = _classifier.classify(
         # stdout is deliberately NOT passed: the baton matches error patterns
         # against stderr ONLY. An agent writing "401" or "authentication" into
@@ -1241,6 +1259,9 @@ def _classify_error(exec_result: ExecutionResult) -> _ErrorClassification:
         exit_reason=exec_result.exit_reason,
     )
     bucket = _CATEGORY_TO_BUCKET.get(classified.category, "EXECUTION_ERROR")
+    if classified.error_code is ErrorCode.BACKEND_NOT_FOUND:
+        # ENOENT / exit 127 recognised by the classifier (#418, same meaning).
+        bucket = "INSTRUMENT_UNAVAILABLE"
     # Preserve the backend's raw error_message when present (the user-facing
     # text); fall back to the classifier's synthesized message otherwise.
     message = exec_result.error_message or classified.message

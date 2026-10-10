@@ -279,6 +279,7 @@ class TestFallbackReasonPropagatesToHistory:
         ("AUTH_FAILURE", "auth_failure"),
         ("auth", "auth_failure"),
         ("AUTH", "auth_failure"),
+        ("INSTRUMENT_UNAVAILABLE", "unavailable"),  # GH #418
     ],
 )
 class TestAuthFailureReasonNormalization:
