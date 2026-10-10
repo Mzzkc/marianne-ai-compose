@@ -29,7 +29,8 @@ from marianne.execution.base import ExecutionResult
 def _missing_binary_result() -> ExecutionResult:
     return ExecutionResult(
         success=False, stdout="", stderr="Executable not found: claude",
-        exit_code=None, exit_reason="error", duration_seconds=0.01,
+        exit_code=None, exit_reason="error", error_type="executable_not_found",
+        duration_seconds=0.01,
     )
 
 
@@ -52,12 +53,49 @@ class TestClassification:
         assert cls.classification == "INSTRUMENT_UNAVAILABLE"
         assert cls.error_code == "E505"
 
-    def test_exit_127_command_not_found_is_instrument_unavailable(self) -> None:
+    def test_typed_executable_not_found_is_instrument_unavailable(self) -> None:
+        """The backend now TYPES the cause (design §5.2); the bucket keys on it."""
+        cls = _classify_error(ExecutionResult(
+            success=False, stdout="", stderr="Executable not found: claude",
+            exit_code=None, exit_reason="error", error_type="executable_not_found",
+            duration_seconds=0.01,
+        ))
+        assert cls.classification == "INSTRUMENT_UNAVAILABLE"
+        cls = _classify_error(ExecutionResult(
+            success=False, stdout="", stderr="Failed to start process: EACCES",
+            exit_code=None, exit_reason="error", error_type="spawn_failed",
+            duration_seconds=0.01,
+        ))
+        assert cls.classification == "INSTRUMENT_UNAVAILABLE"
+
+    def test_classifier_enoent_on_error_exit_reason_is_instrument_unavailable(self) -> None:
+        cls = _classify_error(ExecutionResult(
+            success=False, stdout="", stderr="spawn claude ENOENT",
+            exit_code=None, exit_reason="error", duration_seconds=0.01,
+        ))
+        assert cls.classification == "INSTRUMENT_UNAVAILABLE"
+
+    @pytest.mark.parametrize("stderr", [
+        "Error: ENOENT: no such file or directory, open 'notes/plan.md'",
+        "bash: line 1: pytest: command not found",
+        "spawn claude ENOENT",
+    ])
+    def test_agent_own_enoent_text_is_not_instrument_unavailable(self, stderr: str) -> None:
+        """Blueprint P9 (PO-C8): a process that RAN and exited 1 with its own
+        tool error must be retried on the same entry, not abandoned."""
+        cls = _classify_error(ExecutionResult(
+            success=False, stdout="", stderr=stderr, exit_code=1,
+            exit_reason="completed", duration_seconds=2.0,
+        ))
+        assert cls.classification != "INSTRUMENT_UNAVAILABLE"
+
+    def test_exit_127_without_error_exit_reason_is_retried(self) -> None:
+        """Exit 127 is not inferred as route-unavailable (design §5.2)."""
         cls = _classify_error(ExecutionResult(
             success=False, stdout="", stderr="bash: foo: command not found",
             exit_code=127, duration_seconds=0.01,
         ))
-        assert cls.classification == "INSTRUMENT_UNAVAILABLE"
+        assert cls.classification != "INSTRUMENT_UNAVAILABLE"
 
     def test_genuine_signal_race_stays_transient(self) -> None:
         """A bare exit_code=None with no ENOENT text is still the retriable case."""

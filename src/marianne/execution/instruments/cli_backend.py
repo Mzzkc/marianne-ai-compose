@@ -1349,6 +1349,7 @@ class PluginCliBackend(Backend):
         stderr_data = ""
         exit_code: int | None = None
         exit_reason = "completed"
+        spawn_error_type: str | None = None  # GH #418: typed route-unavailable cause
         returncode_at_timeout: int | None = None
         post_exit_grace_fired = False
         stdout_chunks: list[bytes] = []
@@ -1607,6 +1608,7 @@ class PluginCliBackend(Backend):
             # a missing executable, not a missing working directory.
             stderr_data = f"Executable not found: {cmd[0]}"
             exit_reason = "error"
+            spawn_error_type = "executable_not_found"
             _logger.error(
                 "plugin_cli_executable_not_found",
                 instrument=self._profile.name,
@@ -1615,6 +1617,7 @@ class PluginCliBackend(Backend):
         except OSError as e:
             stderr_data = f"Failed to start process: {e}"
             exit_reason = "error"
+            spawn_error_type = "spawn_failed"
             _logger.error(
                 "plugin_cli_execution_error",
                 instrument=self._profile.name,
@@ -1648,6 +1651,11 @@ class PluginCliBackend(Backend):
         elif exit_reason == "error":
             result.success = False
             result.exit_reason = "error"
+            if spawn_error_type is not None:
+                # The route itself could not be reached (binary absent /
+                # spawn refused). Typed so the baton's INSTRUMENT_UNAVAILABLE
+                # bucket keys on this, never on stderr text (GH #418).
+                result.error_type = spawn_error_type
 
         _logger.info(
             "plugin_cli_execute_complete",

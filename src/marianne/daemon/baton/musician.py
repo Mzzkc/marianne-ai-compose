@@ -1184,6 +1184,12 @@ _classifier = ErrorClassifier()
 # TRANSIENT and the rest to EXECUTION_ERROR; the distinction is purely
 # diagnostic today (no consumer branches on TRANSIENT vs EXECUTION_ERROR) — the
 # precise category travels in the structured error_code instead.
+# Backend-typed causes meaning "the route itself could not be reached" (GH #418,
+# capability-classes design §5.2). The ONE predicate behind INSTRUMENT_UNAVAILABLE.
+_ROUTE_UNAVAILABLE_TYPES: frozenset[str] = frozenset(
+    {"executable_not_found", "spawn_failed", "connection"}
+)
+
 _CATEGORY_TO_BUCKET: dict[ErrorCategory, str] = {
     ErrorCategory.AUTH: "AUTH_FAILURE",
     ErrorCategory.RATE_LIMIT: "TRANSIENT",
@@ -1241,8 +1247,15 @@ def _classify_error(exec_result: ExecutionResult) -> _ErrorClassification:
     # failure of THIS attempt; retrying it is pure waste. Surface a distinct
     # bucket so the baton advances the fallback chain immediately instead of
     # spending the whole retry budget (3 dispatches per sheet, measured).
+    # The predicate is TYPED at the source (Blueprint capability-classes design
+    # §5.2): the CLI backend sets error_type on its spawn-failure branches and
+    # the HTTP backend on ConnectError. The stderr-prefix test stays for one
+    # release behind the typed check for results from older code paths; it is
+    # gated on exit_reason == "error", which only the backend's spawn-failure
+    # branches set, so an agent that PRINTS "Executable not found" is never
+    # matched here.
     stderr_text = exec_result.stderr or ""
-    if exec_result.error_type == "connection" or (
+    if exec_result.error_type in _ROUTE_UNAVAILABLE_TYPES or (
         exec_result.exit_reason == "error"
         and stderr_text.startswith(("Executable not found", "Failed to start process"))
     ):
@@ -1266,8 +1279,15 @@ def _classify_error(exec_result: ExecutionResult) -> _ErrorClassification:
         exit_reason=exec_result.exit_reason,
     )
     bucket = _CATEGORY_TO_BUCKET.get(classified.category, "EXECUTION_ERROR")
-    if classified.error_code is ErrorCode.BACKEND_NOT_FOUND:
-        # ENOENT / exit 127 recognised by the classifier (#418, same meaning).
+    if (
+        classified.error_code is ErrorCode.BACKEND_NOT_FOUND
+        and exec_result.exit_reason == "error"
+    ):
+        # ENOENT recognised by the classifier on a result that never reached a
+        # running instrument (#418). A process that RAN and printed its own
+        # "command not found" / ENOENT text (an agent's tool error, exit 1)
+        # keeps its ordinary bucket and is retried on the same entry — the
+        # Blueprint P9 misfire: 3/3 agent-text cases abandoned the primary.
         bucket = "INSTRUMENT_UNAVAILABLE"
     # Preserve the backend's raw error_message when present (the user-facing
     # text); fall back to the classifier's synthesized message otherwise.
