@@ -13,13 +13,24 @@ plays a test note.
 from __future__ import annotations
 
 import shutil
+from typing import Any
 
 import typer
 from rich.table import Table
 
 from marianne.cli.output import console, output_error, output_json
 from marianne.core.config.instruments import InstrumentProfile
+from marianne.instruments.availability import (
+    check_instrument_available,
+    check_profile_available,
+)
+from marianne.instruments.classes import (
+    CLASS_VOCABULARY,
+    load_class_map,
+    write_user_classes,
+)
 from marianne.instruments.loader import load_all_profiles
+from marianne.instruments.registry import InstrumentRegistry
 
 # ---------------------------------------------------------------------------
 # Typer app for ``mzt instruments`` subcommand
@@ -30,6 +41,98 @@ instruments_app = typer.Typer(
     help="Manage and inspect available instruments.",
     invoke_without_command=True,
 )
+classes_app = typer.Typer(name="classes", help="Inspect and generate capability classes.")
+instruments_app.add_typer(classes_app)
+
+
+def _class_report() -> tuple[dict[str, Any], bool]:
+    profiles = _load_all_profiles()
+    registry = InstrumentRegistry()
+    for profile in profiles.values():
+        registry.register(profile)
+    class_map = load_class_map(profile_names=set(profiles))
+    details: dict[str, Any] = {}
+    broken = bool(class_map.failures)
+    for name, entry in sorted(class_map.classes.items()):
+        chain = []
+        for item in entry.chain:
+            available, reason = check_instrument_available(item.profile, registry)
+            chain.append(
+                {
+                    "profile": item.profile,
+                    "model": item.config.model,
+                    "availability": available,
+                    "reason": reason,
+                }
+            )
+        if entry.source_layer != "default" and not any(item["availability"] for item in chain):
+            broken = True
+        details[name] = {"source_layer": entry.source_layer, "chain": chain}
+    return {
+        "layers": [record.model_dump(mode="json") for record in class_map.layers],
+        "classes": details,
+        "vocabulary": sorted(CLASS_VOCABULARY),
+        "failures": [
+            {"layer": failure.layer, "path": str(failure.path), "reason": failure.reason}
+            for failure in class_map.failures
+        ],
+    }, broken
+
+
+@classes_app.command(name="show")
+def show_classes(json_output: bool = typer.Option(False, "--json")) -> None:
+    """Show effective chains, their layers, and local availability."""
+    report, _ = _class_report()
+    if json_output:
+        output_json(report)
+        return
+    for name, entry in report["classes"].items():
+        console.print(
+            f"{name} ({entry['source_layer']}): "
+            + " → ".join(item["profile"] for item in entry["chain"])
+        )
+    for layer in report["layers"]:
+        console.print(f"{layer['layer']}: {layer['path']} sha256={layer['sha256']}")
+
+
+@classes_app.command(name="check")
+def check_classes(
+    class_name: str | None = typer.Option(
+        None, "--class", help="Require this class to be runnable."
+    ),
+) -> None:
+    """Refuse broken layers and configured chains with no available entry."""
+    report, broken = _class_report()
+    if class_name is not None:
+        selected = report["classes"].get(class_name)
+        if selected is None or not any(item["availability"] for item in selected["chain"]):
+            broken = True
+    if broken:
+        output_error("Capability class configuration has unavailable chains or invalid layers")
+        raise typer.Exit(1)
+    console.print(f"Checked {len(report['classes'])} capability classes")
+
+
+@classes_app.command(name="write")
+def write_classes(
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    force: bool = typer.Option(False, "--force"),
+    if_absent: bool = typer.Option(False, "--if-absent"),
+) -> None:
+    """Generate a user map from shipped profiles available on this machine."""
+    try:
+        path, content, changed = write_user_classes(
+            dry_run=dry_run,
+            force=force,
+            if_absent=if_absent,
+        )
+    except (OSError, ValueError) as exc:
+        output_error(str(exc))
+        raise typer.Exit(1) from exc
+    if dry_run:
+        console.print(content)
+    else:
+        console.print(f"{path}: {'written' if changed else 'already exists'}")
 
 
 # ---------------------------------------------------------------------------
@@ -51,12 +154,9 @@ def _check_binary(profile: InstrumentProfile) -> tuple[bool, str | None]:
     Returns:
         (found, path) — True and the resolved path if found, False and None otherwise.
     """
-    if profile.kind != "cli" or profile.cli is None:
-        return True, None  # non-CLI instruments don't have binaries
-
-    executable = profile.cli.command.executable
-    binary_path = shutil.which(executable)
-    return binary_path is not None, binary_path
+    available, _ = check_profile_available(profile)
+    executable = profile.cli.command.executable if profile.cli is not None else None
+    return available, shutil.which(executable) if executable else None
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +175,9 @@ def instruments_callback(ctx: typer.Context) -> None:
 @instruments_app.command(name="list")
 def list_instruments(
     json_output: bool = typer.Option(
-        False, "--json", help="Output as JSON",
+        False,
+        "--json",
+        help="Output as JSON",
     ),
 ) -> None:
     """List all available instruments and their readiness status."""
@@ -160,16 +262,18 @@ def _list_json(profiles: dict[str, InstrumentProfile]) -> None:
         else:
             status = "unchecked"
 
-        result.append({
-            "name": profile.name,
-            "display_name": profile.display_name,
-            "kind": profile.kind,
-            "status": status,
-            "ready": found if profile.kind == "cli" else None,
-            "binary_path": binary_path,
-            "default_model": profile.default_model,
-            "capabilities": sorted(profile.capabilities),
-        })
+        result.append(
+            {
+                "name": profile.name,
+                "display_name": profile.display_name,
+                "kind": profile.kind,
+                "status": status,
+                "ready": found if profile.kind == "cli" else None,
+                "binary_path": binary_path,
+                "default_model": profile.default_model,
+                "capabilities": sorted(profile.capabilities),
+            }
+        )
 
     output_json(result)
 
@@ -178,7 +282,9 @@ def _list_json(profiles: dict[str, InstrumentProfile]) -> None:
 def check_instrument(
     name: str = typer.Argument(help="Instrument name to check"),
     json_output: bool = typer.Option(
-        False, "--json", help="Output as JSON",
+        False,
+        "--json",
+        help="Output as JSON",
     ),
 ) -> None:
     """Check readiness and configuration of a specific instrument."""
@@ -222,9 +328,7 @@ def _check_rich(profile: InstrumentProfile) -> None:
         if binary_path:
             console.print(f"  Binary:        {binary_path} [green]✓[/green]")
         else:
-            console.print(
-                f"  Binary:        {executable} [red]✗ not found[/red]"
-            )
+            console.print(f"  Binary:        {executable} [red]✗ not found[/red]")
             all_ok = False
     elif profile.kind == "http" and profile.http is not None:
         console.print(f"  Endpoint:      {profile.http.base_url}{profile.http.endpoint}")
@@ -246,9 +350,7 @@ def _check_rich(profile: InstrumentProfile) -> None:
                     f" (${model.cost_per_1k_input:.4f}/1K in, "
                     f"${model.cost_per_1k_output:.4f}/1K out)"
                 )
-            console.print(
-                f"    {model.name}: {model.context_window:,} ctx{cost_str}"
-            )
+            console.print(f"    {model.name}: {model.context_window:,} ctx{cost_str}")
 
     console.print()
     if all_ok:

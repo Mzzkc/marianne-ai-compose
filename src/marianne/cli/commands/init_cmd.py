@@ -68,9 +68,9 @@ description: "A starter score — edit this with your task"
 workspace: ./workspaces/{name}
 
 # Which instrument plays the score.
-# Available instruments: claude-code, gemini-cli, codex-cli, aider, goose, cline-cli
-# Run `mzt instruments list` to see what's available.
-instrument: claude-code
+# Generic class resolved through ~/.marianne/classes.yaml at run time.
+# Run `mzt instruments classes show` to inspect the ordered profile chain.
+instrument: strong
 instrument_config:
   timeout_seconds: 300
 
@@ -204,6 +204,15 @@ def init(
     # Generate and write starter score
     score_content = _generate_starter_score(name)
     score_file.write_text(score_content)
+
+    # Setup owns only an absent user layer; a later init never rewrites edits.
+    from marianne.instruments.classes import write_user_classes
+
+    try:
+        write_user_classes(if_absent=True)
+    except (OSError, ValueError) as exc:
+        output_error(f"Starter score created, but classes setup failed: {exc}")
+        raise typer.Exit(1) from exc
 
     _logger.info("init.complete", target_path=str(target), score_name=name)
 

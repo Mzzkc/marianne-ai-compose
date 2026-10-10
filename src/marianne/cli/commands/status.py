@@ -120,6 +120,8 @@ def format_instrument_with_fallback(sheet: SheetState) -> str:
     # override is shown; a bare profile name means the profile default.
     if sheet.instrument_model:
         name = f"{name} ({sheet.instrument_model})"
+    if sheet.instrument_resolution is not None:
+        name = f"{sheet.instrument_resolution.requested} → {name}"
     if not sheet.instrument_fallback_history:
         return name
     last = sheet.instrument_fallback_history[-1]
@@ -996,9 +998,13 @@ def _output_status_json(
             )
             sheet_data["dispatch_blocked_details"] = sheet.dispatch_blocked_details
             sheet_data["dispatch_wait"] = format_dispatch_wait(sheet)
+        if sheet.instrument_resolution is not None:
+            sheet_data["instrument_resolution"] = sheet.instrument_resolution.model_dump(
+                mode="json"
+            )
         sheets_json[str(num)] = sheet_data
 
-    output = {
+    output: dict[str, Any] = {
         "job_id": job.job_id,
         "job_name": job.job_name,
         "status": job.status.value,
@@ -1054,6 +1060,11 @@ def _output_status_json(
         "error": job.error_message,
         "sheets": sheets_json,
     }
+    if job.instrument_classes is not None:
+        output["instrument_classes"] = {
+            "digest": job.instrument_classes.digest,
+            "layers": [layer.model_dump(mode="json") for layer in job.instrument_classes.layers],
+        }
 
     # Add movement grouping when movement data is available (M3 step 31)
     if _has_movement_data(job):

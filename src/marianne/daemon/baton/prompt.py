@@ -668,6 +668,8 @@ def write_context_delivery_receipt(
     attempt: int,
     instrument: str,
     rendered: RenderedPrompt,
+    instrument_class: str | None = None,
+    class_snapshot_sha256: str | None = None,
 ) -> Path:
     """Persist proof of the exact prompt context passed to ``sheet_task``."""
     safe_job = re.sub(r"[^A-Za-z0-9._-]+", "-", job_id).strip("-._") or "job"
@@ -683,6 +685,8 @@ def write_context_delivery_receipt(
         "sheet_num": sheet_num,
         "attempt": attempt,
         "instrument": instrument,
+        "instrument_class": instrument_class,
+        "class_snapshot_sha256": class_snapshot_sha256,
         "prompt_sha256": _sha256(rendered.prompt.encode("utf-8")),
         "preamble_sha256": _sha256(rendered.preamble.encode("utf-8")),
         "context_manifest": list(rendered.context_manifest),

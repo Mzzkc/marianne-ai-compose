@@ -1,0 +1,10 @@
+version: 1
+classes:
+  strong: [claude-code, codex-cli, antigravity, opencode]
+  workhorse: [codex-cli, claude-code, opencode, antigravity, crush]
+  fast: [antigravity, opencode, crush, codex-cli, claude-code]
+  cheap: [ollama, crush, opencode, antigravity]
+  writing: [claude-code, codex-cli, antigravity, opencode]
+  review: [codex-cli, antigravity, claude-code, opencode]
+  vision: [claude-code, codex-cli]
+  local: [ollama]

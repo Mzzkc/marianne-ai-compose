@@ -52,6 +52,12 @@ class CliRawPromptBashCheck:
             profiles = load_all_profiles()
         except Exception:
             return []
+        try:
+            from marianne.instruments.classes import load_class_map
+
+            class_map = load_class_map(profile_names=set(profiles))
+        except Exception:
+            class_map = None
 
         issues: list[ValidationIssue] = []
         for sheet in build_sheets(config):
@@ -59,7 +65,7 @@ class CliRawPromptBashCheck:
             if not self._is_raw_shell_profile(profile):
                 continue
 
-            issues.extend(self._check_fallback_chain(sheet, profiles, raw_yaml))
+            issues.extend(self._check_fallback_chain(sheet, profiles, class_map, raw_yaml))
 
             rendered, render_issue = self._render_raw_prompt(
                 config,
@@ -93,25 +99,33 @@ class CliRawPromptBashCheck:
         self,
         sheet: Sheet,
         profiles: dict[str, InstrumentProfile],
+        class_map: object | None,
         raw_yaml: str,
     ) -> list[ValidationIssue]:
         non_raw_fallbacks: list[str] = []
+        class_fallbacks: list[str] = []
         seen: set[str] = set()
         for fallback in sheet.instrument_fallbacks:
             if fallback in seen:
                 continue
             seen.add(fallback)
+            if self._is_class_name(fallback, class_map):
+                class_fallbacks.append(fallback)
+                continue
             fallback_profile = profiles.get(fallback)
             if fallback_profile is None:
                 continue
             if self._is_raw_shell_profile(fallback_profile):
                 continue
             non_raw_fallbacks.append(fallback)
+        issues: list[ValidationIssue] = [
+            self._class_fallback_issue(sheet, name, raw_yaml) for name in class_fallbacks
+        ]
         if not non_raw_fallbacks:
-            return []
+            return issues
 
         fallback_list = ", ".join(f"'{name}'" for name in non_raw_fallbacks)
-        return [
+        issues.append(
             ValidationIssue(
                 check_id=self.check_id,
                 severity=ValidationSeverity.WARNING,
@@ -137,7 +151,42 @@ class CliRawPromptBashCheck:
                     "fallbacks": ",".join(non_raw_fallbacks),
                 },
             )
-        ]
+        )
+        return issues
+
+    @staticmethod
+    def _is_class_name(name: str, class_map: object | None) -> bool:
+        """A fallback naming a capability class (V-CLS-10) — model instruments."""
+        from marianne.instruments.classes import CLASS_VOCABULARY, ClassMap
+
+        if name in CLASS_VOCABULARY:
+            return True
+        return isinstance(class_map, ClassMap) and name in class_map.classes
+
+    @staticmethod
+    def _class_fallback_issue(sheet: Sheet, class_name: str, raw_yaml: str) -> ValidationIssue:
+        """V-CLS-10: a raw shell step that can fall back into a model class."""
+        return ValidationIssue(
+            check_id="V307",
+            severity=ValidationSeverity.WARNING,
+            message=(
+                f"sheet {sheet.num}: raw shell step can fall back to class "
+                f"'{class_name}', whose entries are model instruments"
+            ),
+            line=(
+                find_line_in_yaml(raw_yaml, "per_sheet_fallbacks:")
+                or find_line_in_yaml(raw_yaml, "instrument_fallbacks:")
+            ),
+            suggestion=(
+                "Set this sheet's fallback chain to [] — a deterministic shell "
+                "step must never fall back to a model instrument."
+            ),
+            metadata={
+                "sheet": str(sheet.num),
+                "instrument": sheet.instrument_name,
+                "class_fallback": class_name,
+            },
+        )
 
     def _render_raw_prompt(
         self,

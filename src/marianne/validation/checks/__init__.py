@@ -16,6 +16,15 @@ from marianne.validation.checks.best_practices import (
     SkipWhenSheetRangeCheck,
     VariableShadowingCheck,
 )
+from marianne.validation.checks.capability_classes import (
+    AliasShadowsClassCheck,
+    ClassAliasProfileCheck,
+    ClassChainAvailabilityCheck,
+    ClassChainSummaryCheck,
+    ClassesFileValidCheck,
+    ClassModelConfigCheck,
+    ClassNameResolutionCheck,
+)
 from marianne.validation.checks.cli import (
     CliRawPromptBashCheck,
     FanOutAssignmentCoverageCheck,
@@ -83,6 +92,13 @@ __all__ = [
     "NoUsableInstrumentCheck",
     "InstrumentNameCheck",
     "InteractiveSupportCheck",
+    "ClassNameResolutionCheck",
+    "ClassChainAvailabilityCheck",
+    "ClassAliasProfileCheck",
+    "AliasShadowsClassCheck",
+    "ClassModelConfigCheck",
+    "ClassesFileValidCheck",
+    "ClassChainSummaryCheck",
     # Best-practice checks
     "JinjaInValidationPathCheck",
     "FormatSyntaxInTemplateCheck",

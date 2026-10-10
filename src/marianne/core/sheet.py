@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
+from marianne.core.config.classes import ClassEntry, ClassSnapshot, InstrumentResolution
 from marianne.core.config.execution import ValidationRule
 from marianne.core.config.job import InjectionItem
 from marianne.core.constants import SHEET_NUM_KEY, positional_template_variables
@@ -107,6 +108,7 @@ class Sheet(BaseModel):
         "instrument_fallbacks. Each entry is the resolved alias's config "
         "(e.g. {'model': ...}); empty dict for a bare-profile fallback (#342).",
     )
+    instrument_resolution: InstrumentResolution | None = None
 
     # --- Prompt ---
     prompt_template: str | None = Field(
@@ -201,7 +203,11 @@ class Sheet(BaseModel):
         return tvars
 
 
-def build_sheets(config: JobConfig) -> list[Sheet]:
+def _entry_label(profile: str, model: str | None) -> str:
+    return f"{profile}/{model}" if model else profile
+
+
+def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> list[Sheet]:
     """Construct Sheet entities from a JobConfig.
 
     This bridges the old scattered-dict model (SheetConfig with separate
@@ -272,6 +278,10 @@ def build_sheets(config: JobConfig) -> list[Sheet]:
             if resolved_instrument is None:
                 resolved_instrument = config.effective_instrument_name
 
+        requested_instrument = resolved_instrument
+        class_tail: list[ClassEntry] = []
+        class_primary = False
+
         # Resolve score-level instrument aliases to profile names.
         # If the resolved name matches a key in config.instruments, replace
         # it with the profile name and merge the InstrumentDef config.
@@ -280,6 +290,13 @@ def build_sheets(config: JobConfig) -> list[Sheet]:
             resolved_instrument = instrument_def.profile
             if instrument_def.config:
                 instrument_config = {**instrument_config, **instrument_def.config}
+        elif classes is not None and resolved_instrument in classes.classes:
+            class_primary = True
+            chain = classes.classes[resolved_instrument].chain
+            resolved_instrument = chain[0].profile
+            if chain[0].config.model is not None:
+                instrument_config["model"] = chain[0].config.model
+            class_tail = chain[1:]
 
         instrument_name: str = resolved_instrument
 
@@ -340,14 +357,61 @@ def build_sheets(config: JobConfig) -> list[Sheet]:
         # applies it on fallback advance. A bare profile name → empty config.
         resolved_fallbacks: list[str] = []
         fallback_configs: list[dict[str, Any]] = []
+        used_class = class_primary
+        for entry in class_tail:
+            resolved_fallbacks.append(entry.profile)
+            fallback_configs.append(
+                {"model": entry.config.model} if entry.config.model is not None else {},
+            )
         for fb_name in fallbacks:
             fb_def = config.instruments.get(fb_name)
             if fb_def is not None:
                 resolved_fallbacks.append(fb_def.profile)
                 fallback_configs.append(dict(fb_def.config) if fb_def.config else {})
+            elif classes is not None and fb_name in classes.classes:
+                used_class = True
+                for entry in classes.classes[fb_name].chain:
+                    resolved_fallbacks.append(entry.profile)
+                    fallback_configs.append(
+                        {"model": entry.config.model} if entry.config.model is not None else {},
+                    )
             else:
                 resolved_fallbacks.append(fb_name)
                 fallback_configs.append({})
+
+        dropped_duplicates: list[str] = []
+        if used_class:
+            seen = {(instrument_name, instrument_config.get("model"))}
+            unique_names: list[str] = []
+            unique_configs: list[dict[str, Any]] = []
+            for name, fb_config in zip(resolved_fallbacks, fallback_configs, strict=True):
+                model = fb_config.get("model")
+                key = (name, model)
+                if key in seen:
+                    dropped_duplicates.append(_entry_label(name, model))
+                    continue
+                seen.add(key)
+                unique_names.append(name)
+                unique_configs.append(fb_config)
+            resolved_fallbacks = unique_names
+            fallback_configs = unique_configs
+
+        resolution = None
+        if class_primary and classes is not None:
+            resolution = InstrumentResolution(
+                requested=requested_instrument,
+                chain=[
+                    _entry_label(instrument_name, instrument_config.get("model")),
+                    *[
+                        _entry_label(name, fb_config.get("model"))
+                        for name, fb_config in zip(
+                            resolved_fallbacks, fallback_configs, strict=True,
+                        )
+                    ],
+                ],
+                dropped_duplicates=dropped_duplicates,
+                snapshot_digest=classes.digest,
+            )
 
         sheets.append(
             Sheet(
@@ -362,6 +426,7 @@ def build_sheets(config: JobConfig) -> list[Sheet]:
                 instrument_config=instrument_config,
                 instrument_fallbacks=resolved_fallbacks,
                 instrument_fallback_configs=fallback_configs,
+                instrument_resolution=resolution,
                 prompt_template=prompt_template,
                 template_file=template_file,
                 variables=variables,

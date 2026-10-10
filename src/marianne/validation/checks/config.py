@@ -7,7 +7,6 @@ validation rule completeness, and instrument name resolution.
 from __future__ import annotations
 
 import re
-import shutil
 from pathlib import Path
 
 from marianne.core.config import JobConfig
@@ -622,15 +621,18 @@ class InteractiveSupportCheck:
 
 
 class InstrumentNameCheck:
-    """Check that instrument names resolve to known profiles (V210).
+    """Check that instrument names resolve (V210).
 
-    Warns when an instrument name doesn't match any loaded instrument profile.
-    This catches typos (e.g., 'clause-code' instead of 'claude-code') at
-    validation time rather than runtime.
+    A name must be a loaded instrument profile, a score-level alias, or a
+    capability class configured through the one class loader. Typos (e.g.
+    'clause-code' instead of 'claude-code') are caught at validation time;
+    the suggestion searches profiles, aliases, classes, and the shipped
+    class vocabulary (edit distance <= 2). Class-shaped names that resolve
+    to nothing here (vocabulary-only, tombstoned) are V310's domain and are
+    skipped here so one bad name is reported once.
 
-    Severity is WARNING (not ERROR) because the conductor may have instruments
-    the validator doesn't know about — profiles loaded from other directories,
-    dynamic instruments, etc. The warning is informational, not blocking.
+    Severity is ERROR (submit refusal for the same condition) since the S3
+    overhaul; the message names every namespace it searched.
 
     Checks:
     - Top-level ``instrument:`` field
@@ -660,9 +662,12 @@ class InstrumentNameCheck:
         """Check all instrument references against the loaded profile registry."""
         # Load known instruments — gracefully degrade on failure
         try:
+            from marianne.instruments.classes import CLASS_VOCABULARY, load_class_map
             from marianne.instruments.loader import load_all_profiles
 
             known = set(load_all_profiles().keys())
+            class_map = load_class_map(profile_names=known)
+            class_names = set(class_map.classes)
         except Exception:
             _logger.debug("validation.profiles_unavailable_skip", check="V210")
             return []
@@ -673,15 +678,22 @@ class InstrumentNameCheck:
         # Score-level instrument aliases are valid references — they resolve
         # to profile names at build time via config.instruments[name].profile.
         score_instruments = set(config.instruments.keys())
-        all_valid = known | score_instruments
+        all_valid = known | score_instruments | class_names
+        # Class-shaped names that resolve to nothing here are V310's domain
+        # (vocabulary-only, tombstoned): its message names the fix command.
+        class_domain = (CLASS_VOCABULARY | class_map.tombstones) - class_names
 
         issues: list[ValidationIssue] = []
 
         # 1. Top-level instrument: field
-        # Must check against all_valid (profiles + score aliases), not just
+        # Must check against all_valid (profiles + score aliases + classes), not just
         # known (profiles only). A score can define instrument: my-alias and
         # instruments: { my-alias: { profile: claude-code } } — that's valid.
-        if config.instrument and config.instrument not in all_valid:
+        if (
+            config.instrument
+            and config.instrument not in all_valid
+            and config.instrument not in class_domain
+        ):
             issues.append(
                 self._make_issue(
                     config.instrument,
@@ -694,7 +706,7 @@ class InstrumentNameCheck:
         # 2. Per-sheet instruments
         if config.sheet.per_sheet_instruments:
             for sheet_num, instr_name in config.sheet.per_sheet_instruments.items():
-                if instr_name not in all_valid:
+                if instr_name not in all_valid and instr_name not in class_domain:
                     issues.append(
                         self._make_issue(
                             instr_name,
@@ -707,7 +719,7 @@ class InstrumentNameCheck:
         # 3. Instrument map
         if config.sheet.instrument_map:
             for instr_name in config.sheet.instrument_map:
-                if instr_name not in all_valid:
+                if instr_name not in all_valid and instr_name not in class_domain:
                     issues.append(
                         self._make_issue(
                             instr_name,
@@ -720,7 +732,11 @@ class InstrumentNameCheck:
         # 4. Movement-level instruments
         if config.movements:
             for mov_num, mov_def in config.movements.items():
-                if mov_def.instrument and mov_def.instrument not in all_valid:
+                if (
+                    mov_def.instrument
+                    and mov_def.instrument not in all_valid
+                    and mov_def.instrument not in class_domain
+                ):
                     issues.append(
                         self._make_issue(
                             mov_def.instrument,
@@ -740,19 +756,24 @@ class InstrumentNameCheck:
         known: set[str],
     ) -> ValidationIssue:
         """Create a ValidationIssue for an unknown instrument name."""
-        available = sorted(known)
-        from difflib import get_close_matches
+        from marianne.instruments.classes import CLASS_VOCABULARY
+        from marianne.validation.checks._helpers import nearest_name
 
-        close = get_close_matches(name, available, n=1, cutoff=0.7)
+        candidates = known | CLASS_VOCABULARY
+        close = nearest_name(name, candidates)
+        available = sorted(candidates)
         suggestion = (
-            (f"Did you mean '{close[0]}'? " if close else "")
+            (f"Did you mean '{close}'? " if close else "")
             + f"Available instruments: {', '.join(available)}. "
             f"Run 'mzt instruments list' to see all instruments."
         )
         return ValidationIssue(
             check_id=self.check_id,
             severity=self.severity,
-            message=f"Unknown {location}: '{name}' not found in instrument registry",
+            message=(
+                f"Unknown {location}: '{name}' is not an instrument profile, "
+                "score alias, or capability class"
+            ),
             line=line,
             suggestion=suggestion,
             metadata={
@@ -763,11 +784,12 @@ class InstrumentNameCheck:
 
 
 class InstrumentFallbackCheck:
-    """Check that instrument_fallbacks references resolve to known profiles (V211).
+    """Check that instrument_fallbacks references resolve (V211).
 
-    Warns when a fallback instrument name doesn't match any loaded instrument
-    profile or score-level instrument alias. Same severity as V210 — the
-    conductor may have instruments the validator doesn't know about.
+    Same namespace as V210 — loaded profiles, score-level aliases, and
+    capability classes through the one class loader. Class-shaped names
+    that resolve to nothing here are V310's domain, skipped so one bad
+    name is reported once. Severity ERROR, matching V210.
 
     Checks:
     - Score-level ``instrument_fallbacks``
@@ -795,9 +817,12 @@ class InstrumentFallbackCheck:
     ) -> list[ValidationIssue]:
         """Check all instrument fallback references against the loaded profile registry."""
         try:
+            from marianne.instruments.classes import CLASS_VOCABULARY, load_class_map
             from marianne.instruments.loader import load_all_profiles
 
             known = set(load_all_profiles().keys())
+            class_map = load_class_map(profile_names=known)
+            class_names = set(class_map.classes)
         except Exception:
             _logger.debug("validation.profiles_unavailable_skip", check="V211")
             return []
@@ -807,13 +832,15 @@ class InstrumentFallbackCheck:
 
         # Score-level instrument aliases are valid fallback targets
         score_instruments = set(config.instruments.keys())
-        all_valid = known | score_instruments
+        all_valid = known | score_instruments | class_names
+        # Class-shaped names that resolve to nothing here are V310's domain.
+        class_domain = (CLASS_VOCABULARY | class_map.tombstones) - class_names
 
         issues: list[ValidationIssue] = []
 
         # 1. Score-level instrument_fallbacks
         for name in config.instrument_fallbacks:
-            if name not in all_valid:
+            if name not in all_valid and name not in class_domain:
                 issues.append(
                     self._make_issue(
                         name,
@@ -826,7 +853,7 @@ class InstrumentFallbackCheck:
         # 2. Movement-level instrument_fallbacks
         for mov_num, mov_def in config.movements.items():
             for name in mov_def.instrument_fallbacks:
-                if name not in all_valid:
+                if name not in all_valid and name not in class_domain:
                     issues.append(
                         self._make_issue(
                             name,
@@ -839,7 +866,7 @@ class InstrumentFallbackCheck:
         # 3. Per-sheet fallbacks
         for sheet_num, fallback_list in config.sheet.per_sheet_fallbacks.items():
             for name in fallback_list:
-                if name not in all_valid:
+                if name not in all_valid and name not in class_domain:
                     issues.append(
                         self._make_issue(
                             name,
@@ -859,19 +886,24 @@ class InstrumentFallbackCheck:
         known: set[str],
     ) -> ValidationIssue:
         """Create a ValidationIssue for an unknown fallback instrument name."""
-        available = sorted(known)
-        from difflib import get_close_matches
+        from marianne.instruments.classes import CLASS_VOCABULARY
+        from marianne.validation.checks._helpers import nearest_name
 
-        close = get_close_matches(name, available, n=1, cutoff=0.7)
+        candidates = known | CLASS_VOCABULARY
+        close = nearest_name(name, candidates)
+        available = sorted(candidates)
         suggestion = (
-            (f"Did you mean '{close[0]}'? " if close else "")
+            (f"Did you mean '{close}'? " if close else "")
             + f"Available instruments: {', '.join(available)}. "
             f"Run 'mzt instruments list' to see all instruments."
         )
         return ValidationIssue(
             check_id=self.check_id,
             severity=self.severity,
-            message=f"Unknown {location}: '{name}' not found in instrument registry",
+            message=(
+                f"Unknown {location}: '{name}' is not an instrument profile, "
+                "score alias, or capability class"
+            ),
             line=line,
             suggestion=suggestion,
             metadata={
@@ -1019,8 +1051,8 @@ class NoUsableInstrumentCheck:
 
     Targets the unknown-system onboarding case: a fresh install has no AI CLI,
     so even a deep fallback chain can resolve to nothing the system can actually
-    run. The chain skips uninstalled instruments at dispatch, so a chain with
-    *zero* installed CLI binaries would advance straight to its HTTP fallbacks
+    run. An unavailable instrument costs one dispatch attempt before advancing;
+    a chain with *zero* installed CLI binaries would advance through HTTP fallbacks
     (which need a running local server or an API key) — or exhaust entirely.
 
     This surfaces that BEFORE the run: it resolves the score-level instrument
@@ -1049,9 +1081,12 @@ class NoUsableInstrumentCheck:
         raw_yaml: str,
     ) -> list[ValidationIssue]:
         try:
+            from marianne.instruments.availability import check_profile_available
+            from marianne.instruments.classes import load_class_map
             from marianne.instruments.loader import load_all_profiles
 
             profiles = load_all_profiles()
+            class_map = load_class_map(profile_names=set(profiles))
         except Exception:
             _logger.debug("validation.profiles_unavailable_skip", check="V212")
             return []
@@ -1074,15 +1109,20 @@ class NoUsableInstrumentCheck:
         for name in chain:
             alias = config.instruments.get(name)
             profile_name = alias.profile if alias is not None else name
-            prof = profiles.get(profile_name)
-            if prof is None:
-                unresolved += 1
-                continue
-            if prof.kind == "cli" and prof.cli is not None and prof.cli.command is not None:
-                if shutil.which(prof.cli.command.executable) is not None:
+            resolved_names = (
+                [entry.profile for entry in class_map.classes[profile_name].chain]
+                if profile_name in class_map.classes and profile_name not in profiles
+                else [profile_name]
+            )
+            for resolved_name in resolved_names:
+                prof = profiles.get(resolved_name)
+                if prof is None:
+                    unresolved += 1
+                    continue
+                if prof.kind == "cli" and check_profile_available(prof)[0]:
                     cli_installed += 1
-            elif prof.kind == "http":
-                http_count += 1
+                elif prof.kind == "http":
+                    http_count += 1
 
         if cli_installed > 0:
             return []  # at least one installed CLI instrument — the chain can run

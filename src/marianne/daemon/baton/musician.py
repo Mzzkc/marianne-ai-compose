@@ -148,6 +148,14 @@ async def sheet_task(
                 attempt=attempt_context.attempt_number,
                 instrument=effective_instrument,
                 rendered=context_delivery,
+                instrument_class=(
+                    sheet.instrument_resolution.requested
+                    if sheet.instrument_resolution is not None else None
+                ),
+                class_snapshot_sha256=(
+                    sheet.instrument_resolution.snapshot_digest
+                    if sheet.instrument_resolution is not None else None
+                ),
             )
 
         # Step 1: Build prompt

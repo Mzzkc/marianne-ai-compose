@@ -848,7 +848,9 @@
       "parse": "ok"
     },
     "venue:examples/getting-started/hello.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/getting-started/observability-demo.yaml": {
