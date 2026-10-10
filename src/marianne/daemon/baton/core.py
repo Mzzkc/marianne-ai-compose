@@ -1157,6 +1157,8 @@ class BatonCore:
             return "execution_stale"
         if "AUTH" in classification:
             return "auth_failure"
+        if "UNAVAILABLE" in classification:
+            return "unavailable"
         return "execution_failed"
 
     def _check_and_fallback_unavailable(self, sheet: SheetExecutionState, job_id: str) -> bool:
@@ -1916,6 +1918,42 @@ class BatonCore:
         if not event.execution_success:
             # Execution failed — update instrument failure tracking
             self._update_instrument_on_failure(event.instrument_name)
+
+            if event.error_classification == "INSTRUMENT_UNAVAILABLE":
+                # GH #418: the instrument cannot be reached at all (binary not
+                # on PATH, endpoint refusing connections). Retrying it is
+                # waste; advance the chain NOW without charging a retry. With
+                # no chain left, fall through to the ordinary retry/exhaustion
+                # path so the failure is still recorded and bounded.
+                if sheet.has_fallback_available:
+                    from_instrument = sheet.instrument_name or ""
+                    to_instrument = sheet.advance_fallback("unavailable")
+                    if to_instrument is not None:
+                        self._ensure_instrument_registered(to_instrument)
+                        sheet.normal_attempts = max(0, sheet.normal_attempts - 1)
+                        sheet.status = BatonSheetStatus.PENDING
+                        self._state_dirty = True
+                        self._fallback_events.append(
+                            InstrumentFallback(
+                                job_id=event.job_id,
+                                sheet_num=event.sheet_num,
+                                from_instrument=from_instrument,
+                                to_instrument=to_instrument,
+                                reason="unavailable",
+                            )
+                        )
+                        _logger.warning(
+                            "baton.sheet.instrument_unavailable_fallback",
+                            extra={
+                                "job_id": event.job_id,
+                                SHEET_NUM_KEY: event.sheet_num,
+                                "from_instrument": from_instrument,
+                                "to_instrument": to_instrument,
+                                "error_message": event.error_message,
+                            },
+                        )
+                        self._check_job_cost_limit(event.job_id)
+                        return
 
             if event.error_classification == "AUTH_FAILURE":
                 # Auth failure on THIS instrument — try fallback chain before
