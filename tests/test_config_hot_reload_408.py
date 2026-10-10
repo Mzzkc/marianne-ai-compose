@@ -18,8 +18,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
+from marianne.core.config.job import JobConfig
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.daemon.config import DaemonConfig
@@ -27,6 +29,8 @@ from marianne.daemon.manager import JobManager
 from marianne.daemon.process import DaemonProcess, _load_config
 from marianne.daemon.scheduler import GlobalSheetScheduler
 from marianne.daemon.types import ConfigReloadResult
+from marianne.instruments import classes as class_loader
+from marianne.instruments.classes import resolve_job_classes
 from marianne.instruments.registry import InstrumentRegistry
 
 _WS = Path("/tmp/408-test-ws")
@@ -343,6 +347,46 @@ async def test_reload_configuration_applies_caps_sheets_and_gate(
     assert removed.success is True
     assert "alpha:m1" not in adapter.model_concurrency_snapshot()
     assert manager._instrument_registry.get("alpha") is None
+
+
+async def test_class_reload_changes_new_jobs_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    org = _profile_dir(tmp_path)
+    config = _load_config(_config_file(tmp_path))
+    manager = _manager(tmp_path, config=config, org_dir=org)
+    default_path = class_loader.class_source_paths()[0]
+    user_path = tmp_path / "classes.yaml"
+    venue_path = tmp_path / "absent.yaml"
+    user_path.write_text("version: 1\nclasses:\n  strong: [alpha]\n")
+    monkeypatch.setattr(
+        class_loader, "class_source_paths",
+        lambda **_overrides: (default_path, user_path, venue_path),
+    )
+    score = JobConfig.model_validate({
+        "name": "class-reload",
+        "workspace": str(tmp_path / "job"),
+        "sheet": {"size": 1, "total_items": 1},
+        "prompt": {"template": "Work"},
+        "instrument": "strong",
+    })
+
+    assert (await manager.reload_configuration("initial")).success
+    assert manager._class_map is not None
+    profiles = {p.name for p in manager._instrument_registry.list_all()}
+    admitted = resolve_job_classes(score, profiles, manager._class_map)
+    assert admitted is not None
+    assert admitted.classes["strong"].chain[0].profile == "alpha"
+
+    user_path.write_text("version: 1\nclasses:\n  strong: [cli]\n")
+    assert (await manager.reload_configuration("edited")).success
+    assert manager._class_map is not None
+    new_job = resolve_job_classes(score, profiles, manager._class_map)
+    old_job = resolve_job_classes(score, profiles, manager._class_map, previous=admitted)
+    assert new_job is not None and old_job is not None
+    assert new_job.classes["strong"].chain[0].profile == "cli"
+    assert old_job.classes["strong"].chain[0].profile == "alpha"
+    assert old_job.digest == admitted.digest
 
 
 async def test_reload_configuration_fail_closed_on_invalid_config(

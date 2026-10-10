@@ -27,6 +27,20 @@ def test_show_json_names_layers_and_entry_availability(
     assert isinstance(report["classes"]["strong"]["chain"][0]["availability"], bool)
 
 
+def test_classes_check_refuses_a_chain_with_no_available_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    user_file = tmp_path / ".marianne" / "classes.yaml"
+    user_file.parent.mkdir()
+    user_file.write_text(
+        "version: 1\nclasses:\n  strong: [no-such-marianne-profile-8384]\n"
+    )
+    result = CliRunner().invoke(app, ["instruments", "classes", "check", "--class", "strong"])
+    assert result.exit_code == 1
+    assert "unavailable chains" in result.output
+
+
 def test_writer_provenance_backup_and_hand_edit_guard(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

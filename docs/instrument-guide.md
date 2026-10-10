@@ -89,6 +89,32 @@ prompt:
 > [migration guide](score-writing-guide.md#migrating-from-backend-to-instrument)
 > for the field-by-field conversion.
 
+### Capability classes
+
+Use a class when the score needs a kind of instrument and each installation
+should choose its own profile chain:
+
+```yaml
+instrument: strong
+instrument_fallbacks: [local]
+```
+
+Marianne reads the packaged class map, then `~/.marianne/classes.yaml`, then
+the venue's `.marianne/classes.yaml`. A higher layer replaces a class's entire
+ordered chain; `null` removes one. A score alias takes precedence over a
+registered profile, and a registered profile takes precedence over a class.
+The resolved class chain is saved with the job, so editing the map changes new
+jobs while an existing job keeps its original routes on resume. Use `mzt
+instruments classes show --json` to inspect the winning layers and `mzt
+instruments classes check` to inspect current availability. `mzt instruments
+classes write --if-absent` creates a machine-specific user map without
+overwriting an existing one.
+
+Class entries may select a `model`, but a score-level or sheet-level model
+cannot override a class primary. Use a score alias or named profile for a
+fixed model or a reviewed `expected_route`. `instrument: cli` is the
+deterministic shell profile.
+
 ### Instrument Configuration
 
 Override instrument defaults with `instrument_config:`:

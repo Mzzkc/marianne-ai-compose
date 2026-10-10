@@ -11,13 +11,22 @@ import pytest
 import yaml
 
 from marianne.core.checkpoint import CheckpointState, SheetState
+from marianne.core.config.instruments import (
+    CliCommand,
+    CliErrorConfig,
+    CliOutputConfig,
+    CliProfile,
+    InstrumentProfile,
+)
 from marianne.core.config.job import JobConfig
 from marianne.core.sheet import build_sheets
 from marianne.daemon.baton.adapter import BatonAdapter, sheets_to_execution_states
 from marianne.daemon.baton.backend_pool import BackendPool, InstrumentNotRegisteredError
 from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.musician import _classify_error
 from marianne.daemon.baton.prompt import RenderedPrompt, write_context_delivery_receipt
+from marianne.execution.instruments.cli_backend import PluginCliBackend
 from marianne.instruments.classes import load_class_map, resolve_job_classes
 from marianne.instruments.registry import InstrumentRegistry
 
@@ -112,6 +121,51 @@ def test_status_and_receipt_show_requested_class(
 
 
 @pytest.mark.asyncio
+async def test_class_missing_binary_uses_one_real_backend_attempt(tmp_path: Path) -> None:
+    missing = InstrumentProfile(
+        name="missing-route",
+        display_name="Missing route",
+        description="Class fallback probe",
+        kind="cli",
+        cli=CliProfile(
+            command=CliCommand(executable="marianne-class-missing-binary-8384"),
+            output=CliOutputConfig(format="text"),
+            errors=CliErrorConfig(),
+        ),
+    )
+    user_map = tmp_path / "classes.yaml"
+    user_map.write_text("version: 1\nclasses:\n  strong: [missing-route, cli]\n")
+    config = _job().model_copy(update={"workspace": tmp_path})
+    snapshot = resolve_job_classes(
+        config,
+        {"missing-route", "cli"},
+        load_class_map(user_path=user_map, venue_path=tmp_path / "absent"),
+    )
+    assert snapshot is not None
+    sheet = build_sheets(config, classes=snapshot)[0]
+    result = await PluginCliBackend(missing).execute("test", timeout_seconds=5)
+    assert result.error_type == "executable_not_found"
+    classification = _classify_error(result)
+    assert classification.classification == "INSTRUMENT_UNAVAILABLE"
+    core = BatonCore()
+    core.register_job("j", sheets_to_execution_states([sheet]), {})
+    await core.handle_event(SheetAttemptResult(
+        job_id="j",
+        sheet_num=1,
+        instrument_name="missing-route",
+        attempt=1,
+        execution_success=False,
+        exit_code=result.exit_code,
+        error_classification=classification.classification,
+        error_message=classification.message,
+        error_code=classification.error_code,
+    ))
+    state = core._jobs["j"].sheets[1]
+    assert state.instrument_name == "cli"
+    assert state.normal_attempts == 0
+
+
+@pytest.mark.asyncio
 async def test_registry_miss_is_typed_and_advances_once() -> None:
     registry = InstrumentRegistry()
     pool = BackendPool(registry)
@@ -181,12 +235,14 @@ async def test_real_manager_keeps_class_chain_after_user_map_edit(tmp_path: Path
         status=DaemonJobStatus.RUNNING,
     )
     observed: list[str] = []
+    snapshots: list[CheckpointState] = []
 
     async def consume(job_id: str) -> bool:
         saved = await manager._registry.load_checkpoint(job_id)
         assert saved is not None
         checkpoint = CheckpointState.model_validate_json(saved)
         assert checkpoint.instrument_classes is not None
+        snapshots.append(checkpoint)
         observed.append(checkpoint.instrument_classes.classes["strong"].chain[0].profile)
         assert adapter.get_sheet(job_id, 1).instrument_name == "cli"
         return True
@@ -194,13 +250,35 @@ async def test_real_manager_keeps_class_chain_after_user_map_edit(tmp_path: Path
     adapter.wait_for_completion = consume  # type: ignore[method-assign]
     try:
         assert await manager._run_via_baton("class-job", score, JobRequest(config_path=score_path))
-        user_map.write_text("version: 1\nclasses:\n  strong: [claude-code]\n")
+        user_map.write_text(
+            "version: 1\nclasses:\n  strong: [claude-code]\n  review: [codex-cli]\n"
+        )
+        edited_score = score.model_copy(update={"instrument_fallbacks": ["review"]})
+        score_path.write_text(yaml.safe_dump(edited_score.model_dump(mode="json")))
+        await manager._registry.close()
+        manager = JobManager(DaemonConfig(state_db_path=tmp_path / "registry.db"))
+        manager._instrument_registry = registry
         manager._class_map = load_class_map(user_path=user_map, venue_path=tmp_path / "absent")
         adapter = BatonAdapter()
         adapter.wait_for_completion = consume  # type: ignore[method-assign]
         manager._baton_adapter = adapter
+        await manager._registry.open()
+        manager._job_meta["class-job"] = JobMeta(
+            job_id="class-job",
+            config_path=score_path,
+            workspace=workspace,
+            status=DaemonJobStatus.PAUSED,
+        )
         assert await manager._resume_via_baton("class-job", workspace)
         assert observed == ["cli", "cli"]
+        assert snapshots[0].instrument_classes is not None
+        assert snapshots[1].instrument_classes is not None
+        assert "review" not in snapshots[0].instrument_classes.classes
+        assert snapshots[1].instrument_classes.classes["review"].resolved_at == "resume"
+        assert snapshots[1].instrument_classes.classes["strong"] == (
+            snapshots[0].instrument_classes.classes["strong"]
+        )
+        assert adapter.get_sheet("class-job", 1).instrument_fallbacks[-1] == "codex-cli"
     finally:
         await manager._registry.close()
 

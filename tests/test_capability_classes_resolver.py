@@ -71,6 +71,34 @@ def test_alias_wins_over_class_with_same_name() -> None:
     assert sheet.instrument_config["model"] == "fixed"
 
 
+def test_movement_map_and_per_sheet_class_positions_become_profiles() -> None:
+    classes = _snapshot(
+        strong=["claude-code", "codex-cli"],
+        fast=["antigravity"],
+        writing=["opencode"],
+        local=["ollama"],
+    )
+    config = _job(
+        instrument="strong",
+        instrument_fallbacks=["local"],
+        movements={1: {"instrument": "strong"}},
+        sheet={
+            "size": 1, "total_items": 4,
+            "per_sheet_instruments": {2: "fast"},
+            "instrument_map": {"writing": [3]},
+        },
+    )
+    sheets = build_sheets(config, classes=classes)
+    assert [sheet.instrument_name for sheet in sheets] == [
+        "claude-code", "antigravity", "opencode", "claude-code",
+    ]
+    class_names = set(classes.classes)
+    for sheet in sheets:
+        assert sheet.instrument_name not in class_names
+        assert not class_names.intersection(sheet.instrument_fallbacks)
+        assert len(sheet.instrument_fallbacks) == len(sheet.instrument_fallback_configs)
+
+
 def test_all_tracked_scores_keep_sheet_identity_under_snapshots() -> None:
     root = Path(__file__).resolve().parents[1]
     tracked = subprocess.run(
