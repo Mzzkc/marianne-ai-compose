@@ -1,170 +1,49 @@
 #!/usr/bin/env python3
-"""resolve-hello.py — discover this machine, then template a runnable hello.
+"""Copy the class-based hello score into its workspace with absolute asset paths.
 
-Run by the cli prescore (`hello-setup.yaml`). No AI, no network model calls, so
-it can never hang. It:
-
-  1. picks the best AVAILABLE + REACHABLE instrument, free first (Ollama →
-     free OpenRouter via crush → a configured paid CLI subscription);
-  2. detects the browser-open command for this OS/shell (wslview / xdg-open /
-     open / explorer.exe) and reports it (the assembler does the actual opening);
-  3. reads the hello orchestration template and writes a RESOLVED copy with the
-     chosen instrument baked in — so the run adapts to the machine and, via the
-     assembler, ends with the finished page on screen.
-
-This is the "score editing / templating" the onboarding demonstrates, kept
-deliberately simple: load a score, change one field, add one hook, write it out.
-
-Usage: resolve-hello.py <workspace-dir> <hello-template.yaml>
-Writes: <workspace>/hello-resolved.yaml   (returns non-zero if nothing is usable)
+The hello-setup score has already created and checked the machine's class map.
+This copy gives the chained score a stable workspace and lets assets resolve
+when it runs outside the examples directory.
 """
 
 from __future__ import annotations
 
-import os
-import shutil
 import sys
-import urllib.request
 from pathlib import Path
 from typing import Any
 
-
-def _have(cmd: str) -> bool:
-    return shutil.which(cmd) is not None
+import yaml
 
 
-def _ollama_up() -> bool:
-    try:
-        with urllib.request.urlopen("http://localhost:11434/api/tags", timeout=2):
-            return True
-    except Exception:
-        return False
-
-
-def pick_instrument() -> tuple[str | None, str | None, str]:
-    """(instrument, model, human-label) — free first, only if reachable."""
-    if _ollama_up() and _have("opencode"):
-        return "opencode-gemma", None, "free · local Ollama"
-    if os.environ.get("OPENROUTER_API_KEY") and _have("crush"):
-        return "crush", "qwen/qwen3-coder:free", "free · OpenRouter"
-    if _have("claude"):
-        return "claude-code", None, "paid · Anthropic Max"
-    if _have("gemini"):
-        return "gemini-cli", None, "paid · Google"
-    if _have("opencode") and os.environ.get("ZAI_API_KEY"):
-        return "opencode", "zai-coding-plan/glm-5.2", "paid · Z.AI Coding Plan"
-    return None, None, ""
-
-
-def _is_wsl() -> bool:
-    """True when running under WSL (Windows Subsystem for Linux)."""
-    if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSL_INTEROP"):
-        return True
-    try:
-        with open("/proc/version", encoding="utf-8", errors="replace") as f:
-            return "microsoft" in f.read().lower()
-    except OSError:
-        return False
-
-
-def pick_opener() -> str:
-    """Report how the finished page will be opened. On WSL we target the user's
-    WINDOWS browser (wslview, else explorer.exe via a translated path), never a
-    Linux browser inside WSL. The assembler performs the actual open."""
-    if _is_wsl():
-        if _have("wslview"):
-            return "wslview → Windows browser (WSL)"
-        if _have("explorer.exe"):
-            return "explorer.exe → Windows browser (WSL)"
-        return "WSL detected — install wslu's `wslview` to auto-open"
-    for cmd in ("xdg-open", "open"):
-        if _have(cmd):
-            return cmd
-    return ""
+def _absolute_asset_paths(node: Any, assets: Path) -> Any:
+    if isinstance(node, str):
+        return node.replace("{{ workspace }}/../../examples/getting-started/assets", str(assets))
+    if isinstance(node, dict):
+        return {key: _absolute_asset_paths(value, assets) for key, value in node.items()}
+    if isinstance(node, list):
+        return [_absolute_asset_paths(value, assets) for value in node]
+    return node
 
 
 def main() -> int:
-    if len(sys.argv) < 3:
+    if len(sys.argv) != 3:
         print("usage: resolve-hello.py <workspace-dir> <hello-template.yaml>", file=sys.stderr)
         return 2
-    ws = Path(sys.argv[1]).resolve()
+    workspace = Path(sys.argv[1]).resolve()
     template = Path(sys.argv[2]).resolve()
-
-    instrument, model, label = pick_instrument()
-    opener = pick_opener()
-
-    print(f"[discover] instrument : {instrument or 'NONE'}  ({label or 'nothing reachable'})")
-    print(f"[discover] model      : {model or '(profile default)'}")
-    print(f"[discover] open with  : {opener or 'NONE — open the file yourself'}")
-
-    if instrument is None:
-        print(
-            "[discover] No usable AI instrument found. Set up ONE free path:\n"
-            "  • install Ollama and `ollama pull gemma2` (local, no account), or\n"
-            "  • set OPENROUTER_API_KEY and install crush.\n"
-            "See docs/sandbox-free-quickstart.md.",
-            file=sys.stderr,
-        )
+    try:
+        config = yaml.safe_load(template.read_text(encoding="utf-8"))
+        if not isinstance(config, dict) or config.get("instrument") != "workhorse":
+            raise ValueError("hello template must use the workhorse class")
+        config["workspace"] = str(workspace)
+        config = _absolute_asset_paths(config, template.parent / "assets")
+        workspace.mkdir(parents=True, exist_ok=True)
+        output = workspace / "hello-resolved.yaml"
+        output.write_text(yaml.safe_dump(config, sort_keys=False, allow_unicode=True))
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        print(f"Cannot prepare hello score: {exc}", file=sys.stderr)
         return 1
-
-    import yaml  # local import: only needed on the success path
-
-    cfg = yaml.safe_load(template.read_text(encoding="utf-8"))
-
-    # ── the score edit: pin the one instrument we confirmed works ──
-    template_ic = cfg.get("instrument_config") or {}
-    new_ic: dict[str, Any] = {}
-    if model:
-        new_ic["model"] = model
-    # Keep the template's timeout so a hung local sheet FAILS (and retries, via the
-    # score's max_retries) instead of hanging forever — local model harnesses can
-    # stall, and without a timeout the run never recovers.
-    if "timeout_seconds" in template_ic:
-        new_ic["timeout_seconds"] = template_ic["timeout_seconds"]
-    cfg["instrument"] = instrument
-    cfg["instrument_config"] = new_ic
-    cfg.pop("instruments", None)
-    cfg.pop("instrument_fallbacks", None)
-    cfg["workspace"] = str(ws)
-
-    # ── serialize on local single-GPU instruments ──
-    # The template's max_concurrent (3) is tuned for cloud. A local model on one
-    # GPU cannot safely serve parallel sessions — the parallel vignettes deadlock
-    # the card and the run hangs. When we resolved to a local instrument, force
-    # one sheet at a time so the run actually completes.
-    if "local" in label.lower():
-        parallel = cfg.setdefault("parallel", {})
-        parallel["enabled"] = True
-        parallel["max_concurrent"] = 1
-        print("[discover] local model on one GPU → serializing sheets (max_concurrent=1)")
-
-    # NOTE: the finished page is opened by the assembler (assemble-site.py) on
-    # BOTH the direct and resolved runs, so we don't add a redundant on_success
-    # opener here — one opener, no double-open. We still surface the detected
-    # opener above so the user sees how their machine was read.
-
-    # ── make the asset paths absolute so the resolved score runs from any
-    #    workspace (the template uses a repo-relative path that only works
-    #    2 levels under the repo). This is the templating, in plain sight. ──
-    assets_rel = "{{ workspace }}/../../examples/getting-started/assets"
-    assets_abs = str((template.parent / "assets").resolve())
-
-    def abs_paths(node: Any) -> Any:
-        if isinstance(node, str):
-            return node.replace(assets_rel, assets_abs)
-        if isinstance(node, dict):
-            return {k: abs_paths(v) for k, v in node.items()}
-        if isinstance(node, list):
-            return [abs_paths(v) for v in node]
-        return node
-
-    out = ws / "hello-resolved.yaml"
-    out.write_text(
-        yaml.safe_dump(abs_paths(cfg), sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
-    print(f"[discover] wrote resolved score → {out}")
-    print(f"[discover] running the orchestration on: {instrument} ({label})")
+    print(f"Prepared {output} with instrument: workhorse")
     return 0
 
 

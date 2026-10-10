@@ -40,6 +40,13 @@ def check_instrument_available(
     if profile is None:
         return False, f"Instrument '{name}' not registered (profile not found in registry)"
 
+    return check_profile_available(profile)
+
+
+def check_profile_available(profile: InstrumentProfile) -> tuple[bool, str]:
+    """Apply the same local availability probe when the profile is already loaded."""
+    name = profile.name
+
     if profile.kind != "cli":
         # Non-CLI instruments have no binary to check
         return True, ""

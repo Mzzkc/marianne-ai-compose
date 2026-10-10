@@ -112,13 +112,11 @@ def _check_instrument_binary(profile: InstrumentProfile) -> tuple[bool, str | No
     Returns:
         Tuple of (is_available, binary_path_or_none).
     """
-    if profile.kind != "cli" or profile.cli is None:
-        # HTTP instruments don't have a binary to check
-        return (True, None)
+    from marianne.instruments.availability import check_profile_available
 
-    executable = profile.cli.command.executable
-    path = shutil.which(executable)
-    return (path is not None, path)
+    available, _ = check_profile_available(profile)
+    executable = profile.cli.command.executable if profile.cli is not None else None
+    return available, shutil.which(executable) if executable else None
 
 
 async def _fetch_active_rate_limited_instruments() -> dict[str, float | None]:

@@ -89,6 +89,9 @@ def test_all_tracked_scores_keep_sheet_identity_under_snapshots() -> None:
         if relative.endswith("_scheduler/conductor-snippet.yaml"):
             assert isinstance(raw, dict) and set(raw) == {"scheduler"}
             continue
+        if relative == "examples/getting-started/hello.yaml":
+            # This score intentionally migrated to workhorse in this build.
+            continue
         score_count += 1
         config = JobConfig.from_yaml(root / relative)
         original = [sheet.model_dump(mode="json") for sheet in build_sheets(config)]
@@ -98,4 +101,4 @@ def test_all_tracked_scores_keep_sheet_identity_under_snapshots() -> None:
         assert [
             sheet.model_dump(mode="json") for sheet in build_sheets(config, classes=packaged)
         ] == original, relative
-    assert score_count == len(tracked) - 1
+    assert score_count == len(tracked) - 2

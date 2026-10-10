@@ -224,6 +224,10 @@ def _build_openai_family_backend(
     return backend
 
 
+class InstrumentNotRegisteredError(ValueError):
+    """A named profile disappeared from the live registry before dispatch."""
+
+
 class BackendPool:
     """Manages Backend instances for per-sheet execution.
 
@@ -341,7 +345,7 @@ class BackendPool:
                 f"Instrument '{instrument_name}' not found in registry. "
                 f"Available: {', '.join(p.name for p in self._registry.list_all())}"
             )
-            raise ValueError(msg)
+            raise InstrumentNotRegisteredError(msg)
 
         # Resolve API key from keyring for HTTP instruments before acquiring lock.
         # Key is loaded from disk, used to configure the backend, then not stored.

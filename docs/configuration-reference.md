@@ -65,11 +65,11 @@ and constraints are extracted directly from the Pydantic v2 config models in
 | `name` | `str` | **required** | Unique score name |
 | `description` | `str \| None` | `None` | Human-readable description |
 | `workspace` | `Path` | `./workspace` | Output directory. Resolved to absolute path at construction time. |
-| `instrument` | `str \| None` | `None` | Named instrument to use (e.g., `claude-code`, `gemini-cli`). Run `mzt instruments list` to see available instruments. If unset, defaults to `claude-code`. |
+| `instrument` | `str \| None` | `None` | Profile, score alias, or capability class (e.g., `strong`). Run `mzt instruments classes show` to see class chains. If unset, defaults to `claude-code`. |
 | `instrument_config` | `dict` | `{}` | Per-score overrides for the named instrument's defaults. Keys include `model`, `timeout_seconds`, HTTP `max_tokens` and `temperature`, `response_format`, `interactive`, `interactive_max_nudges`, and `interactive_nudge_message`. Support depends on the executor; see below. |
 | `instruments` | `dict[str, InstrumentDef]` | `{}` | Named instrument definitions local to this score. Declares reusable aliases referencing registered instrument profiles with optional overrides. Referenced by name in per-sheet or per-movement `instrument:` fields. See [instruments](#instruments). |
 | `movements` | `dict[int, MovementDef]` | `{}` | Movement declarations. Map of movement number to MovementDef. Each movement can specify a name, instrument, instrument config, and voice count. See [movements](#movements). |
-| `instrument_fallbacks` | `list[str]` | `[]` | Score-level default fallback instrument chain. Tried in order when the primary instrument is unavailable or rate-limited to exhaustion. Each entry is an instrument name (profile or score alias). See [Instrument Fallbacks](#instrument-fallbacks). |
+| `instrument_fallbacks` | `list[str]` | `[]` | Score-level fallback chain. Each profile, alias, or class is expanded in place; a primary class's tail runs before declared fallbacks. See [Instrument Fallbacks](#instrument-fallbacks). |
 
 ```yaml
 instrument: gemini-cli
@@ -170,8 +170,36 @@ sheet:
 2. `movements.N.instrument_fallbacks` — per-movement default
 3. Top-level `instrument_fallbacks` — score default
 
-The `mzt validate` command checks fallback names against known profiles and
-score aliases (V211 ERROR). An unresolvable fallback blocks validation.
+The `mzt validate` command checks fallback names against known profiles,
+score aliases, and configured classes (V211 ERROR).
+
+## Capability Classes
+
+Use a generic class when the score needs a kind of instrument rather than one
+specific profile:
+
+```yaml
+instrument: strong
+instrument_fallbacks: [review]
+```
+
+Class files are read in order: the packaged default, `~/.marianne/classes.yaml`,
+then `<venue>/.marianne/classes.yaml` relative to the conductor's working
+directory. A later definition replaces the whole ordered chain; `null` removes
+an inherited class. Resolution order is score alias, registered profile, then
+class. Class chains become profile names before dispatch and are frozen in each
+job's checkpoint. A global class edit affects new submissions; `--fresh`
+creates a new snapshot.
+
+Use `mzt instruments classes show --json` to inspect chains and source digests,
+`mzt instruments classes check` to check configured chains, and
+`mzt instruments classes write --if-absent` to generate a user map from
+available shipped profiles. The writer backs up any existing file before an
+authorized replacement and refuses hand edits unless given `--force`.
+Class entries accept a profile name or `{profile: NAME, config: {model: MODEL}}`.
+Other per-entry settings are refused because the fallback path cannot carry
+them consistently. A score-level `instrument_config.model` with a class primary
+is refused; put a fixed model in a score alias instead.
 
 ---
 

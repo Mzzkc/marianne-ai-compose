@@ -1,18 +1,14 @@
 # hello-setup.yaml — the discovery prescore (run THIS first).
 #
-# Marianne doesn't know what's on your machine, so this tiny score finds out —
-# then writes a version of `hello` that fits, and chains to it. It's pure `cli`
-# (a shell command, no AI), so it can never hang.
+# This pure `cli` prescore creates a class map only when absent, checks that
+# workhorse has a runnable entry, then chains to hello.
 #
-#   1. Discover  →  resolve-hello.py picks the best AVAILABLE + REACHABLE
-#      instrument (free first: local Ollama → free OpenRouter → a paid CLI sub →
-#      a configured paid CLI) and a browser-open command for your OS/shell.
-#   2. Template  →  it reads examples/getting-started/hello.yaml, swaps in that
-#      one instrument, and adds an on_success hook to open the finished page.
-#      It writes the result to workspaces/hello/hello-resolved.yaml.
+#   1. Configure → classes write --if-absent probes available shipped routes.
+#   2. Prepare   → resolve-hello.py copies the class-based score into the
+#      workspace with absolute asset paths.
 #   3. Chain     →  on success, Marianne runs that resolved orchestration. The
 #      hello story (prose → vignettes → a Strudel soundtrack → a website) is
-#      composed on the instrument we KNOW works, then opens in your browser.
+#      composed through the frozen workhorse fallback chain.
 #
 # So the chain is: discover → edit a score → run it → present the result. That
 # is Marianne introspecting and rewriting its own work to fit the machine — a
@@ -24,7 +20,7 @@
 #   # (it opens workspaces/hello/the-sky-library.html for you when it finishes)
 
 name: hello-setup
-description: "Discovery prescore — detect the machine, template a runnable hello, and chain to it. Pure cli, can't hang."
+description: "Setup prescore — configure capability classes, prepare hello, and chain to it."
 
 workspace: ../../workspaces/hello
 
@@ -38,9 +34,10 @@ sheet:
   total_items: 1
 
 prompt:
-  # raw_prompt (cli): the rendered command runs verbatim in bash. It discovers
-  # the environment and writes workspaces/hello/hello-resolved.yaml.
+  # raw_prompt (cli): configure only when absent, verify workhorse, then copy.
   template: >-
+    mzt instruments classes write --if-absent &&
+    mzt instruments classes check --class workhorse &&
     python3 "{{ workspace }}/../../examples/getting-started/assets/resolve-hello.py"
     "{{ workspace }}"
     "{{ workspace }}/../../examples/getting-started/hello.yaml"
@@ -48,7 +45,7 @@ prompt:
 validations:
   - type: file_exists
     path: "{workspace}/hello-resolved.yaml"
-    description: "A machine-fit orchestration was written"
+    description: "A class-based orchestration was written"
   - type: command_succeeds
     command: "mzt validate {workspace}/hello-resolved.yaml"
     description: "Resolved hello score validates before chaining"

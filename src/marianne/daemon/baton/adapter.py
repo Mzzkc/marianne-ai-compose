@@ -50,6 +50,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from marianne.core.checkpoint import InstrumentIdentity
 from marianne.core.config.a2a import AgentCard
+from marianne.core.config.classes import InstrumentResolution
 from marianne.core.config.execution import (
     CodeExecutionConfig,
     SkipWhenCommand,
@@ -62,6 +63,7 @@ from marianne.core.expressions import parse_expression
 from marianne.core.sheet import Sheet
 from marianne.daemon.a2a.inbox import A2AInbox
 from marianne.daemon.a2a.registry import AgentCardRegistry
+from marianne.daemon.baton.backend_pool import InstrumentNotRegisteredError
 from marianne.daemon.baton.core import BatonCore, CronHandler
 from marianne.daemon.baton.events import (
     A2ATaskRouted,
@@ -336,6 +338,11 @@ def sheets_to_execution_states(
         states[sheet.num] = SheetExecutionState(
             sheet_num=sheet.num,
             instrument_name=sheet.instrument_name,
+            instrument_resolution=(
+                sheet.instrument_resolution
+                if isinstance(sheet.instrument_resolution, InstrumentResolution)
+                else None
+            ),
             model=str(raw_model) if raw_model is not None else None,
             max_retries=max_retries,
             max_completion=max_completion,
@@ -1686,6 +1693,11 @@ class BatonAdapter:
             # The checkpoint may have instrument_name=None for sheets that
             # were never dispatched (e.g., dependency-cascaded failures).
             state.instrument_name = sheet.instrument_name
+            state.instrument_resolution = (
+                sheet.instrument_resolution
+                if isinstance(sheet.instrument_resolution, InstrumentResolution)
+                else None
+            )
             raw_model = sheet.instrument_config.get("model")
             primary_model = str(raw_model) if raw_model is not None else None
             if baton_status not in {
@@ -2405,6 +2417,7 @@ class BatonAdapter:
         instrument_name: str,
         error_msg: str,
         state: SheetExecutionState | None = None,
+        unavailable: bool = False,
     ) -> None:
         """Send a SheetAttemptResult failure event when dispatch cannot proceed.
 
@@ -2434,7 +2447,8 @@ class BatonAdapter:
             event_generation=self._baton.get_job_generation(job_id),
             dispatch_epoch=state.dispatch_epoch if state is not None else None,
             execution_success=False,
-            error_classification="E505",
+            error_classification=("INSTRUMENT_UNAVAILABLE" if unavailable else "E505"),
+            error_code="E505" if unavailable else None,
             error_message=error_msg,
         )
         self._baton.inbox.put_nowait(failure)
@@ -2733,6 +2747,7 @@ class BatonAdapter:
                 f"Backend acquisition failed for instrument "
                 f"'{effective_instrument}': {exc}",
                 state=state,
+                unavailable=isinstance(exc, InstrumentNotRegisteredError),
             )
             return True
 

@@ -61,6 +61,11 @@ def test_normal_cli_distinguishes_connection_outcomes(
         return False, None
 
     monkeypatch.setattr(detect, "try_daemon_route", route)
+    if command == "run":
+        async def available(*args, **kwargs):
+            return True
+
+        monkeypatch.setattr(detect, "is_daemon_available", available)
     args = [command]
     if command == "run":
         config = tmp_path / "public-score.yaml"

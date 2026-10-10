@@ -84,3 +84,15 @@ def test_broken_override_keeps_lower_layer_and_reports_failure(tmp_path: Path) -
     loaded = load_class_map(user_path=user, venue_path=tmp_path / "absent.yaml")
     assert loaded.classes["strong"].source_layer == "default"
     assert len(loaded.failures) == 1
+
+
+def test_user_class_colliding_with_loaded_profile_refuses_that_layer(tmp_path: Path) -> None:
+    user = tmp_path / "classes.yaml"
+    user.write_text("version: 1\nclasses:\n  strong: [codex-cli]\n")
+    loaded = load_class_map(
+        user_path=user, venue_path=tmp_path / "absent.yaml",
+        profile_names={"strong", "claude-code", "codex-cli"},
+    )
+    assert loaded.classes["strong"].source_layer == "default"
+    assert len(loaded.failures) == 1
+    assert "collides with a registered profile" in loaded.failures[0].reason

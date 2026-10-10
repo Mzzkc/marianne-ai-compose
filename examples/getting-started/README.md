@@ -6,8 +6,8 @@ These scores teach you how to orchestrate AI agents to produce outcomes no singl
 
 | Score | What It Does | Sheets | Patterns Used | Time | Cost |
 |-------|-------------|--------|--------------|------|------|
-| [**hello-setup**](hello-setup.yaml) | **Start here.** Discovers your machine (a free/local/paid instrument + a browser opener), templates a `hello` that fits, chains to it, and opens the result. Pure cli — can't hang. | 1 | Discovery, Score Templating, Concert (chaining) | ~5-15m | free |
-| [hello](hello.yaml) | The orchestration `hello-setup` runs: parallel agents write a story, one composes a soundtrack, one writes the synthesis finale, and a deterministic tool builds the website and opens it — across mediums. Runnable standalone (deep free→paid chain). | 7 | Fan-out + Synthesis, Tool-Chain, Stigmergic Workspace | ~5-15m | free |
+| [**hello-setup**](hello-setup.yaml) | **Start here.** Writes a class map if absent, checks `workhorse`, prepares `hello`, then chains to it. | 1 | Discovery, Score Templating, Concert (chaining) | ~5-15m | route-dependent |
+| [hello](hello.yaml) | Parallel agents write a story and soundtrack; a deterministic tool builds the site. Uses the configured `workhorse` chain. | 7 | Fan-out + Synthesis, Tool-Chain, Stigmergic Workspace | ~5-15m | route-dependent |
 | [hello-local](hello-local.yaml) | The pure-local twin of `hello` — same orchestration, run entirely on a local Ollama model (no cloud, no account) | 7 | Fan-out + Synthesis, Tool-Chain | ~5-15m | free |
 | [simple-sheet](simple-sheet.yaml) | Demonstrates basic parallel execution with minimal configuration — the fastest path from zero to running job | 2 | none | ~2m | ~$0.10 |
 | [cross-sheet-test](cross-sheet-test.yaml) | Builds a three-stage research pipeline where each stage reads and transforms previous outputs | 3 | Succession Pipeline | ~3m | ~$0.15 |
@@ -18,9 +18,9 @@ These scores teach you how to orchestrate AI agents to produce outcomes no singl
 
 ### hello.yaml — Your First Score
 
-**Free, local-capable, and orchestrated across mediums.** Marianne is an orchestrator, not a prompt wrapper, and this score shows it across five movements and mediums: (1) one agent writes the shared world; (2) three agents fan out and write character vignettes *in parallel*, each reading the world but not each other; (3) another agent composes an ambient Strudel **soundtrack** tuned to the world's mood (guided by an injected composition craft so it writes its own, valid music); (4) a final agent reads the world *and* all three vignettes and writes the **synthesis finale** — braiding the separately-written secrets into one revelation no single vignette could reach; (5) a **deterministic tool** (no AI) builds the finished, designed website from the prose, the finale, and the embedded soundtrack — your guaranteed-beautiful result — then opens it in your browser. The output is a page you read with a soundtrack you can play, built from parallel contributions, a synthesis, and a tool-chain seam.
+**Orchestrated across mediums.** The score coordinates world building, parallel character vignettes, a Strudel soundtrack, a synthesis finale, and a deterministic page builder.
 
-It runs on a **deep, free instrument fallback chain** — free OpenRouter models first, falling back to a local Ollama model — so it completes whether you have an OpenRouter key or just a local model. No paid API required. (For a fully offline run that skips the OpenRouter attempts, use [`hello-local.yaml`](hello-local.yaml).)
+It uses the `workhorse` class. `hello-setup` writes a machine-specific ordered chain and checks it before running the score. Cost depends on the selected profile. For a fully offline run, use [`hello-local.yaml`](hello-local.yaml).
 
 ### simple-sheet.yaml — Minimal Working Configuration
 
@@ -56,9 +56,8 @@ Three code reviewers (quality, correctness, security) work simultaneously on the
 # Start the conductor daemon
 mzt start
 
-# Run your first score. hello-setup discovers what's on your machine (a free,
-# local, or paid instrument + how to open a browser), templates a hello that
-# fits, chains to it, and opens the finished page for you.
+# Run your first score. hello-setup configures classes, prepares hello, and
+# chains to the class-based score.
 mzt run examples/getting-started/hello-setup.yaml
 
 # Watch the orchestration in real time
@@ -66,8 +65,8 @@ mzt status hello-resolved --watch
 ```
 
 (Curious what it built? `hello.yaml` is the orchestration itself — runnable
-standalone with a deep free→paid fallback chain — and `workspaces/hello/hello-resolved.yaml`
-is the machine-fit copy `hello-setup` wrote for you.)
+standalone with the `workhorse` class — and `workspaces/hello/hello-resolved.yaml`
+is the path-stable copy `hello-setup` wrote for you.)
 
 ## Adapting to Your Project
 

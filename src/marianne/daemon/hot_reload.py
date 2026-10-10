@@ -50,6 +50,7 @@ class ConfigWatcher:
         *,
         config_file: Path | None,
         profile_dirs: list[Path],
+        class_files: list[Path] | None = None,
         reload_fn: ReloadFn,
         enabled_fn: Callable[[], bool] | None = None,
         debounce_fn: Callable[[], float] | None = None,
@@ -57,6 +58,7 @@ class ConfigWatcher:
     ) -> None:
         self._config_file = config_file
         self._profile_dirs = list(profile_dirs)
+        self._class_files = list(class_files or [])
         self._reload_fn = reload_fn
         self._enabled_fn = enabled_fn or (lambda: True)
         self._debounce_fn = debounce_fn or (lambda: 2.0)
@@ -94,6 +96,7 @@ class ConfigWatcher:
         candidates: list[Path] = []
         if self._config_file is not None:
             candidates.append(self._config_file)
+        candidates.extend(self._class_files)
         for directory in self._profile_dirs:
             for pattern in ("*.yaml", "*.yml"):
                 candidates.extend(sorted(directory.glob(pattern)))

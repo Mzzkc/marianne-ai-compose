@@ -34,7 +34,9 @@ from marianne.core.checkpoint import (
     SheetState,
     SheetStatus,
 )
+from marianne.core.config.classes import InstrumentResolution
 from marianne.core.config.flow import ConcertTrigger
+from marianne.core.config.job import JobConfig as ConcreteJobConfig
 from marianne.core.config.spec import SpecCorpusConfig
 from marianne.core.constants import STATE_DB_FILENAME
 from marianne.core.logging import get_logger
@@ -73,6 +75,8 @@ from marianne.daemon.types import (
     ObserverEvent,
     ScheduleStatus,
 )
+from marianne.instruments.classes import ClassMap, load_class_map, resolve_job_classes
+from marianne.instruments.registry import InstrumentRegistry
 from marianne.utils.time import utc_now
 
 _logger = get_logger("daemon.manager")
@@ -609,6 +613,7 @@ class JobManager:
         self._mcp_pool: Any | None = None
         # #171: live instrument registry, retained for SIGHUP hot-reload.
         self._instrument_registry: InstrumentRegistry | None = None
+        self._class_map: ClassMap | None = None
         # #197: per-job git worktree paths for isolation cleanup.
         self._job_worktrees: dict[str, Path] = {}
         self._baton_loop_task: asyncio.Task[Any] | None = None
@@ -771,6 +776,7 @@ class JobManager:
             registry.register(profile, override=True)
         # #171: retain for hot-reload of instrument profiles.
         self._instrument_registry = registry
+        self._class_map = load_class_map(profile_names=set(profiles))
 
         # Start semantic analyzer after event bus (needs bus for subscription).
         # Failure must not prevent the conductor from starting.
@@ -1162,6 +1168,18 @@ class JobManager:
                     retained_from[source] = previous.name
 
             partial_reload = bool(failed_profiles)
+            fresh_classes = load_class_map(profile_names=set(merged_profiles))
+            if fresh_classes.failures and self._class_map is not None:
+                failed_layers = {failure.layer for failure in fresh_classes.failures}
+                retained = dict(fresh_classes.classes)
+                for class_name, prior in self._class_map.classes.items():
+                    if prior.source_layer in failed_layers:
+                        retained[class_name] = prior
+                fresh_classes = ClassMap(
+                    retained, fresh_classes.layers, fresh_classes.failures,
+                    fresh_classes.tombstones,
+                )
+            partial_reload = partial_reload or bool(fresh_classes.failures)
 
             # ── Classify: restart-only changes keep running values ──
             applied: list[str] = []
@@ -1181,6 +1199,10 @@ class JobManager:
                 )
                 for failure in failed_profiles
             ]
+            declined.extend(
+                f"class load failed ({failure.path}): {failure.reason}"
+                for failure in fresh_classes.failures
+            )
             keep_running: dict[str, Any] = {}
             for field_name in self._RESTART_ONLY_FIELDS:
                 if getattr(new_config, field_name) != getattr(old, field_name):
@@ -1243,6 +1265,9 @@ class JobManager:
                     applied.append(field_name)
 
             self._config = effective
+            if self._class_map is not None and fresh_classes != self._class_map:
+                applied.append(f"instrument_classes: {len(fresh_classes.classes)}")
+            self._class_map = fresh_classes
 
             # ── Instrument profiles: registry swap + caps diff ──
             if self._instrument_registry is not None:
@@ -2160,6 +2185,25 @@ class JobManager:
                     ),
                 )
 
+        admitted_classes = None
+        if isinstance(parsed_config, ConcreteJobConfig) and isinstance(
+            self._instrument_registry, InstrumentRegistry
+        ):
+            try:
+                profile_names = {
+                    profile.name for profile in self._instrument_registry.list_all()
+                }
+                admitted_classes = resolve_job_classes(
+                    parsed_config,
+                    profile_names,
+                    self._class_map or load_class_map(profile_names=profile_names),
+                    expected_route=request.expected_route is not None,
+                )
+            except ValueError as exc:
+                return JobResponse(
+                    job_id=job_id, status="rejected", message=str(exc),
+                )
+
         # Resolve relative workspace against client_cwd (working directory fix).
         # When the CLI sends client_cwd, relative workspace paths from the
         # config should resolve against where the user invoked the command,
@@ -2413,6 +2457,16 @@ class JobManager:
                     )
                     self._job_meta[job_id] = meta
                     self._bind_cleanup_generation(meta, new_execution=True)
+                    if admitted_classes is not None:
+                        admission = CheckpointState(
+                            job_id=job_id,
+                            job_name=parsed_config.name if parsed_config else job_id,
+                            total_sheets=parsed_config.sheet.total_sheets if parsed_config else 0,
+                            instrument_classes=admitted_classes,
+                        )
+                        await self._registry.save_checkpoint(
+                            job_id, admission.model_dump_json()
+                        )
 
                     if concert_config_dict is not None or request.chain_depth is not None:
                         await self._registry.store_concert_context(
@@ -5785,7 +5839,25 @@ class JobManager:
             )
 
         # Build Sheet entities from config
-        sheets = build_sheets(config)
+        registry = getattr(self, "_instrument_registry", None)
+        class_snapshot = None
+        if isinstance(config, ConcreteJobConfig) and isinstance(registry, InstrumentRegistry):
+            admitted_json = await self._registry.load_checkpoint(job_id)
+            admitted_snapshot = None
+            if admitted_json:
+                admitted_state = CheckpointState.model_validate_json(admitted_json)
+                if admitted_state.started_at is None:
+                    admitted_snapshot = admitted_state.instrument_classes
+            profile_names = {profile.name for profile in registry.list_all()}
+            class_snapshot = resolve_job_classes(
+                config,
+                profile_names,
+                self._class_map or load_class_map(profile_names=profile_names),
+                previous=admitted_snapshot,
+                phase="resume" if admitted_snapshot is not None else "submit",
+                expected_route=request.expected_route is not None,
+            )
+        sheets = build_sheets(config, classes=class_snapshot)
         deps = extract_dependencies(config)
 
         # Extract retry/cost settings from config
@@ -5820,6 +5892,11 @@ class JobManager:
                 sheet_num=sheet.num,
                 instrument_name=sheet.instrument_name,  # F-151
                 instrument_model=model if isinstance(model, str) else None,
+                instrument_resolution=(
+                    sheet.instrument_resolution
+                    if isinstance(sheet.instrument_resolution, InstrumentResolution)
+                    else None
+                ),
                 expected_route=request.expected_route,
             )
         # #361: escalation decoupled from healing — either flag enables
@@ -5834,6 +5911,7 @@ class JobManager:
             status=CPJobStatus.RUNNING,
             started_at=utc_now(),  # F-493: Set started_at so elapsed time displays correctly
             sheets=initial_sheets,
+            instrument_classes=class_snapshot,
             instruments_used=list({s.instrument_name for s in sheets if s.instrument_name}),
             total_movements=max((s.movement for s in sheets), default=None),
             escalation_enabled=escalation_enabled,
@@ -6131,6 +6209,33 @@ class JobManager:
         config = _merge_runtime_variables(
             config, dict(checkpoint.runtime_variables)
         )
+        # Build sheets and dependencies
+        registry = getattr(self, "_instrument_registry", None)
+        previous_classes = checkpoint.instrument_classes
+        class_snapshot = None
+        if isinstance(config, ConcreteJobConfig) and isinstance(registry, InstrumentRegistry):
+            profile_names = {profile.name for profile in registry.list_all()}
+            class_snapshot = resolve_job_classes(
+                config,
+                profile_names,
+                self._class_map or load_class_map(profile_names=profile_names),
+                previous=previous_classes,
+                phase="resume",
+                expected_route=checkpoint.expected_route is not None,
+            )
+        if class_snapshot is not None and (
+            previous_classes is None
+            or class_snapshot.classes.keys() != previous_classes.classes.keys()
+        ):
+            _logger.warning(
+                "classes.resolved_on_resume",
+                job_id=job_id,
+                added=sorted(
+                    set(class_snapshot.classes)
+                    - set(previous_classes.classes if previous_classes else {})
+                ),
+            )
+        checkpoint.instrument_classes = class_snapshot
         if checkpoint.expected_route is not None:
             from marianne.instruments.loader import verify_single_route
 
@@ -6138,9 +6243,7 @@ class JobManager:
             for saved_sheet in checkpoint.sheets.values():
                 if saved_sheet.expected_route != checkpoint.expected_route:
                     raise ValueError("attempt_route_drift: checkpoint sheet route differs from job")
-
-        # Build sheets and dependencies
-        sheets = build_sheets(config)
+        sheets = build_sheets(config, classes=class_snapshot)
         deps = extract_dependencies(config)
 
         # #185: intrinsic recovery. Reset FAILED/cascade-SKIPPED sheets (or all

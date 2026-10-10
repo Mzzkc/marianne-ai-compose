@@ -680,10 +680,12 @@ class DaemonProcess:
             # single reload path. Opt-in via hot_reload.enabled (default on).
             if self._config.hot_reload.enabled:
                 from marianne.daemon.hot_reload import ConfigWatcher
+                from marianne.instruments.classes import class_source_paths
 
                 self._config_watcher = ConfigWatcher(
                     config_file=self._config.config_file,
                     profile_dirs=list(self._manager.profile_source_paths),
+                    class_files=list(class_source_paths()),
                     reload_fn=self.reload_configuration,
                     enabled_fn=lambda: self._config.hot_reload.enabled,
                     debounce_fn=lambda: self._config.hot_reload.debounce_seconds,

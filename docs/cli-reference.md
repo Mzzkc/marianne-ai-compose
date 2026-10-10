@@ -1303,6 +1303,17 @@ mzt config check --config /path/to/custom.yaml
 
 ## Instrument Commands
 
+### `mzt instruments classes show|check|write`
+
+`show --json` reports the effective class chains, each layer path and SHA256,
+and entry availability. `check` exits 1 for a broken layer or a user configured
+class with no available entry; `check --class strong` also requires that class
+to have an available entry. `write` probes shipped profiles and creates
+`~/.marianne/classes.yaml` with an ordered, model-free chain for each eligible
+class. It preserves an existing file with `--if-absent`, prints a proposal with
+`--dry-run`, and requires `--force` to replace hand edits. Replacements are
+backed up and written atomically.
+
 These commands manage and inspect available instruments — the AI tools Marianne can use to execute scores. Instruments include CLI tools (Claude Code, Gemini CLI, Codex CLI, Aider, Goose) and HTTP APIs (Anthropic API, Ollama).
 
 ### `mzt instruments list`

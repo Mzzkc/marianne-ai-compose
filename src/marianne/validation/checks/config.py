@@ -7,7 +7,6 @@ validation rule completeness, and instrument name resolution.
 from __future__ import annotations
 
 import re
-import shutil
 from pathlib import Path
 
 from marianne.core.config import JobConfig
@@ -660,9 +659,11 @@ class InstrumentNameCheck:
         """Check all instrument references against the loaded profile registry."""
         # Load known instruments — gracefully degrade on failure
         try:
+            from marianne.instruments.classes import load_class_map
             from marianne.instruments.loader import load_all_profiles
 
             known = set(load_all_profiles().keys())
+            class_names = set(load_class_map(profile_names=known).classes)
         except Exception:
             _logger.debug("validation.profiles_unavailable_skip", check="V210")
             return []
@@ -673,7 +674,7 @@ class InstrumentNameCheck:
         # Score-level instrument aliases are valid references — they resolve
         # to profile names at build time via config.instruments[name].profile.
         score_instruments = set(config.instruments.keys())
-        all_valid = known | score_instruments
+        all_valid = known | score_instruments | class_names
 
         issues: list[ValidationIssue] = []
 
@@ -795,9 +796,11 @@ class InstrumentFallbackCheck:
     ) -> list[ValidationIssue]:
         """Check all instrument fallback references against the loaded profile registry."""
         try:
+            from marianne.instruments.classes import load_class_map
             from marianne.instruments.loader import load_all_profiles
 
             known = set(load_all_profiles().keys())
+            class_names = set(load_class_map(profile_names=known).classes)
         except Exception:
             _logger.debug("validation.profiles_unavailable_skip", check="V211")
             return []
@@ -807,7 +810,7 @@ class InstrumentFallbackCheck:
 
         # Score-level instrument aliases are valid fallback targets
         score_instruments = set(config.instruments.keys())
-        all_valid = known | score_instruments
+        all_valid = known | score_instruments | class_names
 
         issues: list[ValidationIssue] = []
 
@@ -1019,8 +1022,8 @@ class NoUsableInstrumentCheck:
 
     Targets the unknown-system onboarding case: a fresh install has no AI CLI,
     so even a deep fallback chain can resolve to nothing the system can actually
-    run. The chain skips uninstalled instruments at dispatch, so a chain with
-    *zero* installed CLI binaries would advance straight to its HTTP fallbacks
+    run. An unavailable instrument costs one dispatch attempt before advancing;
+    a chain with *zero* installed CLI binaries would advance through HTTP fallbacks
     (which need a running local server or an API key) — or exhaust entirely.
 
     This surfaces that BEFORE the run: it resolves the score-level instrument
@@ -1049,9 +1052,12 @@ class NoUsableInstrumentCheck:
         raw_yaml: str,
     ) -> list[ValidationIssue]:
         try:
+            from marianne.instruments.availability import check_profile_available
+            from marianne.instruments.classes import load_class_map
             from marianne.instruments.loader import load_all_profiles
 
             profiles = load_all_profiles()
+            class_map = load_class_map(profile_names=set(profiles))
         except Exception:
             _logger.debug("validation.profiles_unavailable_skip", check="V212")
             return []
@@ -1074,15 +1080,20 @@ class NoUsableInstrumentCheck:
         for name in chain:
             alias = config.instruments.get(name)
             profile_name = alias.profile if alias is not None else name
-            prof = profiles.get(profile_name)
-            if prof is None:
-                unresolved += 1
-                continue
-            if prof.kind == "cli" and prof.cli is not None and prof.cli.command is not None:
-                if shutil.which(prof.cli.command.executable) is not None:
+            resolved_names = (
+                [entry.profile for entry in class_map.classes[profile_name].chain]
+                if profile_name in class_map.classes and profile_name not in profiles
+                else [profile_name]
+            )
+            for resolved_name in resolved_names:
+                prof = profiles.get(resolved_name)
+                if prof is None:
+                    unresolved += 1
+                    continue
+                if prof.kind == "cli" and check_profile_available(prof)[0]:
                     cli_installed += 1
-            elif prof.kind == "http":
-                http_count += 1
+                elif prof.kind == "http":
+                    http_count += 1
 
         if cli_installed > 0:
             return []  # at least one installed CLI instrument — the chain can run

@@ -14,6 +14,7 @@ from typing import Any, Literal, Required, cast
 from pydantic import BaseModel, Field, model_validator
 from typing_extensions import TypedDict
 
+from marianne.core.config.classes import ClassSnapshot, InstrumentResolution
 from marianne.core.config.instruments import InstrumentRouteBinding
 from marianne.core.errors.codes import ErrorCategory, ExitReason
 from marianne.core.flow_state import FlowState
@@ -338,6 +339,9 @@ class SheetState(BaseModel):
         default=None,
         description="Model used by the instrument, e.g. 'gemini-2.5-pro'. "
         "Populated at execution time from backend metadata.",
+    )
+    instrument_resolution: InstrumentResolution | None = Field(
+        default=None, description="Class-to-profile resolution frozen for this sheet."
     )
     primary_identity: InstrumentIdentity | None = Field(
         default=None, description="Configured primary instrument and model for flow resets."
@@ -1224,6 +1228,9 @@ class CheckpointState(BaseModel):
     config_snapshot: dict[str, Any] | None = Field(
         default=None,
         description="Serialized JobConfig for resume without config file",
+    )
+    instrument_classes: ClassSnapshot | None = Field(
+        default=None, description="Capability class chains frozen when this job was admitted."
     )
     config_path: str | None = Field(
         default=None,
