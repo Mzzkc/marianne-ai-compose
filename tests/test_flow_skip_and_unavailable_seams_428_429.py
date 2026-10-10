@@ -134,6 +134,29 @@ class TestUnavailableFallsBackBeforeOnFail429:
         else:
             assert s1.status == SheetStatus.FAILED  # max_retries=0, no chain left
 
+    async def test_auth_failure_takes_chain_before_on_fail_d_i2(self) -> None:
+        """D-I2 (Blueprint classes Integration C-I2): credentials are per
+        route; a logged-out first entry advances the chain, on_fail only once
+        exhausted. Falsifier: Blueprint I1 case D."""
+        sheets = {n: SheetState(sheet_num=n, instrument_name="logged-out") for n in (1, 2)}
+        sheets[1].fallback_chain = ["present-cli"]
+        sheets[1].max_retries = 0
+        cp = CheckpointState(job_id="j", job_name="j", total_sheets=2, sheets=sheets)
+        baton = BatonCore()
+        baton.register_job(
+            "j", cp.sheets, {}, flow_state=cp.flow,
+            triggers={"1": SheetTriggerConfig(on_fail=[TriggerAction(skip="2")])},
+        )
+        await baton.handle_event(_result(1, "logged-out", success=False, cls="AUTH_FAILURE"))
+        s1, s2 = cp.sheets[1], cp.sheets[2]
+        assert s1.status == SheetStatus.PENDING
+        assert s1.instrument_name == "present-cli"
+        assert [h["reason"] for h in s1.instrument_fallback_history] == ["auth_failure"]
+        assert s2.status == SheetStatus.PENDING  # on_fail did not fire
+        await baton.handle_event(_result(1, "present-cli", success=False, cls="AUTH_FAILURE"))
+        assert s1.status == SheetStatus.FAILED
+        assert s2.status == SheetStatus.SKIPPED  # chain exhausted → on_fail
+
     async def test_unavailable_with_no_chain_left_fires_on_fail(self) -> None:
         sheets = {n: SheetState(sheet_num=n, instrument_name="missing-cli") for n in (1, 2)}
         sheets[1].max_retries = 0

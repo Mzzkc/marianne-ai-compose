@@ -225,6 +225,9 @@ async def test_class_fallback_completes_through_real_adapter(
         assert state.instrument_name == "cli"
         assert state.normal_attempts == 0
         assert dispatched == ["missing-route", "cli"]
+        # PO-C7: the advance was the typed route-unavailable path, not
+        # ordinary exhaustion (which also advances a fallback).
+        assert [h["reason"] for h in state.instrument_fallback_history] == ["unavailable"]
     finally:
         await adapter.shutdown()
         run_task.cancel()

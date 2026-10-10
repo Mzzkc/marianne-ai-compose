@@ -47,6 +47,12 @@ def check_profile_available(profile: InstrumentProfile) -> tuple[bool, str]:
     """Apply the same local availability probe when the profile is already loaded."""
     name = profile.name
 
+    if profile.execution_status == "unsupported":
+        # Declared unsupported is never a runnable entry, whatever its kind
+        # (Forge Inspect P2, unsupported-class-entry-reported-ready).
+        detail = profile.execution_status_detail or "execution_status: unsupported"
+        return False, f"Instrument '{name}' is unsupported: {detail}"
+
     if profile.kind != "cli":
         # Non-CLI instruments have no binary to check
         return True, ""

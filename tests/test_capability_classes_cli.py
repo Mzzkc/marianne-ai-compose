@@ -41,6 +41,36 @@ def test_classes_check_refuses_a_chain_with_no_available_entry(
     assert "unavailable chains" in result.output
 
 
+def test_classes_check_treats_unsupported_profile_as_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Forge Inspect P2: a sole chain entry marked execution_status: unsupported
+    was reported available and `check` exited 0."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    profiles = tmp_path / ".marianne" / "instruments"
+    profiles.mkdir(parents=True)
+    (profiles / "unsupported-http-8384.yaml").write_text(
+        "name: unsupported-http-8384\n"
+        "display_name: Unsupported\n"
+        "description: probe\n"
+        "kind: http\n"
+        "execution_status: unsupported\n"
+        "execution_status_detail: declared unsupported for this test\n"
+        "http:\n  base_url: http://127.0.0.1:9\n  endpoint: /chat/completions\n"
+        "  schema_family: openai\n"
+    )
+    (tmp_path / ".marianne" / "classes.yaml").write_text(
+        "version: 1\nclasses:\n  strong: [unsupported-http-8384]\n"
+    )
+    shown = CliRunner().invoke(app, ["instruments", "classes", "show", "--json"])
+    assert shown.exit_code == 0
+    entry = json.loads(shown.stdout)["classes"]["strong"]["chain"][0]
+    assert entry["availability"] is False
+    assert "unsupported" in entry["reason"]
+    checked = CliRunner().invoke(app, ["instruments", "classes", "check", "--class", "strong"])
+    assert checked.exit_code == 1
+
+
 def test_writer_provenance_backup_and_hand_edit_guard(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

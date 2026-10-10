@@ -34,6 +34,10 @@ class _UniqueKeyLoader(yaml.SafeLoader):
         keys: set[Any] = set()
         for key_node, _ in node.value:
             key = self.construct_object(key_node, deep=deep)
+            if not isinstance(key, str | int | float | bool | type(None)):
+                raise yaml.constructor.ConstructorError(
+                    None, None, f"unhashable key {key!r}", key_node.start_mark,
+                )
             if key in keys:
                 raise yaml.constructor.ConstructorError(
                     None,
@@ -110,7 +114,10 @@ def load_class_map(
                         "class name collides with a registered profile: "
                         + ", ".join(sorted(collisions))
                     )
-        except (OSError, UnicodeError, yaml.YAMLError, ValueError) as exc:
+        except (OSError, UnicodeError, yaml.YAMLError, ValueError, TypeError) as exc:
+            # TypeError: a sequence or mapping used as a YAML key is unhashable
+            # and escapes the duplicate-key check; a broken layer is refused,
+            # lower layers stand (Forge Inspect P1, loader-unhashable-keys).
             layers.append(ClassLayerRecord(layer=layer, path=path))
             failures.append(ClassLoadFailure(layer=layer, path=path, reason=str(exc)))
             continue
@@ -178,8 +185,9 @@ def resolve_job_classes(
                 f"instrument alias '{alias}' names class '{definition.profile}' as its profile; "
                 "an alias must name a profile",
             )
-        if definition.profile not in profile_names:
-            raise ValueError(f"instruments.{alias}.profile: unknown profile '{definition.profile}'")
+        # An alias naming a profile this machine lacks is not a class state
+        # either (D-I1): main admitted it and V210 rates it; hello.yaml's
+        # local-only aliases are exactly this on a fresh install.
 
     requested: set[str] = set()
     for location, name in _instrument_positions(config):
@@ -192,11 +200,12 @@ def resolve_job_classes(
                 f"{location}: class '{name}' has no instruments configured on this machine; "
                 "run 'mzt instruments classes write' or define it in ~/.marianne/classes.yaml",
             )
-        else:
-            raise ValueError(
-                f"{location}: '{name}' is not an instrument profile, score alias, "
-                "or capability class",
-            )
+        # Any other unknown name is NOT the class seam's business (D-I1,
+        # Blueprint Integration C-I1): before classes, the daemon refused
+        # nothing by instrument name — S3's V210/V211 rate it ERROR and
+        # dispatch fails that seat only. Refusing it here changed admission
+        # for scores that never use classes (6 of 68 tracked on a fresh
+        # install, 1 on this machine). It is left to those owners.
 
     if expected_route and requested:
         raise ValueError("classes cannot be used with a reviewed route (expected_route)")

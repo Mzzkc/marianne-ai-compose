@@ -86,6 +86,26 @@ def test_broken_override_keeps_lower_layer_and_reports_failure(tmp_path: Path) -
     assert len(loaded.failures) == 1
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "version: 1\nclasses:\n  ? [strong]\n  : [claude-code]\n",   # sequence key
+        "version: 1\nclasses:\n  ? {a: b}\n  : [claude-code]\n",     # mapping key
+    ],
+)
+def test_unhashable_yaml_key_is_a_declined_layer_not_a_crash(
+    tmp_path: Path, source: str,
+) -> None:
+    """Forge Inspect P1: a sequence/mapping key used to escape as TypeError
+    and could abort manager start; it must be a refused layer."""
+    user = tmp_path / "classes.yaml"
+    user.write_text(source)
+    loaded = load_class_map(user_path=user, venue_path=tmp_path / "absent.yaml")
+    assert loaded.classes["strong"].source_layer == "default"
+    assert len(loaded.failures) == 1
+    assert "unhashable key" in loaded.failures[0].reason
+
+
 def test_user_class_colliding_with_loaded_profile_refuses_that_layer(tmp_path: Path) -> None:
     user = tmp_path / "classes.yaml"
     user.write_text("version: 1\nclasses:\n  strong: [codex-cli]\n")

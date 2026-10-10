@@ -1923,13 +1923,15 @@ class BatonCore:
             and sheet.expected_route is None
             and job.flow.has_on_fail(event.sheet_num)
             and not (event.execution_success and effective_pass_rate >= 100.0)
-            # GH #429: availability is not an outcome of the sheet's work.
-            # An unreachable instrument with a chain entry left takes the
-            # #418 fallback branch below; on_fail fires only once the chain
-            # is exhausted. (Accepted design S-14 bypasses retry/fallback for
-            # the WORK's failure; it predates #418 and capability classes.)
+            # GH #429 (+ D-I2, Blueprint classes Integration): availability
+            # and credentials are per ROUTE, not outcomes of the sheet's
+            # work. An unreachable or logged-out instrument with a chain
+            # entry left takes its fallback branch below; on_fail fires only
+            # once the chain is exhausted. (Accepted design S-14 bypasses
+            # retry/fallback for the WORK's failure; it predates #418 and
+            # capability classes.)
             and not (
-                event.error_classification == "INSTRUMENT_UNAVAILABLE"
+                event.error_classification in ("INSTRUMENT_UNAVAILABLE", "AUTH_FAILURE")
                 and sheet.has_fallback_available
             )
         ):

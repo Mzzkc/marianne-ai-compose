@@ -1171,10 +1171,21 @@ class JobManager:
             fresh_classes = load_class_map(profile_names=set(merged_profiles))
             if fresh_classes.failures and self._class_map is not None:
                 failed_layers = {failure.layer for failure in fresh_classes.failures}
+                layer_rank = {"default": 0, "user": 1, "venue": 2}
                 retained = dict(fresh_classes.classes)
                 for class_name, prior in self._class_map.classes.items():
-                    if prior.source_layer in failed_layers:
-                        retained[class_name] = prior
+                    if prior.source_layer not in failed_layers:
+                        continue
+                    current = fresh_classes.classes.get(class_name)
+                    if (
+                        current is not None
+                        and layer_rank[current.source_layer] > layer_rank[prior.source_layer]
+                    ):
+                        # A healthy higher layer owns the class now; the old
+                        # lower-layer chain must not override it (Forge
+                        # Inspect P1, reload-overrides-valid-venue).
+                        continue
+                    retained[class_name] = prior
                 fresh_classes = ClassMap(
                     retained, fresh_classes.layers, fresh_classes.failures,
                     fresh_classes.tombstones,

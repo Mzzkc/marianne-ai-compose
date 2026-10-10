@@ -389,6 +389,36 @@ async def test_class_reload_changes_new_jobs_only(
     assert old_job.digest == admitted.digest
 
 
+async def test_broken_user_layer_does_not_override_healthy_venue_on_reload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Forge Inspect P1: after the user layer breaks and a valid venue layer
+    sets the class, reload kept the stale user chain (packaged < user < venue
+    violated while reporting success)."""
+    org = _profile_dir(tmp_path)
+    config = _load_config(_config_file(tmp_path))
+    manager = _manager(tmp_path, config=config, org_dir=org)
+    default_path = class_loader.class_source_paths()[0]
+    user_path = tmp_path / "classes.yaml"
+    venue_path = tmp_path / "venue-classes.yaml"
+    user_path.write_text("version: 1\nclasses:\n  strong: [alpha]\n")
+    monkeypatch.setattr(
+        class_loader, "class_source_paths",
+        lambda **_overrides: (default_path, user_path, venue_path),
+    )
+    assert (await manager.reload_configuration("initial")).success
+    assert manager._class_map is not None
+    assert manager._class_map.classes["strong"].chain[0].profile == "alpha"
+
+    user_path.write_text("version: 1\nclasses:\n  strong: []\n")  # now invalid
+    venue_path.write_text("version: 1\nclasses:\n  strong: [cli]\n")  # healthy, higher
+    result = await manager.reload_configuration("user-broke-venue-set")
+    assert result.success and result.partial  # the broken user layer is reported
+    assert manager._class_map is not None
+    assert manager._class_map.classes["strong"].chain[0].profile == "cli"
+    assert manager._class_map.classes["strong"].source_layer == "venue"
+
+
 async def test_reload_configuration_fail_closed_on_invalid_config(
     tmp_path: Path,
 ) -> None:

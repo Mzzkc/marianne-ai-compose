@@ -42,17 +42,28 @@ def test_snapshot_keeps_existing_class_after_map_edit(tmp_path: Path) -> None:
     assert extended.classes["review"].resolved_at == "resume"
 
 
+def test_unconfigured_vocabulary_class_refuses(tmp_path: Path) -> None:
+    loaded = load_class_map(user_path=tmp_path / "missing", venue_path=tmp_path / "absent")
+    with pytest.raises(ValueError, match="no instruments configured"):
+        resolve_job_classes(_job(instrument="image"), {"claude-code"}, loaded)
+
+
 @pytest.mark.parametrize(
-    ("name", "reason"),
+    "overrides",
     [
-        ("unknown-agent", "not an instrument profile"),
-        ("image", "no instruments configured"),
+        {"instrument": "unknown-agent"},                                     # primary seat
+        {"instrument": "claude-code", "instrument_fallbacks": ["not-here"]},  # fallback-only (I6)
     ],
 )
-def test_unknown_or_unconfigured_name_refuses(name: str, reason: str, tmp_path: Path) -> None:
+def test_unknown_non_class_name_is_not_the_class_seams_business(
+    overrides: dict[str, object], tmp_path: Path,
+) -> None:
+    """D-I1 (Blueprint Integration C-I1): the class seam refuses only states
+    classes create. An unknown non-class name is S3's (V210/V211 ERROR) and
+    dispatch's, exactly as before classes existed — 6 of 68 tracked scores on
+    a fresh install were otherwise refused at submit though main admits them."""
     loaded = load_class_map(user_path=tmp_path / "missing", venue_path=tmp_path / "absent")
-    with pytest.raises(ValueError, match=reason):
-        resolve_job_classes(_job(instrument=name), {"claude-code"}, loaded)
+    assert resolve_job_classes(_job(**overrides), {"claude-code"}, loaded) is None
 
 
 def test_alias_precedes_class_and_guarded_route_refuses_class(tmp_path: Path) -> None:

@@ -134,6 +134,7 @@ class TestCheckInstrumentAvailable:
         mock_profile.name = "broken-cli"
         mock_profile.kind = "cli"
         mock_profile.cli = None
+        mock_profile.execution_status = "ready"  # the guard reads this first
         registry._profiles["broken-cli"] = mock_profile
 
         available, reason = check_instrument_available("broken-cli", registry)
