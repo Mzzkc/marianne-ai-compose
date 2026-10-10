@@ -10,8 +10,15 @@ from marianne.core.config import JobConfig
 from marianne.validation.base import ValidationCheck, ValidationIssue, ValidationSeverity
 from marianne.validation.checks import (
     AbsoluteHomePathCheck,
+    AliasShadowsClassCheck,
     BashArrayLengthCheck,
     CadenzaOrderingCheck,
+    ClassAliasProfileCheck,
+    ClassChainAvailabilityCheck,
+    ClassChainSummaryCheck,
+    ClassesFileValidCheck,
+    ClassModelConfigCheck,
+    ClassNameResolutionCheck,
     CliRawPromptBashCheck,
     CodeExecutionSandboxCheck,
     EmptyPatternCheck,
@@ -214,6 +221,14 @@ def create_default_checks() -> list[ValidationCheck]:
         InstrumentFallbackCheck(),
         NoUsableInstrumentCheck(),
         InteractiveSupportCheck(),
+        # Capability-class checks (V-CLS frame; class state via the one loader)
+        ClassNameResolutionCheck(),
+        ClassChainAvailabilityCheck(),
+        ClassAliasProfileCheck(),
+        AliasShadowsClassCheck(),
+        ClassModelConfigCheck(),
+        ClassesFileValidCheck(),
+        ClassChainSummaryCheck(),
         # Best-practice checks
         JinjaInValidationPathCheck(),
         FormatSyntaxInTemplateCheck(),

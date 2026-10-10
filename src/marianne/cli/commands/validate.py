@@ -35,7 +35,7 @@ from marianne.validation import (
     create_default_checks,
 )
 from marianne.validation.base import ValidationIssue, ValidationSeverity
-from marianne.validation.output_contract import apply_suppression, structural_summary
+from marianne.validation.output_contract import apply_suppression, class_summary, structural_summary
 
 from ..helpers import configure_global_logging
 from ..output import console, output_error
@@ -199,6 +199,7 @@ def validate(
     issues = runner.validate(config, config_file, raw_yaml)
     issues, suppressed = apply_suppression(config, issues)
     summary = structural_summary(config)
+    summary["classes"] = class_summary(config)
 
     # Output results
     reporter = ValidationReporter(console)
@@ -227,6 +228,19 @@ def validate(
         console.print(f"\nScore: {summary['score']}")
         console.print(f"Sheets: {summary['sheets']} ({summary['stages']} stages)")
         console.print(f"Instruments: {summary['instruments']['primary']}")
+        class_info = summary.get("classes") or {}
+        for row in class_info.get("used", []):
+            chain = ", ".join(row["chain"])
+            console.print(
+                f"Instruments: {row['class']} → {chain} "
+                f"({row['layer']} layer, sha256 {row['layer_sha256'] or 'n/a'})"
+            )
+        for layer in class_info.get("layers", []):
+            if layer["present"]:
+                console.print(
+                    f"[dim]Class layer {layer['layer']}: {layer['path']} "
+                    f"(sha256 {layer['sha256']})[/dim]"
+                )
         console.print(f"Variables: {summary['variables']['declared']} declared")
         if summary["loops"]:
             console.print(f"Loops: {', '.join(summary['loops'])}")

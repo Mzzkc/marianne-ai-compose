@@ -1,9 +1,11 @@
 """V215: warn when a score's instrument chain has nothing installed here.
 
-The unknown-system onboarding guard. The deep fallback chain skips uninstalled
-instruments at dispatch, so a chain that resolves to zero installed CLI binaries
-would advance straight to HTTP fallbacks (which need a server/key) or exhaust.
-V215 surfaces that at validate time with an actionable, free-path-first message.
+The unknown-system onboarding guard. An unavailable instrument costs one
+dispatch attempt before the chain advances (#418's typed path), so a chain
+that resolves to zero installed CLI binaries would burn one attempt per
+entry, then land on HTTP fallbacks (which need a server/key) or exhaust.
+V215 surfaces that at validate time with an actionable, free-path-first
+message.
 """
 
 from __future__ import annotations

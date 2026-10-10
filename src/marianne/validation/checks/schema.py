@@ -7,6 +7,7 @@ from pathlib import Path
 from marianne.core.config import JobConfig
 from marianne.core.config.schema_walk import UnknownScoreField
 from marianne.validation.base import ValidationIssue, ValidationSeverity
+from marianne.validation.checks._helpers import edit_distance
 
 _KNOWN_TYPOS = {
     "retries": "retry",
@@ -30,20 +31,12 @@ _KNOWN_TYPOS = {
 }
 
 
-def _distance(a: str, b: str) -> int:
-    previous = list(range(len(b) + 1))
-    for i, char_a in enumerate(a, 1):
-        row = [i]
-        for j, char_b in enumerate(b, 1):
-            row.append(min(row[-1] + 1, previous[j] + 1, previous[j - 1] + (char_a != char_b)))
-        previous = row
-    return previous[-1]
-
-
 def unknown_field_issue(field: UnknownScoreField, raw_yaml: str) -> ValidationIssue:
     """Classify one unknown key without rejecting the rest of the score."""
-    nearest = min(field.candidates, key=lambda key: (_distance(field.key, key), key), default=None)
-    near = nearest is not None and _distance(field.key, nearest) <= 2
+    nearest = min(
+        field.candidates, key=lambda key: (edit_distance(field.key, key), key), default=None
+    )
+    near = nearest is not None and edit_distance(field.key, nearest) <= 2
     override = _KNOWN_TYPOS.get(field.key) if not field.path else None
     suggested = override or (nearest if near else None)
     # A curated onboarding hint is high-confidence even when the edit distance is high.
