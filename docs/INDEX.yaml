@@ -131,8 +131,16 @@ semantic_index:
   compose:
   - guides/score-composition-guide.md
   instruments:
+  - instrument-guide.md
   - research/2026-03-26-universal-instrument-api-research.md
   - specs/2026-04-13-instrument-forge-spec.md
+  capability-classes:
+  - instrument-guide.md
+  - configuration-reference.md
+  - cli-reference.md
+  fallback:
+  - configuration-reference.md
+  - instrument-guide.md
   patterns:
   - guides/score-composition-guide.md
   schema:

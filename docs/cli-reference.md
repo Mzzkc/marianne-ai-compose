@@ -156,7 +156,7 @@ Resume a paused or failed score.
 Usage: mzt resume [OPTIONS] JOB_ID
 ```
 
-Loads the score state and continues execution from where it left off. By default, Marianne auto-reloads the config from the original YAML file if it still exists on disk. Falls back to the cached `config_snapshot` when the file is gone. Use `--no-reload` to force using the cached snapshot.
+Loads the score state and continues execution from where it left off. By default, Marianne auto-reloads the config from the original YAML file if it still exists on disk. Falls back to the cached `config_snapshot` when the file is gone. Use `--no-reload` to force using the cached snapshot: the score exactly as it was admitted (or as the last reloading resume ran it), so edits made to the YAML on disk since then are ignored. The snapshot is written at submit and refreshed on every reloading resume.
 
 #### Arguments
 
