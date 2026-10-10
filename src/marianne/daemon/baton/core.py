@@ -1819,6 +1819,39 @@ class BatonCore:
         # normal_attempts for non-rate-limited results).
         sheet.record_attempt(event)
 
+        # GH #428: a trigger `skip`/forward `goto` queued against this sheet
+        # while it was in flight means "do not run this sheet again". If the
+        # attempt did not fully succeed, settle it as a clean SKIPPED now,
+        # before retry / completion / fallback / healing can re-dispatch it.
+        # A fully successful attempt still drops the skip (on_terminal).
+        if (
+            job.flow is not None
+            and event.sheet_num in job.flow.state.queued_skips
+            and not (
+                event.execution_success
+                and (
+                    event.validations_total == 0
+                    or event.validation_pass_rate >= 100.0
+                )
+            )
+        ):
+            if not event.execution_success:
+                self._update_instrument_on_failure(event.instrument_name)
+            # Funnel as a non-attempt terminal: on_terminal consumes the
+            # queued skip and converts the sheet to SKIPPED (error_code None).
+            self._set_sheet_terminal_status(event.job_id, sheet, BatonSheetStatus.SKIPPED)
+            sheet.clear_dispatch_block()
+            _logger.info(
+                "baton.sheet.queued_skip_applied_on_attempt_end",
+                extra={
+                    "job_id": event.job_id,
+                    SHEET_NUM_KEY: event.sheet_num,
+                    "attempt": event.attempt,
+                },
+            )
+            self._check_job_cost_limit(event.job_id)
+            return
+
         # A reviewed guarded request is one bounded attempt. Neither an HTTP
         # failure nor partial validation may silently spend another attempt,
         # enter healing, or borrow the instrument's rate-limit retry path.
@@ -1890,6 +1923,15 @@ class BatonCore:
             and sheet.expected_route is None
             and job.flow.has_on_fail(event.sheet_num)
             and not (event.execution_success and effective_pass_rate >= 100.0)
+            # GH #429: availability is not an outcome of the sheet's work.
+            # An unreachable instrument with a chain entry left takes the
+            # #418 fallback branch below; on_fail fires only once the chain
+            # is exhausted. (Accepted design S-14 bypasses retry/fallback for
+            # the WORK's failure; it predates #418 and capability classes.)
+            and not (
+                event.error_classification == "INSTRUMENT_UNAVAILABLE"
+                and sheet.has_fallback_available
+            )
         ):
             if event.execution_success and effective_pass_rate > 0:
                 self._update_instrument_on_success(event.instrument_name)
