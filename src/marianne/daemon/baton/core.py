@@ -1767,6 +1767,42 @@ class BatonCore:
     # Event Handlers — private
     # =========================================================================
 
+    def _settle_queued_skip_on_attempt_end(
+        self, job: _JobRecord, sheet: SheetExecutionState, event: SheetAttemptResult
+    ) -> bool:
+        """GH #428: apply a queued in-flight skip when a non-success attempt ends.
+
+        A trigger `skip`/forward `goto` queued against this sheet while it was
+        in flight means "do not run this sheet again". If the attempt did not
+        fully succeed, settle it as a clean SKIPPED now, before retry /
+        completion / fallback / healing can re-dispatch it. A fully successful
+        attempt still drops the skip (on_terminal). Shared by the attempt-result
+        path and the process-crash path (GH #430), so a crash with a queued
+        skip cannot re-dispatch the sheet either. Returns True when settled.
+        """
+        if job.flow is None or event.sheet_num not in job.flow.state.queued_skips:
+            return False
+        if event.execution_success and (
+            event.validations_total == 0 or event.validation_pass_rate >= 100.0
+        ):
+            return False
+        if not event.execution_success:
+            self._update_instrument_on_failure(event.instrument_name)
+        # Funnel as a non-attempt terminal: on_terminal consumes the
+        # queued skip and converts the sheet to SKIPPED (error_code None).
+        self._set_sheet_terminal_status(event.job_id, sheet, BatonSheetStatus.SKIPPED)
+        sheet.clear_dispatch_block()
+        _logger.info(
+            "baton.sheet.queued_skip_applied_on_attempt_end",
+            extra={
+                "job_id": event.job_id,
+                SHEET_NUM_KEY: event.sheet_num,
+                "attempt": event.attempt,
+            },
+        )
+        self._check_job_cost_limit(event.job_id)
+        return True
+
     async def _handle_attempt_result(self, event: SheetAttemptResult) -> None:
         """Process a musician's execution report."""
         job = self._jobs.get(event.job_id)
@@ -1829,37 +1865,7 @@ class BatonCore:
         # normal_attempts for non-rate-limited results).
         sheet.record_attempt(event)
 
-        # GH #428: a trigger `skip`/forward `goto` queued against this sheet
-        # while it was in flight means "do not run this sheet again". If the
-        # attempt did not fully succeed, settle it as a clean SKIPPED now,
-        # before retry / completion / fallback / healing can re-dispatch it.
-        # A fully successful attempt still drops the skip (on_terminal).
-        if (
-            job.flow is not None
-            and event.sheet_num in job.flow.state.queued_skips
-            and not (
-                event.execution_success
-                and (
-                    event.validations_total == 0
-                    or event.validation_pass_rate >= 100.0
-                )
-            )
-        ):
-            if not event.execution_success:
-                self._update_instrument_on_failure(event.instrument_name)
-            # Funnel as a non-attempt terminal: on_terminal consumes the
-            # queued skip and converts the sheet to SKIPPED (error_code None).
-            self._set_sheet_terminal_status(event.job_id, sheet, BatonSheetStatus.SKIPPED)
-            sheet.clear_dispatch_block()
-            _logger.info(
-                "baton.sheet.queued_skip_applied_on_attempt_end",
-                extra={
-                    "job_id": event.job_id,
-                    SHEET_NUM_KEY: event.sheet_num,
-                    "attempt": event.attempt,
-                },
-            )
-            self._check_job_cost_limit(event.job_id)
+        if self._settle_queued_skip_on_attempt_end(job, sheet, event):
             return
 
         # A reviewed guarded request is one bounded attempt. Neither an HTTP
@@ -2556,6 +2562,8 @@ class BatonCore:
                 + (f" with code {event.exit_code}" if event.exit_code is not None else ""),
             )
             sheet.record_attempt(crash_result)
+            if self._settle_queued_skip_on_attempt_end(job, sheet, crash_result):
+                return
             self._update_instrument_on_failure(sheet.instrument_name or "")
             if not sheet.can_retry:
                 await self._handle_exhaustion(event.job_id, event.sheet_num, sheet)

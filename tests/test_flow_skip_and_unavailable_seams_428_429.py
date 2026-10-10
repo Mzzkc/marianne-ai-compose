@@ -148,3 +148,34 @@ class TestUnavailableFallsBackBeforeOnFail429:
         )
         assert cp.sheets[1].status == SheetStatus.FAILED
         assert cp.sheets[2].status == SheetStatus.SKIPPED
+
+
+@pytest.mark.parametrize("retries_left", [True, False])
+async def test_process_crash_with_queued_skip_settles_skipped_not_retry_430(
+    retries_left: bool,
+) -> None:
+    """GH #430: ``_handle_process_exited`` built a synthetic attempt and went straight to
+    retry / exhaustion, bypassing the #428 settlement. A crash on a skip-queued sheet
+    re-dispatched (retries left) or FAILED and cascaded (exhausted) the very sheet the
+    author had skipped. It now ends as a clean SKIPPED with the dependent released, on
+    both branches, through the one helper the attempt-result path uses."""
+    from marianne.daemon.baton.events import ProcessExited
+
+    checkpoint = _job([], 3 if retries_left else 0)
+    baton = BatonCore()
+    baton.register_job(
+        "j",
+        checkpoint.sheets,
+        {3: [2]},
+        flow_state=checkpoint.flow,
+        triggers={"1": SheetTriggerConfig(on_success=[TriggerAction(skip="2")])},
+    )
+    checkpoint.sheets[2].status = SheetStatus.DISPATCHED
+    await baton.handle_event(_result(1, success=True))
+    assert 2 in checkpoint.flow.queued_skips
+    await baton.handle_event(ProcessExited(job_id="j", sheet_num=2, pid=4242, exit_code=137))
+    assert checkpoint.flow.queued_skips == {}
+    assert checkpoint.sheets[2].status == SheetStatus.SKIPPED
+    assert checkpoint.sheets[2].error_code is None
+    assert checkpoint.sheets[2].normal_attempts == 1  # the crash still counts
+    assert [sheet.sheet_num for sheet in baton.get_ready_sheets("j")] == [3]
