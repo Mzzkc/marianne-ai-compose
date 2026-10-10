@@ -332,3 +332,37 @@ async def test_file_condition_false_restarts_nested_loop() -> None:
     assert checkpoint.flow.loops["1"].phase == "running"
     assert checkpoint.flow.loops["1"].iteration == 1
     assert {state.dispatch_epoch for state in states.values()} == {1}
+
+
+@pytest.mark.parametrize("terminal_event", ["job_timeout", "cancel_job", "shutdown_hard"])
+async def test_terminal_write_over_fermata_releases_escalation_ownership(
+    terminal_event: str,
+) -> None:
+    """GH #424: JobTimeout (and every other terminal writer) over an escalated sheet
+    used to leave ``escalation_pause_owners`` and ``pause_reason`` set, so the job
+    had only terminal sheets yet ``is_job_complete`` stayed False forever."""
+    from marianne.daemon.baton.events import CancelJob, JobTimeout, ShutdownRequested
+
+    checkpoint = _checkpoint()
+    baton = BatonCore()
+    baton.register_job(
+        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        triggers={"1": SheetTriggerConfig(on_fail=[TriggerAction(escalate="check")])},
+    )
+    await baton.handle_event(_result(0, success=False))
+    assert checkpoint.sheets[1].status == SheetStatus.FERMATA
+    assert checkpoint.flow.escalation_pause_owners == {1}
+    assert checkpoint.flow.pause_reason == "check"
+
+    if terminal_event == "job_timeout":
+        await baton.handle_event(JobTimeout(job_id="j"))
+    elif terminal_event == "cancel_job":
+        await baton.handle_event(CancelJob(job_id="j"))
+    else:
+        await baton.handle_event(ShutdownRequested(graceful=False))
+
+    assert checkpoint.sheets[1].status == SheetStatus.CANCELLED
+    assert checkpoint.flow.escalation_pause_owners == set()
+    assert checkpoint.flow.pause_reason is None
+    if terminal_event != "cancel_job":  # cancel deregisters the job entirely
+        assert baton.is_job_complete("j")

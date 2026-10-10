@@ -1378,6 +1378,16 @@ class BatonCore:
         outcome: Literal["success", "fail"] | None = None,
     ) -> None:
         """The sole core writer of terminal status and its flow notification."""
+        if sheet.status == BatonSheetStatus.FERMATA:
+            # GH #424: a terminal write over an escalated sheet (job timeout,
+            # cancel, non-graceful shutdown) must release that sheet's
+            # escalation ownership, or the flow pause outlives every sheet and
+            # `is_job_complete` never turns true. Resolve/timeout handlers
+            # release explicitly before they write; this is the funnel's
+            # guarantee for every other writer.
+            job = self._jobs.get(job_id)
+            if job is not None:
+                self._release_escalation_pause(job, sheet.sheet_num)
         sheet.status = status
         self._state_dirty = True
         self._on_sheet_terminal(job_id, sheet.sheet_num, outcome)
