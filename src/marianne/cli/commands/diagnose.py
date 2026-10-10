@@ -44,7 +44,6 @@ from marianne.core.constants import (
     DAEMON_STATE_DB_PATH,
     SHEET_NUM_KEY,
     STATE_DB_FILENAME,
-    active_registry_db_path,
 )
 from marianne.core.log_sources import (
     LogSource,
@@ -53,6 +52,7 @@ from marianne.core.log_sources import (
     read_registry_job_metadata,
 )
 from marianne.core.logging import find_log_files, get_default_log_path
+from marianne.daemon.clone import active_registry_db_path
 
 from ..helpers import (
     configure_global_logging,

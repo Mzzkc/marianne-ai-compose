@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from marianne.core.constants import DAEMON_STATE_DB_PATH
 from marianne.core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -208,3 +209,18 @@ def build_clone_config(
             component = hashlib.sha256(server_name.encode()).hexdigest()[:16]
             entry["socket"] = str(mcp_dir / f"{component}.sock")
     return DaemonConfig.model_validate(config_dict)
+
+
+def active_registry_db_path() -> Path:
+    """The registry DB of the conductor the CLI is currently addressing.
+
+    Production ``DAEMON_STATE_DB_PATH`` unless ``--conductor-clone`` selected
+    a clone, in which case the clone's own state DB (GH #401). Every offline
+    registry reader (recover, diagnose, status fallbacks, dashboard stream)
+    must go through this instead of the constant. Lives on the daemon side
+    because it depends on clone selection; ``core/`` never imports ``daemon/``
+    (GH #414).
+    """
+    if is_clone_active():
+        return resolve_clone_paths(get_clone_name()).state_db.expanduser()
+    return DAEMON_STATE_DB_PATH.expanduser()

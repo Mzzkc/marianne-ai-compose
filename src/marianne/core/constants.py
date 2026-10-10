@@ -131,21 +131,6 @@ remains a deliberately deferred feature — ``state_db_path`` is documented as
 reserved and logs a warning when set."""
 
 
-def active_registry_db_path() -> Path:
-    """The registry DB of the conductor the CLI is currently addressing.
-
-    Production ``DAEMON_STATE_DB_PATH`` unless ``--conductor-clone`` selected
-    a clone, in which case the clone's own state DB (GH #401). Every offline
-    registry reader (recover, diagnose, status fallbacks, dashboard stream)
-    must go through this instead of the constant.
-    """
-    from marianne.daemon.clone import get_clone_name, is_clone_active, resolve_clone_paths
-
-    if is_clone_active():
-        return resolve_clone_paths(get_clone_name()).state_db.expanduser()
-    return DAEMON_STATE_DB_PATH.expanduser()
-
-
 VALIDATION_PASS_RATE_KEY = "validation_pass_rate"
 """Standard key for validation pass rate in checkpoint/job data."""
 

@@ -21,9 +21,10 @@ import typer
 from rich.console import Console
 
 from marianne.core.checkpoint import CheckpointState
-from marianne.core.constants import DAEMON_STATE_DB_PATH, active_registry_db_path
+from marianne.core.constants import DAEMON_STATE_DB_PATH
 from marianne.core.errors.codes import ErrorCode
 from marianne.core.logging import configure_logging, get_logger
+from marianne.daemon.clone import active_registry_db_path
 from marianne.state import StateBackend
 
 if TYPE_CHECKING:

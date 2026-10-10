@@ -43,8 +43,11 @@ def test_recover_db_path_uses_constant() -> None:
 def test_recover_db_path_follows_active_clone(monkeypatch) -> None:
     """GH #401: with --conductor-clone active, offline readers open the clone's DB."""
     from marianne.cli.commands.recover import _get_db_path
-    from marianne.core.constants import active_registry_db_path
-    from marianne.daemon.clone import resolve_clone_paths, set_clone_name
+    from marianne.daemon.clone import (
+        active_registry_db_path,
+        resolve_clone_paths,
+        set_clone_name,
+    )
 
     set_clone_name("pin401")
     try:
@@ -54,3 +57,29 @@ def test_recover_db_path_follows_active_clone(monkeypatch) -> None:
     finally:
         set_clone_name(None)
     assert _get_db_path() == DAEMON_STATE_DB_PATH.expanduser()
+
+
+def test_core_package_never_imports_daemon_execution_or_cli() -> None:
+    """GH #414: ``core/`` is the bottom layer. Function-level imports count too —
+    the original defect was a deferred ``from marianne.daemon.clone import …``
+    inside ``core/constants.py``."""
+    import ast
+
+    import marianne.core as core
+
+    root = Path(core.__file__).parent
+    forbidden = ("marianne.daemon", "marianne.execution", "marianne.cli", "marianne.ipc")
+    offenders: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                modules = [node.module or ""]
+            else:
+                continue
+            for module in modules:
+                if module.startswith(forbidden):
+                    offenders.append(f"{path.relative_to(root)}:{node.lineno} imports {module}")
+    assert not offenders, "\n".join(offenders)

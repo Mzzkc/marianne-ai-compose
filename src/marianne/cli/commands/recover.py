@@ -29,8 +29,9 @@ from rich.panel import Panel
 
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetStatus
 from marianne.core.config import JobConfig
-from marianne.core.constants import SHEET_NUM_KEY, active_registry_db_path
+from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
+from marianne.daemon.clone import active_registry_db_path
 from marianne.execution.validation import SheetValidationResult, ValidationEngine
 from marianne.utils.time import utc_now
 

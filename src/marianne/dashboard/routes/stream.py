@@ -21,13 +21,13 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from marianne.core.checkpoint import CheckpointState, JobStatus
-from marianne.core.constants import active_registry_db_path
 from marianne.core.log_sources import (
     LogSource,
     discover_job_log_sources,
     iter_source_lines,
 )
 from marianne.core.logging import get_logger
+from marianne.daemon.clone import active_registry_db_path
 from marianne.dashboard.app import get_state_backend
 from marianne.dashboard.services.event_bridge import DaemonEventBridge
 from marianne.dashboard.services.sse_manager import SSEEvent
