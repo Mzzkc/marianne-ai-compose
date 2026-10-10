@@ -1475,8 +1475,15 @@ Conscious re-registration through `mzt run` amends the pin. The digest also
 travels through child admission so a source change between tick checking and
 submission is refused.
 `max_wall_seconds` is an absolute deadline from first admission, so pause,
-resume, pending admission, and restart do not reset it. Status diagnostics
-include the schedule's last due/run/outcome, next due, and deadline evidence.
+resume, pending admission, and restart do not reset it. It is also immutable on
+resume: `mzt resume -c` with a score whose `max_wall_seconds` differs from the
+registered value is refused before any status transition, and a plain resume of
+a job whose deadline has already passed times out again at once. A job that hit
+its wall with its work intact is recovered by re-running the remaining stages as
+a new score (or, for persistent agents, a lifecycle-care engagement), not by
+editing the limit. Size the wall for the heaviest stage plus the tail. Status
+diagnostics include the schedule's last due/run/outcome, next due, and deadline
+evidence.
 
 ### Preflight Sub-Config
 
@@ -1523,7 +1530,11 @@ sheet:
 A loop runs its range at least once and evaluates `until` after every complete
 iteration. `count` requests an exact number of passes; `count` with `until`
 acts as a cap. `max_iterations` defaults to 50. `cost_limit_usd` caps spend
-inside the span. When an `until` condition remains false at a cap, the loop
+inside the span. Any error while evaluating `until` (an undefined variable, an
+incompatible comparison, division by zero, an arithmetic result out of range)
+ends the loop with `condition_error` and fails the span's last sheet with E999
+and a message naming the expression; it never leaves the loop mid-decision.
+When an `until` condition remains false at a cap, the loop
 ends with a warning and the job proceeds; use a validation for a required
 artifact. Loop spans may be separate or nested, and index names must be unique.
 Use `{{ loops.pass_no }}` or `{{ pass_no }}` in prompts, `{pass_no}` in validations
