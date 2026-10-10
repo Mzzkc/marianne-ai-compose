@@ -12,6 +12,7 @@ from marianne.core.expressions import (
     ExpressionContext,
     ExpressionError,
     ExpressionSyntaxError,
+    ExpressionTypeError,
     ReservedSyntaxError,
     evaluate,
     parse_expression,
@@ -89,3 +90,14 @@ def test_parser_never_raises_an_untyped_error(source: str) -> None:
 def test_invalid_file_string_is_positioned(source: str) -> None:
     with pytest.raises(ExpressionSyntaxError):
         parse_expression(source)
+
+
+def test_overflow_is_a_typed_positioned_refusal() -> None:
+    """GH #426: an int beyond float range meeting a float operand used to escape
+    ``evaluate`` as a raw ``OverflowError``; it is an ``ExpressionTypeError`` like
+    division by zero, positioned at the operator."""
+    big = 10**400
+    for source in ("var.big * 1.5 > 1", "var.big / 3 > 1"):
+        with pytest.raises(ExpressionTypeError) as info:
+            evaluate(parse_expression(source), Facts({"big": big}))
+        assert "out of range" in str(info.value)

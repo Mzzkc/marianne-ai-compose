@@ -479,3 +479,23 @@ def test_expression_core_import_boundary_is_daemon_free() -> None:
                 for module in modules
                 for prefix in forbidden
             ), (path, modules)
+
+
+async def test_arithmetic_overflow_in_until_positions_condition_error() -> None:
+    """GH #426: an ``OverflowError`` from an ``until`` expression used to unwind out of
+    ``handle_event`` and leave the loop mid-decision (a silent hang until the wall
+    timeout). It now ends the loop at ``condition_error`` with E999 on the last sheet,
+    exactly like any other expression error, on both the inline and the facts path."""
+    loops = {"1": LoopConfig(until="var.big * 1.5 > 1", index="pass_no")}
+    job = _job()
+    baton = BatonCore()
+    baton.register_job(
+        "j", job.sheets, {}, loops=loops, flow_state=job.flow, flow_variables={"big": 10**400}
+    )
+    await baton.handle_event(_result(1))
+    assert job.flow.loops["1"].completed_reason == "condition_error"
+    assert job.flow.loops["1"].phase == "completed"
+    assert job.sheets[1].status == SheetStatus.FAILED
+    assert job.sheets[1].error_code == "E999"
+    assert "out of range" in (job.sheets[1].error_message or "")
+    assert baton.is_job_complete("j")

@@ -145,6 +145,12 @@ def evaluate_value(expr: Expression, ctx: ExpressionContext) -> Value:
                 return left_num % right_num
             except ZeroDivisionError as exc:
                 raise ExpressionTypeError(expr.source, node.offset, "division by zero") from exc
+            except OverflowError as exc:
+                # An int beyond float range meets a float operand (GH #426):
+                # a typed, positioned refusal, never a raw ArithmeticError.
+                raise ExpressionTypeError(
+                    expr.source, node.offset, "arithmetic result out of range"
+                ) from exc
         raise AssertionError(f"unknown expression node: {node!r}")
 
     return walk(expr.root)

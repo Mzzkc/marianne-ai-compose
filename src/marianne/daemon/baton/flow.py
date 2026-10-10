@@ -281,7 +281,9 @@ class FlowEngine:
                 )
                 if evaluate(expr, context):
                     reason = "condition_met"
-            except ExpressionError as exc:
+            except (ExpressionError, ArithmeticError) as exc:
+                # ArithmeticError: an evaluator gap must still position the
+                # loop at condition_error, never unwind and hang it (GH #426).
                 reason = "condition_error"
                 members[-1].status = SheetStatus.FAILED
                 members[-1].error_message = f"Flow condition {config.until!r}: {exc}"
@@ -355,7 +357,7 @@ class FlowEngine:
                     sheets, self.state, self.plan.variables, span_bounds(span)[1], files
                 )
                 met = evaluate(parse_expression(config.until), context)
-            except ExpressionError as exc:
+            except (ExpressionError, ArithmeticError) as exc:
                 error = str(exc)
             else:
                 if met:
