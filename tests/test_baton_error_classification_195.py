@@ -40,6 +40,7 @@ def _exec(
     exit_reason: str = "completed",
     rate_limited: bool = False,
     error_message: str | None = None,
+    error_type: str | None = None,
 ) -> ExecutionResult:
     return ExecutionResult(
         success=success,
@@ -51,6 +52,7 @@ def _exec(
         exit_reason=exit_reason,  # type: ignore[arg-type]
         rate_limited=rate_limited,
         error_message=error_message,
+        error_type=error_type,
     )
 
 
@@ -105,13 +107,36 @@ class TestClassifyError:
         assert (c.classification, c.message, c.error_code) == (None, None, None)
 
     def test_auth_failure(self) -> None:
-        c = _classify_error(_exec(stderr="HTTP 401 Unauthorized", exit_code=1))
+        # The backend typed the cause (HTTP 401 status / profile auth pattern).
+        c = _classify_error(
+            _exec(stderr="HTTP 401 Unauthorized", exit_code=1, error_type="authentication")
+        )
         assert c.classification == "AUTH_FAILURE"
         assert c.error_code == "E502"  # ErrorCode.BACKEND_AUTH
 
     def test_auth_failure_api_key(self) -> None:
-        c = _classify_error(_exec(stderr="invalid_api_key provided", exit_code=1))
+        c = _classify_error(
+            _exec(stderr="invalid_api_key provided", exit_code=1, error_type="auth")
+        )
         assert c.classification == "AUTH_FAILURE"
+
+    @pytest.mark.parametrize(
+        "stderr",
+        [
+            "bash: line 1: ./scripts/deploy.sh: Permission denied",
+            "git@github.com: Permission denied (publickey).",
+            "FAILED tests/test_api.py::test_admin - assert 403 == 200",
+            'File "app/handler.py", line 403, in run\nKeyError: \'user\'',
+            "HTTP 401 Unauthorized",
+        ],
+    )
+    def test_auth_text_without_typed_cause_is_not_auth_failure(self, stderr: str) -> None:
+        """Blueprint capability-classes Inspect F1: an agent that RAN and printed
+        auth-looking words is retried on its own entry, not moved to the next
+        provider as a credential failure. The E502 diagnosis survives in the code."""
+        c = _classify_error(_exec(stderr=stderr, exit_code=1))
+        assert c.classification == "EXECUTION_ERROR"
+        assert c.error_code == "E502"
 
     def test_signal_kill_is_transient(self) -> None:
         c = _classify_error(_exec(exit_code=None, exit_signal=9))

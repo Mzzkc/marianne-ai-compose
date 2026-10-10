@@ -1501,6 +1501,7 @@ class TestCrossSystemIntegration:
             stderr="Error: 401 unauthorized - invalid api key",
             duration_seconds=1.0,
             exit_code=1,
+            error_type="authentication",
         )
         classification, _, _ = _classify_error(auth_result)
         assert classification == "AUTH_FAILURE"

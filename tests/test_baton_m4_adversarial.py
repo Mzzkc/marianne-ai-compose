@@ -326,6 +326,7 @@ class TestClassifyErrorAdversarial:
             exit_code=1,
             stderr="UNAUTHORIZED: Invalid API key provided",
         )
+        result.error_type = "auth"  # the profile's auth_error_patterns matched
         classification, _, _ = _classify_error(result)
         assert classification == "AUTH_FAILURE"
 

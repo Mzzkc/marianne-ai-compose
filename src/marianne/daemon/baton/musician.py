@@ -1198,6 +1198,18 @@ _ROUTE_UNAVAILABLE_TYPES: frozenset[str] = frozenset(
     {"executable_not_found", "spawn_failed", "connection"}
 )
 
+# Backend-typed causes meaning "this route rejected our credentials". The ONE
+# predicate behind AUTH_FAILURE (Blueprint capability-classes Inspect F1, same
+# rule as §5.2): the CLI backend sets ``auth`` when the PROFILE's own
+# ``auth_error_patterns`` match, the HTTP backend sets ``authentication`` on a
+# 401/403 status, the interactive backend sets ``auth`` on its login gates.
+# The core classifier's generic, unanchored patterns ("401", "403",
+# "permission denied", "authentication") are diagnosis text only: an agent
+# whose tool prints "Permission denied (publickey)" or a traceback's
+# "line 403" RAN and failed on its own, and must be retried on the same
+# entry, never moved to the next provider as a credential failure.
+_ROUTE_AUTH_TYPES: frozenset[str] = frozenset({"auth", "authentication"})
+
 _CATEGORY_TO_BUCKET: dict[ErrorCategory, str] = {
     ErrorCategory.AUTH: "AUTH_FAILURE",
     ErrorCategory.RATE_LIMIT: "TRANSIENT",
@@ -1228,7 +1240,9 @@ def _classify_error(exec_result: ExecutionResult) -> _ErrorClassification:
         for successful or rate-limited executions.
 
     Classifications:
-        AUTH_FAILURE — authentication/authorization failure (drives fallback)
+        AUTH_FAILURE — the backend typed a credential rejection for this route
+            (drives immediate fallback); auth-looking text in an agent's own
+            stderr is an EXECUTION_ERROR carrying E502 as diagnosis only
         INSTRUMENT_UNAVAILABLE — binary absent / endpoint unreachable (drives
             immediate fallback without consuming a retry, GH #418)
         TRANSIENT — retriable: timeout, signal kill, network, generic-unknown
@@ -1287,6 +1301,11 @@ def _classify_error(exec_result: ExecutionResult) -> _ErrorClassification:
         exit_reason=exec_result.exit_reason,
     )
     bucket = _CATEGORY_TO_BUCKET.get(classified.category, "EXECUTION_ERROR")
+    if bucket == "AUTH_FAILURE" and exec_result.error_type not in _ROUTE_AUTH_TYPES:
+        # Text-derived AUTH with no backend-typed cause: the agent printed the
+        # words. Keep the E502 diagnosis in the code, but the bucket is an
+        # ordinary execution error retried on the same entry.
+        bucket = "EXECUTION_ERROR"
     if (
         classified.error_code is ErrorCode.BACKEND_NOT_FOUND
         and exec_result.exit_reason == "error"

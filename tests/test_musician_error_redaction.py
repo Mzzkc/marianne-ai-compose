@@ -544,6 +544,7 @@ class TestClassifyErrorPathRedaction:
                     stderr="401 unauthorized for api key",
                     duration_seconds=1.0,
                     exit_code=1,
+                    error_type="authentication",
                     error_message=(
                         "Unauthorized: invalid API key "
                         "sk-ant-api03-secretsecretsecretsecretsecret1234"

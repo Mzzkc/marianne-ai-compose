@@ -282,9 +282,11 @@ and used by the conductor for instrument selection in future versions.
 | `rate_limit_patterns` | `[]` | Regex patterns in stderr/stdout indicating rate limiting |
 | `auth_error_patterns` | `[]` | Regex patterns indicating auth failures |
 
-These patterns supplement Marianne's built-in error classifier. When a pattern
-matches, the error is classified as `RATE_LIMIT` or `AUTH_FAILURE` and handled
-accordingly (rate limits pause the instrument; auth failures fail immediately).
+These patterns are the instrument's own word on its failures. A
+`rate_limit_patterns` match pauses the instrument; an `auth_error_patterns`
+match types the result as a credential rejection, which is the only way text
+can produce `AUTH_FAILURE` (the built-in classifier's generic auth words are
+diagnosis only). Keep them anchored to the instrument's real messages.
 
 #### `models` — Available Models
 
@@ -486,8 +488,14 @@ Marianne classifies execution errors into categories:
 - **RATE_LIMIT** — Detected via `rate_limit_patterns` or HTTP 429. The conductor
   pauses the instrument and schedules a retry when it recovers. Rate limits
   do not count as failures.
-- **AUTH_FAILURE** — Detected via `auth_error_patterns`. The sheet fails
-  immediately (no retry).
+- **AUTH_FAILURE** — The backend typed a credential rejection for the route:
+  a CLI profile's own `auth_error_patterns` matched, an HTTP route returned
+  401/403, or an interactive session hit its login gate. The sheet leaves that
+  instrument at once and advances its fallback chain. Auth-looking words in an
+  agent's own output ("Permission denied (publickey)", a test asserting 403, a
+  traceback's "line 403") are not a credential failure: that attempt is an
+  ordinary execution error retried on the same instrument, with E502 kept as
+  the diagnosis.
 - **TRANSIENT** — Timeouts, killed processes, temporary failures. The conductor
   retries with exponential backoff.
 - **EXECUTION_ERROR** — Other non-zero exit codes. Retried up to `max_retries`.
