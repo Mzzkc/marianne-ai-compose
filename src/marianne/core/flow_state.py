@@ -46,4 +46,7 @@ class FlowState(BaseModel):
     queued_skips: dict[int, str] = Field(default_factory=dict, description="Pending skip reasons.")
     goto_bypass: list[int] = Field(default_factory=list, description="Dependency bypass targets.")
     pause_reason: str | None = Field(default=None, description="Durable flow pause reason.")
+    escalation_pause_owners: set[int] = Field(
+        default_factory=set, description="Sheets currently owning an escalation pause."
+    )
     plan_digest: str | None = Field(default=None, description="Compiled flow plan digest.")

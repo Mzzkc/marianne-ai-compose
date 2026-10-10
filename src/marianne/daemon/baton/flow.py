@@ -33,10 +33,12 @@ class FlowPlan:
     variables: dict[str, Any]
 
     def digest(self) -> str:
-        payload = repr((
-            [(key, value.model_dump(mode="json")) for key, value in self.loops.items()],
-            [(key, value.model_dump(mode="json")) for key, value in self.triggers.items()],
-        ))
+        payload = repr(
+            (
+                [(key, value.model_dump(mode="json")) for key, value in self.loops.items()],
+                [(key, value.model_dump(mode="json")) for key, value in self.triggers.items()],
+            )
+        )
         return hashlib.sha256(payload.encode()).hexdigest()
 
 
@@ -54,7 +56,10 @@ class FlowEngine:
     """Changes only shared sheet/flow objects; the baton persists them together."""
 
     def __init__(
-        self, job_id: str, plan: FlowPlan, state: FlowState,
+        self,
+        job_id: str,
+        plan: FlowPlan,
+        state: FlowState,
         event_generation: int | None = None,
     ) -> None:
         self.job_id = job_id
@@ -62,23 +67,20 @@ class FlowEngine:
         self.plan = plan
         self.state = state
         self._effects: list[FlowActionRequest] = []
-        self._events: list[
-            SheetTriggerFired | GotoRequested | LoopIterating | LoopCompleted
-        ] = []
+        self._events: list[SheetTriggerFired | GotoRequested | LoopIterating | LoopCompleted] = []
         digest = plan.digest()
         if state.plan_digest not in (None, digest):
             state.chains.clear()
             state.loops = {
-                span: run for span, run in state.loops.items()
+                span: run
+                for span, run in state.loops.items()
                 if span in plan.loops and run.index_name == plan.loops[span].index
             }
         state.plan_digest = digest
         for span, config in plan.loops.items():
             state.loops.setdefault(
                 span,
-                LoopRunState(
-                    span=span, index_name=config.index, iteration_started_at=time.time()
-                ),
+                LoopRunState(span=span, index_name=config.index, iteration_started_at=time.time()),
             )
         for run in state.loops.values():
             if run.phase == "awaiting_facts":
@@ -135,18 +137,26 @@ class FlowEngine:
         if outcome is not None:
             actions = self.actions_for(sheet_num, outcome)
             if actions:
-                self._events.append(SheetTriggerFired(
-                    self.job_id, sheet_num, outcome, tuple(actions),
-                    self.state.next_chain_id, sheets[sheet_num].dispatch_epoch,
-                    event_generation=self.event_generation,
-                ))
-                self.state.chains.append(TriggerChainState(
-                    chain_id=self.state.next_chain_id,
-                    sheet_num=sheet_num,
-                    outcome=outcome,
-                    fired_epoch=sheets[sheet_num].dispatch_epoch,
-                    actions=actions,
-                ))
+                self._events.append(
+                    SheetTriggerFired(
+                        self.job_id,
+                        sheet_num,
+                        outcome,
+                        tuple(actions),
+                        self.state.next_chain_id,
+                        sheets[sheet_num].dispatch_epoch,
+                        event_generation=self.event_generation,
+                    )
+                )
+                self.state.chains.append(
+                    TriggerChainState(
+                        chain_id=self.state.next_chain_id,
+                        sheet_num=sheet_num,
+                        outcome=outcome,
+                        fired_epoch=sheets[sheet_num].dispatch_epoch,
+                        actions=actions,
+                    )
+                )
                 self.state.next_chain_id += 1
         return self.settle(sheets)
 
@@ -174,14 +184,16 @@ class FlowEngine:
                 action = chain.actions[chain.cursor]
                 if action.run is not None or action.concert is not None:
                     chain.phase = "awaiting_run" if action.run is not None else "awaiting_concert"
-                    self._effects.append(FlowActionRequest(
-                        chain_id=chain.chain_id,
-                        cursor=chain.cursor,
-                        sheet_num=chain.sheet_num,
-                        fired_epoch=chain.fired_epoch,
-                        attempt=chain.attempt,
-                        action=action,
-                    ))
+                    self._effects.append(
+                        FlowActionRequest(
+                            chain_id=chain.chain_id,
+                            cursor=chain.cursor,
+                            sheet_num=chain.sheet_num,
+                            fired_epoch=chain.fired_epoch,
+                            attempt=chain.attempt,
+                            action=action,
+                        )
+                    )
                     return True
                 chain.cursor += 1
                 self._apply_action(sheets, chain.sheet_num, action)
@@ -219,8 +231,11 @@ class FlowEngine:
         if not self.state.chains:
             return False
         chain = self.state.chains[0]
-        if (chain.chain_id != chain_id or chain.cursor != cursor
-                or chain.phase not in {"awaiting_run", "awaiting_concert"}):
+        if (
+            chain.chain_id != chain_id
+            or chain.cursor != cursor
+            or chain.phase not in {"awaiting_run", "awaiting_concert"}
+        ):
             return False
         chain.results.append(result)
         chain.cursor += 1
@@ -229,9 +244,7 @@ class FlowEngine:
         self.settle(sheets)
         return True
 
-    def _decide_loop(
-        self, sheets: dict[int, SheetState], span: str, run: LoopRunState
-    ) -> None:
+    def _decide_loop(self, sheets: dict[int, SheetState], span: str, run: LoopRunState) -> None:
         config = self.plan.loops[span]
         members = [sheets[num] for num in span_range(span)]
         failed = any(
@@ -248,9 +261,11 @@ class FlowEngine:
             reason = "count_reached"
         elif run.iteration >= config.max_iterations:
             reason = "max_iterations"
-        elif (config.cost_limit_usd is not None and
-              sum(sheet.total_cost_usd for sheet in members) - run.cost_baseline_usd
-              > config.cost_limit_usd):
+        elif (
+            config.cost_limit_usd is not None
+            and sum(sheet.total_cost_usd for sheet in members) - run.cost_baseline_usd
+            > config.cost_limit_usd
+        ):
             reason = "cost_limit_exceeded"
         elif config.until is not None:
             expr = parse_expression(config.until)
@@ -278,9 +293,7 @@ class FlowEngine:
             return
         self._iterate_loop(sheets, span, run)
 
-    def _iterate_loop(
-        self, sheets: dict[int, SheetState], span: str, run: LoopRunState
-    ) -> None:
+    def _iterate_loop(self, sheets: dict[int, SheetState], span: str, run: LoopRunState) -> None:
         members = [sheets[num] for num in span_range(span)]
         cost = sum(sheet.total_cost_usd for sheet in members) - run.cost_baseline_usd
         uncertain = any(sheet.cost_uncertain for sheet in members)
@@ -299,16 +312,29 @@ class FlowEngine:
                 )
         run.iteration += 1
         run.iteration_started_at = time.time()
-        self._events.append(LoopIterating(
-            self.job_id, span_range(span), run.index_name, run.iteration,
-            cost, uncertain, event_generation=self.event_generation,
-        ))
+        self._events.append(
+            LoopIterating(
+                self.job_id,
+                span_range(span),
+                run.index_name,
+                run.iteration,
+                cost,
+                uncertain,
+                event_generation=self.event_generation,
+            )
+        )
 
     def _emit_loop_completed(self, span: str, run: LoopRunState, reason: str) -> None:
-        self._events.append(LoopCompleted(
-            self.job_id, span_range(span), run.index_name, run.iteration,
-            reason, event_generation=self.event_generation,
-        ))
+        self._events.append(
+            LoopCompleted(
+                self.job_id,
+                span_range(span),
+                run.index_name,
+                run.iteration,
+                reason,
+                event_generation=self.event_generation,
+            )
+        )
 
     def facts_ready(
         self,
@@ -375,11 +401,17 @@ class FlowEngine:
                     reset.append(target)
             if target not in self.state.goto_bypass:
                 self.state.goto_bypass.append(target)
-            self._events.append(GotoRequested(
-                self.job_id, source, target,
-                "same" if target == source else "forward" if target > source else "backward",
-                tuple(reset), tuple(skipped), event_generation=self.event_generation,
-            ))
+            self._events.append(
+                GotoRequested(
+                    self.job_id,
+                    source,
+                    target,
+                    "same" if target == source else "forward" if target > source else "backward",
+                    tuple(reset),
+                    tuple(skipped),
+                    event_generation=self.event_generation,
+                )
+            )
         elif action.skip is not None:
             for num in span_range(action.skip):
                 sheet = sheets[num]
@@ -393,9 +425,11 @@ class FlowEngine:
             sheet = sheets[source]
             sheet.status = SheetStatus.FERMATA
             sheet.fermata_reason = (
-                action.escalate if isinstance(action.escalate, str)
+                action.escalate
+                if isinstance(action.escalate, str)
                 else f"Trigger escalation from sheet {source}"
             )
+            self.state.escalation_pause_owners.add(source)
             self.state.pause_reason = sheet.fermata_reason
         # continue is an intentional no-op.
 

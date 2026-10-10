@@ -23,18 +23,29 @@ from marianne.daemon.baton.events import (
 
 def _job(size: int = 1) -> CheckpointState:
     return CheckpointState(
-        job_id="j", job_name="j", total_sheets=size,
+        job_id="j",
+        job_name="j",
+        total_sheets=size,
         sheets={n: SheetState(sheet_num=n, instrument_name="cli") for n in range(1, size + 1)},
     )
 
 
 def _result(
-    num: int, epoch: int = 0, *, cost: float = 0, success: bool = True,
+    num: int,
+    epoch: int = 0,
+    *,
+    cost: float = 0,
+    success: bool = True,
 ) -> SheetAttemptResult:
     return SheetAttemptResult(
-        job_id="j", sheet_num=num, instrument_name="cli", attempt=1,
-        dispatch_epoch=epoch, execution_success=success,
-        validation_pass_rate=100.0 if success else 0.0, cost_usd=cost,
+        job_id="j",
+        sheet_num=num,
+        instrument_name="cli",
+        attempt=1,
+        dispatch_epoch=epoch,
+        execution_success=success,
+        validation_pass_rate=100.0 if success else 0.0,
+        cost_usd=cost,
     )
 
 
@@ -42,7 +53,10 @@ async def test_loop_cost_cap_counts_across_resets_and_marks_uncertainty() -> Non
     checkpoint = _job()
     baton = BatonCore()
     baton.register_job(
-        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        "j",
+        checkpoint.sheets,
+        {},
+        flow_state=checkpoint.flow,
         loops={"1": LoopConfig(count=10, cost_limit_usd=1.0, index="pass_no")},
     )
     for epoch in range(3):
@@ -61,7 +75,10 @@ async def test_stale_epoch_cannot_refire_trigger_but_still_charges_money() -> No
     checkpoint = _job()
     baton = BatonCore()
     baton.register_job(
-        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        "j",
+        checkpoint.sheets,
+        {},
+        flow_state=checkpoint.flow,
         triggers={"1": SheetTriggerConfig(on_success=[TriggerAction(goto=1)])},
     )
     await baton.handle_event(_result(1, cost=0.2))
@@ -87,7 +104,11 @@ async def test_resume_reconciles_all_terminal_loop_once() -> None:
     next_checkpoint = CheckpointState.model_validate_json(restored.model_dump_json())
     baton2 = BatonCore()
     baton2.register_job(
-        "j", next_checkpoint.sheets, {}, loops=loops, flow_state=next_checkpoint.flow,
+        "j",
+        next_checkpoint.sheets,
+        {},
+        loops=loops,
+        flow_state=next_checkpoint.flow,
     )
     assert next_checkpoint.flow.loops["1"].iteration == 2
     assert baton2.drain_flow_events() == []
@@ -98,7 +119,11 @@ async def test_runtime_variable_in_until_is_checked_at_boundary() -> None:
     supplied = _job()
     baton = BatonCore()
     baton.register_job(
-        "j", supplied.sheets, {}, loops=loops, flow_state=supplied.flow,
+        "j",
+        supplied.sheets,
+        {},
+        loops=loops,
+        flow_state=supplied.flow,
         flow_variables={"target": 3},
     )
     await baton.handle_event(_result(1))
@@ -119,7 +144,10 @@ async def test_forward_goto_skips_intervening_sheets_and_bypasses_target_depende
     checkpoint.sheets[2].status = SheetStatus.COMPLETED
     baton = BatonCore()
     baton.register_job(
-        "j", checkpoint.sheets, {7: [5]}, flow_state=checkpoint.flow,
+        "j",
+        checkpoint.sheets,
+        {7: [5]},
+        flow_state=checkpoint.flow,
         triggers={"3": SheetTriggerConfig(on_success=[TriggerAction(goto=7)])},
     )
     await baton.handle_event(_result(3))
@@ -135,7 +163,10 @@ async def test_forward_goto_over_loop_completes_skipped_without_iteration() -> N
     checkpoint = _job(6)
     baton = BatonCore()
     baton.register_job(
-        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        "j",
+        checkpoint.sheets,
+        {},
+        flow_state=checkpoint.flow,
         loops={"3-4": LoopConfig(count=3, index="pass_no")},
         triggers={"1": SheetTriggerConfig(on_success=[TriggerAction(goto=6)])},
     )
@@ -149,7 +180,10 @@ async def test_matching_triggers_order_narrowest_span_first() -> None:
     checkpoint = _job(9)
     baton = BatonCore()
     baton.register_job(
-        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        "j",
+        checkpoint.sheets,
+        {},
+        flow_state=checkpoint.flow,
         triggers={
             "1-9": SheetTriggerConfig(on_success=[TriggerAction(run="echo wide")]),
             "2-5": SheetTriggerConfig(on_success=[TriggerAction(run="echo middle")]),
@@ -158,22 +192,36 @@ async def test_matching_triggers_order_narrowest_span_first() -> None:
     )
     await baton.handle_event(_result(3))
     assert [action.run for action in checkpoint.flow.chains[0].actions] == [
-        "echo narrow", "echo middle", "echo wide",
+        "echo narrow",
+        "echo middle",
+        "echo wide",
     ]
 
 
 async def test_guarded_failure_cannot_fire_goto_trigger() -> None:
     checkpoint = _job()
     checkpoint.sheets[1].expected_route = InstrumentRouteBinding(
-        arm="remote", instrument="cli", kind="cli", profile_origin="venue",
-        profile_file_sha256=None, effective_model="reviewed", effective_provider=None,
-        model_source="profile", provider_source=None, transport_scheme=None,
-        transport_host=None, transport_port=None, transport_endpoint=None,
+        arm="remote",
+        instrument="cli",
+        kind="cli",
+        profile_origin="venue",
+        profile_file_sha256=None,
+        effective_model="reviewed",
+        effective_provider=None,
+        model_source="profile",
+        provider_source=None,
+        transport_scheme=None,
+        transport_host=None,
+        transport_port=None,
+        transport_endpoint=None,
         resolved_at=datetime.now(UTC),
     )
     baton = BatonCore()
     baton.register_job(
-        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        "j",
+        checkpoint.sheets,
+        {},
+        flow_state=checkpoint.flow,
         triggers={"1": SheetTriggerConfig(on_fail=[TriggerAction(goto=1)])},
     )
     await baton.handle_event(_result(1, success=False))
@@ -182,41 +230,125 @@ async def test_guarded_failure_cannot_fire_goto_trigger() -> None:
     assert checkpoint.flow.chains == []
 
 
-def test_terminal_status_writes_have_one_funnel_owner() -> None:
-    source_path = inspect.getsourcefile(BatonCore)
-    assert source_path is not None
-    source = ast.parse(Path(source_path).read_text())
-    writes: list[str] = []
+def _terminal_write_violations(source_text: str) -> tuple[list[str], list[str]]:
+    """Use the same census for the live source and deliberately mutated copies."""
+    source = ast.parse(source_text)
+    violations: list[str] = []
     terminal_calls: list[str] = []
     terminal_names = {"COMPLETED", "FAILED", "SKIPPED", "CANCELLED"}
-    for method in (node for node in ast.walk(source) if isinstance(node, ast.FunctionDef)):
+    nonterminal_names = {
+        "PENDING",
+        "DISPATCHED",
+        "IN_PROGRESS",
+        "WAITING",
+        "RETRY_SCHEDULED",
+        "FERMATA",
+    }
+    for method in (
+        node
+        for node in ast.walk(source)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ):
         for node in ast.walk(method):
-            if isinstance(node, ast.Assign) and any(
-                isinstance(target, ast.Attribute) and target.attr == "status"
-                for target in node.targets
-            ) and (isinstance(node.value, ast.Attribute)
-                   and node.value.attr in terminal_names
-                   or isinstance(node.value, ast.Name) and node.value.id == "status"):
-                writes.append(method.name)
-            if isinstance(node, ast.Call) and any(
+            assignments: list[tuple[ast.expr, ast.expr]] = []
+            if isinstance(node, ast.Assign):
+                assignments = [(target, node.value) for target in node.targets]
+            elif isinstance(node, ast.AnnAssign) and node.value is not None:
+                assignments = [(node.target, node.value)]
+            for target, value in assignments:
+                if not isinstance(target, ast.Attribute) or target.attr != "status":
+                    continue
+                if method.name == "_set_sheet_terminal_status" and (
+                    isinstance(value, ast.Name) and value.id == "status"
+                ):
+                    continue
+                if not (
+                    isinstance(value, ast.Attribute)
+                    and isinstance(value.value, ast.Name)
+                    and value.value.id == "BatonSheetStatus"
+                    and value.attr in nonterminal_names
+                ):
+                    violations.append(f"{method.name}:{node.lineno}: {ast.unparse(value)}")
+            if not isinstance(node, ast.Call):
+                continue
+            if (
+                isinstance(node.func, ast.Name)
+                and node.func.id == "setattr"
+                and len(node.args) >= 2
+            ):
+                if isinstance(node.args[1], ast.Constant) and node.args[1].value == "status":
+                    violations.append(f"{method.name}:{node.lineno}: setattr(status)")
+            if any(
                 isinstance(arg, ast.Attribute)
                 and isinstance(arg.value, ast.Name)
                 and arg.value.id == "BatonSheetStatus"
                 and arg.attr in terminal_names
                 for arg in node.args
             ):
-                assert isinstance(node.func, ast.Attribute)
-                terminal_calls.append(node.func.attr)
-    assert terminal_calls
-    assert set(terminal_calls) == {"_set_sheet_terminal_status"}, terminal_calls
-    assert set(writes) == {"_set_sheet_terminal_status"}, writes
+                terminal_calls.append(
+                    node.func.attr
+                    if isinstance(node.func, ast.Attribute)
+                    else ast.unparse(node.func)
+                )
+    return violations, terminal_calls
+
+
+def test_terminal_status_writes_have_one_funnel_owner() -> None:
+    source_path = inspect.getsourcefile(BatonCore)
+    assert source_path is not None
+    violations, calls = _terminal_write_violations(Path(source_path).read_text())
+    assert calls and set(calls) == {"_set_sheet_terminal_status"}, calls
+    assert not violations, violations
+
+
+def test_terminal_census_catches_circuit_mutants() -> None:
+    source_path = inspect.getsourcefile(BatonCore)
+    assert source_path is not None
+    source = Path(source_path).read_text()
+    anchor_async = "        # Preserve the error from the last attempt"
+    anchor_sync = "    def _handle_escalation_timeout(self, event: EscalationTimeout) -> None:"
+    assert source.count(anchor_async) == source.count(anchor_sync) == 1
+    mutants = {
+        "M0": source,
+        "M1": source.replace(
+            anchor_async, "        sheet.status = BatonSheetStatus.FAILED\n" + anchor_async, 1
+        ),
+        "M2": source.replace(
+            anchor_sync,
+            anchor_sync + "\n        failed_state = BatonSheetStatus.FAILED\n"
+            "        sheet.status = failed_state\n",
+            1,
+        ),
+        "M3": source.replace(
+            anchor_sync,
+            "    def _mutant_fail(self, sheet):\n"
+            "        sheet.status = BatonSheetStatus.SKIPPED\n\n" + anchor_sync,
+            1,
+        ),
+        "M4": source.replace(
+            anchor_sync,
+            anchor_sync + "\n        setattr(sheet, 'status', BatonSheetStatus.CANCELLED)\n",
+            1,
+        ),
+        "M5": source.replace(
+            anchor_sync,
+            anchor_sync + "\n        sheet.status: BatonSheetStatus = BatonSheetStatus.COMPLETED\n",
+            1,
+        ),
+    }
+    for name, mutant in mutants.items():
+        violations, _ = _terminal_write_violations(mutant)
+        assert (not violations) if name == "M0" else bool(violations), (name, violations)
 
 
 async def test_non_attempt_skip_and_cancel_settle_loop_and_queued_cleanup() -> None:
     checkpoint = _job(2)
     baton = BatonCore()
     baton.register_job(
-        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        "j",
+        checkpoint.sheets,
+        {},
+        flow_state=checkpoint.flow,
         loops={"1-2": LoopConfig(count=2, index="pass_no")},
     )
     checkpoint.flow.queued_skips[2] = "queued in-flight skip"
@@ -233,7 +365,10 @@ async def test_job_wall_timeout_stops_an_infinite_goto_after_resets() -> None:
     checkpoint = _job()
     baton = BatonCore()
     baton.register_job(
-        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        "j",
+        checkpoint.sheets,
+        {},
+        flow_state=checkpoint.flow,
         triggers={"1": SheetTriggerConfig(on_success=[TriggerAction(goto=1)])},
     )
     for epoch in range(2):
@@ -252,7 +387,10 @@ async def test_queued_in_flight_skip_settles_when_sheet_returns(succeeds: bool) 
     checkpoint.sheets[2].max_retries = 0
     baton = BatonCore()
     baton.register_job(
-        "j", checkpoint.sheets, {3: [2]}, flow_state=checkpoint.flow,
+        "j",
+        checkpoint.sheets,
+        {3: [2]},
+        flow_state=checkpoint.flow,
         triggers={"1": SheetTriggerConfig(on_success=[TriggerAction(skip="2")])},
     )
     checkpoint.sheets[2].status = SheetStatus.DISPATCHED
@@ -271,19 +409,33 @@ async def test_concert_action_waits_for_submission_result_before_next_action() -
     checkpoint = _job()
     baton = BatonCore()
     baton.register_job(
-        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
-        triggers={"1": SheetTriggerConfig(on_success=[
-            TriggerAction(concert="child.yaml"), TriggerAction(goto=1),
-        ])},
+        "j",
+        checkpoint.sheets,
+        {},
+        flow_state=checkpoint.flow,
+        triggers={
+            "1": SheetTriggerConfig(
+                on_success=[
+                    TriggerAction(concert="child.yaml"),
+                    TriggerAction(goto=1),
+                ]
+            )
+        },
     )
     await baton.handle_event(_result(1))
     chain = checkpoint.flow.chains[0]
     assert chain.phase == "awaiting_concert"
     assert checkpoint.sheets[1].status == SheetStatus.COMPLETED
-    await baton.handle_event(FlowConcertSubmitted(
-        job_id="j", chain_id=chain.chain_id, cursor=chain.cursor,
-        accepted=True, child_job_id="child-1", message=None,
-    ))
+    await baton.handle_event(
+        FlowConcertSubmitted(
+            job_id="j",
+            chain_id=chain.chain_id,
+            cursor=chain.cursor,
+            accepted=True,
+            child_job_id="child-1",
+            message=None,
+        )
+    )
     assert checkpoint.flow.chains == []
     assert checkpoint.sheets[1].status == SheetStatus.PENDING
 
@@ -293,7 +445,10 @@ async def test_failed_member_cascades_range_failed_without_reopening_loop() -> N
     checkpoint.sheets[1].max_retries = 0
     baton = BatonCore()
     baton.register_job(
-        "j", checkpoint.sheets, {2: [1]}, flow_state=checkpoint.flow,
+        "j",
+        checkpoint.sheets,
+        {2: [1]},
+        flow_state=checkpoint.flow,
         loops={"1-2": LoopConfig(count=3, index="pass_no")},
     )
     await baton.handle_event(_result(1, success=False))
@@ -321,5 +476,6 @@ def test_expression_core_import_boundary_is_daemon_free() -> None:
                 continue
             assert not any(
                 module == prefix or module.startswith(prefix + ".")
-                for module in modules for prefix in forbidden
+                for module in modules
+                for prefix in forbidden
             ), (path, modules)
