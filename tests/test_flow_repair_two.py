@@ -280,3 +280,65 @@ async def test_unskipped_failure_keeps_error_and_blocks_dependent() -> None:
     assert checkpoint.sheets[1].error_code is not None
     assert checkpoint.sheets[2].status == SheetStatus.SKIPPED
     assert baton.get_ready_sheets("j") == []
+
+
+@pytest.mark.parametrize("path", ["exhaustion", "cost_limit", "auth", "resolve_fail", "timeout"])
+async def test_failed_writers_set_error_detail_before_the_terminal_funnel_431(path: str) -> None:
+    """GH #431: the queued-skip variants above now settle inside the #428 helper before any
+    `_fail_sheet` caller runs, so they no longer prove that each FAILED writer sets
+    error detail BEFORE the terminal funnel (the #420 ordering). This pins it directly:
+    no queued skip, and the flow engine's `on_terminal` is wrapped to record what the
+    sheet carried at the moment the funnel fired."""
+    checkpoint = job()
+    checkpoint.sheets[2].max_retries = 0 if path in {"exhaustion", "resolve_fail", "timeout"} else 3
+    baton = BatonCore()
+    baton.register_job(
+        "j",
+        checkpoint.sheets,
+        {3: [2]},
+        flow_state=checkpoint.flow,
+        escalation_enabled=path in {"resolve_fail", "timeout"},
+        # An inert trigger elsewhere gives the job a flow engine (the shape every
+        # flow-control score has) without queuing anything against sheet 2.
+        triggers={"3": SheetTriggerConfig(on_success=[TriggerAction(pause=True)])},
+    )
+    if path == "cost_limit":
+        baton.set_sheet_cost_limit("j", 2, 0.01)
+    flow = baton._jobs["j"].flow
+    assert flow is not None
+    seen_at_terminal: list[tuple[str | None, str | None, str]] = []
+    real_on_terminal = flow.on_terminal
+
+    def recording_on_terminal(sheets, sheet_num, outcome=None):  # type: ignore[no-untyped-def]
+        if sheet_num == 2:
+            s = sheets[2]
+            seen_at_terminal.append((s.error_code, s.error_message, s.status.value))
+        return real_on_terminal(sheets, sheet_num, outcome)
+
+    flow.on_terminal = recording_on_terminal  # type: ignore[method-assign]
+
+    checkpoint.sheets[2].status = SheetStatus.DISPATCHED
+    await baton.handle_event(
+        result(
+            2,
+            cost=5.0 if path == "cost_limit" else 0.0,
+            classification="AUTH_FAILURE" if path == "auth" else None,
+        )
+    )
+    if path == "resolve_fail":
+        await baton.handle_event(EscalationResolved(job_id="j", sheet_num=2, decision="fail"))
+    elif path == "timeout":
+        await baton.handle_event(EscalationTimeout(job_id="j", sheet_num=2))
+
+    assert checkpoint.sheets[2].status == SheetStatus.FAILED
+    assert checkpoint.sheets[2].error_code is not None
+    assert checkpoint.sheets[2].error_message
+    # The funnel saw the sheet FAILED with its detail already written.
+    failed_seen = [row for row in seen_at_terminal if row[2] == "failed"]
+    assert failed_seen, seen_at_terminal
+    code, message, _ = failed_seen[-1]
+    assert code == checkpoint.sheets[2].error_code
+    assert message == checkpoint.sheets[2].error_message
+    # And the dependent was cascaded, not released (sheet 1 never ran and stays ready).
+    assert checkpoint.sheets[3].status == SheetStatus.SKIPPED
+    assert 3 not in [s.sheet_num for s in baton.get_ready_sheets("j")]
