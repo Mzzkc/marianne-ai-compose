@@ -330,6 +330,18 @@ class DaemonResourceChecker:
         return self._monitor.is_accepting_work()
 
 
+def _config_snapshot_of(config: JobConfig) -> dict[str, Any] | None:
+    """The JSON-mode dump persisted as ``CheckpointState.config_snapshot`` (GH #417).
+
+    Several submit-path unit tests drive ``_run_via_baton`` with a spec-free
+    ``MagicMock`` config whose ``model_dump`` is not a dict; those tests assert
+    other fields and must not have to know about the snapshot. A non-dict
+    dump is persisted as ``None`` (the pre-#417 value), never as a mock.
+    """
+    dumped = config.model_dump(mode="json")
+    return dumped if isinstance(dumped, dict) else None
+
+
 def _merge_runtime_variables(
     config: JobConfig, runtime_variables: dict[str, str]
 ) -> JobConfig:
@@ -5838,6 +5850,12 @@ class JobManager:
             total_movements=max((s.movement for s in sheets), default=None),
             escalation_enabled=escalation_enabled,
             self_healing_enabled=request.self_healing,
+            # GH #417: the resolved config is persisted so `mzt resume
+            # --no-reload` (and the status/judgment readers) see the score
+            # as it was admitted, not whatever is on disk now. The writer was
+            # lost in the 2026-04 runner→core migration; the reader survived.
+            config_snapshot=_config_snapshot_of(config),
+            config_path=str(meta.config_path) if meta is not None else None,
             parallel_enabled=config.parallel.enabled,
             parallel_max_concurrent=(
                 config.parallel.max_concurrent if config.parallel.enabled else 1
@@ -6124,13 +6142,16 @@ class JobManager:
                 )
                 return DaemonJobStatus.FAILED
 
-        # #359: re-apply persisted runtime variables. The default resume
-        # path re-reads the YAML from disk (no config_snapshot), so the
-        # --var values would be lost without this — mirrors the
-        # escalation_enabled re-apply above (the #361 durability lesson).
+        # #359: re-apply persisted runtime variables. A disk reload would
+        # drop the --var values without this — mirrors the escalation_enabled
+        # re-apply above (the #361 durability lesson).
         config = _merge_runtime_variables(
             config, dict(checkpoint.runtime_variables)
         )
+        # GH #417: whatever config this resume runs with becomes the snapshot
+        # the next `--no-reload` resume (and status/judgment readers) see.
+        checkpoint.config_snapshot = _config_snapshot_of(config)
+        checkpoint.config_path = str(meta.config_path)
         if checkpoint.expected_route is not None:
             from marianne.instruments.loader import verify_single_route
 

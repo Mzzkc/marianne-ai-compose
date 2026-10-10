@@ -332,3 +332,75 @@ async def test_concert_submission_is_fire_and_forget_and_refuses_active_duplicat
         assert reason is not None and "already" in reason
     finally:
         await manager.shutdown(graceful=False)
+
+
+@pytest.mark.asyncio
+async def test_resume_no_reload_runs_the_admitted_score_not_the_edited_disk(
+    tmp_path: Path,
+) -> None:
+    """GH #417: ``mzt resume --no-reload`` promised the admitted config and was a
+    silent no-op because nothing wrote ``config_snapshot``. Sheet 2's prompt is a
+    bash command (the ``cli`` profile) that records which template ran: the YAML is
+    edited between pause and resume; with ``--no-reload`` the ORIGINAL runs, without
+    it the EDITED one does."""
+    for no_reload, expected in ((True, "original"), (False, "edited")):
+        root = tmp_path / ("no-reload" if no_reload else "reload")
+        root.mkdir()
+        workspace = root / "workspace"
+        witness = root / "witness.txt"
+        score = root / "score.yaml"
+
+        def body(word: str, workspace: Path = workspace, witness: Path = witness) -> str:
+            return (
+                "name: snapshot-417\n"
+                f"workspace: {workspace}\n"
+                "instrument: cli\n"
+                "sheet:\n  size: 1\n  total_items: 2\n"
+                "  triggers:\n    1:\n      on_success:\n        - pause: true\n"
+                f"prompt:\n  template: echo {word} >> {witness}\n"
+            )
+
+        score.write_text(body("original"), encoding="utf-8")
+        config = DaemonConfig(
+            pid_file=root / "conductor.pid", state_db_path=root / "jobs.db"
+        )
+        manager = JobManager(config)
+        await manager.start()
+        try:
+            response = await manager.submit_job(JobRequest(config_path=score))
+            assert response.status == "accepted"
+            job_id = response.job_id
+            deadline = time.monotonic() + 10
+            while (
+                manager._job_meta[job_id].status != DaemonJobStatus.PAUSED
+                and time.monotonic() < deadline
+            ):
+                await asyncio.sleep(0.02)
+            assert manager._job_meta[job_id].status == DaemonJobStatus.PAUSED
+            paused_json = await manager._registry.load_checkpoint(job_id)
+            assert paused_json is not None
+            paused = CheckpointState.model_validate_json(paused_json)
+            assert paused.config_snapshot is not None, "the admitted config was never persisted"
+            assert paused.config_snapshot["prompt"]["template"] == f"echo original >> {witness}"
+            assert witness.read_text().split() == ["original"]
+
+            score.write_text(body("edited"), encoding="utf-8")
+            resumed = await manager.resume_job(job_id, no_reload=no_reload)
+            assert resumed.status == "accepted"
+            deadline = time.monotonic() + 10
+            while (
+                manager._job_meta[job_id].status
+                not in {DaemonJobStatus.COMPLETED, DaemonJobStatus.FAILED}
+                and time.monotonic() < deadline
+            ):
+                await asyncio.sleep(0.02)
+            assert manager._job_meta[job_id].status == DaemonJobStatus.COMPLETED
+            final_json = await manager._registry.load_checkpoint(job_id)
+            assert final_json is not None
+            final = CheckpointState.model_validate_json(final_json)
+            assert witness.read_text().split() == ["original", expected], {
+                n: (s.status.value, s.attempt_count, s.error_message, s.stdout_tail)
+                for n, s in final.sheets.items()
+            }
+        finally:
+            await manager.shutdown(graceful=False)
