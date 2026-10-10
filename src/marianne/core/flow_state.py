@@ -49,4 +49,12 @@ class FlowState(BaseModel):
     escalation_pause_owners: set[int] = Field(
         default_factory=set, description="Sheets currently owning an escalation pause."
     )
+    trigger_pause_reason: str | None = Field(
+        default=None,
+        description=(
+            "Durable pause requested by a trigger `pause` action, owned separately from "
+            "escalation owners so resolving an escalation never releases it (GH #419 "
+            "follow-up). Cleared only by an explicit operator resume."
+        ),
+    )
     plan_digest: str | None = Field(default=None, description="Compiled flow plan digest.")

@@ -1299,6 +1299,14 @@ class BatonCore:
                 for num, sheet in sheets.items()
                 if sheet.status == BatonSheetStatus.FERMATA and sheet.fermata_reason
             )
+            if (
+                not flow.state.escalation_pause_owners
+                and flow.state.trigger_pause_reason is None
+            ):
+                # No FERMATA sheet owns it: the pre-field checkpoint's pause
+                # was a trigger `pause`. Re-own it so a later escalation
+                # release cannot clear it.
+                flow.state.trigger_pause_reason = flow.state.pause_reason
         self._jobs[job_id] = _JobRecord(
             job_id=job_id,
             sheets=sheets,
@@ -1401,7 +1409,9 @@ class BatonCore:
             owner = max(owners)
             job.flow.state.pause_reason = job.sheets[owner].fermata_reason
         else:
-            job.flow.state.pause_reason = None
+            # The last escalation is released; a trigger `pause` in the same
+            # chain still holds the job until an explicit operator resume.
+            job.flow.state.pause_reason = job.flow.state.trigger_pause_reason
 
     def _settle_flow(self, job_id: str) -> None:
         job = self._jobs.get(job_id)

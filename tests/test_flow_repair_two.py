@@ -99,6 +99,67 @@ async def test_escalation_release_preserves_operator_pause() -> None:
     assert baton.is_job_paused("j")
 
 
+@pytest.mark.parametrize("order", ["escalate_then_pause", "pause_then_escalate"])
+async def test_trigger_pause_survives_escalation_resolution(order: str) -> None:
+    """Forge repair-2 Inspect P1: `on_fail: [escalate, pause]` must still hold the
+    job after `mzt resolve … retry`; only an explicit operator resume releases it."""
+    actions = [TriggerAction(escalate="check"), TriggerAction(pause=True)]
+    if order == "pause_then_escalate":
+        actions.reverse()
+    checkpoint = job(1)
+    baton = BatonCore()
+    baton.register_job(
+        "j",
+        checkpoint.sheets,
+        {},
+        flow_state=checkpoint.flow,
+        triggers={"1": SheetTriggerConfig(on_fail=actions)},
+    )
+    await baton.handle_event(result(1))
+    assert checkpoint.flow.escalation_pause_owners == {1}
+    assert checkpoint.flow.trigger_pause_reason == "trigger on sheet 1"
+    assert baton.is_job_paused("j")
+
+    await baton.handle_event(EscalationResolved(job_id="j", sheet_num=1, decision="retry"))
+    assert checkpoint.flow.escalation_pause_owners == set()
+    assert checkpoint.sheets[1].status is SheetStatus.PENDING
+    # The trigger pause is still owned and still displayed.
+    assert checkpoint.flow.trigger_pause_reason == "trigger on sheet 1"
+    assert checkpoint.flow.pause_reason == "trigger on sheet 1"
+    assert baton.is_job_paused("j")
+    assert not baton.is_job_complete("j")
+
+    # Only the operator's explicit resume (what `mzt resume` does to the
+    # checkpoint before re-registering) releases it.
+    checkpoint.flow.pause_reason = None
+    checkpoint.flow.trigger_pause_reason = None
+    fresh = BatonCore()
+    fresh.register_job(
+        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        triggers={"1": SheetTriggerConfig(on_fail=actions)},
+    )
+    assert not fresh.is_job_paused("j")
+
+
+async def test_legacy_checkpoint_trigger_pause_is_reowned_not_lost() -> None:
+    """A pre-field checkpoint whose pause_reason came from a trigger `pause`
+    (no FERMATA sheet) must be re-owned as a trigger pause on load."""
+    checkpoint = job(1)
+    checkpoint.flow.pause_reason = "trigger on sheet 1"
+    serialized = checkpoint.model_dump(mode="json")
+    serialized["flow"].pop("escalation_pause_owners", None)
+    serialized["flow"].pop("trigger_pause_reason", None)
+    restored = CheckpointState.model_validate_json(json.dumps(serialized))
+    baton = BatonCore()
+    baton.register_job(
+        "j", restored.sheets, {}, flow_state=restored.flow,
+        triggers={"1": SheetTriggerConfig(on_fail=[TriggerAction(pause=True)])},
+    )
+    assert restored.flow.trigger_pause_reason == "trigger on sheet 1"
+    assert restored.flow.escalation_pause_owners == set()
+    assert baton.is_job_paused("j")
+
+
 async def test_legacy_escalation_checkpoint_recovers_owners() -> None:
     checkpoint = job(2)
     checkpoint.sheets[1].status = SheetStatus.FERMATA

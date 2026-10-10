@@ -420,7 +420,8 @@ class FlowEngine:
                 elif sheet.status not in {SheetStatus.COMPLETED, SheetStatus.CANCELLED}:
                     self._skip(sheet, f"trigger skip from {source}")
         elif action.pause:
-            self.state.pause_reason = f"trigger on sheet {source}"
+            self.state.trigger_pause_reason = f"trigger on sheet {source}"
+            self.state.pause_reason = self.state.trigger_pause_reason
         elif action.escalate:
             sheet = sheets[source]
             sheet.status = SheetStatus.FERMATA

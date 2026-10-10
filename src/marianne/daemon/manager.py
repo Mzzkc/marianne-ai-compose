@@ -6065,6 +6065,7 @@ class JobManager:
             return DaemonJobStatus.FAILED
         if operator_resume:
             checkpoint.flow.pause_reason = None
+            checkpoint.flow.trigger_pause_reason = None
 
         # Registry registration is the primary deadline authority. A valid
         # checkpoint deadline remains authoritative for databases created by
