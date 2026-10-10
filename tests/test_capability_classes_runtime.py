@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+from contextlib import suppress
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -26,6 +27,7 @@ from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.musician import _classify_error
 from marianne.daemon.baton.prompt import RenderedPrompt, write_context_delivery_receipt
+from marianne.daemon.baton.state import SheetExecutionState
 from marianne.execution.instruments.cli_backend import PluginCliBackend
 from marianne.instruments.classes import load_class_map, resolve_job_classes
 from marianne.instruments.registry import InstrumentRegistry
@@ -163,6 +165,71 @@ async def test_class_missing_binary_uses_one_real_backend_attempt(tmp_path: Path
     state = core._jobs["j"].sheets[1]
     assert state.instrument_name == "cli"
     assert state.normal_attempts == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("removed_from_registry", [False, True])
+async def test_class_fallback_completes_through_real_adapter(
+    tmp_path: Path, removed_from_registry: bool,
+) -> None:
+    from marianne.instruments.loader import load_all_profiles
+
+    missing = InstrumentProfile(
+        name="missing-route",
+        display_name="Missing route",
+        description="Class fallback probe",
+        kind="cli",
+        cli=CliProfile(
+            command=CliCommand(executable="marianne-class-missing-binary-8384"),
+            output=CliOutputConfig(format="text"),
+            errors=CliErrorConfig(),
+        ),
+    )
+    registry = InstrumentRegistry()
+    if not removed_from_registry:
+        registry.register(missing)
+    registry.register(load_all_profiles()["cli"])
+    user_map = tmp_path / "classes.yaml"
+    user_map.write_text("version: 1\nclasses:\n  strong: [missing-route, cli]\n")
+    config = _job().model_copy(update={
+        "workspace": tmp_path,
+        "prompt": _job().prompt.model_copy(update={"template": "printf class-fallback-ok"}),
+    })
+    snapshot = resolve_job_classes(
+        config,
+        {"missing-route", "cli"},
+        load_class_map(user_path=user_map, venue_path=tmp_path / "absent"),
+    )
+    assert snapshot is not None
+    adapter = BatonAdapter()
+    adapter.set_backend_pool(BackendPool(registry))
+    adapter.register_job(
+        "class-adapter", build_sheets(config, classes=snapshot), {},
+        prompt_config=config.prompt, max_retries=0,
+    )
+    dispatched: list[str] = []
+    dispatch = adapter._dispatch_callback
+
+    async def capture_dispatch(
+        job_id: str, sheet_num: int, state: SheetExecutionState,
+    ) -> bool:
+        dispatched.append(state.instrument_name)
+        return await dispatch(job_id, sheet_num, state)
+
+    adapter._dispatch_callback = capture_dispatch
+    run_task = asyncio.create_task(adapter.run())
+    try:
+        assert await asyncio.wait_for(adapter.wait_for_completion("class-adapter"), 15)
+        state = adapter.baton.get_sheet_state("class-adapter", 1)
+        assert state is not None
+        assert state.instrument_name == "cli"
+        assert state.normal_attempts == 0
+        assert dispatched == ["missing-route", "cli"]
+    finally:
+        await adapter.shutdown()
+        run_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await run_task
 
 
 @pytest.mark.asyncio
