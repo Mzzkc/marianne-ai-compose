@@ -1539,7 +1539,12 @@ runtime variable fails the loop condition at its boundary. The legacy
 `validation(...)` and `output(...)` expression forms are reserved.
 
 `on_success` runs after a successful attempt. `on_fail` replaces retry,
-fallback, completion mode, and healing for that sheet. Each action object has
+fallback, completion mode, and healing for that sheet, with one exception: an
+instrument that cannot be reached at all (binary absent, endpoint refusing
+connections) still advances the sheet's fallback chain first, and `on_fail`
+fires only once the chain is exhausted. A `skip` or forward `goto` that targets
+a sheet already in flight takes effect as soon as that attempt ends without
+full success; the skipped sheet is never dispatched again. Each action object has
 exactly one key: `goto`, `skip`, `pause`, `escalate`, `run`, `concert`, or
 `continue`. Several actions form an ordered list. A backward `goto` reopens
 sheets from its target through the current sheet; a forward `goto` deliberately
