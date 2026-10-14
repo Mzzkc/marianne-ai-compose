@@ -8,13 +8,13 @@ These scores teach you how to orchestrate AI agents to produce outcomes no singl
 |-------|-------------|--------|--------------|------|------|
 | [**hello-setup**](hello-setup.yaml) | **Start here.** Writes a class map if absent, checks `workhorse`, prepares `hello`, then chains to it. | 1 | Discovery, Score Templating, Concert (chaining) | ~5-15m | route-dependent |
 | [hello](hello.yaml) | Parallel agents write a story and soundtrack; a deterministic tool builds the site. Uses the configured `workhorse` chain. | 7 | Fan-out + Synthesis, Tool-Chain, Stigmergic Workspace | ~5-15m | route-dependent |
-| [hello-local](hello-local.yaml) | The pure-local twin of `hello`, using the `local` class; provision the selected local model first | 7 | Fan-out + Synthesis, Tool-Chain | hardware-dependent | $0 API cost |
-| [simple-sheet](simple-sheet.yaml) | Demonstrates basic parallel execution with minimal configuration — the fastest path from zero to running job | 2 | none | ~2m | route-dependent |
-| [cross-sheet-test](cross-sheet-test.yaml) | Builds a three-stage research pipeline where each stage reads and transforms previous outputs | 3 | Succession Pipeline | ~3m | route-dependent |
+| [hello-local](hello-local.yaml) | The pure-local twin of `hello` — same orchestration, run entirely on a local Ollama model (no cloud, no account) | 7 | Fan-out + Synthesis, Tool-Chain | ~5-15m | free |
+| [simple-sheet](simple-sheet.yaml) | Demonstrates basic parallel execution with minimal configuration — the fastest path from zero to running job | 2 | none | ~2m | ~$0.10 |
+| [cross-sheet-test](cross-sheet-test.yaml) | Builds a three-stage research pipeline where each stage reads and transforms previous outputs | 3 | Succession Pipeline | ~3m | ~$0.15 |
 | [api-backend](api-backend.yaml) | Generates structured technical briefings through local Ollama's OpenAI-compatible endpoint | 3 | Succession Pipeline | hardware-dependent | $0 API cost |
-| [prelude-cadenza-example](prelude-cadenza-example.yaml) | Produces documentation through research → draft → review with injected context files at each stage | 3 | Succession Pipeline | ~4m | route-dependent |
-| [observability-demo](observability-demo.yaml) | Runs a project health check while teaching you how to monitor jobs with logs, diagnostics, and state inspection | 3 | none | ~4m | route-dependent |
-| [worktree-isolation](worktree-isolation.yaml) | Performs parallel code review where three expert perspectives work simultaneously in isolated git worktrees | 5 | Fan-out + Synthesis | ~5m | route-dependent |
+| [prelude-cadenza-example](prelude-cadenza-example.yaml) | Produces documentation through research → draft → review with injected context files at each stage | 3 | Succession Pipeline | ~4m | ~$0.25 |
+| [observability-demo](observability-demo.yaml) | Runs a project health check while teaching you how to monitor jobs with logs, diagnostics, and state inspection | 3 | none | ~4m | ~$0.20 |
+| [worktree-isolation](worktree-isolation.yaml) | Performs parallel code review where three expert perspectives work simultaneously in isolated git worktrees | 5 | Fan-out + Synthesis | ~5m | ~$0.25 |
 
 ### hello.yaml — Your First Score
 

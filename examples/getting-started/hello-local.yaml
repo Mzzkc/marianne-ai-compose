@@ -1,11 +1,10 @@
 # hello-local.yaml — Your First Marianne Score (PURE-LOCAL, fully offline)
-# `local` keeps every AI seat on a local route; configure classes.yaml to choose yours.
 #
 # The local-only twin of hello.yaml. Identical orchestration — parallel agents
 # write a story, one composes a soundtrack, one writes the synthesis finale, and a
 # deterministic tool builds the website — but it runs ENTIRELY on a local Ollama
 # model (no OpenRouter, no cloud, no account). Use this when you want zero network
-# calls to external providers; use hello.yaml for a configured workhorse chain.
+# calls; use hello.yaml to try fast free OpenRouter models first, then fall back.
 #
 #   Movement 1 · The World     one agent writes the shared setting (prose)
 #         │  ▼ fan-out (parallel)
@@ -23,9 +22,8 @@
 #
 # Prerequisites (one-time):
 #   pip install -e ".[daemon]"           # Marianne + conductor
-#   mzt instruments classes show         # confirm local resolves to your local profile
-#   mzt instruments check ollama         # confirm the packaged endpoint is reachable
-#   ollama pull llama3.1:8b              # packaged Ollama profile's current default model
+#   # a local model served by Ollama, reachable by the opencode-gemma instrument:
+#   ollama pull gemma4:26b               # (or adjust the instrument's model)
 #
 # Usage:
 #   mzt start                                          # start the conductor
@@ -43,10 +41,11 @@ description: "Pure-local first score — the same orchestration as hello.yaml, r
 
 workspace: ../../workspaces/hello-local
 
-# Fully local by class policy. The packaged chain uses Ollama's HTTP profile;
-# a machine can select another local profile in classes.yaml without changing
-# this score. Provision the selected profile's model before running.
-instrument: local
+# Fully local — opencode drives a local Ollama model via its OpenAI-compatible
+# endpoint. No OpenRouter, no fallback chain, no network. Swap the model in
+# the opencode-gemma profile (~/.marianne/instruments/opencode-gemma.yaml) for
+# any Ollama tag you have pulled.
+instrument: opencode-gemma
 
 movements:
   1:
