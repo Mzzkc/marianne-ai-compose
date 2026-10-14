@@ -1502,16 +1502,14 @@ refuses the tick with `source_drift_refused`; it does not silently update the pi
 Conscious re-registration through `mzt run` amends the pin. The digest also
 travels through child admission so a source change between tick checking and
 submission is refused.
-`max_wall_seconds` is an absolute deadline from first admission, so pause,
-resume, pending admission, and restart do not reset it. It is also immutable on
-resume: `mzt resume -c` with a score whose `max_wall_seconds` differs from the
-registered value is refused before any status transition, and a plain resume of
-a job whose deadline has already passed times out again at once. A job that hit
-its wall with its work intact is recovered by re-running the remaining stages as
-a new score (or, for persistent agents, a lifecycle-care engagement), not by
-editing the limit. Size the wall for the heaviest stage plus the tail. Status
-diagnostics include the schedule's last due/run/outcome, next due, and deadline
-evidence.
+`max_wall_seconds` bounds a scheduled tick: it is an absolute deadline from the
+tick's admission so one run cannot overlap the next, and pause, resume, pending
+admission, and restart do not reset it. It is immutable on resume (`mzt resume
+-c` with a different value is refused). It is not a budget for one-shot jobs:
+bound those per sheet with `instrument_config.timeout_seconds` and
+`stale_detection`, which measure the attempt rather than the calendar and so
+survive pauses and conductor restarts (GH #435). Status diagnostics include the
+schedule's last due/run/outcome, next due, and deadline evidence.
 
 ### Preflight Sub-Config
 
