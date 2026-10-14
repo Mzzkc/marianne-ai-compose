@@ -72,6 +72,15 @@ class DescendantIdentity:
     start_ticks: int | None = None
 
 
+# A wall-clock step (NTP slew, VM time sync) moves psutil's create_time for
+# every live process at once; a recycled PID's create_time differs from the
+# dead one's by at least the dead process's lifetime plus the reuse gap,
+# which for the parents we track is far beyond any step. Circuit measured
+# +3.00 s steps on WSL (GH #446); a minute of tolerance keeps the float
+# check meaningful without going blind after the first step.
+_CLOCK_STEP_TOLERANCE_SECONDS = 60.0
+
+
 def _proc_start_ticks(pid: int) -> int | None:
     """Read the kernel's stable process start tick, independent of wall time."""
     try:
@@ -99,13 +108,24 @@ def snapshot_descendant_trees(
     parent_pid: int, parent_create_time: float,
     *, parent_start_ticks: int | None = None,
 ) -> tuple[DescendantIdentity, ...]:
-    """Capture actual descendants while the parent still owns their ancestry."""
+    """Capture actual descendants while the parent still owns their ancestry.
+
+    Parent identity: a caller that recorded ``parent_start_ticks`` at spawn is
+    checked against the kernel start tick. A caller that only has the float
+    is checked against the float, which on Linux moves with every wall-clock
+    step (psutil re-reads ``btime`` per call; GH #446) — so the float check
+    is tolerant of the identity-preserving case: when the kernel tick is
+    readable and the process is still the same one psutil knew at spawn
+    (same PID, create_time within the step tolerance), the capture proceeds.
+    A recycled PID has a different tick AND a different float by far more
+    than any clock step, so it is still refused.
+    """
     try:
         parent = psutil.Process(parent_pid)
-        if (parent_start_ticks is not None
-                and _proc_start_ticks(parent_pid) != parent_start_ticks):
-            return ()
-        if parent_start_ticks is None and parent.create_time() != parent_create_time:
+        if parent_start_ticks is not None:
+            if _proc_start_ticks(parent_pid) != parent_start_ticks:
+                return ()
+        elif abs(parent.create_time() - parent_create_time) > _CLOCK_STEP_TOLERANCE_SECONDS:
             return ()
         descendants = parent.children(recursive=True)
     except (psutil.NoSuchProcess, psutil.AccessDenied):

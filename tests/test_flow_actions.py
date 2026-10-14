@@ -447,3 +447,34 @@ async def test_workspace_package_named_marianne_cannot_shadow_the_supervisor(
     )
     assert outcome.log_path is not None
     assert "shadowed by workspace" not in Path(outcome.log_path).read_text()
+
+
+@pytest.mark.parametrize("pythonpath", [".", ":/nonexistent", "/nonexistent:"])
+async def test_pythonpath_cannot_reopen_the_supervisor_shadow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pythonpath: str,
+) -> None:
+    """Circuit V3 (GH #445): ``-P -m`` was still shadowed when PYTHONPATH was
+    "." or carried an empty entry (the shape ``export PYTHONPATH=$PYTHONPATH:/x``
+    produces when the variable was unset). The supervisor is now launched with
+    ``-I`` by its absolute file path, which ignores PYTHONPATH entirely."""
+    shadow = tmp_path / "marianne"
+    shadow.mkdir()
+    (shadow / "__init__.py").write_text("raise RuntimeError('shadowed by workspace')\n")
+    (shadow / "utils").mkdir()
+    (shadow / "utils" / "__init__.py").write_text("")
+    (shadow / "utils" / "run_supervisor.py").write_text(
+        "raise RuntimeError('workspace run_supervisor must never run')\n"
+    )
+    monkeypatch.setenv("PYTHONPATH", pythonpath)
+    outcome = await execute_run_action(
+        RunTrigger(command="echo $$ > shell.pid; echo written > out.txt", timeout_seconds=5),
+        workspace=tmp_path, job_id="shadow-pp", sheet_num=1, fired_epoch=0,
+        chain_id=1, cursor=0, attempt=1, variables={},
+    )
+    assert outcome.error is None, outcome.error
+    assert outcome.exit_code == 0
+    assert (tmp_path / "out.txt").read_text() == "written\n"
+    shell_pid = int((tmp_path / "shell.pid").read_text().strip())
+    assert not psutil.pid_exists(shell_pid) or (
+        psutil.Process(shell_pid).status() == psutil.STATUS_ZOMBIE
+    )
