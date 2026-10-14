@@ -216,3 +216,40 @@ async def test_run_log_identity_is_unique_across_repeated_and_fresh_jobs(tmp_pat
     assert len(set(paths)) == 3
     assert all(path.read_text().strip() == "done" for path in paths)
     assert all(path.stat().st_mode & 0o777 == 0o600 for path in paths)
+
+
+async def test_run_log_cap_ends_the_command_while_it_runs(tmp_path: Path) -> None:
+    """GH #415: a child that writes without bound is ended when the log passes the
+    cap, within the poll loop, instead of running to its full timeout and only
+    being truncated afterwards. Peak disk use is bounded by the cap plus one poll."""
+    from marianne.daemon.baton import flow_actions
+
+    cap = 64 * 1024
+    original = flow_actions.FLOW_RUN_LOG_CAP_BYTES
+    flow_actions.FLOW_RUN_LOG_CAP_BYTES = cap
+    try:
+        outcome = await execute_run_action(
+            RunTrigger(command="yes 0123456789abcdef; sleep 30", timeout_seconds=20),
+            workspace=tmp_path, job_id="j", sheet_num=1, fired_epoch=0,
+            chain_id=7, cursor=0, attempt=1, variables={},
+        )
+    finally:
+        flow_actions.FLOW_RUN_LOG_CAP_BYTES = original
+    # Ended by the cap: the 20 s command timeout did not fire, and the log
+    # stopped at the cap instead of growing for the command's lifetime.
+    assert not outcome.timed_out
+    assert outcome.error and "exceeded" in outcome.error
+    assert outcome.log_path is not None
+    assert Path(outcome.log_path).stat().st_size <= cap
+    assert not any(
+        p.info["name"] == "yes" and os.getpgid(p.pid) != os.getpgid(0)
+        for p in psutil.process_iter(["name"])
+        if _alive(p)
+    )
+
+
+def _alive(process: psutil.Process) -> bool:
+    try:
+        return process.status() != psutil.STATUS_ZOMBIE
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return False

@@ -140,10 +140,19 @@ async def execute_run_action(
             proc, timeout_seconds=spec.timeout_seconds, pgid=proc.pid,
             context="flow_run", file_output_path=log_path,
             parent_create_time=parent_created_at,
+            # GH #415: the cap is enforced WHILE the child runs, not only
+            # truncated after it exits, so peak disk use is bounded.
+            file_output_cap_bytes=FLOW_RUN_LOG_CAP_BYTES,
         )
         if log_path.stat().st_size > FLOW_RUN_LOG_CAP_BYTES:
             with log_path.open("r+b") as limited_log:
                 limited_log.truncate(FLOW_RUN_LOG_CAP_BYTES)
+        if result.output_capped:
+            return RunOutcome(
+                result.returncode, False, str(log_path),
+                f"run log exceeded {FLOW_RUN_LOG_CAP_BYTES} bytes while the command ran; "
+                "the command was ended and the log truncated to the cap",
+            )
         return RunOutcome(result.returncode, result.timed_out, str(log_path))
     except (OSError, ValueError) as exc:
         return RunOutcome(None, False, None, f"{type(exc).__name__}: {exc}")

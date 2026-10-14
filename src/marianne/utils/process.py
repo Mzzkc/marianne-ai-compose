@@ -270,6 +270,9 @@ class BoundedCommandResult:
     """The PARENT did not exit within ``timeout_seconds``."""
     drain_grace_fired: bool
     """The parent exited but an inherited pipe stayed open past the grace."""
+    output_capped: bool = False
+    """File-output mode only: the log passed its byte cap while the command
+    ran, and the group was ended for it (GH #415)."""
 
 
 async def _drain_pipe(stream: asyncio.StreamReader | None, chunks: list[bytes]) -> None:
@@ -294,6 +297,7 @@ async def run_bounded_command(
     kill_grace_seconds: float = 2.0,
     file_output_path: Path | None = None,
     parent_create_time: float | None = None,
+    file_output_cap_bytes: int | None = None,
 ) -> BoundedCommandResult:
     """Wait for a spawned ``bash -c`` command the #406-safe way (GH #410).
 
@@ -327,6 +331,7 @@ async def run_bounded_command(
             context=context, file_output_path=file_output_path,
             parent_create_time=parent_create_time,
             kill_grace_seconds=kill_grace_seconds,
+            file_output_cap_bytes=file_output_cap_bytes,
         )
     out: list[bytes] = []
     err: list[bytes] = []
@@ -454,10 +459,18 @@ async def _run_file_output_command(
     file_output_path: Path,
     parent_create_time: float | None,
     kill_grace_seconds: float,
+    file_output_cap_bytes: int | None = None,
 ) -> BoundedCommandResult:
-    """File-output mode: wait on the parent, then settle its captured process tree."""
+    """File-output mode: wait on the parent, then settle its captured process tree.
+
+    ``file_output_cap_bytes`` (GH #415): the log is watched in the same poll
+    loop that waits on the parent; the moment it passes the cap the group is
+    ended exactly like a timeout, so peak disk use is bounded while the child
+    runs, not only truncated after it exits.
+    """
     captured: dict[tuple[int, float], DescendantIdentity] = {}
     born = parent_create_time if parent_create_time is not None else 0.0
+    output_capped = False
 
     def capture() -> None:
         if parent_create_time is not None:
@@ -468,10 +481,23 @@ async def _run_file_output_command(
         for child in snapshot_file_holders(str(file_output_path), born):
             captured[(child.pid, child.create_time)] = child
 
+    def over_cap() -> bool:
+        if file_output_cap_bytes is None:
+            return False
+        try:
+            return file_output_path.stat().st_size > file_output_cap_bytes
+        except OSError:
+            return False
+
+    class _OutputCapExceeded(Exception):
+        pass
+
     async def parent_exit() -> None:
         started = time.monotonic()
         while proc.returncode is None:
             capture()
+            if over_cap():
+                raise _OutputCapExceeded
             await asyncio.sleep(0.001 if time.monotonic() - started < 0.2 else 0.05)
         capture()
 
@@ -481,6 +507,8 @@ async def _run_file_output_command(
             await asyncio.wait_for(parent_exit(), timeout=timeout_seconds)
         except TimeoutError:
             timed_out = True
+        except _OutputCapExceeded:
+            output_capped = True
     finally:
         capture()
         # A successful shell can leave both same-group children with closed
@@ -523,4 +551,6 @@ async def _run_file_output_command(
             except TimeoutError:
                 proc.kill()
                 await proc.wait()
-    return BoundedCommandResult(proc.returncode, b"", b"", timed_out, False)
+    return BoundedCommandResult(
+        proc.returncode, b"", b"", timed_out, False, output_capped=output_capped
+    )

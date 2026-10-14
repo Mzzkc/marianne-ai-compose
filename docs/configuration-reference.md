@@ -1587,8 +1587,10 @@ exactly one key: `goto`, `skip`, `pause`, `escalate`, `run`, `concert`, or
 `continue`. Several actions form an ordered list. A backward `goto` reopens
 sheets from its target through the current sheet; a forward `goto` deliberately
 skips unrun sheets in between. `pause` persists a hold until `mzt resume`.
-`run` executes a bounded shell command in the job workspace; `concert` submits
-a child score and does not wait for that child. Commands may repeat after a
+`run` executes a bounded shell command in the job workspace: its output goes to
+a per-attempt log under `.marianne-flow/`, capped at 1 MiB, and a command that
+passes the cap while running is ended like a timeout, with the outcome's error
+naming the cap. `concert` submits a child score and does not wait for that child. Commands may repeat after a
 conductor crash, so make their effects idempotent using `MARIANNE_FLOW_ATTEMPT`.
 Loop and trigger state is saved in the same checkpoint as sheet state.
 
