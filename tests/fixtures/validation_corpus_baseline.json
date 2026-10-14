@@ -722,36 +722,47 @@
       "parse": "ok"
     },
     "venue:examples/advanced/parallel-research.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/creative/dialectic.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/creative/dinner-party.yaml": {
       "issues": {
-        "V207": 1
+        "V207": 1,
+        "V325": 1
       },
       "parse": "ok"
     },
     "venue:examples/creative/palimpsest.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/creative/skill-builder.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/creative/thinking-lab.yaml": {
       "issues": {
-        "V207": 1
+        "V207": 1,
+        "V325": 1
       },
       "parse": "ok"
     },
     "venue:examples/creative/worldbuilder.yaml": {
       "issues": {
-        "V205": 1
+        "V205": 1,
+        "V325": 1
       },
       "parse": "ok"
     },
@@ -766,7 +777,9 @@
       "parse": "ok"
     },
     "venue:examples/engineering/issue-triage.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/engineering/lovable-generator.yaml": {
@@ -796,7 +809,8 @@
     },
     "venue:examples/engineering/score-composer.yaml": {
       "issues": {
-        "V110": 1
+        "V110": 1,
+        "V325": 1
       },
       "parse": "ok"
     },
@@ -836,7 +850,9 @@
       "parse": "ok"
     },
     "venue:examples/getting-started/cross-sheet-test.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/getting-started/hello-local.yaml": {
@@ -854,21 +870,28 @@
       "parse": "ok"
     },
     "venue:examples/getting-started/observability-demo.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/getting-started/prelude-cadenza-example.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/getting-started/simple-sheet.yaml": {
       "issues": {
-        "V101": 1
+        "V101": 1,
+        "V325": 1
       },
       "parse": "ok"
     },
     "venue:examples/getting-started/worktree-isolation.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/patterns/convergence-loop.yaml": {
@@ -884,7 +907,9 @@
       "parse": "ok"
     },
     "venue:examples/patterns/design-review.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/patterns/echelon-repair.yaml": {
@@ -912,31 +937,45 @@
       "parse": "ok"
     },
     "venue:examples/product/candidate-screening.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/product/contract-generator.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/product/invoice-analysis.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/product/marketing-content.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/research/context-engineering-lab.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/research/nonfiction-book.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/research/parallel-research-fanout.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/research/research-agent.yaml": {
@@ -944,15 +983,21 @@
       "parse": "ok"
     },
     "venue:examples/research/strategic-plan.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/research/systematic-literature-review.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/research/training-data-curation.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/rosetta/cathedral-construction.yaml": {
