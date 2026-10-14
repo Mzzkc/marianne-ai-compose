@@ -28,7 +28,20 @@ Marianne holds a hard quality bar — CI enforces all of it on every push:
 pytest tests/                  # full suite must pass (no -k subsets when claiming green)
 mypy --strict src/             # strict typing, zero errors
 ruff check src/                # lint clean
+python tests/scripts/check_language.py --baseline tests/fixtures/language_baseline.json
+                               # the score language agrees with itself (runs in the suite
+                               # as tests/test_score_language.py; see below)
 ```
+
+**The score language is gated like code.** Score YAML keys, validator messages,
+`docs/` and the skills in `plugins/` are four layers of one language (CLAUDE.md,
+GH #436). `tests/scripts/check_language.py` fails on a schema key with no description,
+a key no skill or doc teaches, a skill example that uses a key the schema does not
+have, a validator hint that names a key that does nothing, or a V-code the CLI
+reference does not list. `tests/fixtures/language_baseline.json` holds the gaps
+known when the gate landed; it may only shrink. Close a gap by changing the
+language (schema description, doc line and skill line in the same commit), never
+by adding to the fixture.
 
 A few non-negotiables (see `.marianne/spec/` for the full set):
 

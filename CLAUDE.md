@@ -67,7 +67,7 @@ lives outside this repository on the developer's machine.
 
 ## Constraints — The Short Version
 
-**MUST:** All tests pass. Types pass (`mypy src/`). Lint passes (`ruff check src/`). State saves are atomic. Score YAML is backward compatible. Error paths produce diagnostics.
+**MUST:** All tests pass. Types pass (`mypy src/`). Lint passes (`ruff check src/`). The score language agrees with itself (`tests/test_score_language.py`; its baseline fixture only shrinks). State saves are atomic. Score YAML is backward compatible. Error paths produce diagnostics.
 
 **MUST NOT:** Wrap `mzt start` in external `timeout`. **NEVER stop, restart, or kill the conductor (`mzt stop`) while jobs are running — recovery from interrupted jobs is unreliable and work is lost. Check `mzt status` first.** Use `--fresh` on interrupted jobs. Add dependencies without justification. Log secrets or full prompt text. Use fixed sleeps in tests. Silence errors without explanation. Use Pydantic v1 syntax.
 
