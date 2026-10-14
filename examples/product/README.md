@@ -72,7 +72,7 @@ You'll see three candidates evaluated against consistent criteria with comparati
 - Adjust Movement 2 channel assignments (add video scripts, remove email, etc.)
 - Customize Movement 3 brand audit criteria to check your specific style guide rules
 
-**Prerequisites**: Scores use `claude-code` with `codex-cli` fallbacks. Configure at least one of those CLIs before running them.
+**Prerequisites**: Scores use the `strong`, `workhorse`, or `writing` class. Run `mzt instruments classes show` to see their ordered profiles, then configure at least one available profile in the chosen chain.
 
 ## Patterns Demonstrated
 

@@ -32,9 +32,8 @@ description: "Demonstrates cross-sheet context passing in a three-stage research
 
 workspace: "../../workspaces/cross-sheet-workspace"
 
-instrument: claude-code
-instrument_fallbacks:
-  - codex-cli
+# `strong` selects an available model for this role; set classes.yaml to prefer yours.
+instrument: strong
 
 instrument_config:
   timeout_seconds: 300

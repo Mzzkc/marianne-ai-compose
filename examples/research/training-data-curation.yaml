@@ -87,9 +87,8 @@ description: "ML training data curation via Succession Pipeline — 7-phase anno
 
 workspace: "../../workspaces/data-curation-workspace"
 
-instrument: claude-code
-instrument_fallbacks:
-  - codex-cli
+# `workhorse` selects an available model for this role; set classes.yaml to prefer yours.
+instrument: workhorse
 instrument_config:
   timeout_seconds: 2400    # 40 minutes per sheet — annotation tasks require careful attention
 

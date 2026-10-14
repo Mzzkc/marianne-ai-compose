@@ -1,4 +1,5 @@
 # Example: Simple Sheet Job
+# `workhorse` chooses an available general model; set classes.yaml to prefer yours.
 # A minimal Mzt configuration demonstrating core Marianne features
 #
 # What this demonstrates:
@@ -6,7 +7,7 @@
 #   - Fan-out pattern: work divided across multiple sheets (2 sheets processing 10 items)
 #   - Built-in template variables (sheet_num, total_sheets, workspace, start_item, end_item)
 #   - Validation requirements and retry configuration
-#   - Instrument fallback configuration for resilience
+#   - A workhorse class chain for resilient instrument selection
 #
 # What it produces:
 #   - Two markdown files (sheet1.md, sheet2.md) in the workspace
@@ -18,7 +19,7 @@
 #   - Add validations specific to your output format
 #   - Point workspace to your desired output directory
 #
-# Estimated cost: ~$0.10-0.20 (2 sheets with Claude Code)
+# Estimated cost depends on the configured workhorse profile.
 # Estimated time: 2-5 minutes
 #
 # Usage:
@@ -31,18 +32,14 @@ description: "Minimal example showing core Marianne features"
 
 workspace: "../../workspaces/simple-workspace"
 
-# Instrument: which AI tool to use (default: claude-code)
-# See `mzt instruments list` for all available instruments.
-instrument: claude-code
-
-# Fallback instruments if primary is unavailable
-instrument_fallbacks: [codex-cli]
+# Instrument: a general capability resolved through the user's class chain.
+# See `mzt instruments classes show` for the effective order.
+instrument: workhorse
 
 instrument_config:
   timeout_seconds: 600       # 10 minutes per sheet
 
-  # Optional: Model selection (omit to use Claude Code's default)
-  # model: claude-sonnet-4-20250514
+  # A fixed model belongs in a score alias, not on a capability class.
 
 sheet:
   size: 5          # Items per sheet
@@ -80,4 +77,3 @@ validations:
   - type: command_succeeds
     command: 'test $(wc -w < "{workspace}/sheet{sheet_num}.md") -ge 50'
     description: "Output has substantive content (50+ words)"
-

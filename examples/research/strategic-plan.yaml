@@ -78,9 +78,8 @@ description: "Strategic plan development via Succession Pipeline — PESTEL, Por
 
 workspace: "../../workspaces/strategy-workspace"
 
-instrument: claude-code
-instrument_fallbacks:
-  - codex-cli
+# `strong` selects an available model for this role; set classes.yaml to prefer yours.
+instrument: strong
 instrument_config:
   timeout_seconds: 3600    # 60 minutes per sheet — strategic analysis requires depth
 

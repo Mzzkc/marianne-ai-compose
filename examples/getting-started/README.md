@@ -82,10 +82,10 @@ All scores use `prompt.variables` for customization. The patterns:
 - Project directory to analyze for `observability-demo.yaml`
 
 **Common customizations:**
-- Change `instrument:` to use another registered profile (`claude-code`, `codex-cli`, `ollama`)
+- Set `instrument:` to a capability class such as `workhorse` or to a specific registered profile when that route matters
 - Adjust `sheet.size` and `total_items` to control parallelization
 - Modify `instrument_config.timeout_seconds` for longer/shorter work
-- Add `instrument_fallbacks` for resilience (scores already include this)
+- Check the ordered class chain with `mzt instruments classes show`; add `instrument_fallbacks` only for a distinct route after that chain
 
 ## Patterns Demonstrated
 

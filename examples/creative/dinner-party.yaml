@@ -51,8 +51,8 @@ description: "Plan a dinner party with parallel planning tracks"
 
 workspace: "../../workspaces/dinner-party-workspace"
 
-instrument: claude-code
-instrument_fallbacks: [codex-cli]
+# `writing` selects an available model for this role; set classes.yaml to prefer yours.
+instrument: writing
 instrument_config:
   timeout_seconds: 1200
 

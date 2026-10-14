@@ -46,9 +46,8 @@ description: "PRISMA-compliant systematic literature review with quality gates a
 
 workspace: "../../workspaces/slr-workspace"
 
-instrument: claude-code
-instrument_fallbacks:
-  - codex-cli
+# `strong` selects an available model for this role; set classes.yaml to prefer yours.
+instrument: strong
 
 instrument_config:
   timeout_seconds: 3600    # 60 minutes per sheet - literature reviews require deep analysis

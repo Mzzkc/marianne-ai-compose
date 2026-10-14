@@ -32,7 +32,7 @@ Watch as sheets 2-4 execute simultaneously (academic, industry, patent searches)
 4. Update `workspace` path to your output location
 
 **Prerequisites:**
-- Claude Code and Codex CLI configured (uses claude-code with codex-cli fallback)
+- At least one profile configured in the `strong` class chain (`mzt instruments classes show`); the instrument showcase keeps its explicit provider seats
 - Score validates clean: `mzt validate examples/advanced/parallel-research.yaml`
 
 ## Patterns Demonstrated
