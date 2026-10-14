@@ -856,7 +856,10 @@
       "parse": "ok"
     },
     "venue:examples/getting-started/hello-local.yaml": {
-      "issues": {},
+      "issues": {
+        "V215": 1,
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/getting-started/hello-setup.yaml": {
