@@ -416,3 +416,34 @@ def _alive(process: psutil.Process) -> bool:
         return process.status() != psutil.STATUS_ZOMBIE
     except (psutil.NoSuchProcess, psutil.AccessDenied):
         return False
+
+
+async def test_workspace_package_named_marianne_cannot_shadow_the_supervisor(
+    tmp_path: Path,
+) -> None:
+    """Forge Inspect P2 (2026-10-14): a score workspace holding a ``marianne``
+    package shadowed ``python -m marianne.utils.run_supervisor`` because the
+    action cwd led sys.path. The action must still run its shell there, write
+    its output, exit 0, and leave no survivor."""
+    shadow = tmp_path / "marianne"
+    shadow.mkdir()
+    (shadow / "__init__.py").write_text("raise RuntimeError('shadowed by workspace')\n")
+    (shadow / "utils").mkdir()
+    (shadow / "utils" / "__init__.py").write_text("")
+    (shadow / "utils" / "run_supervisor.py").write_text(
+        "raise RuntimeError('workspace run_supervisor must never run')\n"
+    )
+    outcome = await execute_run_action(
+        RunTrigger(command="echo $$ > shell.pid; echo written > out.txt", timeout_seconds=5),
+        workspace=tmp_path, job_id="shadow", sheet_num=1, fired_epoch=0,
+        chain_id=1, cursor=0, attempt=1, variables={},
+    )
+    assert outcome.error is None, outcome.error
+    assert outcome.exit_code == 0
+    assert (tmp_path / "out.txt").read_text() == "written\n"
+    shell_pid = int((tmp_path / "shell.pid").read_text().strip())
+    assert not psutil.pid_exists(shell_pid) or (
+        psutil.Process(shell_pid).status() == psutil.STATUS_ZOMBIE
+    )
+    assert outcome.log_path is not None
+    assert "shadowed by workspace" not in Path(outcome.log_path).read_text()

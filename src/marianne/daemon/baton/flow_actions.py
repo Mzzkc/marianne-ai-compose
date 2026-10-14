@@ -135,8 +135,12 @@ async def execute_run_action(
             flags |= os.O_NOFOLLOW
         descriptor = os.open(log_path, flags, 0o600)
         with os.fdopen(descriptor, "wb") as log:
+            # ``-P`` (safe_path, Python 3.11+): never put the action's cwd on
+            # sys.path, so a workspace that happens to contain a ``marianne``
+            # package cannot shadow the installed supervisor module (Forge
+            # Inspect P2, 2026-10-14). The shell still runs in ``cwd``.
             argv = (
-                [sys.executable, "-m", "marianne.utils.run_supervisor",
+                [sys.executable, "-P", "-m", "marianne.utils.run_supervisor",
                  str(state_path), command]
                 if state_path is not None else ["bash", "-c", command]
             )
