@@ -59,3 +59,43 @@ def test_guard_refusal_is_not_counted_as_signal(monkeypatch) -> None:
     assert counts.signalled == 0
     assert counts.skipped_identity_mismatch == 0
     assert counts.skipped_unsafe_group == 1
+
+
+def test_linux_start_ticks_survive_psutil_wall_clock_drift(monkeypatch) -> None:
+    current = psutil.Process()
+    ticks = process._proc_start_ticks(current.pid)
+    assert ticks is not None
+    identity = process.DescendantIdentity(
+        current.pid, current.create_time() - 3, os.getuid(), current.pid, ticks,
+    )
+    monkeypatch.setattr(process.os, "getpgid", lambda pid: current.pid)
+    signals: list[int] = []
+    monkeypatch.setattr(
+        process, "safe_killpg",
+        lambda pgid, sig, **kw: signals.append(pgid) or True,
+    )
+
+    counts = process.reap_descendant_trees((identity,))
+
+    assert counts.signalled == 1
+    assert signals == [current.pid]
+
+
+def test_linux_start_ticks_refuse_recycled_pid_despite_matching_float(monkeypatch) -> None:
+    current = psutil.Process()
+    ticks = process._proc_start_ticks(current.pid)
+    assert ticks is not None
+    identity = process.DescendantIdentity(
+        current.pid, current.create_time(), os.getuid(), current.pid, ticks - 1,
+    )
+    monkeypatch.setattr(process.os, "getpgid", lambda pid: current.pid)
+    signals: list[int] = []
+    monkeypatch.setattr(
+        process, "safe_killpg",
+        lambda pgid, sig, **kw: signals.append(pgid) or True,
+    )
+
+    counts = process.reap_descendant_trees((identity,))
+
+    assert counts.skipped_identity_mismatch == 1
+    assert signals == []

@@ -69,6 +69,22 @@ class DescendantIdentity:
     create_time: float
     uid: int
     pgid: int
+    start_ticks: int | None = None
+
+
+def _proc_start_ticks(pid: int) -> int | None:
+    """Read the kernel's stable process start tick, independent of wall time."""
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
+        return int(stat.rsplit(") ", 1)[1].split()[19])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _same_start(process: psutil.Process, identity: DescendantIdentity) -> bool:
+    if identity.start_ticks is not None:
+        return _proc_start_ticks(process.pid) == identity.start_ticks
+    return process.create_time() == identity.create_time
 
 
 @dataclass(frozen=True)
@@ -81,11 +97,15 @@ class DescendantReapCounts:
 
 def snapshot_descendant_trees(
     parent_pid: int, parent_create_time: float,
+    *, parent_start_ticks: int | None = None,
 ) -> tuple[DescendantIdentity, ...]:
     """Capture actual descendants while the parent still owns their ancestry."""
     try:
         parent = psutil.Process(parent_pid)
-        if parent.create_time() != parent_create_time:
+        if (parent_start_ticks is not None
+                and _proc_start_ticks(parent_pid) != parent_start_ticks):
+            return ()
+        if parent_start_ticks is None and parent.create_time() != parent_create_time:
             return ()
         descendants = parent.children(recursive=True)
     except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -96,6 +116,7 @@ def snapshot_descendant_trees(
             captured.append(DescendantIdentity(
                 pid=child.pid, create_time=child.create_time(),
                 uid=child.uids().real, pgid=os.getpgid(child.pid),
+                start_ticks=_proc_start_ticks(child.pid),
             ))
         except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
             continue
@@ -139,6 +160,7 @@ def snapshot_pipe_holders(
                 continue
             captured.append(DescendantIdentity(
                 proc.pid, born, uids.real, os.getpgid(proc.pid),
+                _proc_start_ticks(proc.pid),
             ))
         except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
             continue
@@ -176,6 +198,7 @@ def snapshot_file_holders(
                 if (held.st_dev, held.st_ino) == (target.st_dev, target.st_ino):
                     captured.append(DescendantIdentity(
                         proc.pid, born, uids.real, os.getpgid(proc.pid),
+                        _proc_start_ticks(proc.pid),
                     ))
                     break
         except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
@@ -197,7 +220,9 @@ def snapshot_process_group_members(
                     or uids is None or uids.real != os.getuid()):
                 continue
             if os.getpgid(proc.pid) == pgid:
-                captured.append(DescendantIdentity(proc.pid, born, uids.real, pgid))
+                captured.append(DescendantIdentity(
+                    proc.pid, born, uids.real, pgid, _proc_start_ticks(proc.pid),
+                ))
         except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
             continue
     return tuple(captured)
@@ -218,7 +243,7 @@ def reap_descendant_trees(
             if current.status() == psutil.STATUS_ZOMBIE:
                 already_gone += 1
                 continue
-            if (current.create_time() != identity.create_time
+            if (not _same_start(current, identity)
                     or current.uids().real != identity.uid
                     or os.getpgid(identity.pid) != identity.pgid):
                 skipped_identity_mismatch += 1
@@ -230,7 +255,7 @@ def reap_descendant_trees(
                 continue
             # Recheck directly at the signal boundary; a changed leader is
             # never authority for a group signal.
-            if (current.create_time() != identity.create_time
+            if (not _same_start(current, identity)
                     or os.getpgid(identity.pid) != identity.pgid):
                 skipped_identity_mismatch += 1
                 continue
@@ -253,7 +278,7 @@ def _descendant_alive(identity: DescendantIdentity) -> bool:
         current = psutil.Process(identity.pid)
         return (
             current.status() != psutil.STATUS_ZOMBIE
-            and current.create_time() == identity.create_time
+            and _same_start(current, identity)
             and current.uids().real == identity.uid
         )
     except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
@@ -474,13 +499,14 @@ async def _run_file_output_command(
     ended exactly like a timeout, so peak disk use is bounded while the child
     runs, not only truncated after it exits.
     """
-    captured: dict[tuple[int, float], DescendantIdentity] = {}
+    captured: dict[tuple[int, int | float], DescendantIdentity] = {}
     born = parent_create_time if parent_create_time is not None else 0.0
+    parent_start_ticks = _proc_start_ticks(proc.pid) if supervisor_state_path else None
     output_capped = False
     shell_pid: int | None = None
     shell_exit_code: int | None = None
     state_error: str | None = None
-    reparented: set[tuple[int, float]] = set()
+    reparented: set[tuple[int, int | float]] = set()
 
     def read_shell_state() -> None:
         nonlocal shell_pid, shell_exit_code, pgid, state_error
@@ -511,21 +537,24 @@ async def _run_file_output_command(
     def capture() -> None:
         read_shell_state()
         if parent_create_time is not None:
-            for child in snapshot_descendant_trees(proc.pid, parent_create_time):
-                captured[(child.pid, child.create_time)] = child
+            for child in snapshot_descendant_trees(
+                proc.pid, parent_create_time, parent_start_ticks=parent_start_ticks,
+            ):
+                child_key = (child.pid, child.start_ticks or child.create_time)
+                captured[child_key] = child
                 if shell_exit_code is not None and child.pid != shell_pid:
                     try:
                         if psutil.Process(child.pid).ppid() == proc.pid:
-                            reparented.add((child.pid, child.create_time))
+                            reparented.add(child_key)
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
         for child in snapshot_process_group_members(pgid, proc.pid, born):
-            captured[(child.pid, child.create_time)] = child
+            captured[(child.pid, child.start_ticks or child.create_time)] = child
         for child in snapshot_file_holders(str(file_output_path), born):
             # The supervisor itself holds the log. It must remain alive as the
             # orphan adoption point until its children have been settled.
             if child.pid != proc.pid:
-                captured[(child.pid, child.create_time)] = child
+                captured[(child.pid, child.start_ticks or child.create_time)] = child
 
     def over_cap() -> bool:
         if file_output_cap_bytes is None:
@@ -579,6 +608,12 @@ async def _run_file_output_command(
             reap_descendant_trees(tuple(captured.values()))
         deadline = time.monotonic() + kill_grace_seconds
         while time.monotonic() < deadline:
+            # The subreaper can adopt a child forked after the first census.
+            # Keep sampling its live subtree for the entire grace window.
+            before = len(captured)
+            capture()
+            if len(captured) != before:
+                reap_descendant_trees(tuple(captured.values()))
             if proc.returncode is not None and not any(
                 _descendant_alive(child) for child in captured.values()
             ):
@@ -610,10 +645,33 @@ async def _run_file_output_command(
                         pass
         if proc.returncode is None:
             try:
-                await asyncio.wait_for(proc.wait(), timeout=kill_grace_seconds)
+                # Keep the adoption point alive while late descendants settle.
+                deadline = time.monotonic() + kill_grace_seconds
+                while proc.returncode is None and time.monotonic() < deadline:
+                    before = len(captured)
+                    capture()
+                    if len(captured) != before:
+                        reap_descendant_trees(tuple(captured.values()))
+                    await asyncio.sleep(0.02)
+                if proc.returncode is None:
+                    raise TimeoutError
             except TimeoutError:
-                proc.kill()
-                await proc.wait()
+                # A fork can cross the final census exactly as its parent is
+                # killed. Keep the subreaper alive through the force settle so
+                # that newly adopted children remain discoverable.
+                force_deadline = time.monotonic() + kill_grace_seconds
+                while proc.returncode is None and time.monotonic() < force_deadline:
+                    capture()
+                    for child in captured.values():
+                        if _descendant_alive(child):
+                            try:
+                                os.kill(child.pid, signal.SIGKILL)
+                            except (ProcessLookupError, PermissionError):
+                                pass
+                    await asyncio.sleep(0.02)
+                if proc.returncode is None:
+                    proc.kill()
+                    await proc.wait()
         if supervisor_state_path is not None:
             supervisor_state_path.unlink(missing_ok=True)
             if shell_exit_code is None and not timed_out and not output_capped:
