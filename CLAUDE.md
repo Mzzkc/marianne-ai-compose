@@ -71,6 +71,8 @@ lives outside this repository on the developer's machine.
 
 **MUST NOT:** Wrap `mzt start` in external `timeout`. **NEVER stop, restart, or kill the conductor (`mzt stop`) while jobs are running — recovery from interrupted jobs is unreliable and work is lost. Check `mzt status` first.** Use `--fresh` on interrupted jobs. Add dependencies without justification. Log secrets or full prompt text. Use fixed sleeps in tests. Silence errors without explanation. Use Pydantic v1 syntax.
 
+**The score language is the product's type system.** Score YAML keys, validator messages, CLI words, status words, `docs/`, and the skills in `plugins/` are four layers of one language that LLMs and humans must read correctly without shooting themselves in the foot: the schema says what a key IS, the validator says when it is WRONG, the docs say WHY, the skill says WHEN. A gap or error in any layer is a bug with the priority of the behaviour it misdescribes (GH #436), labelled `bug` + `documentation`. A change to a config key, validator message, CLI word or status word ships with its schema description, its doc line and its skill line in the same commit; a key whose name can be read two ways is renamed or moved where its meaning lives (M-005: alias + warning first), never documented around.
+
 **After code changes:** The conductor runs the installed package, not the source tree. To pick up changes: `pip install -e . --quiet`, then pause/cancel active jobs, then `mzt stop`, then `mzt start`. Each step must complete before the next.
 
 ## Code Patterns
