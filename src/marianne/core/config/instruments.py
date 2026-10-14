@@ -304,6 +304,16 @@ class CliCommand(BaseModel):
         "sentinel with '-p -' to indicate 'read prompt from stdin'. "
         "Only meaningful when prompt_via_stdin is True.",
     )
+    stdin_json_template: dict[str, Any] | None = Field(
+        default=None,
+        description="When set, the prompt is NOT written to stdin as raw "
+        "text: this object is serialised as ONE JSON line with every string "
+        "value equal to '{prompt}' replaced by the assembled prompt (nested "
+        "dicts/lists are walked). For CLIs whose only stdin path is a "
+        "structured stream, e.g. Antigravity's --input-format stream-json "
+        "expects {\"event\":\"user\",\"message\":{\"role\":\"user\","
+        "\"content\":...}}. Only meaningful when prompt_via_stdin is True.",
+    )
 
     # Process isolation
     start_new_session: bool = Field(
@@ -383,6 +393,12 @@ class CliOutputConfig(BaseModel):
         default=None,
         description="JSONL event type that signals completion, "
         "e.g. 'turn.completed', 'item.completed'",
+    )
+    event_type_key: str = Field(
+        default="type",
+        description="JSONL key that carries each event's type, compared "
+        "against completion_event_type. Most CLIs use 'type'; Antigravity's "
+        "stream-json uses 'event'.",
     )
     completion_event_filter: dict[str, str] | None = Field(
         default=None,

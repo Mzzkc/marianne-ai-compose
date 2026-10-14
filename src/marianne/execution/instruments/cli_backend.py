@@ -550,6 +550,31 @@ class PluginCliBackend(Backend):
             parts.extend(prompt_extensions)
         return "\n\n".join(parts)
 
+    def _encode_stdin_prompt(self, full_prompt: str) -> bytes:
+        """Bytes written to the musician's stdin for ``full_prompt``.
+
+        Raw UTF-8 unless the profile declares ``stdin_json_template``: then
+        one JSON line with every ``"{prompt}"`` string value replaced by the
+        prompt (Antigravity's ``--input-format stream-json`` is the first
+        consumer; it has no raw-text stdin path and argv is capped by the
+        kernel's per-argument limit, so a 140 KB prelude cannot be passed
+        any other way).
+        """
+        template = self._cli.command.stdin_json_template
+        if template is None:
+            return full_prompt.encode("utf-8")
+
+        def fill(node: Any) -> Any:
+            if isinstance(node, str):
+                return full_prompt if node == "{prompt}" else node
+            if isinstance(node, dict):
+                return {k: fill(v) for k, v in node.items()}
+            if isinstance(node, list):
+                return [fill(v) for v in node]
+            return node
+
+        return (json.dumps(fill(template), ensure_ascii=False) + "\n").encode("utf-8")
+
     def _require_schema_capable_profile(
         self, response_format: dict[str, Any]
     ) -> str:
@@ -1052,7 +1077,7 @@ class PluginCliBackend(Backend):
         # Find completion event
         if output.completion_event_type:
             for event in events:
-                event_type = event.get("type")
+                event_type = event.get(output.event_type_key)
                 if event_type != output.completion_event_type:
                     continue
 
@@ -1069,6 +1094,10 @@ class PluginCliBackend(Backend):
                     extracted = extract_json_path(event, output.result_path)
                     if extracted is not None:
                         result_text = str(extracted)
+                if output.error_path and not is_success:
+                    extracted_err = extract_json_path(event, output.error_path)
+                    if extracted_err not in (None, ""):
+                        error_message = str(extracted_err)
                 break
 
         # Extract tokens from any event that has them
@@ -1489,7 +1518,7 @@ class PluginCliBackend(Backend):
                 full_prompt = self._build_prompt(
                     prompt, req_preamble, req_extensions
                 )
-                proc.stdin.write(full_prompt.encode("utf-8"))
+                proc.stdin.write(self._encode_stdin_prompt(full_prompt))
                 await proc.stdin.drain()
                 proc.stdin.close()
 

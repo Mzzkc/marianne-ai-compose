@@ -203,8 +203,26 @@ models:
 cli:
   command:
     executable: agy
+    # Print-mode prompt delivery (verified 2026-10-14 against agy 1.1.26): the
+    # prompt travels on stdin as ONE stream-json line. `agy -p` has no raw-text
+    # stdin form (`-p -` is taken literally as the prompt "-"), and a 142 KB
+    # prelude in argv dies at the kernel's per-argument limit (E2BIG,
+    # "Argument list too long") before the process starts — observed live on
+    # `mx-prism-verify-care-20261009` sheet 9, which then fell through to the
+    # next instrument. `--input-format stream-json` requires
+    # `--output-format stream-json`; the empty `-p ''` keeps print mode on
+    # while the stream supplies the turn. Needle-at-the-end probes at 72 KB
+    # and 161 KB answered correctly (no silent truncation).
     prompt_flag: "-p"
-    prompt_via_stdin: false
+    prompt_via_stdin: true
+    stdin_sentinel: ""
+    stdin_json_template:
+      event: user
+      message:
+        role: user
+        content: "{prompt}"
+    output_format_flag: "--output-format"
+    output_format_value: "stream-json"
     model_flag: "--model"
     auto_approve_flag: "--dangerously-skip-permissions"
     mcp_config_workspace_path: ".agents/mcp_config.json"
@@ -218,6 +236,8 @@ cli:
     # unexpected-argument error that still exits 0. Omitting it entirely means
     # no sandbox — the original intent of "--sandbox false".
     extra_flags:
+      - "--input-format"
+      - "stream-json"
       - "--print-timeout"
       - "30m"
   interactive:
@@ -252,7 +272,16 @@ cli:
     terminal_height: 50
     volatile_tail_lines: 2
   output:
-    format: text
+    # Print mode emits NDJSON: {"event":"init",...}, {"event":"step_update",...}
+    # per delta, and one terminal {"event":"result","result":{"status":
+    # "SUCCESS"|"ERROR","response":...,"error":...,"usage":{...}}}.
+    format: jsonl
+    event_type_key: event
+    completion_event_type: result
+    result_path: result.response
+    error_path: result.error
+    input_tokens_path: result.usage.input_tokens
+    output_tokens_path: result.usage.output_tokens
   errors:
     success_exit_codes: [0]
     rate_limit_patterns:

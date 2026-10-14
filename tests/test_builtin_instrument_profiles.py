@@ -162,7 +162,17 @@ class TestProfileDetails:
         assert profile.cli.command.prompt_flag == "-p"
         assert profile.cli.command.model_flag == "--model"
         assert profile.cli.command.mcp_config_workspace_path == ".agents/mcp_config.json"
-        assert profile.cli.command.prompt_via_stdin is False
+        # Print-mode prompt delivery is ONE stream-json line on stdin (2026-10-14):
+        # argv dies at the kernel per-argument limit for 100 KB+ preludes, and
+        # agy has no raw-text stdin form. Interactive launch omits all of this.
+        assert profile.cli.command.prompt_via_stdin is True
+        assert profile.cli.command.stdin_sentinel == ""
+        assert profile.cli.command.stdin_json_template == {
+            "event": "user",
+            "message": {"role": "user", "content": "{prompt}"},
+        }
+        assert profile.cli.command.output_format_value == "stream-json"
+        assert "--input-format" in profile.cli.command.extra_flags
         assert profile.cli.interactive is not None
         assert profile.cli.interactive.enabled_by_default is True
         assert profile.cli.interactive.ready_pattern == r"(?m)^>\s*$"
@@ -174,7 +184,10 @@ class TestProfileDetails:
             "bubbletea" in pattern.lower()
             for pattern in profile.cli.errors.crash_patterns
         )
-        assert profile.cli.output.format == "text"
+        assert profile.cli.output.format == "jsonl"
+        assert profile.cli.output.event_type_key == "event"
+        assert profile.cli.output.completion_event_type == "result"
+        assert profile.cli.output.result_path == "result.response"
 
     def test_codex_uses_positional_prompt(self) -> None:
         """Codex CLI uses positional prompt (prompt_flag is None)."""

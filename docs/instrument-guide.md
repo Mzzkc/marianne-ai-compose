@@ -50,6 +50,7 @@ startup:
 | `claude-code` | Claude Code CLI | `claude login` |
 | `gemini-cli` | Google Gemini CLI | `GOOGLE_API_KEY` or `gcloud auth` |
 | `codex-cli` | OpenAI Codex CLI | `OPENAI_API_KEY or CODEX_API_KEY` |
+| `antigravity` | Google Antigravity CLI (`agy`), Gemini CLI's successor; tmux-interactive by default, print mode delivers the prompt as one stream-json line on stdin | Existing Google account/API configuration |
 | `cline-cli` | Cline CLI | Provider API key |
 | `aider` | Aider | Provider API key (`OPENAI_API_KEY`, etc.) |
 | `goose` | Block's Goose | Provider API key |
@@ -255,6 +256,9 @@ and used by the conductor for instrument selection in future versions.
 | `working_dir_flag` | No | | Flag for working directory. `null` = subprocess cwd |
 | `extra_flags` | No | `[]` | Fixed flags always appended |
 | `env` | No | `{}` | Environment variables. `${VAR}` references expand from `os.environ` |
+| `prompt_via_stdin` | No | `true` | Write the assembled prompt to the child's stdin instead of argv. Prompts routinely exceed 100 KB with prelude/cadenza injection, and Linux caps a single argv entry at 128 KiB (`E2BIG`, "Argument list too long" before the process starts). Set `false` only for a CLI that cannot read stdin |
+| `stdin_sentinel` | No | | What to put after `prompt_flag` when the prompt goes to stdin: `-` for Claude Code's `-p -`; `""` keeps the flag with an empty value (Antigravity's `-p ''`). Unset = omit the flag entirely |
+| `stdin_json_template` | No | | For a CLI whose only stdin path is a structured stream: this object is written as ONE JSON line with every `"{prompt}"` string replaced by the prompt (nested keys are walked). Antigravity: `{event: user, message: {role: user, content: "{prompt}"}}` with `--input-format stream-json` |
 
 #### `cli.output` — How to Parse the Result
 
@@ -264,6 +268,7 @@ and used by the conductor for instrument selection in future versions.
 | `result_path` | No | | JSON dot-path to response text (`result`, `response`) |
 | `error_path` | No | | JSON dot-path to error message (`error.message`) |
 | `completion_event_type` | No | | For JSONL: event type signaling completion |
+| `event_type_key` | No | `type` | For JSONL: the key that carries each event's type (`event` for Antigravity's stream-json) |
 | `completion_event_filter` | No | | For JSONL: additional key-value filter |
 | `input_tokens_path` | No | | JSON dot-path to input token count |
 | `output_tokens_path` | No | | JSON dot-path to output token count |
@@ -487,7 +492,13 @@ For CLI instruments, the `PluginCliBackend` builds the command from the profile:
 ```
 
 The prompt is passed via `prompt_flag` (or as a positional argument if
-`prompt_flag` is `null`). The backend handles output parsing, token extraction,
+`prompt_flag` is `null`) only when `prompt_via_stdin` is `false`; by default it
+is written to the child's stdin (raw text, or the `stdin_json_template`
+envelope) and argv carries at most `prompt_flag` + `stdin_sentinel`. A profile
+with `prompt_via_stdin: false` and no sentinel is kept in argv even above 32 KB
+(the backend logs `plugin_cli_stdin_not_supported_for_large_prompt`), and a
+prompt past the kernel's per-argument cap fails to spawn with `E2BIG`; give such
+a CLI a stdin contract instead. The backend handles output parsing, token extraction,
 and error detection based on the profile configuration.
 
 ### Error Handling

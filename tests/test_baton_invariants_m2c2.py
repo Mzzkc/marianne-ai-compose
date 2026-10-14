@@ -646,6 +646,12 @@ class TestCredentialRedactionPreservesNonCredentials:
 # =============================================================================
 
 
+def _class_vocabulary() -> frozenset[str]:
+    from marianne.instruments.classes import CLASS_VOCABULARY
+
+    return frozenset(CLASS_VOCABULARY)
+
+
 class TestV210InstrumentNameCheckCoverage:
     """InstrumentNameCheck catches unknown instrument names.
 
@@ -701,6 +707,9 @@ class TestV210InstrumentNameCheckCoverage:
                 "goose",
                 "ollama",
             }
+            # A capability class (`strong`, `fast`, ...) is a valid instrument
+            # position on every machine with a class map; it is not "unknown".
+            and n not in _class_vocabulary()
         ),
     )
     @settings(max_examples=50)

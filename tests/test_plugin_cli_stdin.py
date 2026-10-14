@@ -410,3 +410,126 @@ class TestClaudeCodeProfile:
         assert claude_profile.cli.command.prompt_via_stdin is True
         assert claude_profile.cli.command.stdin_sentinel == "-"
         assert claude_profile.cli.command.start_new_session is True
+
+
+# ---------------------------------------------------------------------------
+# JSON stdin envelope (Antigravity stream-json; E2BIG on argv, 2026-10-14)
+# ---------------------------------------------------------------------------
+
+
+def _json_envelope_profile(*, output_format: str = "jsonl") -> InstrumentProfile:
+    """A profile whose only stdin path is one NDJSON line (agy-shaped)."""
+    return InstrumentProfile(
+        name="stream-json-cli",
+        display_name="Stream JSON CLI",
+        description="reads one NDJSON turn from stdin",
+        kind="cli",
+        cli=CliProfile(
+            command=CliCommand(
+                executable="stream-json-cli",
+                prompt_flag="-p",
+                prompt_via_stdin=True,
+                stdin_sentinel="",
+                stdin_json_template={
+                    "event": "user",
+                    "message": {"role": "user", "content": "{prompt}"},
+                },
+                output_format_flag="--output-format",
+                output_format_value="stream-json",
+            ),
+            output=CliOutputConfig(
+                format=output_format,
+                event_type_key="event",
+                completion_event_type="result",
+                result_path="result.response",
+                error_path="result.error",
+                input_tokens_path="result.usage.input_tokens",
+                output_tokens_path="result.usage.output_tokens",
+            ),
+            errors=CliErrorConfig(),
+        ),
+        models=[],
+    )
+
+
+class TestStdinJsonTemplate:
+    def test_schema_fields_default_off(self) -> None:
+        assert CliCommand(executable="x").stdin_json_template is None
+        assert CliOutputConfig().event_type_key == "type"
+
+    def test_prompt_is_embedded_as_one_json_line(self) -> None:
+        backend = PluginCliBackend(_json_envelope_profile())
+        raw = backend._encode_stdin_prompt('say "hi"\nthen stop')
+        assert raw.endswith(b"\n") and raw.count(b"\n") == 1
+        assert json.loads(raw) == {
+            "event": "user",
+            "message": {"role": "user", "content": 'say "hi"\nthen stop'},
+        }
+
+    def test_without_template_stdin_is_raw_text(self) -> None:
+        backend = PluginCliBackend(_make_profile(prompt_via_stdin=True))
+        assert backend._encode_stdin_prompt("plain") == b"plain"
+
+    def test_empty_sentinel_keeps_the_flag_with_an_empty_value(self) -> None:
+        """agy needs `-p ''` to stay in print mode while stdin carries the turn."""
+        backend = PluginCliBackend(_json_envelope_profile())
+        cmd = backend._build_command("hello", timeout_seconds=None)
+        assert cmd[cmd.index("-p") + 1] == ""
+        assert "hello" not in cmd
+
+    def test_jsonl_completion_event_uses_event_type_key(self) -> None:
+        backend = PluginCliBackend(_json_envelope_profile())
+        lines = [
+            json.dumps({"event": "init", "init": {"model": "m"}}),
+            json.dumps({"event": "step_update", "step_update": {"text_delta": "HO"}}),
+            json.dumps({"event": "result", "result": {
+                "status": "SUCCESS", "response": "HOTEL\n",
+                "usage": {"input_tokens": 12, "output_tokens": 2}}}),
+        ]
+        result = backend._parse_output("\n".join(lines), "", exit_code=0)
+        assert result.success is True
+        assert result.stdout == "HOTEL\n"
+        assert (result.input_tokens, result.output_tokens) == (12, 2)
+
+    def test_jsonl_error_event_names_the_error(self) -> None:
+        backend = PluginCliBackend(_json_envelope_profile())
+        line = json.dumps({"event": "result", "result": {
+            "status": "ERROR", "response": "",
+            "error": 'stream input message is missing the "event" field'}})
+        result = backend._parse_output(line, "", exit_code=1)
+        assert result.success is False
+        assert result.error_message is not None
+        assert "missing" in result.error_message
+
+    @pytest.mark.asyncio
+    async def test_real_subprocess_receives_the_envelope_for_a_150kb_prompt(
+        self, tmp_path: Path,
+    ) -> None:
+        """End to end with a real child: a prompt far beyond the kernel's
+        per-argument limit (128 KiB) arrives intact through the JSON line,
+        and the result event is parsed back. The fake CLI is agy-shaped."""
+        fake = tmp_path / "stream-json-cli"
+        fake.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            "argv = sys.argv[1:]\n"
+            "assert argv[argv.index('-p') + 1] == '', argv\n"
+            "turn = json.loads(sys.stdin.readline())\n"
+            "assert turn['event'] == 'user'\n"
+            "content = turn['message']['content']\n"
+            "print(json.dumps({'event': 'init', 'init': {'model': 'fake'}}))\n"
+            "print(json.dumps({'event': 'result', 'result': {\n"
+            "    'status': 'SUCCESS', 'response': content[-11:],\n"
+            "    'usage': {'input_tokens': len(content), 'output_tokens': 11}}}))\n"
+        )
+        fake.chmod(0o755)
+        profile = _json_envelope_profile()
+        profile.cli.command.executable = str(fake)  # type: ignore[union-attr]
+        backend = PluginCliBackend(profile)
+        prompt = ("x" * 150_000) + "\nmarker-9731"
+
+        result = await backend.execute(prompt, timeout_seconds=30)
+
+        assert result.success is True, result.error_message
+        assert result.stdout == "marker-9731"
+        assert result.input_tokens == len(prompt)
