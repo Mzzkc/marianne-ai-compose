@@ -322,7 +322,13 @@ Only one wire contract exists today: `schema_family: openai`.
 | `auth_env_var` | No | Name of the environment variable holding the bearer token; omit for unauthenticated local servers |
 | `response_format` | No | Opt-in structured output (`{type: json_object}` or `{type: json_schema, json_schema: {...}}`), forwarded unchanged; per-sheet `instrument_config.response_format` overrides it |
 
-The shipped `ollama` profile is the minimal shape (local, unauthenticated):
+The shipped `ollama` profile is the minimal shape (local, unauthenticated). Its
+`default_model` must be one the local server actually serves: `mzt validate`,
+`mzt instruments classes check` and dispatch preflight list the server's models
+(`/v1/models`) and report the profile unavailable, naming what is served, when
+the default is missing; set `instrument_config.model` in the score or
+`default_model` in a user copy of the profile to a pulled tag. A local server
+that does not answer at all is a reachability warning (V215), not a model miss.
 
 ```yaml
 name: ollama

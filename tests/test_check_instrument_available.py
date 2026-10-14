@@ -165,3 +165,66 @@ class TestCheckInstrumentAvailable:
             available, reason = check_instrument_available("test-cli", registry)
             assert available is False
             assert "not found" in reason.lower()
+
+
+class TestLocalHttpServedModel:
+    """GH #437: a loopback HTTP profile whose server answers /v1/models but
+    does not serve the profile's default_model is unavailable, with the served
+    models named. A server that does not answer stays available (V215's job)."""
+
+    @staticmethod
+    def _ollama_like(name: str, default_model: str) -> InstrumentProfile:
+        from marianne.core.config.instruments import ModelCapacity
+
+        return InstrumentProfile(
+            name=name,
+            display_name=name,
+            description="local",
+            kind="http",
+            default_model=default_model,
+            http=HttpProfile(base_url="http://localhost:11434/v1", schema_family="openai"),
+            models=[
+                ModelCapacity(
+                    name=default_model, context_window=8192,
+                    cost_per_1k_input=0.0, cost_per_1k_output=0.0,
+                )
+            ],
+        )
+
+    def test_model_not_served_is_unavailable_with_served_list(self) -> None:
+        from marianne.instruments import availability
+
+        profile = self._ollama_like("ollama", "llama3.1:8b")
+        with patch.object(
+            availability, "served_local_models", return_value=["gemma4:26b", "qwen3:30b"]
+        ):
+            available, reason = availability.check_profile_available(profile)
+        assert available is False
+        assert "llama3.1:8b" in reason and "gemma4:26b" in reason
+        assert "instrument_config.model" in reason
+
+    def test_model_served_is_available(self) -> None:
+        from marianne.instruments import availability
+
+        profile = self._ollama_like("ollama", "gemma4:26b")
+        with patch.object(availability, "served_local_models", return_value=["gemma4:26b"]):
+            assert availability.check_profile_available(profile) == (True, "")
+
+    def test_server_not_answering_stays_available(self) -> None:
+        """Reachability is V215's domain; a silent loopback server is not a model miss."""
+        from marianne.instruments import availability
+
+        profile = self._ollama_like("ollama", "llama3.1:8b")
+        with patch.object(availability, "served_local_models", return_value=None):
+            assert availability.check_profile_available(profile) == (True, "")
+
+    def test_remote_host_is_never_probed(self) -> None:
+        from marianne.instruments import availability
+
+        assert availability.served_local_models("https://api.example.com/v1") is None
+
+    def test_unreachable_loopback_port_returns_none_fast(self) -> None:
+        from marianne.instruments import availability
+
+        # Nothing listens on this port; the probe must not raise or hang.
+        assert availability.served_local_models("http://127.0.0.1:1/v1") is None

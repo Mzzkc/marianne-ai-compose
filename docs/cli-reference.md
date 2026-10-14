@@ -560,7 +560,7 @@ code-registry and corpus-sweep tests.
 | ERROR | V221–V223, V227, V229, V312–V314, V316–V317, V320 | Flow load errors and invalid flow references, reported with a code and hint rather than a raw schema trace |
 | ERROR | V310, V321, V323, V324 | Capability classes: a class-shaped name cannot resolve on this machine (V-CLS-02, including a chain with no runnable entry); an instrument alias names a class as its profile; `instrument_config.model` applied to a class primary; an invalid classes layer file while the score uses a class |
 | WARNING | V010, V208, V219–V220, V224, V226, V228, V231–V232, V315 | Likely typo; built-in shadowing (deprecation); advisory structure and flow risks |
-| WARNING | V311, V322 | Capability classes: part of a used class's chain cannot run here (binary missing, unsupported, or unable to enforce the sheet's `response_format`) — the job starts at the first available entry; a default-layer class shadowed by a same-named profile; a score alias shadowing a class name |
+| WARNING | V311, V322 | Capability classes: part of a used class's chain cannot run here (binary missing, unsupported, local server not serving the profile's model, or unable to enforce the sheet's `response_format`) — the job starts at the first available entry; a default-layer class shadowed by a same-named profile; a score alias shadowing a class name |
 | INFO | V011, V104, V110, V218, V225 | Distant unknown field; timeout above 7200 seconds (2 hours); unused variable; ambiguous file reference; mixed fan-out keying |
 | INFO | V325 | Capability classes: per-used-class resolution summary (`Instruments: strong → claude-code, … (user layer, sha256 …)`) |
 
