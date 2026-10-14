@@ -16,6 +16,7 @@ from marianne.validation.checks.flow import (
     JinjaLoopCollisionCheck,
     LegacyConditionCheck,
     MixedFanOutKeyingCheck,
+    RunOrphanReapingScopeCheck,
     UndefinedFlowVariableCheck,
 )
 
@@ -42,6 +43,37 @@ prompt: {template: hello}
     data = json.loads(result.stdout)
     assert data["issues"][0]["check_id"] == "V314"
     assert data["summary"]["triggers"] == ["1"]
+
+
+def test_run_orphan_reaping_info_only_on_unsupported_host(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    from marianne.validation.checks import flow
+
+    path = _file(
+        tmp_path,
+        "name: run-scope\nsheet:\n  size: 1\n  total_items: 2\n"
+        "  triggers: {1: {on_success: [{run: 'echo done'}]}}\n"
+        "prompt: {template: hello}\n",
+    )
+    config = JobConfig.from_yaml(path)
+    monkeypatch.setattr(flow, "subreaper_available", lambda: False)
+    issues = RunOrphanReapingScopeCheck().check(config, path, path.read_text())
+    assert len(issues) == 1
+    assert issues[0].check_id == "V326"
+    rendered = CliRunner().invoke(app, ["validate", str(path), "--json"])
+    assert rendered.exit_code == 0
+    assert "V326" in {item["check_id"] for item in json.loads(rendered.stdout)["issues"]}
+    monkeypatch.setattr(flow, "subreaper_available", lambda: True)
+    assert RunOrphanReapingScopeCheck().check(config, path, path.read_text()) == []
+    plain = _file(
+        tmp_path,
+        "name: no-run\nsheet: {size: 1, total_items: 2}\n"
+        "prompt: {template: hello}\n",
+    )
+    assert RunOrphanReapingScopeCheck().check(
+        JobConfig.from_yaml(plain), plain, plain.read_text()
+    ) == []
 
 
 def test_until_and_trigger_advisories(tmp_path: Path) -> None:

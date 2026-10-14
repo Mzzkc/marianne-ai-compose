@@ -696,6 +696,8 @@ class FlowRunFinished:
     timed_out: bool
     log_path: str | None
     error: str | None = None
+    supervisor_pid: int | None = None
+    reparented_orphans: int = 0
     event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 

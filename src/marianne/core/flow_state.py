@@ -43,6 +43,9 @@ class FlowState(BaseModel):
     )
     next_chain_id: int = Field(default=1, ge=1, description="Next chain identifier.")
     next_facts_id: int = Field(default=1, ge=1, description="Next file-facts request identifier.")
+    run_cleanup: list[dict[str, int]] = Field(
+        default_factory=list, description="Run-action supervisor cleanup records for diagnosis."
+    )
     queued_skips: dict[int, str] = Field(default_factory=dict, description="Pending skip reasons.")
     goto_bypass: list[int] = Field(default_factory=list, description="Dependency bypass targets.")
     pause_reason: str | None = Field(default=None, description="Durable flow pause reason.")

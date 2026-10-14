@@ -1265,6 +1265,7 @@ def _build_diagnostic_report(
         timing_data["duration_seconds"] = round(duration, 2)
 
     report["timing"] = timing_data
+    report["run_cleanup"] = job.flow.run_cleanup if job.flow is not None else []
 
     # Collect preflight warnings across all sheets
     all_warnings: list[dict[str, Any]] = []
@@ -1473,6 +1474,11 @@ def _display_diagnostic_report(job: CheckpointState, report: dict[str, Any]) -> 
     """
     # Header panel
     console.print(create_diagnostic_panel(job.job_name, job.job_id, job.status))
+    for cleanup in report.get("run_cleanup", []):
+        console.print(
+            f"  Run supervisor {cleanup['supervisor_pid']}: "
+            f"{cleanup['reparented_orphans']} reparented orphans observed"
+        )
 
     # Progress section
     progress = report.get("progress", {})

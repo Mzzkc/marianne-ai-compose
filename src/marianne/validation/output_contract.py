@@ -140,6 +140,7 @@ def _known_suppression_severities() -> dict[str, ValidationSeverity]:
             # registered check owns it (my own S3 Inspect advisory), but the
             # emission exists, so suppression must be able to judge it.
             "V230": ValidationSeverity.ERROR,
+            "V326": ValidationSeverity.INFO,
         }
     )
     return known

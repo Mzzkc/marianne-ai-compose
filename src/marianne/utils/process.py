@@ -8,6 +8,7 @@ Also hosts identity-bound descendant cleanup for CLI execution.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import signal
 import time
@@ -273,6 +274,8 @@ class BoundedCommandResult:
     output_capped: bool = False
     """File-output mode only: the log passed its byte cap while the command
     ran, and the group was ended for it (GH #415)."""
+    supervisor_pid: int | None = None
+    reparented_orphans: int = 0
 
 
 async def _drain_pipe(stream: asyncio.StreamReader | None, chunks: list[bytes]) -> None:
@@ -298,6 +301,7 @@ async def run_bounded_command(
     file_output_path: Path | None = None,
     parent_create_time: float | None = None,
     file_output_cap_bytes: int | None = None,
+    supervisor_state_path: Path | None = None,
 ) -> BoundedCommandResult:
     """Wait for a spawned ``bash -c`` command the #406-safe way (GH #410).
 
@@ -332,6 +336,7 @@ async def run_bounded_command(
             parent_create_time=parent_create_time,
             kill_grace_seconds=kill_grace_seconds,
             file_output_cap_bytes=file_output_cap_bytes,
+            supervisor_state_path=supervisor_state_path,
         )
     out: list[bytes] = []
     err: list[bytes] = []
@@ -460,6 +465,7 @@ async def _run_file_output_command(
     parent_create_time: float | None,
     kill_grace_seconds: float,
     file_output_cap_bytes: int | None = None,
+    supervisor_state_path: Path | None = None,
 ) -> BoundedCommandResult:
     """File-output mode: wait on the parent, then settle its captured process tree.
 
@@ -471,15 +477,55 @@ async def _run_file_output_command(
     captured: dict[tuple[int, float], DescendantIdentity] = {}
     born = parent_create_time if parent_create_time is not None else 0.0
     output_capped = False
+    shell_pid: int | None = None
+    shell_exit_code: int | None = None
+    state_error: str | None = None
+    reparented: set[tuple[int, float]] = set()
+
+    def read_shell_state() -> None:
+        nonlocal shell_pid, shell_exit_code, pgid, state_error
+        if supervisor_state_path is None:
+            return
+        try:
+            state = json.loads(supervisor_state_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        if not isinstance(state, dict):
+            state_error = "run supervisor reported malformed state"
+            return
+        pid = state.get("shell_pid")
+        code = state.get("exit_code")
+        if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 1:
+            state_error = "run supervisor reported an invalid shell PID"
+            return
+        if code is not None and (not isinstance(code, int) or isinstance(code, bool)):
+            state_error = "run supervisor reported an invalid shell exit"
+            return
+        if shell_pid is not None and shell_pid != pid:
+            state_error = "run supervisor changed shell identity"
+            return
+        shell_pid = pid
+        pgid = pid  # The shell starts its own session before the state is written.
+        shell_exit_code = code
 
     def capture() -> None:
+        read_shell_state()
         if parent_create_time is not None:
             for child in snapshot_descendant_trees(proc.pid, parent_create_time):
                 captured[(child.pid, child.create_time)] = child
+                if shell_exit_code is not None and child.pid != shell_pid:
+                    try:
+                        if psutil.Process(child.pid).ppid() == proc.pid:
+                            reparented.add((child.pid, child.create_time))
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
         for child in snapshot_process_group_members(pgid, proc.pid, born):
             captured[(child.pid, child.create_time)] = child
         for child in snapshot_file_holders(str(file_output_path), born):
-            captured[(child.pid, child.create_time)] = child
+            # The supervisor itself holds the log. It must remain alive as the
+            # orphan adoption point until its children have been settled.
+            if child.pid != proc.pid:
+                captured[(child.pid, child.create_time)] = child
 
     def over_cap() -> bool:
         if file_output_cap_bytes is None:
@@ -494,12 +540,18 @@ async def _run_file_output_command(
 
     async def parent_exit() -> None:
         started = time.monotonic()
-        while proc.returncode is None:
+        while proc.returncode is None and (
+            supervisor_state_path is None or shell_exit_code is None
+        ):
             capture()
+            if state_error is not None:
+                raise ValueError(state_error)
             if over_cap():
                 raise _OutputCapExceeded
             await asyncio.sleep(0.001 if time.monotonic() - started < 0.2 else 0.05)
         capture()
+        if supervisor_state_path is not None and shell_exit_code is None:
+            raise ValueError("run supervisor exited without a shell completion record")
 
     timed_out = False
     try:
@@ -514,7 +566,7 @@ async def _run_file_output_command(
         # A successful shell can leave both same-group children with closed
         # streams and detached children holding the log. Both belong to this
         # invocation; neither is identified by the parent's return code.
-        group_alive = proc.returncode is None or any(
+        group_alive = (supervisor_state_path is None and proc.returncode is None) or any(
             child.pgid == pgid and _descendant_alive(child)
             for child in captured.values()
         )
@@ -532,13 +584,24 @@ async def _run_file_output_command(
             ):
                 break
             await asyncio.sleep(0.02)
-        if proc.returncode is None or any(
+        # A group leader may fork during the TERM grace. The supervisor
+        # retains the orphan's ancestry, so census it before the final strike.
+        capture()
+        if captured:
+            reap_descendant_trees(tuple(captured.values()))
+        action_alive = any(
             _descendant_alive(child) for child in captured.values()
-        ):
-            try:
-                safe_killpg(pgid, signal.SIGKILL, context=f"{context}.kill_force")
-            except (ProcessLookupError, PermissionError):
-                pass
+        )
+        group_alive = any(
+            child.pgid == pgid and _descendant_alive(child)
+            for child in captured.values()
+        )
+        if (supervisor_state_path is None and proc.returncode is None) or action_alive:
+            if (supervisor_state_path is None and proc.returncode is None) or group_alive:
+                try:
+                    safe_killpg(pgid, signal.SIGKILL, context=f"{context}.kill_force")
+                except (ProcessLookupError, PermissionError):
+                    pass
             for child in captured.values():
                 if _descendant_alive(child):
                     try:
@@ -551,6 +614,15 @@ async def _run_file_output_command(
             except TimeoutError:
                 proc.kill()
                 await proc.wait()
+        if supervisor_state_path is not None:
+            supervisor_state_path.unlink(missing_ok=True)
+            if shell_exit_code is None and not timed_out and not output_capped:
+                raise ValueError(
+                    state_error or "run supervisor did not report the shell exit"
+                )
     return BoundedCommandResult(
-        proc.returncode, b"", b"", timed_out, False, output_capped=output_capped
+        shell_exit_code if supervisor_state_path is not None else proc.returncode,
+        b"", b"", timed_out, False, output_capped=output_capped,
+        supervisor_pid=proc.pid if supervisor_state_path is not None else None,
+        reparented_orphans=len(reparented),
     )

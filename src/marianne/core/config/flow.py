@@ -93,7 +93,12 @@ class ConcertTrigger(BaseModel):
 class RunTrigger(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    command: str = Field(description="Shell command executed in a bounded process group.")
+    command: str = Field(
+        description=(
+            "Shell command with bounded cleanup of descendants, including detached "
+            "closed-stdio orphans on Linux via a per-action subreaper."
+        )
+    )
     working_directory: str | None = Field(
         default=None, description="Directory; defaults to job workspace."
     )

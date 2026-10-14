@@ -1640,6 +1640,11 @@ class BatonCore:
                                 "error": event.error,
                             },
                         ):
+                            if event.supervisor_pid is not None:
+                                job.flow.state.run_cleanup.append({
+                                    "supervisor_pid": event.supervisor_pid,
+                                    "reparented_orphans": event.reparented_orphans,
+                                })
                             self._state_dirty = True
 
                 case FlowConcertSubmitted():

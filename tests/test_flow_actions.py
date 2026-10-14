@@ -10,12 +10,13 @@ import time
 from pathlib import Path
 
 import psutil
+import pytest
 
 from marianne.core.config.flow import RunTrigger
 from marianne.daemon.baton import flow_actions
 from marianne.daemon.baton.flow_actions import execute_run_action, prefetch_file_facts
 from marianne.utils import process as process_utils
-from marianne.utils.process import safe_killpg
+from marianne.utils.process import run_bounded_command, safe_killpg
 
 
 async def test_file_facts_are_bounded_and_compare_iteration_mtime(tmp_path: Path) -> None:
@@ -106,20 +107,31 @@ async def test_detached_log_holder_is_reaped_without_signalling_unrelated_proces
 ) -> None:
     original_spawn = flow_actions.asyncio.create_subprocess_exec
     original_reap = process_utils.reap_descendant_trees
+    original_killpg = process_utils.safe_killpg
     redirects: list[object] = []
     signalled: list[int] = []
+    signalled_groups: list[int] = []
+    supervisor_groups: list[tuple[int, int]] = []
 
     async def capture_spawn(*args, **kwargs):
         redirects.append(kwargs["stdout"])
-        return await original_spawn(*args, **kwargs)
+        assert kwargs["start_new_session"] is True
+        spawned = await original_spawn(*args, **kwargs)
+        supervisor_groups.append((spawned.pid, os.getpgid(spawned.pid)))
+        return spawned
 
     def capture_reap(descendants):
         result = original_reap(descendants)
         signalled.append(result.signalled)
         return result
 
+    def capture_killpg(pgid, sig, *, context=""):
+        signalled_groups.append(pgid)
+        return original_killpg(pgid, sig, context=context)
+
     monkeypatch.setattr(flow_actions.asyncio, "create_subprocess_exec", capture_spawn)
     monkeypatch.setattr(process_utils, "reap_descendant_trees", capture_reap)
+    monkeypatch.setattr(process_utils, "safe_killpg", capture_killpg)
     unrelated = await original_spawn(
         "sleep", "30", stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
@@ -145,7 +157,10 @@ async def test_detached_log_holder_is_reaped_without_signalling_unrelated_proces
         assert match is not None
         child_pid = int(match.group(1))
         assert redirects and redirects[0] != asyncio.subprocess.PIPE
-        assert sum(signalled) == 1
+        assert supervisor_groups and supervisor_groups[0][0] == supervisor_groups[0][1]
+        assert supervisor_groups[0][1] != os.getpgid(0)
+        assert outcome.supervisor_pid not in signalled_groups
+        assert sum(signalled) >= 1
         assert unrelated.returncode is None
         assert (
             not psutil.pid_exists(child_pid)
@@ -200,6 +215,154 @@ async def test_closed_stdio_group_child_is_reaped_but_bystander_survives(
         if unrelated.returncode is None:
             unrelated.kill()
         await unrelated.wait()
+
+
+async def test_detached_closed_stdio_orphan_is_reaped_after_clean_shell_exit(
+    tmp_path: Path,
+) -> None:
+    """GH #421 Shape A: detached and closed-stdio descendants still belong to run."""
+    bystander = await asyncio.create_subprocess_exec(
+        "sleep", "30", start_new_session=True,
+    )
+    try:
+        for iteration in range(5):
+            child_file = tmp_path / f"detached-{iteration}.pid"
+            command = (
+                "setsid sh -c 'echo $$ > detached-"
+                f"{iteration}.pid; exec >/dev/null 2>&1 </dev/null; exec sleep 30' "
+                "& echo done"
+            )
+            outcome = await execute_run_action(
+                RunTrigger(command=command, timeout_seconds=3),
+                workspace=tmp_path, job_id=f"shape-a-{iteration}", sheet_num=1,
+                fired_epoch=0, chain_id=1, cursor=0, attempt=1, variables={},
+            )
+            assert outcome.exit_code == 0
+            assert not outcome.timed_out
+            child_pid = int(child_file.read_text().strip())
+            assert not psutil.pid_exists(child_pid) or (
+                psutil.Process(child_pid).status() == psutil.STATUS_ZOMBIE
+            )
+            assert bystander.returncode is None
+    finally:
+        for child_file in tmp_path.glob("detached-*.pid"):
+            pid = int(child_file.read_text().strip())
+            if psutil.pid_exists(pid):
+                try:
+                    psutil.Process(pid).kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+        if bystander.returncode is None:
+            bystander.kill()
+        await bystander.wait()
+
+
+async def test_late_detached_fork_during_cleanup_is_reaped(tmp_path: Path) -> None:
+    """GH #406 Shape B: a real fork after the first census remains owned."""
+    leader = tmp_path / "late_leader.py"
+    leader.write_text(
+        "import os, signal, subprocess, time\n"
+        "from pathlib import Path\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "time.sleep(0.15)\n"
+        "child = subprocess.Popen(['sleep', '30'], start_new_session=True, "
+        "stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, "
+        "stderr=subprocess.DEVNULL)\n"
+        "Path('late.pid').write_text(str(child.pid))\n"
+        "time.sleep(0.2)\n"
+    )
+    try:
+        outcome = await execute_run_action(
+            RunTrigger(
+                command=f"'{os.sys.executable}' '{leader}' & echo done",
+                timeout_seconds=3,
+            ),
+            workspace=tmp_path, job_id="shape-b", sheet_num=1,
+            fired_epoch=0, chain_id=1, cursor=0, attempt=1, variables={},
+        )
+        assert (tmp_path / "late.pid").exists()
+        child_pid = int((tmp_path / "late.pid").read_text())
+        assert outcome.exit_code == 0
+        assert not psutil.pid_exists(child_pid) or (
+            psutil.Process(child_pid).status() == psutil.STATUS_ZOMBIE
+        )
+    finally:
+        if (tmp_path / "late.pid").exists():
+            child_pid = int((tmp_path / "late.pid").read_text())
+            if psutil.pid_exists(child_pid):
+                try:
+                    psutil.Process(child_pid).kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+
+
+async def test_parent_waits_for_detached_closed_stdio_child_then_reaps_it(
+    tmp_path: Path,
+) -> None:
+    """GH #421 Shape C keeps the direct shell's clean exit and child cleanup."""
+    try:
+        outcome = await execute_run_action(
+            RunTrigger(
+                command=(
+                    "setsid sh -c 'echo $$ > waited.pid; "
+                    "exec >/dev/null 2>&1 </dev/null; exec sleep 30' "
+                    "& sleep 0.3; echo done"
+                ),
+                timeout_seconds=3,
+            ),
+            workspace=tmp_path, job_id="shape-c", sheet_num=1,
+            fired_epoch=0, chain_id=1, cursor=0, attempt=1, variables={},
+        )
+        child_pid = int((tmp_path / "waited.pid").read_text())
+        assert outcome.exit_code == 0
+        assert outcome.supervisor_pid is not None
+        assert outcome.reparented_orphans >= 1
+        assert not psutil.pid_exists(child_pid) or (
+            psutil.Process(child_pid).status() == psutil.STATUS_ZOMBIE
+        )
+    finally:
+        if (tmp_path / "waited.pid").exists():
+            child_pid = int((tmp_path / "waited.pid").read_text())
+            if psutil.pid_exists(child_pid):
+                try:
+                    psutil.Process(child_pid).kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+
+
+async def test_unavailable_subreaper_uses_existing_cleanup(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    monkeypatch.setattr(flow_actions, "subreaper_available", lambda: False)
+    outcome = await execute_run_action(
+        RunTrigger(command="echo done", timeout_seconds=2),
+        workspace=tmp_path, job_id="fallback", sheet_num=1,
+        fired_epoch=0, chain_id=1, cursor=0, attempt=1, variables={},
+    )
+    assert outcome.exit_code == 0
+    assert outcome.supervisor_pid is None
+
+
+async def test_malformed_supervisor_state_refuses_and_stops_process(
+    tmp_path: Path,
+) -> None:
+    state = tmp_path / "control.state"
+    log_path = tmp_path / "control.log"
+    with log_path.open("wb") as log:
+        proc = await asyncio.create_subprocess_exec(
+            os.sys.executable, "-c",
+            "import pathlib, sys, time; pathlib.Path(sys.argv[1]).write_text('[]'); "
+            "time.sleep(30)",
+            str(state), stdout=log, stderr=log, start_new_session=True,
+        )
+    created = psutil.Process(proc.pid).create_time()
+    with pytest.raises(ValueError, match="malformed state"):
+        await run_bounded_command(
+            proc, timeout_seconds=3, pgid=proc.pid, context="malformed_state",
+            file_output_path=log_path, parent_create_time=created,
+            supervisor_state_path=state,
+        )
+    assert proc.returncode is not None
 
 
 async def test_run_log_identity_is_unique_across_repeated_and_fresh_jobs(tmp_path: Path) -> None:

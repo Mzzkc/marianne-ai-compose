@@ -8,12 +8,32 @@ from pathlib import Path
 from marianne.core.config import JobConfig
 from marianne.core.config.flow import ConcertTrigger, span_range
 from marianne.core.expressions import parse_expression
+from marianne.utils.run_supervisor import subreaper_available
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks.structure import _IDENTITY_VARIABLES
 
 
 def _issue(code: str, severity: ValidationSeverity, message: str) -> ValidationIssue:
     return ValidationIssue(check_id=code, severity=severity, message=message)
+
+
+class RunOrphanReapingScopeCheck:
+    check_id = "V326"
+    severity = ValidationSeverity.INFO
+    description = "Detached run-action orphan cleanup requires Linux subreaper support"
+
+    def check(self, config: JobConfig, config_path: Path, raw_yaml: str) -> list[ValidationIssue]:
+        if subreaper_available():
+            return []
+        for trigger in (config.sheet.triggers or {}).values():
+            for action in (trigger.on_success or []) + (trigger.on_fail or []):
+                if action.run is not None:
+                    return [_issue(
+                        self.check_id, self.severity,
+                        "run: detached, closed-stdio orphan reaping needs Linux "
+                        "PR_SET_CHILD_SUBREAPER; this host uses three-source cleanup",
+                    )]
+        return []
 
 
 class UndefinedFlowVariableCheck:
