@@ -22,11 +22,18 @@ _KNOWN_TYPOS = {
     "sheets": "sheet",
     "prompts": "prompt",
     "max_retries": "retry.max_retries",
-    "timeout": "stale_detection.idle_timeout_seconds",
+    # The sheet timeout is instrument_config.timeout_seconds (P4); the idle
+    # timer is a different, opt-in thing. Until instrument_config is a typed
+    # model (stage 4), the hint names the idle timer WITH its switch so
+    # following it is never a silent no-op; stage 4 retargets the hint to
+    # the sheet timeout key.
+    "timeout": "stale_detection.idle_timeout_seconds (requires stale_detection.enabled: true)",
     "preamble": "prompt.template",
     "task": "prompt.template",
-    "stager_delay_ms": "parallel.stagger_delay_ms",
-    "stagger_delay": "parallel.stagger_delay_ms",
+    # Stagger only takes effect with parallel enabled, so the hint names the
+    # switch (D7) instead of leaving the author a silent no-op.
+    "stager_delay_ms": "parallel.stagger_delay_ms (requires parallel.enabled: true)",
+    "stagger_delay": "parallel.stagger_delay_ms (requires parallel.enabled: true)",
     "backend_type": "instrument",
 }
 

@@ -166,7 +166,9 @@ class NotificationConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["desktop", "slack", "webhook", "email"]
+    type: Literal["desktop", "slack", "webhook", "email"] = Field(
+        description="Notification channel: desktop, slack, webhook, or email."
+    )
     on_events: list[Literal[
         "job_start",
         "sheet_start",
@@ -175,7 +177,12 @@ class NotificationConfig(BaseModel):
         "job_complete",
         "job_failed",
         "job_paused",
-    ]] = Field(default=["job_complete", "job_failed"])
+    ]] = Field(
+        default=["job_complete", "job_failed"],
+        description="Score events that trigger this notification: job_start, "
+        "sheet_start, sheet_complete, sheet_failed, job_complete, job_failed, "
+        "or job_paused.",
+    )
     config: dict[str, Any] = Field(
         default_factory=dict, description="Channel-specific configuration"
     )

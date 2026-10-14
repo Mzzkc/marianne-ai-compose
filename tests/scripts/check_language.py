@@ -18,26 +18,30 @@ hold today's known gaps and fail only on regression, the way
 
 Checks (``L`` codes, so they never collide with validator ``V`` codes):
 
-L01 undescribed      schema key with no description on the field or its model
+L01 undescribed      schema key with no description on its own field (a
+                      parent model's docstring is not a field description)
 L02 divergent        root key whose description shares no word stem with its name
 L03 misplaced-sched  key described as scheduled/recurring that does not live
-                     under ``schedule``
+                      under ``schedule``
 L04 phantom-key      validator suggestion/typo table names a key path that does
-                     not exist
+                      not exist
 L05 orphan           schema key no author surface mentions (score-authoring,
-                     composing, configuration-reference.md)
+                      composing, configuration-reference.md)
 L06 stale            a score-shaped YAML example in a skill, ``docs/ref`` or
-                     ``docs/*.md`` whose keys the loader's own tolerant walk
-                     drops (the example teaches a key that does nothing)
+                      ``docs/*.md`` whose keys the loader's own tolerant walk
+                      drops (the example teaches a key that does nothing)
 L07 vcode-undocumented  a V-code ``mzt validate`` can emit that the
-                     ``docs/cli-reference.md`` validate table does not list
+                      ``docs/cli-reference.md`` validate table does not list
 L08 unread           a score field no runtime code reads (advisory; heuristic)
 L09 silent-switch    a model gated by ``enabled: false`` whose other fields a
-                     score can set without turning it on, and the validator
-                     says nothing (advisory)
+                      score can set without turning it on, and the validator
+                      says nothing (advisory)
 L10 dead-end-hint    a validator suggestion points at a key that does nothing
-                     on its own (it sits in an ``enabled: false`` section with
-                     no auto-enable): following the fix yields a silent no-op
+                      on its own (it sits in an ``enabled: false`` section with
+                      no auto-enable): following the fix yields a silent no-op
+L11 orphan-check     a V-code check class defined in ``src/marianne/
+                      validation`` that the runner never registers and no
+                      doc row marks retired (GH #439)
 
 Exit 0 when no finding is outside the baseline, 1 on regression, 2 on usage or
 environment error. ``--json`` prints machine-readable output.
@@ -72,8 +76,9 @@ CHECKS = {
     "L08": "unread",
     "L09": "silent-switch",
     "L10": "dead-end-hint",
+    "L11": "orphan-check",
 }
-GATING = {"L01", "L02", "L03", "L04", "L05", "L06", "L07", "L10"}
+GATING = {"L01", "L02", "L03", "L04", "L05", "L06", "L07", "L10", "L11"}
 
 # Author surfaces, relative to the repository root. The plugin tree is the
 # ``plugins`` submodule.
@@ -441,6 +446,78 @@ def _untyped_dict_paths(keys: list[KeyInfo]) -> set[str]:
     return {k.path for k in keys if k.annotation.startswith("dict[str, Any]")}
 
 
+def _suggestion_path(suggestion: str) -> str:
+    """The primary key path a suggestion names.
+
+    A suggestion may carry guidance after the key (``parallel.stagger_delay_ms
+    (requires parallel.enabled: true)``); the path the author writes is the
+    first dotted path in the text.
+    """
+    match = re.search(r"[a-z_]+(?:\.[a-z_]+)+", suggestion)
+    return match.group(0) if match else suggestion
+
+
+def _names_the_switch(suggestion: str, section: str) -> bool:
+    """Whether a suggestion itself names the section's ``enabled`` switch.
+
+    A hint that says ``requires parallel.enabled: true`` cannot strand the
+    author: following it turns the section on. That is D7's contract for
+    hints that land inside an opt-in section.
+    """
+    return f"{section}.enabled" in suggestion
+
+
+def orphan_check_definitions(repo: Path) -> list[tuple[str, str]]:
+    """V-codes a check class defines but the registry never registers.
+
+    A class with a ``check_id`` property returning a literal V-code, or a
+    ``ValidationIssue(check_id="Vxxx")`` literal, defines an emittable code.
+    When the suppression-known registry does not know it, the check is dead:
+    written, exported, never run (GH #439). Deleting a retired check with a
+    doc note, or registering it, clears the finding.
+    """
+    import ast
+
+    known = emittable_vcodes()
+    out: list[tuple[str, str]] = []
+    base = repo / "src" / "marianne" / "validation"
+    for path in sorted(base.rglob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        rel = path.relative_to(repo).as_posix()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                for item in node.body:
+                    if not isinstance(item, ast.FunctionDef) or item.name != "check_id":
+                        continue
+                    for ret in ast.walk(item):
+                        value = getattr(ret, "value", None)
+                        if (
+                            isinstance(value, ast.Constant)
+                            and isinstance(value.value, str)
+                            and re.fullmatch(r"V[0-9]{3}", value.value)
+                            and value.value not in known
+                        ):
+                            out.append((f"{rel}:{node.lineno}", value.value))
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                if node.func.id != "ValidationIssue":
+                    continue
+                for keyword in node.keywords:
+                    if keyword.arg != "check_id":
+                        continue
+                    value = keyword.value
+                    if (
+                        isinstance(value, ast.Constant)
+                        and isinstance(value.value, str)
+                        and re.fullmatch(r"V[0-9]{3}", value.value)
+                        and value.value not in known
+                    ):
+                        out.append((f"{rel}:{node.lineno}", value.value))
+    return sorted(set(out))
+
+
 # --------------------------------------------------------------------------
 # runtime (advisory)
 # --------------------------------------------------------------------------
@@ -490,12 +567,13 @@ def run_checks(
     config_ref = _read(repo, CONFIG_REFERENCE)
     cli_ref = _read(repo, CLI_REFERENCE)
 
-    # L01 undescribed
+    # L01 undescribed: a field description is required on the key's own field;
+    # a parent model's docstring describes the model, not the key (D5).
     for key in keys:
-        if not key.description and not key.model_description:
+        if not key.description:
             findings.append(
                 Finding(
-                    "L01", key.path, "no description on the field or its model", where=[key.source]
+                    "L01", key.path, "no description on the field", where=[key.source]
                 )
             )
 
@@ -533,15 +611,16 @@ def run_checks(
     untyped = _untyped_dict_paths(keys)
     references = validator_key_references(repo, {k.key for k in root_keys})
     for origin, target in references:
-        if target in leaf_paths:
+        primary = _suggestion_path(target)
+        if primary in leaf_paths:
             continue
-        parent = target.rsplit(".", 1)[0]
+        parent = primary.rsplit(".", 1)[0]
         why = (
             "inside an untyped dict the schema cannot describe"
             if parent in untyped
             else "no such key"
         )
-        findings.append(Finding("L04", target, f"named by {origin}; {why}", where=[origin]))
+        findings.append(Finding("L04", primary, f"named by {origin}; {why}", where=[origin]))
 
     # L10 a validator hint that lands on a key inert without `enabled: true`
     switched_off = {
@@ -556,12 +635,17 @@ def run_checks(
     for origin, target in references:
         if "_KNOWN_TYPOS" not in origin:
             continue
-        section = target.rsplit(".", 1)[0] if "." in target else ""
-        if section in switched_off and not target.endswith(".enabled"):
+        primary = _suggestion_path(target)
+        section = primary.rsplit(".", 1)[0] if "." in primary else ""
+        if (
+            section in switched_off
+            and not primary.endswith(".enabled")
+            and not _names_the_switch(target, section)
+        ):
             findings.append(
                 Finding(
                     "L10",
-                    target,
+                    primary,
                     f"{origin} suggests it, but `{section}` defaults off; "
                     "following the hint is a silent no-op",
                     where=[origin],
@@ -639,6 +723,19 @@ def run_checks(
                     gating=False,
                 )
             )
+
+    # L11 orphan check class: defined, exported, never registered (GH #439)
+    for origin, code in orphan_check_definitions(repo):
+        findings.append(
+            Finding(
+                "L11",
+                code,
+                f"check class at {origin} is never registered by the runner "
+                "and no doc row marks it retired; register it or delete it "
+                "with a retirement note",
+                where=[origin],
+            )
+        )
 
     # dedupe by id, keep first
     seen: set[str] = set()

@@ -202,10 +202,58 @@ def test_l09_spares_auto_enabling_sections(repo: Path) -> None:
     assert "L09:cost_limits" not in ids
 
 
-def test_l10_fires_when_a_typo_hint_lands_on_a_switched_off_section(repo: Path) -> None:
-    # _KNOWN_TYPOS["timeout"] -> stale_detection.idle_timeout_seconds in the real validator.
+def test_l10_fires_when_a_typo_hint_lands_on_a_switched_off_section(
+    repo: Path, monkeypatch: Any
+) -> None:
+    # D7 fixed the real table ("timeout" now names the sheet timeout), so the
+    # dead-end shape is planted here to prove the RULE still catches it.
+    from marianne.validation.checks import schema as schema_check
+
+    monkeypatch.setattr(
+        schema_check,
+        "_KNOWN_TYPOS",
+        {**schema_check._KNOWN_TYPOS, "timeout": "stale_detection.idle_timeout_seconds"},
+    )
     ids = _ids(repo)
     assert "L10:stale_detection.idle_timeout_seconds" in ids
+
+
+def test_l10_spares_a_hint_that_names_the_switch(
+    repo: Path, monkeypatch: Any
+) -> None:
+    from marianne.validation.checks import schema as schema_check
+
+    monkeypatch.setattr(
+        schema_check,
+        "_KNOWN_TYPOS",
+        {
+            **schema_check._KNOWN_TYPOS,
+            "stagger": (
+                "stale_detection.idle_timeout_seconds"
+                " (requires stale_detection.enabled: true)"
+            ),
+        },
+    )
+    ids = _ids(repo)
+    assert "L10:stale_detection.idle_timeout_seconds" not in ids
+
+
+def test_l11_fires_on_an_unregistered_check_class(repo: Path) -> None:
+    _write(
+        repo,
+        "src/marianne/validation/orphan.py",
+        "class OrphanCheck:\n"
+        "    @property\n"
+        "    def check_id(self) -> str:\n"
+        '        return "V987"\n',
+    )
+    ids = _ids(repo)
+    assert "L11:V987" in ids
+
+
+def test_l11_silent_on_registered_classes(repo: Path) -> None:
+    ids = {i for i in _ids(repo) if i.startswith("L11:")}
+    assert ids == set()
 
 
 def test_baseline_turns_known_gaps_green_and_a_new_gap_red(

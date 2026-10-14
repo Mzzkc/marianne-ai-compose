@@ -521,7 +521,11 @@ class ValidationRule(BaseModel):
         "field_match",
         "file_sha256",
         "csv_unique_key",
-    ]
+    ] = Field(
+        description="Kind of check to run on sheet output: file_exists, "
+        "file_modified, content_contains, content_regex, command_succeeds, "
+        "path_in_scope, field_match, file_sha256, or csv_unique_key."
+    )
     path: str | None = Field(
         default=None, description="File path (supports {sheet_num}, {workspace})"
     )

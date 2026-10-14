@@ -602,18 +602,19 @@ store.delete_pattern(pattern_id="xyz0987654321")
 
 ### Entropy Response Tuning
 
-Customize entropy response behavior via `~/.marianne/conductor.yaml`:
+Customize entropy response behavior in the score itself — `learning.entropy_response` is a score-level key:
 
 ```yaml
+# score YAML (learning.entropy_response)
 learning:
   enabled: true
   entropy_response:
+    enabled: true
+    entropy_threshold: 0.25      # default: 0.3
+    cooldown_seconds: 1800       # default: 3600
     boost_budget: true
     revisit_quarantine: true
-    max_quarantine_revisits: 5       # default: 3
-    budget_floor: 0.08               # default: 0.05
-    budget_ceiling: 0.40             # default: 0.50
-    budget_boost_amount: 0.15        # default: 0.10
+    max_quarantine_revisits: 5   # default: 3
 ```
 
 ### Success Factor Extraction

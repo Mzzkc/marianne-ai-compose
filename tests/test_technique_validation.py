@@ -288,3 +288,75 @@ class TestTechniqueMcpInstrumentCheckEdgeCases:
             )
             == []
         )
+
+
+class TestRegisteredChecksRunOnRealScores:
+    """V301/V302 fixtures through the real check classes and a real score.
+
+    The classes above this exercise local reimplementations; these pin the
+    registered behaviour GH #439 relies on (fire on the defect, silent on
+    the correct form).
+    """
+
+    @staticmethod
+    def _score(tmp_path: Path, techniques_block: str) -> tuple[object, Path, str]:
+        from marianne.core.config import JobConfig
+
+        score = tmp_path / "score.yaml"
+        text = (
+            "name: technique-fixture\n"
+            f"workspace: {tmp_path.as_posix()}\n"
+            "instrument: cli\n"
+            "sheet:\n"
+            "  size: 1\n"
+            "  total_items: 1\n"
+            "prompt:\n"
+            "  template: do the thing\n"
+            f"{techniques_block}\n"
+        )
+        score.write_text(text, encoding="utf-8")
+        return JobConfig.from_yaml(score), score, text
+
+    def test_v301_fires_on_missing_skill_path(self, tmp_path: Path) -> None:
+        from marianne.validation.checks.techniques import TechniqueSkillPathCheck
+
+        config, path, raw = self._score(
+            tmp_path,
+            "techniques:\n"
+            "  mateship:\n"
+            "    kind: skill\n"
+            "    phases: [work]\n"
+            "    config:\n"
+            "      path: does-not-exist.md\n",
+        )
+        issues = TechniqueSkillPathCheck().check(config, path, raw)
+        assert [i.check_id for i in issues] == ["V301"]
+        assert "mateship" in issues[0].message
+
+    def test_v301_silent_when_the_document_exists(self, tmp_path: Path) -> None:
+        from marianne.validation.checks.techniques import TechniqueSkillPathCheck
+
+        (tmp_path / "mates.md").write_text("# method\n", encoding="utf-8")
+        config, path, raw = self._score(
+            tmp_path,
+            "techniques:\n"
+            "  mateship:\n"
+            "    kind: skill\n"
+            "    phases: [work]\n"
+            "    config:\n"
+            "      path: mates.md\n",
+        )
+        assert TechniqueSkillPathCheck().check(config, path, raw) == []
+
+    def test_v302_registered_in_default_checks(self) -> None:
+        from marianne.validation.checks.techniques import (
+            TechniqueMcpInstrumentCheck,
+            TechniqueSkillPathCheck,
+        )
+        from marianne.validation.runner import create_default_checks
+
+        registered = {check.check_id for check in create_default_checks()}
+        assert "V301" in registered
+        assert "V302" in registered
+        assert TechniqueSkillPathCheck().check_id == "V301"
+        assert TechniqueMcpInstrumentCheck().check_id == "V302"

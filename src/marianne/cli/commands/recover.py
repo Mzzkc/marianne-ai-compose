@@ -216,7 +216,7 @@ def _refresh_checkpoint_progress(checkpoint: dict[str, Any]) -> None:
 
 
 def recover(
-    job_id: str = typer.Argument(..., help="Score ID to recover"),
+    job_id: str = typer.Argument(..., help="The score's run id (job id) to recover"),
     sheet: int | None = typer.Option(
         None,
         "--sheet",

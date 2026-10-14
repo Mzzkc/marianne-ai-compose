@@ -895,7 +895,13 @@ class ValidateConfig(BaseModel):
     """Score-local acknowledgement of advisory validator findings."""
 
     model_config = ConfigDict(extra="forbid")
-    suppress: list[str] = Field(default_factory=list)
+
+    suppress: list[str] = Field(
+        default_factory=list,
+        description="V-codes whose advisory findings this score acknowledges "
+        "and hides (WARN/INFO only; ERROR-tier and unknown codes are refused "
+        "by V012).",
+    )
 
 
 class JobConfig(BaseModel):
@@ -909,11 +915,23 @@ class JobConfig(BaseModel):
         """Fields removed by the tolerant score-file loader."""
         return tuple(self._unknown_fields)
 
-    validation_settings: ValidateConfig = Field(default_factory=ValidateConfig, alias="validate")
+    validation_settings: ValidateConfig = Field(
+        default_factory=ValidateConfig,
+        alias="validate",
+        description="Validator acknowledgements for this score: `suppress` hides "
+        "advisory findings by V-code (WARN/INFO only; ERROR can never be suppressed).",
+    )
 
-    name: str = Field(description="Unique job name")
+    name: str = Field(
+        description="Name of this score — its runs are identified by this name "
+        "(the score's run id shown by mzt status)."
+    )
     description: str | None = Field(default=None, description="Human-readable description")
-    workspace: Path = Field(default=Path("./workspace"), description="Output directory")
+    workspace: Path = Field(
+        default=Path("./workspace"),
+        description="Workspace directory for this score's runs: outputs, logs, "
+        "and state live under it.",
+    )
 
     # Instrument plugin system — the only execution-config path
     # (the legacy backend: field was stripped, #347).
@@ -955,8 +973,14 @@ class JobConfig(BaseModel):
         "instrument: but are overridden by per-sheet assignments.",
     )
 
-    sheet: SheetConfig
-    prompt: PromptConfig
+    sheet: SheetConfig = Field(
+        description="Sheets of this score: how the work divides into numbered "
+        "execution units (size, dependencies, fan-out, loops, triggers)."
+    )
+    prompt: PromptConfig = Field(
+        description="Prompt for every sheet: template or template_file, plus "
+        "variables, stakes, and thinking method."
+    )
     spec: SpecCorpusConfig = Field(
         default_factory=SpecCorpusConfig,
         description="Specification corpus configuration. "
@@ -965,14 +989,46 @@ class JobConfig(BaseModel):
         "to enable.",
     )
 
-    retry: RetryConfig = Field(default_factory=RetryConfig)
-    rate_limit: RateLimitConfig = Field(default_factory=RateLimitConfig)
-    circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)
-    cost_limits: CostLimitConfig = Field(default_factory=CostLimitConfig)
-    learning: LearningConfig = Field(default_factory=LearningConfig)
-    grounding: GroundingConfig = Field(default_factory=GroundingConfig)
-    ai_review: AIReviewConfig = Field(default_factory=AIReviewConfig)
-    logging: LogConfig = Field(default_factory=LogConfig)
+    retry: RetryConfig = Field(
+        default_factory=RetryConfig,
+        description="Retry behaviour for failed sheets: attempts, backoff, "
+        "and partial-completion recovery.",
+    )
+    rate_limit: RateLimitConfig = Field(
+        default_factory=RateLimitConfig,
+        description="Rate-limit handling for this score: detection patterns, "
+        "wait minutes, and quota waits.",
+    )
+    circuit_breaker: CircuitBreakerConfig = Field(
+        default_factory=CircuitBreakerConfig,
+        description="Circuit-breaker behaviour for this score: failure "
+        "thresholds and recovery waits before an instrument is retried.",
+    )
+    cost_limits: CostLimitConfig = Field(
+        default_factory=CostLimitConfig,
+        description="Cost limits for this score: per-sheet and per-job caps "
+        "in USD, and the token rates used to estimate them.",
+    )
+    learning: LearningConfig = Field(
+        default_factory=LearningConfig,
+        description="Learning store for this score: outcome memory fed "
+        "forward between sheets and runs.",
+    )
+    grounding: GroundingConfig = Field(
+        default_factory=GroundingConfig,
+        description="Grounding for this score: corpus passages injected to "
+        "keep sheets on source material.",
+    )
+    ai_review: AIReviewConfig = Field(
+        default_factory=AIReviewConfig,
+        description="AI review of sheet outputs: a reviewer model pass before "
+        "validation.",
+    )
+    logging: LogConfig = Field(
+        default_factory=LogConfig,
+        description="Logging for this score's runs: level, file outputs, and "
+        "retention.",
+    )
     workspace_lifecycle: WorkspaceLifecycleConfig = Field(
         default_factory=WorkspaceLifecycleConfig,
         description="Workspace lifecycle management. "
@@ -1051,8 +1107,16 @@ class JobConfig(BaseModel):
         "other agents can discover and delegate tasks.",
     )
 
-    validations: list[ValidationRule] = Field(default_factory=list)
-    notifications: list[NotificationConfig] = Field(default_factory=list)
+    validations: list[ValidationRule] = Field(
+        default_factory=list,
+        description="Validations every sheet must pass: the acceptance "
+        "criteria that define done for this score.",
+    )
+    notifications: list[NotificationConfig] = Field(
+        default_factory=list,
+        description="Notifications for this score's events: channels and the "
+        "events that trigger them.",
+    )
 
     # Concert orchestration (job chaining)
     on_success: list[PostSuccessHookConfig] = Field(
@@ -1093,7 +1157,8 @@ class JobConfig(BaseModel):
     )
     schedule: ScheduleConfig | None = Field(
         default=None,
-        description="Optional recurring execution declaration for this score.",
+        description="Recurring schedule for this score — when ticks fire "
+        "(cron or interval), plus misfire and overlap policy.",
     )
     max_wall_seconds: float | None = Field(
         default=None,

@@ -395,7 +395,8 @@ def _display_log_source(
 def logs(
     job_id: str | None = typer.Argument(
         None,
-        help="Score ID to filter logs for (optional, shows all if not specified)",
+        help="The score's run id (job id) to filter logs for "
+        "(optional, shows all if not specified)",
     ),
     workspace: Path | None = typer.Option(
         None,
@@ -541,7 +542,7 @@ def logs(
 
 
 def errors(
-    job_id: str = typer.Argument(..., help="Score ID to show errors for"),
+    job_id: str = typer.Argument(..., help="The score's run id (job id) to show errors for"),
     sheet: int | None = typer.Option(
         None,
         "--sheet",
@@ -822,7 +823,7 @@ async def _errors_job(
 
 
 def diagnose(
-    job_id: str = typer.Argument(..., help="Score ID to diagnose"),
+    job_id: str = typer.Argument(..., help="The score's run id (job id) to diagnose"),
     workspace: Path | None = typer.Option(
         None,
         "--workspace",
@@ -1816,7 +1817,9 @@ def _display_resource_profile(profile: dict[str, Any], job_id: str) -> None:
 
 
 def history(
-    job_id: str = typer.Argument(..., help="Score ID to show execution history for"),
+    job_id: str = typer.Argument(
+        ..., help="The score's run id (job id) to show execution history for"
+    ),
     sheet: int | None = typer.Option(
         None,
         "--sheet",

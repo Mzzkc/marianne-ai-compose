@@ -29,7 +29,7 @@ _DECISION_HELP = (
 def resolve(
     job_id: str = typer.Argument(
         ...,
-        help="Score ID with a sheet paused in FERMATA (see `mzt status`)",
+        help="The score's run id (job id) with a sheet paused in FERMATA (see `mzt status`)",
     ),
     sheet_num: int = typer.Argument(
         ...,

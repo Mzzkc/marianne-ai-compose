@@ -954,14 +954,6 @@ cross_sheet:
   max_output_chars: 2000    # Truncate per sheet
 ```
 
-For conductor configuration (in `~/.marianne/conductor.yaml`):
-
-```yaml
-learning:
-  max_execution_history: 1000
-  retention_days: 30
-```
-
 ---
 
 ## Advanced Debugging

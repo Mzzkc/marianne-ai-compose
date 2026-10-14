@@ -466,63 +466,10 @@ class PreludeCadenzaFileCheck:
         return issues
 
 
-class SkillFilesExistCheck:
-    """Check that files referenced in validation commands exist (V107).
-
-    This is a WARNING because skill files might be optional.
-    """
-
-    @property
-    def check_id(self) -> str:
-        return "V107"
-
-    @property
-    def severity(self) -> ValidationSeverity:
-        return ValidationSeverity.WARNING
-
-    @property
-    def description(self) -> str:
-        return "Checks for referenced files in validation paths"
-
-    def check(
-        self,
-        config: JobConfig,
-        config_path: Path,
-        raw_yaml: str,
-    ) -> list[ValidationIssue]:
-        """Check files referenced in validations."""
-        issues: list[ValidationIssue] = []
-
-        for i, validation in enumerate(config.validations):
-            # Skip validations with template variables in path
-            # Check file_exists validations - these are expected to be created
-            # so we don't warn about them. Check other types.
-            if (
-                validation.path
-                and "{" not in validation.path
-                and validation.type in ("content_contains", "content_regex")
-            ):
-                file_path = resolve_path(Path(validation.path), config_path)
-
-                # Only warn if it's an absolute path that doesn't exist
-                # Relative paths might be created during execution
-                if file_path.is_absolute() and not file_path.exists():
-                    issues.append(
-                        ValidationIssue(
-                            check_id=self.check_id,
-                            severity=self.severity,
-                            message=(
-                                f"File referenced in validation {i + 1} does not exist: {file_path}"
-                            ),
-                            suggestion="Ensure file will be created before this validation runs",
-                            metadata={
-                                "validation_index": str(i),
-                                "path": str(file_path),
-                            },
-                        )
-                    )
-
-        return issues
+# V107 (warn on missing absolute validation-output paths) is RETIRED:
+# an output need not exist before a job runs. The retirement note lives
+# in docs/cli-reference.md's validate section (GH #439). The dead class
+# was removed; do not re-add it without re-registering and documenting it.
 
 
 class CadenzaOrderingCheck:
