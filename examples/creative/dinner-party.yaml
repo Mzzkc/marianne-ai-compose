@@ -51,7 +51,7 @@ description: "Plan a dinner party with parallel planning tracks"
 
 workspace: "../../workspaces/dinner-party-workspace"
 
-# `writing` selects an available model for this role; set classes.yaml to prefer yours.
+# `writing` favors drafting and voice across providers; prefer yours in classes.yaml.
 instrument: writing
 instrument_config:
   timeout_seconds: 1200

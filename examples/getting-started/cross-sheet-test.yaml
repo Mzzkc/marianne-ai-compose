@@ -32,7 +32,7 @@ description: "Demonstrates cross-sheet context passing in a three-stage research
 
 workspace: "../../workspaces/cross-sheet-workspace"
 
-# `strong` selects an available model for this role; set classes.yaml to prefer yours.
+# `strong` keeps multi-step judgment on a frontier-capable chain; prefer yours in classes.yaml.
 instrument: strong
 
 instrument_config:

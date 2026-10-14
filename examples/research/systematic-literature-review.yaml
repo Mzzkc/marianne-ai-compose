@@ -46,7 +46,7 @@ description: "PRISMA-compliant systematic literature review with quality gates a
 
 workspace: "../../workspaces/slr-workspace"
 
-# `strong` selects an available model for this role; set classes.yaml to prefer yours.
+# `strong` keeps multi-step judgment on a frontier-capable chain; prefer yours in classes.yaml.
 instrument: strong
 
 instrument_config:

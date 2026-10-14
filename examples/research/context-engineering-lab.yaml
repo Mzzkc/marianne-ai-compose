@@ -77,7 +77,7 @@ description: "Dual-LLM context engineering investigation for any project"
 # ─── Set this to where you want investigation outputs saved ───
 workspace: "../../workspaces/context-lab-workspace"
 
-# `strong` selects an available model for this role; set classes.yaml to prefer yours.
+# `strong` keeps multi-step judgment on a frontier-capable chain; prefer yours in classes.yaml.
 instrument: strong
 instrument_config:
   timeout_seconds: 2400

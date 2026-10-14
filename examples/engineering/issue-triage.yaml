@@ -65,7 +65,7 @@ workspace: "../../workspaces/issue-triage-workspace"
 # self-chain. Overwriting mid-run would corrupt the DAG. Re-run this score
 # only when the solver is stopped.
 
-# `workhorse` selects an available model for this role; set classes.yaml to prefer yours.
+# `workhorse` fits repeatable general work; prefer yours in classes.yaml.
 instrument: workhorse
 instrument_fallbacks: [goose]
 instrument_config:

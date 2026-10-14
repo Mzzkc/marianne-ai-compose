@@ -58,7 +58,7 @@ description: "Multi-source research using fan-out for parallel search"
 
 workspace: "../../workspaces/fanout-workspace"
 
-# `workhorse` selects an available model for this role; set classes.yaml to prefer yours.
+# `workhorse` fits repeatable general work; prefer yours in classes.yaml.
 instrument: workhorse
 instrument_config:
   timeout_seconds: 1800
