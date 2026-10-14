@@ -240,9 +240,25 @@ def schema_inventory(root: type[BaseModel], repo: Path) -> list[KeyInfo]:
 # --------------------------------------------------------------------------
 
 
+class SurfaceMissing(RuntimeError):
+    """An author surface the gate must read is not on disk.
+
+    The skill files live in the ``plugins`` submodule. A bare checkout (fresh
+    worktree, CI without submodules) has none of them; scoring a missing
+    surface as "" would turn every skill-taught key into an L05 orphan and
+    report the wrong gaps with a straight face. Fail loud instead.
+    """
+
+
 def _read(repo: Path, rel: str) -> str:
     path = repo / rel
-    return path.read_text(encoding="utf-8") if path.exists() else ""
+    if not path.exists():
+        raise SurfaceMissing(
+            f"{rel} is missing under {repo}; if it lives in the plugins submodule, "
+            "run `git submodule update --init plugins` (the gate cannot judge the "
+            "language without the skill layer)"
+        )
+    return path.read_text(encoding="utf-8")
 
 
 def _mentions(text: str, key: KeyInfo, homonyms: frozenset[str] = frozenset()) -> bool:
@@ -728,6 +744,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check", action="append", choices=sorted(CHECKS), help="run only these checks"
     )
+    parser.add_argument(
+        "--allow-foreign-import",
+        action="store_true",
+        help="accept a marianne import from outside --repo/src (normally exit 2)",
+    )
     args = parser.parse_args(argv)
 
     repo = args.repo.resolve()
@@ -737,7 +758,21 @@ def main(argv: list[str] | None = None) -> int:
     except ImportError as exc:
         print(f"check_language: cannot import marianne: {exc}", file=sys.stderr)
         return 2
-    keys, findings, meta = run_checks(repo, JobConfig)
+    imported = Path(marianne.__file__).resolve()
+    if not args.allow_foreign_import and not imported.is_relative_to(repo / "src"):
+        print(
+            f"check_language: imported marianne from {imported}, which is not under "
+            f"{repo / 'src'}; the schema and validator registry would belong to a "
+            "different tree than the docs and skills (pass --allow-foreign-import "
+            "to override)",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        keys, findings, meta = run_checks(repo, JobConfig)
+    except SurfaceMissing as exc:
+        print(f"check_language: {exc}", file=sys.stderr)
+        return 2
     if args.check:
         findings = [f for f in findings if f.check in args.check]
     commit = _commit(repo)

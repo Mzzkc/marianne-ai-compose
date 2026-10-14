@@ -19,9 +19,20 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 CHECKER = ROOT / "tests" / "scripts" / "check_language.py"
 BASELINE = ROOT / "tests" / "fixtures" / "language_baseline.json"
+SKILL_SURFACE = ROOT / "plugins" / "marianne" / "skills" / "score-authoring" / "SKILL.md"
+
+pytestmark = pytest.mark.skipif(
+    not SKILL_SURFACE.exists(),
+    reason=(
+        "plugins submodule not checked out: the gate reads the skill layer and "
+        "cannot judge the language without it (git submodule update --init plugins)"
+    ),
+)
 
 
 def _run(*extra: str) -> subprocess.CompletedProcess[str]:
@@ -31,13 +42,25 @@ def _run(*extra: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _regressions(stdout: str) -> str:
+    """The NEW findings, which the JSON serialises first and a tail would hide."""
+    try:
+        report = json.loads(stdout)
+    except json.JSONDecodeError:
+        return stdout[-4000:]
+    return "\n".join(
+        f"NEW {r['id']}  {r.get('detail', '')}  {' '.join(r.get('where', []))}"
+        for r in report.get("regressions", [])
+    ) or "(no regression rows; see stderr)"
+
+
 def test_no_language_regression_outside_the_baseline() -> None:
     result = _run("--baseline", str(BASELINE))
     assert result.returncode == 0, (
         "A schema key, validator code, doc or skill line disagrees with the "
         "others and is not in the baseline. Fix the language (all four layers "
         "in one commit, CLAUDE.md) rather than adding to the fixture:\n"
-        + result.stdout[-4000:] + result.stderr[-2000:]
+        + _regressions(result.stdout) + "\n" + result.stderr[-2000:]
     )
 
 
