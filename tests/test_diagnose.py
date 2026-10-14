@@ -128,6 +128,16 @@ class TestBuildDiagnosticReport:
         assert report["status"] == "completed"
         assert "generated_at" in report
 
+    def test_run_cleanup_is_in_diagnostic_report(self) -> None:
+        job = _make_job()
+        job.flow.run_cleanup.append({
+            "supervisor_pid": 2345, "reparented_orphans": 2,
+        })
+        report = _build_diagnostic_report(job)
+        assert report["run_cleanup"] == [{
+            "supervisor_pid": 2345, "reparented_orphans": 2,
+        }]
+
     def test_progress_section(self) -> None:
         job = _make_job(total_sheets=5)
         report = _build_diagnostic_report(job)
@@ -401,6 +411,21 @@ class TestDiagnoseCommand:
         result = runner.invoke(app, ["diagnose", "diag-test", "--workspace", str(tmp_path)])
         assert result.exit_code == 0
         assert "Diagnose Test" in result.stdout or "diag-test" in result.stdout
+
+    def test_run_cleanup_reaches_rich_and_json_diagnose(self, tmp_path: Path) -> None:
+        job = _make_job()
+        job.flow.run_cleanup.append({
+            "supervisor_pid": 2345, "reparented_orphans": 2,
+        })
+        _write_state(tmp_path, job)
+        rich = runner.invoke(app, ["diagnose", "diag-test", "--workspace", str(tmp_path)])
+        assert rich.exit_code == 0
+        assert "Run supervisor 2345: 2 reparented orphans observed" in rich.stdout
+        encoded = runner.invoke(
+            app, ["diagnose", "diag-test", "--json", "--workspace", str(tmp_path)]
+        )
+        assert encoded.exit_code == 0
+        assert json.loads(encoded.stdout)["run_cleanup"] == job.flow.run_cleanup
 
     def test_diagnose_json_output(self, tmp_path: Path) -> None:
         job = _make_job()

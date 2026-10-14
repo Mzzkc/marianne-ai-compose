@@ -58,6 +58,7 @@ from marianne.validation.checks.flow import (
     JinjaLoopCollisionCheck,
     LegacyConditionCheck,
     MixedFanOutKeyingCheck,
+    RunOrphanReapingScopeCheck,
     UndefinedFlowVariableCheck,
     ZeroCostLoopLimitCheck,
 )
@@ -185,6 +186,7 @@ def create_default_checks() -> list[ValidationCheck]:
         ForwardGotoFanOutCheck(),
         GotoCycleCheck(),
         LegacyConditionCheck(),
+        RunOrphanReapingScopeCheck(),
         DependencyCycleCheck(),
         FanOutCoherenceCheck(),
         CadenzaTargetCheck(),

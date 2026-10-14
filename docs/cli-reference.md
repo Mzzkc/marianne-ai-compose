@@ -563,6 +563,13 @@ code-registry and corpus-sweep tests.
 | WARNING | V311, V322 | Capability classes: part of a used class's chain cannot run here (binary missing, unsupported, local server not serving the profile's model, or unable to enforce the sheet's `response_format`) — the job starts at the first available entry; a default-layer class shadowed by a same-named profile; a score alias shadowing a class name |
 | INFO | V011, V104, V110, V218, V225 | Distant unknown field; timeout above 7200 seconds (2 hours); unused variable; ambiguous file reference; mixed fan-out keying |
 | INFO | V325 | Capability classes: per-used-class resolution summary (`Instruments: strong → claude-code, … (user layer, sha256 …)`) |
+| INFO | V326 | A score uses a `run:` trigger on a host without Linux subreaper support. Detached orphans with closed stdio may outlive the action; Linux reaps them under the per-action supervisor. |
+
+A `sheet.triggers` `run:` action executes its command in a bounded shell.
+On Linux a per-action subreaper keeps detached children owned until cleanup
+finishes, including children that close stdout and stderr. Other hosts use
+process-group, ancestry, and log-holder cleanup; V326 identifies the narrower
+orphan guarantee before execution.
 
 V210/V211 search profiles, score aliases, configured classes, and the shipped
 class vocabulary; their suggestions use edit distance ≤ 2 over that whole

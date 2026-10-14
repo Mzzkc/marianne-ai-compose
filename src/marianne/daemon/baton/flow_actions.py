@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import shlex
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -15,15 +16,18 @@ import psutil
 
 from marianne.core.config.flow import RunTrigger
 from marianne.core.expressions import FileFacts
+from marianne.core.logging import get_logger
 from marianne.execution.validation.expansion import expand_known
 from marianne.utils.process import (
     run_bounded_command,
 )
+from marianne.utils.run_supervisor import subreaper_available
 
 FLOW_FILE_READ_CAP_BYTES = 1_048_576
 FLOW_FACTS_TIMEOUT_SECONDS = 10.0
 FLOW_RUN_LOG_CAP_BYTES = 1_048_576
 _NAME = re.compile(r"\{([a-z][a-z0-9_]*)\}")
+_logger = get_logger("baton.flow_actions")
 
 
 def _expand_path(template: str, variables: dict[str, Any]) -> str:
@@ -80,6 +84,8 @@ class RunOutcome:
     timed_out: bool
     log_path: str | None
     error: str | None = None
+    supervisor_pid: int | None = None
+    reparented_orphans: int = 0
 
 
 async def execute_run_action(
@@ -116,14 +122,30 @@ async def execute_run_action(
         f"run-{safe_job}-s{sheet_num}-e{fired_epoch}-c{chain_id}-a{cursor}-n{attempt}"
         f"-{secrets.token_hex(12)}.log"
     )
+    state_path = log_path.with_suffix(".state") if subreaper_available() else None
+    if state_path is None:
+        _logger.warning(
+            "flow_run.subreaper_unavailable",
+            job_id=job_id,
+            reason="Linux PR_SET_CHILD_SUBREAPER unavailable; using three-source cleanup",
+        )
     try:
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
         descriptor = os.open(log_path, flags, 0o600)
         with os.fdopen(descriptor, "wb") as log:
+            # ``-P`` (safe_path, Python 3.11+): never put the action's cwd on
+            # sys.path, so a workspace that happens to contain a ``marianne``
+            # package cannot shadow the installed supervisor module (Forge
+            # Inspect P2, 2026-10-14). The shell still runs in ``cwd``.
+            argv = (
+                [sys.executable, "-P", "-m", "marianne.utils.run_supervisor",
+                 str(state_path), command]
+                if state_path is not None else ["bash", "-c", command]
+            )
             proc = await asyncio.create_subprocess_exec(
-                "bash", "-c", command, cwd=str(cwd), stdin=asyncio.subprocess.DEVNULL,
+                *argv, cwd=str(cwd), stdin=asyncio.subprocess.DEVNULL,
                 stdout=log, stderr=asyncio.subprocess.STDOUT,
                 start_new_session=True,
                 env={**os.environ,
@@ -143,6 +165,7 @@ async def execute_run_action(
             # GH #415: the cap is enforced WHILE the child runs, not only
             # truncated after it exits, so peak disk use is bounded.
             file_output_cap_bytes=FLOW_RUN_LOG_CAP_BYTES,
+            supervisor_state_path=state_path,
         )
         if log_path.stat().st_size > FLOW_RUN_LOG_CAP_BYTES:
             with log_path.open("r+b") as limited_log:
@@ -152,7 +175,12 @@ async def execute_run_action(
                 result.returncode, False, str(log_path),
                 f"run log exceeded {FLOW_RUN_LOG_CAP_BYTES} bytes while the command ran; "
                 "the command was ended and the log truncated to the cap",
+                result.supervisor_pid, result.reparented_orphans,
             )
-        return RunOutcome(result.returncode, result.timed_out, str(log_path))
+        return RunOutcome(
+            result.returncode, result.timed_out, str(log_path),
+            supervisor_pid=result.supervisor_pid,
+            reparented_orphans=result.reparented_orphans,
+        )
     except (OSError, ValueError) as exc:
         return RunOutcome(None, False, None, f"{type(exc).__name__}: {exc}")

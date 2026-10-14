@@ -155,10 +155,14 @@ async def test_run_action_holds_chain_until_result_then_goto() -> None:
     await baton.handle_event(FlowRunFinished(
         job_id="j", chain_id=request.chain_id, cursor=request.cursor,
         exit_code=0, timed_out=False, log_path="flow.log",
+        supervisor_pid=12345, reparented_orphans=2,
     ))
     assert checkpoint.flow.chains == []
     assert checkpoint.sheets[1].status == SheetStatus.PENDING
     assert checkpoint.sheets[1].dispatch_epoch == 1
+    assert CheckpointState.model_validate_json(checkpoint.model_dump_json()).flow.run_cleanup == [
+        {"supervisor_pid": 12345, "reparented_orphans": 2}
+    ]
 
 
 async def test_guarded_route_success_suppresses_trigger() -> None:

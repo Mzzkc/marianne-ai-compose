@@ -4283,9 +4283,17 @@ class BatonAdapter:
                     event_generation=job.event_generation,
                 ))
                 return
+            _logger.info(
+                "flow_run.cleanup",
+                job_id=job_id,
+                supervisor_pid=outcome.supervisor_pid,
+                reparented_orphans=outcome.reparented_orphans,
+            )
             self._baton.inbox.put_nowait(FlowRunFinished(
                 job_id, request.chain_id, request.cursor, outcome.exit_code,
                 outcome.timed_out, outcome.log_path, error=outcome.error,
+                supervisor_pid=outcome.supervisor_pid,
+                reparented_orphans=outcome.reparented_orphans,
                 event_generation=job.event_generation,
             ))
             return
