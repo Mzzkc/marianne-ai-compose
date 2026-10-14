@@ -20,8 +20,9 @@ def test_primary_v_codes_are_unique_and_secondary_codes_are_reserved() -> None:
     assert "V104" not in codes  # TimeoutRangeCheck's secondary INFO emission
     assert "V212" in codes  # SkipWhenSheetRangeCheck owns it
     assert "V110" in codes  # unused-variable INFO, distinct from V104
-    # V310 doubles as ClassChainAvailabilityCheck's all-entries-unavailable
-    # escalation; the primary owner is ClassNameResolutionCheck.
+    # V310 is owned by ClassNameResolutionCheck alone (no REGISTERED entry);
+    # ClassChainAvailabilityCheck keeps an all-entries-UNAVAILABLE chain at V311
+    # WARNING because availability is a fact about the machine, not the score.
     assert codes.count("V310") == 1
 
 

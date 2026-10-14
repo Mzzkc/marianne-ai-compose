@@ -237,8 +237,9 @@ class ClassChainAvailabilityCheck:
     Per used class: k of n entries unresolvable or unavailable (binary not on
     PATH, execution_status unsupported, or unable to enforce a sheet's
     response_format) — the job still starts at the first available entry. When
-    no entry can run, the row escalates to a V310 ERROR (secondary emission,
-    the V104 precedent) because the class is effectively unrunnable here.
+    no entry can run here the row stays a WARNING that says so: availability
+    is a fact about the machine, the conductor still admits the score (A-C5),
+    and V310 is reserved for a chain with no REGISTERED entry (V-CLS-02).
 
     Also warns when a name the score uses resolves to a profile that shadows a
     packaged-default class of the same name (V-CLS-08 WARN arm): the profile
@@ -290,19 +291,29 @@ class ClassChainAvailabilityCheck:
                 continue
             entries_text = "; ".join(unavailable)
             if len(unavailable) == n:
+                # Availability is a fact about this machine, not the score
+                # (V-CLS-03; A-C5): the conductor admits a chain whose entries
+                # are all registered, and dispatch reports the missing binary.
+                # So a chain nobody can run HERE is a WARNING that says so and
+                # points at the install, never an ERROR that refuses a score
+                # `mzt run` would accept. (The escalation that used to live
+                # here failed `mzt init` → `mzt validate` on every fresh
+                # install and every CI runner.)
                 issues.append(
                     ValidationIssue(
-                        check_id="V310",
-                        severity=ValidationSeverity.ERROR,
+                        check_id=self.check_id,
+                        severity=ValidationSeverity.WARNING,
                         message=(
-                            f"{location}: class '{name}' has no instruments configured "
-                            f"on this machine; {_VOCABULARY_HINT}"
+                            f"class '{name}': none of its {n} entries can run here "
+                            f"({entries_text}); the job will be admitted and every "
+                            "dispatch will fail until one of them is installed"
                         ),
                         line=find_line_in_yaml(raw_yaml, name),
-                        context=f"chain: {entries_text}",
+                        context=name,
                         suggestion=(
-                            "no entry of this class can run here; install one of its "
-                            "instruments or extend the class in ~/.marianne/classes.yaml"
+                            "install one of the class's instruments (mzt doctor lists "
+                            "what is on PATH), or extend the class in "
+                            "~/.marianne/classes.yaml with an instrument you have"
                         ),
                         metadata={"class_name": name, "location": location},
                     )
