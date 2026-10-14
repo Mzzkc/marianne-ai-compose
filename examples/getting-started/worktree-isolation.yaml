@@ -56,8 +56,8 @@ description: "Parallel code review in isolated worktrees — three expert perspe
 
 workspace: ../../workspaces/review-workspace
 
-instrument: claude-code
-instrument_fallbacks: [codex-cli]
+# `strong` keeps multi-step judgment on a frontier-capable chain; prefer yours in classes.yaml.
+instrument: strong
 instrument_config:
   timeout_seconds: 600
 

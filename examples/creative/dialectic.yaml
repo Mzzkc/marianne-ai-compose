@@ -56,8 +56,8 @@ description: "Thesis-antithesis-synthesis argumentation"
 
 workspace: "../../workspaces/dialectic-workspace"
 
-instrument: claude-code
-instrument_fallbacks: [codex-cli]
+# `writing` favors drafting and voice across providers; prefer yours in classes.yaml.
+instrument: writing
 instrument_config:
   timeout_seconds: 1800
 

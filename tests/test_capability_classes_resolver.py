@@ -117,16 +117,28 @@ def test_all_tracked_scores_keep_sheet_identity_under_snapshots() -> None:
         if relative.endswith("_scheduler/conductor-snippet.yaml"):
             assert isinstance(raw, dict) and set(raw) == {"scheduler"}
             continue
-        if relative == "examples/getting-started/hello.yaml":
-            # This score intentionally migrated to workhorse in this build.
-            continue
         score_count += 1
         config = JobConfig.from_yaml(root / relative)
         original = [sheet.model_dump(mode="json") for sheet in build_sheets(config)]
         assert [
             sheet.model_dump(mode="json") for sheet in build_sheets(config, classes=empty)
         ] == original, relative
-        assert [
+        resolved = [
             sheet.model_dump(mode="json") for sheet in build_sheets(config, classes=packaged)
-        ] == original, relative
-    assert score_count == len(tracked) - 2
+        ]
+        if any(sheet["instrument_resolution"] for sheet in resolved):
+            # A migrated score intentionally changes its route. Its work shape must not move.
+            route_keys = {
+                "instrument_name", "instrument_fallbacks",
+                "instrument_fallback_configs", "instrument_resolution",
+            }
+            assert [
+                {key: value for key, value in sheet.items() if key not in route_keys}
+                for sheet in resolved
+            ] == [
+                {key: value for key, value in sheet.items() if key not in route_keys}
+                for sheet in original
+            ], relative
+        else:
+            assert resolved == original, relative
+    assert score_count == len(tracked) - 1

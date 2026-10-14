@@ -65,7 +65,8 @@ workspace: "../../workspaces/issue-triage-workspace"
 # self-chain. Overwriting mid-run would corrupt the DAG. Re-run this score
 # only when the solver is stopped.
 
-instrument: claude-code
+# `workhorse` fits repeatable general work; prefer yours in classes.yaml.
+instrument: workhorse
 instrument_fallbacks: [goose]
 instrument_config:
   timeout_seconds: 900   # covers scanner installs + dependency investigation

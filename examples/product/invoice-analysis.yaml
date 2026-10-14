@@ -68,8 +68,8 @@ description: "Analyze an invoice from three expert perspectives — accuracy, co
 
 workspace: ../../workspaces/invoice-analysis
 
-instrument: claude-code
-instrument_fallbacks: [codex-cli]
+# `workhorse` fits repeatable general work; prefer yours in classes.yaml.
+instrument: workhorse
 instrument_config:
   timeout_seconds: 600
 

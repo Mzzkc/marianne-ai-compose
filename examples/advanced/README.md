@@ -6,7 +6,7 @@ These scores demonstrate Marianne's sophisticated coordination capabilities: exp
 
 | Score | What It Does | Sheets | Patterns Used | Time | Cost |
 |-------|-------------|--------|--------------|------|------|
-| [parallel-research](../../improved/parallel-research.yaml) | Multi-source research via explicit dependencies | 6 | Fan-out + Synthesis (manual) | ~20m | ~$1.50 |
+| [parallel-research](parallel-research.yaml) | Multi-source research via explicit dependencies | 6 | Fan-out + Synthesis (manual) | ~20m | ~$1.50 |
 | [instrument-showcase](instrument-showcase.yaml) | Multi-instrument code analysis with echelon-tiered routing | 6 | Echelon Repair, The Tool Chain | ~20-40m | ~$2-8 |
 
 **parallel-research.yaml** — Conducts research by searching three source types in parallel (academic papers, industry reports, patent filings), then synthesizes findings to identify convergent evidence, divergent claims, and research gaps. Demonstrates explicit sheet dependencies as an alternative to fan-out expansion: each parallel sheet gets hand-crafted domain-specific instructions rather than a parameterized template. Produces a multi-section report with convergence scoring across sources, methodology documentation, and actionable recommendations. The output reveals what emerges from cross-domain collision rather than summarizing sources independently.
@@ -32,7 +32,7 @@ Watch as sheets 2-4 execute simultaneously (academic, industry, patent searches)
 4. Update `workspace` path to your output location
 
 **Prerequisites:**
-- Claude Code and Codex CLI configured (uses claude-code with codex-cli fallback)
+- At least one profile configured in the `strong` class chain (`mzt instruments classes show`); the instrument showcase keeps its explicit provider seats
 - Score validates clean: `mzt validate examples/advanced/parallel-research.yaml`
 
 ## Patterns Demonstrated

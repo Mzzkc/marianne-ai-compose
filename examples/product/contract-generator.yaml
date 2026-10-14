@@ -46,8 +46,8 @@ description: "Generate a complete legal contract from a brief — parallel secti
 
 workspace: ../../workspaces/contract-gen
 
-instrument: claude-code
-instrument_fallbacks: [codex-cli]
+# `strong` keeps multi-step judgment on a frontier-capable chain; prefer yours in classes.yaml.
+instrument: strong
 instrument_config:
   timeout_seconds: 600
 

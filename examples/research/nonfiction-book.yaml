@@ -67,9 +67,8 @@ description: "Non-fiction book authoring via Succession Pipeline — 8-phase Sno
 
 workspace: "../../workspaces/book-workspace"
 
-instrument: claude-code
-instrument_fallbacks:
-  - codex-cli
+# `writing` favors drafting and voice across providers; prefer yours in classes.yaml.
+instrument: writing
 instrument_config:
   timeout_seconds: 3600    # 60 minutes per sheet — creative writing requires depth
 

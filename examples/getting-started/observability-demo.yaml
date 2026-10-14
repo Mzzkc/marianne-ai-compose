@@ -57,8 +57,8 @@ description: "Project health check pipeline — learn Marianne's observability t
 
 workspace: ../../workspaces/observability-demo
 
-instrument: claude-code
-instrument_fallbacks: [codex-cli]
+# `strong` keeps multi-step judgment on a frontier-capable chain; prefer yours in classes.yaml.
+instrument: strong
 instrument_config:
   timeout_seconds: 300
 

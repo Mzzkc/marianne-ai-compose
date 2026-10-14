@@ -52,9 +52,8 @@ description: "Generate a fictional world through parallel creative lenses"
 
 workspace: "../../workspaces/worldbuilder-workspace"
 
-instrument: claude-code
-instrument_fallbacks: [codex-cli]
-
+# `writing` favors drafting and voice across providers; prefer yours in classes.yaml.
+instrument: writing
 instrument_config:
   timeout_seconds: 1800
 
