@@ -215,11 +215,20 @@ def resolve_job_classes(
     selected = dict(previous.classes) if previous is not None else {}
     for name in requested - selected.keys():
         entry = class_map.classes[name]
-        for step in entry.chain:
-            if step.profile not in profile_names:
-                raise ValueError(
-                    f"class '{name}' names unregistered instrument profile '{step.profile}'",
-                )
+        # A-C5 (Blueprint acceptance addendum, decided 2026-10-14): a chain
+        # with SOME unregistered entries is admitted. The validator rates it
+        # V311 WARN ("the job will start at the first available entry") and
+        # dispatch types a registry miss INSTRUMENT_UNAVAILABLE and advances
+        # at once (PO-C9, #425); refusing it here contradicted both, and made
+        # a shared class map unusable on any machine lacking one entry. A
+        # chain with NO registered entry is still refused (V310's state).
+        if not any(step.profile in profile_names for step in entry.chain):
+            entries = ", ".join(step.profile for step in entry.chain)
+            raise ValueError(
+                f"class '{name}' has no instruments registered on this machine "
+                f"(chain: {entries}); run 'mzt instruments classes write' or register "
+                "one of them",
+            )
         selected[name] = entry.model_copy(update={"resolved_at": phase}, deep=True)
     layers = list(previous.layers) if previous is not None else list(class_map.layers)
     snapshot = ClassSnapshot.from_classes(selected, layers)

@@ -81,3 +81,29 @@ def test_score_model_cannot_override_class_choice(tmp_path: Path) -> None:
             _job(instrument="strong", instrument_config={"model": "unrelated"}),
             {"claude-code", "codex-cli", "antigravity", "opencode"}, loaded,
         )
+
+
+def test_partly_unregistered_chain_is_admitted_and_fully_unregistered_is_refused(
+    tmp_path: Path,
+) -> None:
+    """A-C5 (Blueprint acceptance addendum): the sealed pair contradicted itself —
+    §4.3 refused any chain holding an unregistered profile at submit while §8's
+    V-CLS-03 rated the same state WARN with "the job will start at the first
+    available entry". Dispatch already types a registry miss INSTRUMENT_UNAVAILABLE
+    and advances (PO-C9), so admission follows the validator: a partly
+    unregistered chain is admitted with its full chain frozen; only a chain with
+    NO registered entry is refused."""
+    user = tmp_path / "classes.yaml"
+    user.write_text(
+        "version: 1\nclasses:\n  strong: [missing-a, missing-b, claude-code]\n"
+        "  review: [missing-c, missing-d]\n"
+    )
+    loaded = load_class_map(user_path=user, venue_path=tmp_path / "absent",
+                            profile_names={"claude-code", "cli"})
+    snapshot = resolve_job_classes(_job(instrument="strong"), {"claude-code", "cli"}, loaded)
+    assert snapshot is not None
+    assert [s.profile for s in snapshot.classes["strong"].chain] == [
+        "missing-a", "missing-b", "claude-code"
+    ]
+    with pytest.raises(ValueError, match="no instruments registered on this machine"):
+        resolve_job_classes(_job(instrument="review"), {"claude-code", "cli"}, loaded)
