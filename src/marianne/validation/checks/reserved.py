@@ -20,7 +20,7 @@ from pydantic import AliasChoices, BaseModel
 
 from marianne.core.config import JobConfig
 from marianne.validation.base import ValidationIssue, ValidationSeverity
-from marianne.validation.checks._helpers import find_line_in_yaml
+from marianne.validation.checks._helpers import find_line_in_yaml, parsed_document
 
 _MARKERS = ("Reserved:", "Loader-owned:")
 _DEPRECATED_ROOT = "Deprecated:"
@@ -175,13 +175,8 @@ class ReservedKeyUseCheck:
     def check(
         self, config: JobConfig, config_path: Path, raw_yaml: str
     ) -> list[ValidationIssue]:
-        import yaml as _yaml
-
-        try:
-            data = _yaml.safe_load(raw_yaml)
-        except _yaml.YAMLError:
-            return []
-        if not isinstance(data, dict):
+        data = parsed_document(raw_yaml)
+        if data is None:
             return []
         reserved, _deprecated = _scored_paths()
         issues: list[ValidationIssue] = []
@@ -247,13 +242,8 @@ class DeprecatedSpellingCheck:
     def check(
         self, config: JobConfig, config_path: Path, raw_yaml: str
     ) -> list[ValidationIssue]:
-        import yaml as _yaml
-
-        try:
-            data = _yaml.safe_load(raw_yaml)
-        except _yaml.YAMLError:
-            return []
-        if not isinstance(data, dict):
+        data = parsed_document(raw_yaml)
+        if data is None:
             return []
         _reserved, deprecated = _scored_paths()
         issues: list[ValidationIssue] = []
@@ -325,13 +315,8 @@ class EnabledSettingsWarningCheck:
     def check(
         self, config: JobConfig, config_path: Path, raw_yaml: str
     ) -> list[ValidationIssue]:
-        import yaml as _yaml
-
-        try:
-            data = _yaml.safe_load(raw_yaml)
-        except _yaml.YAMLError:
-            return []
-        if not isinstance(data, dict):
+        data = parsed_document(raw_yaml)
+        if data is None:
             return []
         reserved, _deprecated = _scored_paths()
         issues: list[ValidationIssue] = []

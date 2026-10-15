@@ -536,7 +536,6 @@ class TestWorkspacePathTraversal:
     def test_rejects_sensitive_system_paths(self, monkeypatch):
         """workspace_path pointing to /etc, /proc, /sys, /dev is rejected."""
         import marianne.dashboard.routes.scores as scores
-
         from marianne.dashboard.routes.scores import run_extended_validation
 
         observed_paths = []

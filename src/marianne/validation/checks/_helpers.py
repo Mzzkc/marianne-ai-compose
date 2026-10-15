@@ -53,3 +53,34 @@ def resolve_path(path: Path, config_path: Path) -> Path:
     if expanded.is_absolute():
         return expanded
     return config_path.parent / expanded
+
+
+_PARSED_DOCUMENT_CACHE: dict[str, object] = {}
+_PARSED_DOCUMENT_CACHE_LIMIT = 8
+
+
+def parsed_document(raw_yaml: str) -> dict[object, object] | None:
+    """The score's raw YAML as one mapping, parsed once per text.
+
+    Several checks (V004, V327, V328, V329) read the raw document rather
+    than the resolved ``JobConfig``. Each parsing it again cost a corpus
+    sweep of 68 scores ~9 s on CI and tripped the 30 s test timeout.
+    The parse is shared by text identity, so a check must treat the
+    mapping as read-only. Returns ``None`` when the text is not a
+    mapping or does not parse: every caller already returned no issues
+    for that.
+    """
+    import yaml as _yaml
+
+    if raw_yaml in _PARSED_DOCUMENT_CACHE:
+        cached = _PARSED_DOCUMENT_CACHE[raw_yaml]
+        return cached if isinstance(cached, dict) else None
+    loader = getattr(_yaml, "CSafeLoader", _yaml.SafeLoader)
+    try:
+        data = _yaml.load(raw_yaml, Loader=loader)  # noqa: S506 - SafeLoader variant
+    except _yaml.YAMLError:
+        data = None
+    if len(_PARSED_DOCUMENT_CACHE) >= _PARSED_DOCUMENT_CACHE_LIMIT:
+        _PARSED_DOCUMENT_CACHE.pop(next(iter(_PARSED_DOCUMENT_CACHE)))
+    _PARSED_DOCUMENT_CACHE[raw_yaml] = data
+    return data if isinstance(data, dict) else None

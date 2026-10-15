@@ -9,7 +9,11 @@ from pathlib import Path
 from marianne.core.config import JobConfig
 from marianne.core.config.job import InjectionItem
 from marianne.validation.base import ValidationIssue, ValidationSeverity
-from marianne.validation.checks._helpers import find_line_in_yaml, resolve_path
+from marianne.validation.checks._helpers import (
+    find_line_in_yaml,
+    parsed_document,
+    resolve_path,
+)
 
 
 def _workspace_path(config: JobConfig, config_path: Path) -> Path:
@@ -221,13 +225,8 @@ class AbsoluteHomePathCheck:
         raw_yaml: str,
     ) -> list[ValidationIssue]:
         """Check workspace, prelude/cadenza paths, hook job_paths, variables."""
-        import yaml as _yaml
-
-        try:
-            data = _yaml.safe_load(raw_yaml)
-        except _yaml.YAMLError:
-            return []
-        if not isinstance(data, dict):
+        data = parsed_document(raw_yaml)
+        if data is None:
             return []
 
         home_prefix = str(Path.home())
