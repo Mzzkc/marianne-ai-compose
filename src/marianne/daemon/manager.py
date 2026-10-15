@@ -67,6 +67,7 @@ from marianne.daemon.schedule_registry import (
     ScheduleRegistry,
     ScheduleRegistryBusyError,
     ScheduleRegistryDataError,
+    ScheduleRegistryError,
 )
 from marianne.daemon.scheduler import GlobalSheetScheduler
 from marianne.daemon.semantic_analyzer import SemanticAnalyzer
@@ -4146,8 +4147,16 @@ class JobManager:
                 else:
                     removal_error = exc
 
+            async def finish_cancellation() -> None:
+                await self._cancel_schedule_related(record, source=source)
+                token = getattr(record, "registration_id", None)
+                if removal_error is None and isinstance(token, str) and token:
+                    await self._schedule_registry.record_terminal(
+                        token, record.schedule_id, record.source_digest,
+                    )
+
             cleanup = asyncio.create_task(
-                self._cancel_schedule_related(record, source=source),
+                finish_cancellation(),
                 name=f"schedule-cancel-{record.schedule_id}",
             )
             try:
@@ -4160,11 +4169,6 @@ class JobManager:
                 raise
             if removal_error is not None:
                 raise removal_error
-            token = getattr(record, "registration_id", None)
-            if isinstance(token, str) and token:
-                await self._schedule_registry.record_terminal(
-                    token, record.schedule_id, record.source_digest,
-                )
             return True
         finally:
             self._release_lifecycle_admission(claims)
@@ -4211,7 +4215,10 @@ class JobManager:
     async def register_schedule_v2(self, config_path: Path) -> dict[str, Any]:
         """Mint one durable caller-held receipt in the registration transaction."""
         token = uuid4().hex
-        result = await self.register_schedule(config_path, registration_id=token)
+        try:
+            result = await self.register_schedule(config_path, registration_id=token)
+        except ScheduleRegistryError:
+            return self._schedule_venue_result("", "", "inconclusive", "damaged_state")
         result["receipt_version"] = 2
         if result["state"] in {"live", "disabled"}:
             result["registration_id"] = token
@@ -4226,7 +4233,12 @@ class JobManager:
             return self._schedule_venue_result(
                 registry_identity, schedule_id, "inconclusive", "invalid_receipt"
             )
-        result = await self.current_schedule(schedule_id, registry_identity, source_digest)
+        try:
+            result = await self.current_schedule(schedule_id, registry_identity, source_digest)
+        except ScheduleRegistryError:
+            return self._schedule_venue_result(
+                registry_identity, schedule_id, "inconclusive", "damaged_state"
+            )
         result["receipt_version"] = 2
         if result["state"] == "inconclusive":
             return result
@@ -4243,6 +4255,9 @@ class JobManager:
             result.update(state="inconclusive", reason="registry_busy")
             return result
         except ScheduleRegistryDataError:
+            result.update(state="inconclusive", reason="damaged_state")
+            return result
+        except ScheduleRegistryError:
             result.update(state="inconclusive", reason="damaged_state")
             return result
         if terminal != (schedule_id, registry_identity, source_digest):
@@ -4273,6 +4288,10 @@ class JobManager:
         except (JobSubmissionError, ScheduleRegistryBusyError):
             return self._schedule_venue_result(
                 registry_identity, schedule_id, "inconclusive", "race"
+            )
+        except ScheduleRegistryError:
+            return self._schedule_venue_result(
+                registry_identity, schedule_id, "inconclusive", "damaged_state"
             )
         after = await self.current_schedule_v2(
             schedule_id, registry_identity, source_digest, registration_id, receipt_version,

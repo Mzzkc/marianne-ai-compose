@@ -1,5 +1,6 @@
 """Caller-held v2 schedule receipt and terminal proof over a disposable venue."""
 
+import asyncio
 import shutil
 import sqlite3
 from pathlib import Path
@@ -213,3 +214,53 @@ async def test_pre_witness_identity_migrates_by_rotation(tmp_path: Path) -> None
         assert new_identity != old_identity
     async with ScheduleRegistry(state) as restarted:
         assert await restarted.identity() == new_identity
+
+
+@pytest.mark.asyncio
+async def test_cancelled_waiter_still_records_completed_stop(tmp_path: Path) -> None:
+    manager = manager_for(tmp_path / "state" / "state.db")
+    await manager._schedule_registry.open()
+    receipt = await manager.register_schedule_v2(score_at(tmp_path))
+    cleanup_entered = asyncio.Event()
+    cleanup_release = asyncio.Event()
+
+    async def delayed_cleanup(record: object, *, source: str) -> None:
+        cleanup_entered.set()
+        await cleanup_release.wait()
+
+    manager._cancel_schedule_related = delayed_cleanup  # type: ignore[method-assign]
+    task = asyncio.create_task(manager.cancel_schedule_v2(
+        receipt["schedule_id"], receipt["registry_identity"],
+        receipt["source_digest"], receipt["registration_id"], 2,
+    ))
+    await cleanup_entered.wait()
+    task.cancel()
+    cleanup_release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    result = await manager.current_schedule_v2(
+        receipt["schedule_id"], receipt["registry_identity"],
+        receipt["source_digest"], receipt["registration_id"], 2,
+    )
+    assert result["state"] == "not_registered"
+    await manager._schedule_registry.close()
+
+
+@pytest.mark.asyncio
+async def test_missing_terminal_table_is_typed_uncertainty(tmp_path: Path) -> None:
+    manager = manager_for(tmp_path / "state" / "state.db")
+    await manager._schedule_registry.open()
+    receipt = await manager.register_schedule_v2(score_at(tmp_path))
+    await manager.cancel_schedule_v2(
+        receipt["schedule_id"], receipt["registry_identity"],
+        receipt["source_digest"], receipt["registration_id"], 2,
+    )
+    await manager._schedule_registry._db.execute("DROP TABLE schedule_terminals")
+    await manager._schedule_registry._db.commit()
+    result = await manager.current_schedule_v2(
+        receipt["schedule_id"], receipt["registry_identity"],
+        receipt["source_digest"], receipt["registration_id"], 2,
+    )
+    assert result["state"] == "inconclusive"
+    assert result["reason"] == "damaged_state"
+    await manager._schedule_registry.close()
