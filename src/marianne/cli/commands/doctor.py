@@ -24,7 +24,7 @@ from marianne import __version__
 from marianne.cli.output import console as default_console
 from marianne.core.config.instruments import InstrumentProfile
 from marianne.instruments.availability import probe_profile
-from marianne.instruments.loader import load_all_profiles
+from marianne.instruments.loader import load_all_profiles, profile_source_dirs
 
 _DOCTOR_RUNTIME_TIMEOUT_SECONDS = 1.0
 
@@ -332,6 +332,119 @@ def _clean_storage_findings(findings: list[dict[str, Any]]) -> list[str]:
     return removed
 
 
+def _names_in_document(node: Any, found: set[str]) -> None:
+    """Collect every string scalar in a parsed score document.
+
+    A profile counts as referenced if its name appears anywhere a score
+    could name it (``instrument``, fallbacks, per-sheet maps, alias
+    ``profile``, class chains). Taking every string over-approximates,
+    which errs toward NOT reporting a profile: a false "unreferenced" is
+    the costly mistake here, not a missed one.
+    """
+    if isinstance(node, str):
+        found.add(node)
+    elif isinstance(node, dict):
+        for key, value in node.items():
+            if isinstance(key, str):
+                found.add(key)
+            _names_in_document(value, found)
+    elif isinstance(node, list):
+        for item in node:
+            _names_in_document(item, found)
+
+
+def _referenced_instrument_names(db_path: Path) -> set[str] | None:
+    """Names every score the conductor has been given could resolve.
+
+    Reads the registry's ``config_path`` column (read-only, offline) and
+    parses each score file that still exists, plus the class maps every
+    layer loads. Returns ``None`` when there is no registry yet, so the
+    caller can skip the check instead of reporting every profile.
+    """
+    import sqlite3
+
+    import yaml
+
+    from marianne.instruments.classes import load_class_map
+
+    if not db_path.exists():
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            rows = conn.execute("SELECT DISTINCT config_path FROM jobs").fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+    names: set[str] = set()
+    for (config_path,) in rows:
+        path = Path(str(config_path)).expanduser()
+        if not path.is_file():
+            continue  # score deleted since; it can no longer reference anything
+        try:
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, yaml.YAMLError):
+            continue
+        _names_in_document(document, names)
+    for entry in load_class_map().classes.values():
+        for link in entry.chain:
+            names.add(link.profile)
+    return names
+
+
+def _scan_unreferenced_user_profiles(
+    *,
+    organization_dir: Path | None = None,
+    venue_dir: Path | None = None,
+    db_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Report user- and venue-layer profiles no submitted score names (GH #443).
+
+    Generated research seats and one-off agents accumulate in
+    ``~/.marianne/instruments/`` until ``mzt instruments list`` is unreadable
+    (148 profiles on one machine). Never cleanable: a profile is archived by
+    a person, not deleted by ``doctor --clean``. A user-layer file that
+    overrides a built-in name is always referenced, because every score
+    that names nothing resolves to a built-in.
+    """
+    from marianne.core.constants import DAEMON_STATE_DB_PATH, DEFAULT_INSTRUMENT_NAME
+    from marianne.instruments.loader import InstrumentProfileLoader
+
+    builtins_dir, org_dir, venue = profile_source_dirs(
+        organization_dir=organization_dir, venue_dir=venue_dir,
+    )
+    registry = db_path if db_path is not None else DAEMON_STATE_DB_PATH.expanduser()
+    referenced = _referenced_instrument_names(registry)
+    if referenced is None:
+        return []
+    builtin_names = set(InstrumentProfileLoader.load_directory(builtins_dir))
+    referenced |= builtin_names | {DEFAULT_INSTRUMENT_NAME}
+    findings: list[dict[str, Any]] = []
+    for layer, directory in (("user", org_dir), ("venue", venue)):
+        for name, profile in sorted(InstrumentProfileLoader.load_directory(directory).items()):
+            if name in referenced:
+                continue
+            source = profile._source_path or (directory / f"{name}.yaml")
+            try:
+                size = source.stat().st_size
+            except OSError:
+                size = 0
+            findings.append({
+                "kind": "unreferenced_profile",
+                "layer": layer,
+                "name": name,
+                "path": str(source),
+                "size_bytes": size,
+                "cleanable": False,
+                "detail": "no score the conductor has been given names this "
+                "profile and no class chain includes it; a seat is an alias "
+                "over an existing profile (GH #443) — archive the file, or "
+                "submit the score that needs it",
+            })
+    return findings
+
+
 def doctor(
     json: bool = typer.Option(False, "--json", help="Output results as JSON"),
     clean: bool = typer.Option(
@@ -484,6 +597,9 @@ def doctor(
         else:
             out.print("Aborted — nothing deleted.")
 
+    # --- Instrument hygiene (GH #443) ---
+    unreferenced_profiles = _scan_unreferenced_user_profiles()
+
     # --- JSON output ---
     if json:
         result: dict[str, Any] = {
@@ -496,9 +612,10 @@ def doctor(
             "instruments": instrument_results,
             "safety_warnings": safety_warnings,
             "storage_findings": storage_findings,
+            "unreferenced_profiles": unreferenced_profiles,
             "cleaned_paths": cleaned_paths,
             "warnings_count": len(warnings) + len(safety_warnings)
-            + len(storage_findings),
+            + len(storage_findings) + len(unreferenced_profiles),
             "errors_count": len(errors),
         }
         out.print_json(json_mod.dumps(result))
@@ -543,6 +660,21 @@ def doctor(
             )
             warnings.append(f"storage: {f['path']}")
         out.print("    [dim]Reclaim with: mzt doctor --clean[/dim]")
+
+    # Instrument hygiene section (GH #443): reported, never auto-deleted.
+    if unreferenced_profiles:
+        out.print()
+        out.print(
+            f"  [bold]Instrument hygiene:[/bold] {len(unreferenced_profiles)} "
+            f"profile(s) no submitted score names"
+        )
+        for f in unreferenced_profiles:
+            out.print(f"  [yellow]![/yellow] {f['name']:<24} {f['path']}")
+            warnings.append(f"unreferenced profile: {f['name']}")
+        out.print(
+            "    [dim]A seat is an alias over an existing profile (GH #443). "
+            "Archive these files, or submit the score that needs them.[/dim]"
+        )
 
     # Summary
     out.print()

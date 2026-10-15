@@ -128,6 +128,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Execution history** — SQLite-backed attempt tracking
 - **Process management** — Reusable ProcessManager, orphaned process cleanup
 - **Circuit breaker** — Async circuit breaker for failure isolation
+- **`mzt doctor` instrument hygiene (GH #443)** — Reports every user- and venue-layer profile that no score the conductor has been given names and no class chain includes, as an "Instrument hygiene" section and `unreferenced_profiles` in `--json`; never deleted by `--clean`. A seat is an alias over an existing profile; a profile nothing names is archived by a person
 
 ### Changed
 - **"Batch" → "Sheet" terminology** — All config keys, template variables, CLI flags, and internal references renamed from `batch` to `sheet`

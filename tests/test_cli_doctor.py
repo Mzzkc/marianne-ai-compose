@@ -9,8 +9,10 @@ TDD: These tests define the contract for the doctor command.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from typer.testing import CliRunner
 
 from marianne.cli import app
@@ -502,3 +504,139 @@ class TestDoctorCloneAwareness:
             assert pid is None
         finally:
             set_clone_name(None)
+
+
+# ---------------------------------------------------------------------------
+# Instrument hygiene (GH #443): profiles no submitted score references
+# ---------------------------------------------------------------------------
+
+
+def _profile_yaml(name: str) -> str:
+    return f"""\
+name: {name}
+display_name: "{name}"
+kind: cli
+cli:
+  command:
+    executable: test
+    prompt_flag: "-p"
+  output:
+    format: text
+"""
+
+
+def _registry_with(tmp_path: Path, config_paths: list[str]) -> Path:
+    import sqlite3
+
+    db = tmp_path / "daemon-state.db"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE jobs (job_id TEXT PRIMARY KEY, config_path TEXT NOT NULL, "
+        "workspace TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued', "
+        "submitted_at REAL NOT NULL)"
+    )
+    for index, path in enumerate(config_paths):
+        conn.execute(
+            "INSERT INTO jobs VALUES (?, ?, ?, 'completed', ?)",
+            (f"job-{index}", path, str(tmp_path), float(index)),
+        )
+    conn.commit()
+    conn.close()
+    return db
+
+
+class TestUnreferencedProfiles:
+    """A user-layer profile no submitted score names is reported, never deleted.
+
+    148 generated seats once sat in ~/.marianne/instruments/ with nothing
+    naming them; `mzt instruments list` was unreadable and doctor said nothing.
+    """
+
+    def test_reports_profile_nothing_names(self, tmp_path: Path) -> None:
+        from marianne.cli.commands.doctor import _scan_unreferenced_user_profiles
+
+        org = tmp_path / "org"
+        org.mkdir()
+        (org / "orphan-seat.yaml").write_text(_profile_yaml("orphan-seat"))
+        (org / "used-seat.yaml").write_text(_profile_yaml("used-seat"))
+        score = tmp_path / "score.yaml"
+        score.write_text(
+            "name: s\nworkspace: ./ws\ninstruments:\n  reviewer:\n"
+            "    profile: used-seat\nmovements: {}\n"
+        )
+        db = _registry_with(tmp_path, [str(score)])
+
+        findings = _scan_unreferenced_user_profiles(
+            organization_dir=org, venue_dir=tmp_path / "no-venue", db_path=db,
+        )
+
+        assert [f["name"] for f in findings] == ["orphan-seat"]
+        assert findings[0]["layer"] == "user"
+        assert findings[0]["cleanable"] is False
+        assert findings[0]["path"] == str((org / "orphan-seat.yaml").resolve())
+
+    def test_builtin_override_and_class_chain_member_are_referenced(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A user file overriding a built-in name is always in play; so is a
+        profile a class chain names, even with no score naming either."""
+        from marianne.cli.commands.doctor import _scan_unreferenced_user_profiles
+        from marianne.instruments import classes
+
+        org = tmp_path / "org"
+        org.mkdir()
+        (org / "claude-code.yaml").write_text(_profile_yaml("claude-code"))
+        (org / "chain-seat.yaml").write_text(_profile_yaml("chain-seat"))
+        (org / "orphan-seat.yaml").write_text(_profile_yaml("orphan-seat"))
+        user_classes = tmp_path / "classes.yaml"
+        user_classes.write_text("version: 1\nclasses:\n  strong:\n    - chain-seat\n")
+        monkeypatch.setattr(classes, "class_source_paths", lambda **_: (
+            Path(classes.__file__).parent / "classes" / "default.yaml",
+            user_classes, tmp_path / "no-venue-classes.yaml",
+        ))
+        db = _registry_with(tmp_path, [])
+
+        findings = _scan_unreferenced_user_profiles(
+            organization_dir=org, venue_dir=tmp_path / "no-venue", db_path=db,
+        )
+
+        assert [f["name"] for f in findings] == ["orphan-seat"]
+
+    def test_no_registry_means_no_verdict(self, tmp_path: Path) -> None:
+        """Before the conductor ever ran, nothing has been submitted; reporting
+        every profile as unreferenced would be noise, not a finding."""
+        from marianne.cli.commands.doctor import _scan_unreferenced_user_profiles
+
+        org = tmp_path / "org"
+        org.mkdir()
+        (org / "orphan-seat.yaml").write_text(_profile_yaml("orphan-seat"))
+
+        assert _scan_unreferenced_user_profiles(
+            organization_dir=org, venue_dir=tmp_path / "no-venue",
+            db_path=tmp_path / "missing.db",
+        ) == []
+
+    def test_doctor_prints_and_counts_the_finding(self, tmp_path: Path) -> None:
+        finding = {
+            "kind": "unreferenced_profile", "layer": "user", "name": "orphan-seat",
+            "path": str(tmp_path / "orphan-seat.yaml"), "size_bytes": 10,
+            "cleanable": False, "detail": "no score names it",
+        }
+        with (
+            patch(
+                "marianne.cli.commands.doctor._check_conductor_status",
+                return_value=("not running", None),
+            ),
+            patch(
+                "marianne.cli.commands.doctor._scan_unreferenced_user_profiles",
+                return_value=[finding],
+            ),
+        ):
+            human = runner.invoke(app, ["doctor"])
+            as_json = runner.invoke(app, ["doctor", "--json"])
+        assert "Instrument hygiene" in human.stdout
+        assert "orphan-seat" in human.stdout
+        assert "archive" in human.stdout.lower()
+        data = json.loads(as_json.stdout)
+        assert data["unreferenced_profiles"] == [finding]
+        assert data["warnings_count"] >= 1
