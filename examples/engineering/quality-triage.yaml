@@ -141,6 +141,7 @@ sheet:
       on_success:
         - concert:
             score: "issue-solver.yaml"
+            inherit_workspace: false
             fresh: true
 
 prompt:

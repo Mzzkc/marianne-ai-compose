@@ -74,6 +74,7 @@
 #   11-archive.md            — Archive + chain decision record
 #
 # Time: 1-6 hours per iteration  |  Sheets: 13
+# Loop cost warning: see GH #453; unpriced goose fallback is iteration-bounded only.
 
 name: "issue-solver"
 description: "Self-chaining DAG-driven issue solver — bounded implementation loop, skip-gated terminal path, concert-trigger chaining"
@@ -211,6 +212,7 @@ sheet:
       on_success:
         - concert:
             score: "issue-solver.yaml"
+            inherit_workspace: false
             fresh: true
 
 parallel:
@@ -824,7 +826,8 @@ prompt:
 
     **Step 3: Assess against the numbers**
     - verify.sh exit code must be 0
-    - FAIL count in the results line must be 0
+    - TOTAL must be positive, PASS must equal TOTAL, and FAIL must be 0
+    - The report and preserved output must match a fresh validation run
     - Any harness failures must be explained or fixed (go back through
       synthesis if needed)
 
@@ -1138,7 +1141,10 @@ validations:
     stage: 2
 
   - type: command_succeeds
-    command: 'grep -q "Results: \\$PASS/\\$TOTAL passed" "{workspace}/verify.sh" && grep -q "\\[ \"\\$FAIL\" -eq 0 \\]" "{workspace}/verify.sh"'
+    command: |
+      bash -n "{workspace}/verify.sh" &&
+      grep -Fq 'Results: $PASS/$TOTAL passed' "{workspace}/verify.sh" &&
+      grep -Fq '[ "$FAIL" -eq 0 ]' "{workspace}/verify.sh"
     description: "verify.sh emits the numeric Results line and gates on FAIL=0"
     condition: "sheet_num >= 3"
     stage: 2
@@ -1156,11 +1162,11 @@ validations:
     condition: "sheet_num >= 4"
     stage: 2
 
-  # Numeric loop evidence: the marker file only exists after a verify.sh
-  # clean exit (written by the loop sheet itself, never by a report).
+  # A partial pass must validate so the native until condition can repeat it.
+  # Only require recorded execution here; final verification enforces success.
   - type: command_succeeds
-    command: 'test -f "{workspace}/verify-latest.txt"'
-    description: "Loop evidence marker exists (verify.sh exited clean this pass)"
+    command: 'test -s "{workspace}/verify-outcome.txt"'
+    description: "Implementation pass records verify output (partial passes may repeat)"
     condition: "sheet_num == 4"
     timeout_seconds: 30
 
@@ -1243,17 +1249,40 @@ validations:
   # The numeric contract: re-run verify.sh; it must exit 0. Any FAIL count
   # or non-zero exit fails the job here — no percentage, no narrative.
   - type: command_succeeds
-    command: 'cd "{project_root}" && bash "{workspace}/verify.sh"'
+    command: 'cd "{project_root}" && bash "{workspace}/verify.sh" > "{workspace}/08-verify-validation-output.txt" 2>&1'
     description: "verify.sh exits 0 at final verification"
     condition: "sheet_num >= 10"
     stage: 2
     timeout_seconds: 600
 
-  # Parse the numbers out of the recorded output: the Results line must
-  # exist in the preserved verbatim output with zero failures.
+  # Parse actual counts, refusing empty, inconsistent, duplicate and stale
+  # summaries. The report, preserved output and fresh execution must agree.
   - type: command_succeeds
     command: |
-      grep -E '=== Results: [0-9]+/[0-9]+ passed, [0-9]+ failed ===' "{workspace}/08-verify-output.txt" | grep -q ', 0 failed ==='
+      python3 - "{workspace}" <<'PY'
+      from pathlib import Path
+      import re
+      import sys
+
+      root = Path(sys.argv[1])
+      pattern = r'=== Results: (\d+)/(\d+) passed, (\d+) failed ==='
+
+      def counts(text, anchored=True):
+          expression = '^' + pattern + '$' if anchored else pattern
+          matches = re.findall(expression, text, re.MULTILINE)
+          assert len(matches) == 1, 'expected one verification summary'
+          passed, total, failed = map(int, matches[0])
+          assert total > 0 and passed == total and failed == 0, matches[0]
+          return passed, total, failed
+
+      actual = counts((root / '08-verify-validation-output.txt').read_text())
+      recorded = counts((root / '08-verify-output.txt').read_text())
+      report = (root / '08-verification.md').read_text()
+      section = report.split('## verify.sh\n', 1)[1].split('\n## ', 1)[0]
+      assert re.search(r'Exit code:\s*0\b', section), 'report exit must be zero'
+      assert actual == recorded == counts(section, anchored=False), 'stale verification evidence'
+      print('Verification counts agree:', actual)
+      PY
     description: "Recorded verify output shows N/N passed with 0 failed"
     condition: "sheet_num >= 10"
     stage: 2
