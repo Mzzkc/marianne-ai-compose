@@ -190,7 +190,10 @@ class ScheduleRegistry:
                 schedule_id,
                 score_name,
                 str(score_path),
-                schedule.model_dump_json(),
+                schedule.model_dump_json(
+                    exclude={"max_wall_seconds"}
+                    if schedule.max_wall_seconds is None else None
+                ),
                 source_digest,
                 pinned_source_digest,
                 int(schedule.enabled),

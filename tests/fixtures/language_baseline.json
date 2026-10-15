@@ -1,7 +1,5 @@
 {
   "description": "Known language gaps (GH #436). A finding not listed here fails the gate. Remove an entry in the same commit that closes the gap.",
-  "commit": "4499ad99ac33813cffb72397e761fa1408a2eb7b",
-  "findings": [
-    "L03:max_wall_seconds"
-  ]
+  "commit": "729ac721",
+  "findings": []
 }

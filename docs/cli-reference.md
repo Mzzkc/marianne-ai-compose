@@ -571,7 +571,7 @@ code-registry and corpus-sweep tests.
 | ERROR | V213 | `interactive: true` set for an instrument without verified interactive support |
 | WARNING | V010, V208, V219–V220, V224, V226, V228, V231–V232, V315 | Likely typo; built-in shadowing (deprecation); advisory structure and flow risks |
 | WARNING | V327 | A score sets a reserved key — accepted, but no runtime code reads it (P1: nothing a score sets is silently inert) |
-| WARNING | V328 | Deprecated spelling or key: `checkpoints:` (now `approvals:`), hook-level `on_failure` (now `if_hook_fails`), root `conductor` |
+| WARNING | V328 | Deprecated spelling or key: root `max_wall_seconds` (now `schedule.max_wall_seconds`), `checkpoints:` (now `approvals:`), hook-level `on_failure` (now `if_hook_fails`), root `conductor` |
 | WARNING | V101 | Template references a variable the score never declares (and no built-in provides) |
 | WARNING | V102 | `\| string` filter applied to a subscript of an int-keyed variable dict |
 | WARNING | V103 | Sheet or instrument timeout outside the reasonable range (V103/V104) |

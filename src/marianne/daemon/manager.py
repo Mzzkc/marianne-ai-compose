@@ -268,6 +268,8 @@ class JobMeta:
     error_traceback: str | None = None
     chain_depth: int | None = None
     schedule_id: str | None = None
+    running_seconds: float = 0.0
+    running_started_at: float | None = field(default=None, repr=False)
     max_wall_seconds: float | None = None
     wall_deadline_at: float | None = None
     terminal_reason: str | None = None
@@ -294,6 +296,7 @@ class JobMeta:
             "workspace": str(self.workspace),
             "submitted_at": self.submitted_at,
             "started_at": self.started_at,
+            "running_seconds": self.running_seconds,
             # #253: emit the same always-present keys as JobRecord.to_dict so
             # list_jobs returns one consistent shape for active and registry
             # jobs (consumers can rely on these keys existing). JobMeta doesn't
@@ -728,6 +731,7 @@ class JobManager:
                     workspace=Path(record.workspace),
                     submitted_at=record.submitted_at,
                     started_at=record.started_at,
+                    running_seconds=record.running_seconds,
                     status=record.status,
                     error_message=record.error_message,
                     max_wall_seconds=max_wall_seconds,
@@ -1416,6 +1420,18 @@ class JobManager:
         # between them, so on the single-threaded event loop they apply
         # atomically — no observer can see a half-updated state.
 
+        # Charge only intervals in RUNNING. Persist the accumulated charge in
+        # the same registry write as the status transition, before mutating
+        # memory. A paused interval and conductor downtime never consume it.
+        meta = self._job_meta.get(job_id)
+        sampled_at = getattr(self, "_monotonic_clock", time.monotonic)()
+        running_seconds: float | None = None
+        if meta is not None and meta.status is DaemonJobStatus.RUNNING:
+            if status is not DaemonJobStatus.RUNNING and meta.running_started_at is not None:
+                running_seconds = meta.running_seconds + max(
+                    0.0, sampled_at - meta.running_started_at
+                )
+
         # 1. Persistent registry (fallible — do this first).
         await self._registry.update_status(
             job_id,
@@ -1424,11 +1440,16 @@ class JobManager:
             pid=pid,
             snapshot_path=snapshot_path,
             terminal_reason=terminal_reason,
+            running_seconds=running_seconds,
         )
 
         # 2. In-memory metadata (always available for active jobs).
-        meta = self._job_meta.get(job_id)
         if meta is not None:
+            if running_seconds is not None:
+                meta.running_seconds = running_seconds
+                meta.running_started_at = None
+            elif status is DaemonJobStatus.RUNNING and meta.status is not DaemonJobStatus.RUNNING:
+                meta.running_started_at = sampled_at
             meta.status = status
             if error_message is not None:
                 meta.error_message = error_message
@@ -2437,8 +2458,12 @@ class JobManager:
 
                     registered_at = self._wall_clock()
                     max_wall_seconds = (
-                        parsed_config.max_wall_seconds
+                        parsed_config.tick_wall_seconds
                         if parsed_config is not None
+                        and (
+                            request.schedule_id is not None
+                            or request.scheduled_due_at is not None
+                        )
                         else None
                     )
                     wall_deadline_at = (
@@ -2594,9 +2619,9 @@ class JobManager:
             try:
                 from marianne.core.config import JobConfig
 
-                max_wall_seconds = JobConfig.from_yaml(
-                    request.config_path
-                ).max_wall_seconds
+                parsed_pending = JobConfig.from_yaml(request.config_path)
+                if request.schedule_id is not None or request.scheduled_due_at is not None:
+                    max_wall_seconds = parsed_pending.tick_wall_seconds
             except (ValueError, OSError, KeyError, yaml.YAMLError):
                 _logger.debug(
                     "manager.pending_deadline_config_unavailable",
@@ -3033,11 +3058,13 @@ class JobManager:
     ) -> dict[str, Any]:
         """Attach deadline authority and current remaining time when relevant."""
         meta = self._job_meta.get(job_id)
+        record_running_seconds = 0.0
         if meta is None:
             record = await self._registry.get_job(job_id)
             if record is None:
                 return data
             submitted_at = record.submitted_at
+            record_running_seconds = record.running_seconds
             max_wall_seconds = record.max_wall_seconds
             wall_deadline_at = record.wall_deadline_at
             terminal_reason = record.terminal_reason
@@ -3059,6 +3086,14 @@ class JobManager:
 
         now_epoch = self._wall_clock()
         daemon_limit = float(self._config.job_timeout_seconds)
+        running_elapsed = (
+            meta.running_seconds + max(
+                0.0, self._monotonic_clock() - meta.running_started_at
+            )
+            if meta is not None and meta.running_started_at is not None
+            else (meta.running_seconds if meta is not None else record_running_seconds)
+        )
+        daemon_remaining = max(0.0, daemon_limit - running_elapsed)
         score_remaining = (
             max(0.0, wall_deadline_at - now_epoch)
             if wall_deadline_at is not None
@@ -3066,9 +3101,9 @@ class JobManager:
         )
         effective_remaining = max(
             0.0,
-            min(daemon_limit, score_remaining)
+            min(daemon_remaining, score_remaining)
             if score_remaining is not None
-            else daemon_limit,
+            else daemon_remaining,
         )
         elapsed = max(0.0, now_epoch - submitted_at)
         projection = JobDeadlineStatus(
@@ -3083,6 +3118,7 @@ class JobManager:
         )
         if max_wall_seconds is not None:
             data["max_wall_seconds"] = max_wall_seconds
+        data["running_seconds"] = running_elapsed
         if wall_deadline_at is not None:
             data["wall_deadline_at"] = wall_deadline_at
         if terminal_reason is not None:
@@ -3862,9 +3898,11 @@ class JobManager:
             from marianne.core.config import JobConfig
 
             try:
-                resumed_wall_limit = JobConfig.from_yaml(
-                    resume_config_path
-                ).max_wall_seconds
+                resumed_config = JobConfig.from_yaml(resume_config_path)
+                resumed_wall_limit = (
+                    resumed_config.tick_wall_seconds
+                    if meta.schedule_id is not None else None
+                )
             except (OSError, ValueError) as exc:
                 raise JobSubmissionError(
                     f"Score '{job_id}' resume config could not be loaded: {exc}"
@@ -5439,7 +5477,10 @@ class JobManager:
         try:
             meta = self._job_meta[job_id]
             self._bind_cleanup_generation(meta, new_execution=False)
-            daemon_timeout = float(self._config.job_timeout_seconds)
+            daemon_timeout = max(
+                0.0,
+                float(self._config.job_timeout_seconds) - meta.running_seconds,
+            )
             timeout = daemon_timeout
             execution_started_at: float | None = None
 

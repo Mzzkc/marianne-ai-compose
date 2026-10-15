@@ -280,6 +280,12 @@ class DeprecatedSpellingCheck:
 
 
 def _deprecation_advice(path: str) -> str:
+    if path == "max_wall_seconds":
+        return (
+            "move the tick window to `schedule.max_wall_seconds`; for a one-shot "
+            "score use `instrument_config.timeout_seconds` for sheet execution "
+            "or `stale_detection` for no-output detection"
+        )
     if path == "conductor":
         return (
             "the root `conductor:` block is identity metadata with no runtime "

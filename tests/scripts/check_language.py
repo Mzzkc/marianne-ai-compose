@@ -628,7 +628,11 @@ def run_checks(
     # L03 misplaced scheduled semantics
     for key in keys:
         match = _SCHEDULED.search(key.description or "")
-        if match and not key.path.startswith("schedule"):
+        if (
+            match
+            and not key.path.startswith("schedule")
+            and not key.description.startswith("Deprecated:")
+        ):
             findings.append(
                 Finding(
                     "L03",

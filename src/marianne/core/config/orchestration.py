@@ -37,6 +37,12 @@ class ScheduleConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(default=True, description="Whether future ticks are enabled")
+    max_wall_seconds: float | None = Field(
+        default=None,
+        ge=60.0,
+        description="Maximum elapsed seconds from admission for one scheduled tick; "
+        "pauses count against this recurrence window.",
+    )
     cron: str | None = Field(default=None, description="Five-field cron expression")
     interval: str | None = Field(default=None, description="Positive s/m/h/d interval")
     timezone: str | None = Field(default=None, description="Optional IANA timezone")

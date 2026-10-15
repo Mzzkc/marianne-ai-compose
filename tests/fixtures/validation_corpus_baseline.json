@@ -1138,9 +1138,11 @@
     },
     "venue:examples/rosetta/negative-treatment-watch.yaml": {
       "issues": {
-        "V327": 4
+        "V327": 4,
+        "V328": 1
       },
-      "parse": "ok"
+      "parse": "ok",
+      "reason": "Root max_wall_seconds is the one-release tick-window alias; V328 names schedule.max_wall_seconds."
     },
     "venue:examples/rosetta/rashomon-gate.yaml": {
       "issues": {

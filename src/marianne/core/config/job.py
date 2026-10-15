@@ -1182,8 +1182,19 @@ class JobConfig(BaseModel):
     max_wall_seconds: float | None = Field(
         default=None,
         ge=60.0,
-        description="Maximum wall-clock duration for a scheduled run in seconds.",
+        description="Deprecated: this root spelling remains a runtime reader for "
+        "scheduled ticks for one release. Set schedule.max_wall_seconds instead; "
+        "one-shot scores use instrument_config.timeout_seconds and stale_detection.",
     )
+
+    @property
+    def tick_wall_seconds(self) -> float | None:
+        """The tick cap, with the legacy root spelling as a one-release alias."""
+        if self.schedule is None:
+            return None
+        if self.schedule.max_wall_seconds is not None:
+            return self.schedule.max_wall_seconds
+        return self.max_wall_seconds
 
     @field_validator("movements")
     @classmethod

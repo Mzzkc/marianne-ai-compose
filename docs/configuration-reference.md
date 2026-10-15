@@ -1386,7 +1386,7 @@ These are the fields most users will configure:
 |-------|------|---------|-------------|-------------|
 | `max_concurrent_jobs` | `int` | `15` | `1–50` | Maximum jobs executing simultaneously |
 | `log_level` | `"debug" \| "info" \| "warning" \| "error"` | `"info"` | | Daemon log level |
-| `job_timeout_seconds` | `float` | `86400.0` | `>= 60` | Maximum wall-clock time per job (24 hours default). |
+| `job_timeout_seconds` | `float` | `86400.0` | `>= 60` | Maximum accumulated RUNNING time per score (24 hours default); pause and conductor downtime do not spend it. |
 | `learning.enabled` | `bool` | `true` | | Semantic learning on/off |
 | `learning.instrument` | `str` | `"claude-code"` | | Which instrument powers semantic analysis |
 | `profiler.enabled` | `bool` | `true` | | Resource monitoring on/off |
@@ -1597,7 +1597,7 @@ schedule:
   overlap: skip                # safe default; active lineage drops the due child
   jitter_seconds: 0
   pin_source_digest: false     # opt in to refusing source changes until re-registration
-max_wall_seconds: 14400        # optional score cap; stricter of score/daemon caps
+  max_wall_seconds: 14400      # optional absolute deadline for each due tick
 ```
 
 Intervals advance from their scheduled anchor rather than completion time.
@@ -1611,13 +1611,17 @@ refuses the tick with `source_drift_refused`; it does not silently update the pi
 Conscious re-registration through `mzt run` amends the pin. The digest also
 travels through child admission so a source change between tick checking and
 submission is refused.
-`max_wall_seconds` bounds a scheduled tick: it is an absolute deadline from the
+`schedule.max_wall_seconds` bounds a scheduled tick: it is an absolute deadline from the
 tick's admission so one run cannot overlap the next, and pause, resume, pending
-admission, and restart do not reset it. It is immutable on resume (`mzt resume
--c` with a different value is refused). It is not a budget for one-shot jobs:
-bound those per sheet with `instrument_config.timeout_seconds` and
+admission, and restart do not reset it. The root `max_wall_seconds` spelling
+remains an alias for one release and produces V328; it does not cap one-shot
+scores. The tick limit is immutable on resume (`mzt resume -c` with a
+different value is refused). For one-shot scores, bound execution per sheet
+with `instrument_config.timeout_seconds` and
 `stale_detection`, which measure the attempt rather than the calendar and so
-survive pauses and conductor restarts (GH #435). Status diagnostics include the
+survive pauses and conductor restarts (GH #435). The conductor's
+`job_timeout_seconds` counts accumulated RUNNING time across resumes; paused
+time and downtime do not consume it. Status diagnostics include the
 schedule's last due/run/outcome, next due, and deadline evidence.
 
 ### Preflight Sub-Config
