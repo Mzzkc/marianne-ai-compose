@@ -35,8 +35,6 @@ def _validate(tmp_path: Path, settings: str) -> list[str]:
         ("stale_detection: {idle_timeout_seconds: 60}\n", "stale_detection"),
         ("concert: {max_chain_depth: 2}\n", "concert"),
         ("judgment: {instrument: cli}\n", "judgment"),
-        ("learning: {entropy_response: {cooldown_seconds: 120}}\n",
-         "learning.entropy_response"),
     ],
 )
 def test_readable_settings_warn_without_enabling(
@@ -57,8 +55,22 @@ def test_explicit_false_and_reserved_sections_do_not_promise_activation(tmp_path
 
 def test_warning_scope_is_reader_reviewed() -> None:
     assert frozenset({
-        "learning.exploration_budget", "learning.entropy_response",
-        "learning.auto_apply", "isolation", "code_execution", "parallel",
+        "isolation", "code_execution", "parallel",
         "stale_detection", "judgment", "concert",
     }) == SWITCH_WARNING_PATHS
     assert EnabledSettingsWarningCheck().check_id == "V329"
+
+
+@pytest.mark.parametrize("section", ["exploration_budget", "entropy_response", "auto_apply"])
+def test_unread_learning_sections_only_warn_reserved(tmp_path: Path, section: str) -> None:
+    score = tmp_path / "score.yaml"
+    score.write_text(
+        "name: reserved-learning\nworkspace: ./output\n"
+        "sheet: {size: 1, total_items: 1}\nprompt: {template: hi}\n"
+        f"learning: {{{section}: {{enabled: false}}}}\n",
+        encoding="utf-8",
+    )
+    config = JobConfig.from_yaml(score)
+    issues = ValidationRunner(create_default_checks()).validate(config, score, score.read_text())
+    relevant = [issue.check_id for issue in issues if section in issue.message]
+    assert relevant == ["V327"]

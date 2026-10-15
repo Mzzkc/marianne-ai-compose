@@ -220,9 +220,9 @@ class MovementDef(BaseModel):
     voices: int | None = Field(
         default=None,
         ge=1,
-        description="Reserved: no runtime reader yet (V327 warns when set). "
-        "Number of parallel voices in this movement. "
-        "Shorthand for fan_out: {N: voices}.",
+        description="Number of parallel voices in this movement. For size=1 "
+        "and start_item=1, this expands like sheet.fan_out at the same "
+        "movement; an explicit fan_out count takes precedence.",
     )
     instrument_fallbacks: list[str] = Field(
         default_factory=list,
@@ -1195,6 +1195,32 @@ class JobConfig(BaseModel):
         if self.schedule.max_wall_seconds is not None:
             return self.schedule.max_wall_seconds
         return self.max_wall_seconds
+
+    @model_validator(mode="before")
+    @classmethod
+    def _expand_movement_voices(cls, data: object) -> object:
+        """Feed movement voice counts into the existing fan-out expansion."""
+        if not isinstance(data, dict):
+            return data
+        movements = data.get("movements")
+        sheet = data.get("sheet")
+        if not isinstance(movements, dict) or not isinstance(sheet, dict):
+            return data
+        if sheet.get("size", 1) != 1 or sheet.get("start_item", 1) != 1:
+            return data
+        fan_out = dict(sheet.get("fan_out") or {})
+        explicit_stages = {str(key) for key in fan_out}
+        for key, movement in movements.items():
+            voices = (
+                movement.get("voices") if isinstance(movement, dict)
+                else getattr(movement, "voices", None)
+            )
+            if voices is not None and str(key) not in explicit_stages:
+                fan_out[key] = voices
+        if fan_out:
+            data = dict(data)
+            data["sheet"] = {**sheet, "fan_out": fan_out}
+        return data
 
     @field_validator("movements")
     @classmethod

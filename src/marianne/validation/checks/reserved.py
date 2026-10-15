@@ -29,9 +29,6 @@ _DEPRECATED_ROOT = "Deprecated:"
 # unread sections (ai_review, bridge, checkpoints, feedback, grounding) are
 # intentionally absent: V327 describes their actual contract instead.
 SWITCH_WARNING_PATHS = frozenset({
-    "learning.exploration_budget",
-    "learning.entropy_response",
-    "learning.auto_apply",
     "isolation",
     "code_execution",
     "parallel",
@@ -192,8 +189,7 @@ class ReservedKeyUseCheck:
             # A wholly reserved section is one author action and one warning.
             # Its child fields carry honest schema descriptions, but repeating
             # the same V327 for each nested key obscures the fix.
-            root = path.split(".", 1)[0]
-            if path != root and root in reserved:
+            if any(path.startswith(parent + ".") for parent in reserved if parent != path):
                 continue
             for spelling in _set_spellings(data, path, reserved[path]):
                 issues.append(
@@ -213,6 +209,23 @@ class ReservedKeyUseCheck:
                         metadata={"field": path},
                     )
                 )
+        sheet = data.get("sheet")
+        movements = data.get("movements")
+        if isinstance(sheet, dict) and isinstance(movements, dict):
+            if sheet.get("size", 1) != 1 or sheet.get("start_item", 1) != 1:
+                for movement_num, movement in movements.items():
+                    if isinstance(movement, dict) and movement.get("voices") is not None:
+                        issues.append(ValidationIssue(
+                            check_id=self.check_id,
+                            severity=self.severity,
+                            message=(
+                                f"movements.{movement_num}.voices is accepted but cannot "
+                                "expand when sheet.size or sheet.start_item is not 1"
+                            ),
+                            line=_line_of(raw_yaml, "voices"),
+                            suggestion="Use sheet.size: 1 and sheet.start_item: 1 for voices",
+                            metadata={"field": f"movements.{movement_num}.voices"},
+                        ))
         return issues
 
 

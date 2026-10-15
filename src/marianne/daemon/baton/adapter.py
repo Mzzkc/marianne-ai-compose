@@ -760,8 +760,10 @@ class BatonAdapter:
         dependencies: dict[int, list[int]],
         *,
         max_cost_usd: float | None = None,
+        max_sheet_cost_usd: float | None = None,
         max_retries: int = 3,
         max_completion: int = 5,
+        completion_threshold_percent: float = 0.0,
         escalation_enabled: bool = False,
         self_healing_enabled: bool = False,
         prompt_config: PromptConfig | None = None,
@@ -933,6 +935,7 @@ class BatonAdapter:
             ),
             fail_fast=parallel_fail_fast if parallel_enabled is True else False,
             stagger_delay_ms=stagger_delay_ms if parallel_enabled is not False else 0,
+            completion_threshold_percent=completion_threshold_percent,
             event_generation=event_generation,
             workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
             loops=loops,
@@ -944,6 +947,9 @@ class BatonAdapter:
         # Set cost limits if configured
         if max_cost_usd is not None:
             self._baton.set_job_cost_limit(job_id, max_cost_usd)
+        if max_sheet_cost_usd is not None:
+            for sheet in sheets:
+                self._baton.set_sheet_cost_limit(job_id, sheet.num, max_sheet_cost_usd)
 
         _logger.info(
             "adapter.job_registered",
@@ -1521,8 +1527,10 @@ class BatonAdapter:
         checkpoint: CheckpointState,
         *,
         max_cost_usd: float | None = None,
+        max_sheet_cost_usd: float | None = None,
         max_retries: int = 3,
         max_completion: int = 5,
+        completion_threshold_percent: float = 0.0,
         escalation_enabled: bool = False,
         self_healing_enabled: bool = False,
         prompt_config: PromptConfig | None = None,
@@ -1763,6 +1771,7 @@ class BatonAdapter:
             ),
             fail_fast=parallel_fail_fast if parallel_enabled is True else False,
             stagger_delay_ms=stagger_delay_ms if parallel_enabled is not False else 0,
+            completion_threshold_percent=completion_threshold_percent,
             event_generation=event_generation,
             workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
             loops=loops,
@@ -1774,6 +1783,9 @@ class BatonAdapter:
         # Set cost limits if configured
         if max_cost_usd is not None:
             self._baton.set_job_cost_limit(job_id, max_cost_usd)
+        if max_sheet_cost_usd is not None:
+            for sheet in sheets:
+                self._baton.set_sheet_cost_limit(job_id, sheet.num, max_sheet_cost_usd)
 
         _logger.info(
             "adapter.job_recovered",

@@ -213,6 +213,10 @@ phases. Each movement can specify a name (for display in `mzt status`), an instr
 (overriding the score default), instrument configuration, and a voice count (shorthand for `fan_out`).
 
 Movement numbers must be positive integers within the range `[1, total_items]`.
+With `sheet.size: 1` and `sheet.start_item: 1`, `voices` expands the movement
+through the same fan-out engine as `sheet.fan_out`: dependencies, voice variables,
+and sheet numbering all use the expanded sheets. An explicit `sheet.fan_out`
+count takes precedence for that movement.
 
 ```yaml
 movements:
@@ -608,6 +612,12 @@ Controls retry behavior including partial completion recovery.
 
 **Completion mode:** When a sheet partially passes validation (more than `completion_threshold_percent`), Marianne sends a targeted "complete the remaining work" prompt instead of a full retry. This is more efficient and preserves already-completed work.
 
+**Release behavior change:** Earlier baton releases entered completion mode for
+any partial pass, ignoring this key. Now a result must exceed the threshold;
+results at or below it spend the ordinary retry budget. The default threshold
+is 50%, so scores that set 50 intentionally gain this gate. A value of 100
+never enters completion mode.
+
 ```yaml
 retry:
   max_retries: 5
@@ -679,6 +689,9 @@ circuit_breaker:
 *Source: `src/marianne/core/config/execution.py` — `CostLimitConfig`*
 
 Prevents runaway costs by tracking token usage. When enabled, at least one of `max_cost_per_sheet` or `max_cost_per_job` must be set.
+The baton arms the per-sheet cap for every sheet at registration and recovery;
+an attempt that takes a sheet above its cap fails the sheet, including an
+otherwise successful attempt.
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -706,12 +719,13 @@ cost_limits:
 This release, a section with `enabled: false` stays off when you set a sibling
 value but omit `enabled`. `mzt validate` emits V329 for readable sections such
 as `parallel`, `stale_detection`, `isolation`, `code_execution`, `judgment`,
-`concert`, and the readable `learning.*` switches. From the next release,
+and `concert`. From the next release,
 those settings will enable their section automatically. Write `enabled: true`
 for current behavior, or explicit `enabled: false` to keep it off later.
-The unread `ai_review`, `bridge`, `checkpoints`, `feedback`, and `grounding`
-sections remain reserved and emit V327 instead; V329 does not promise that
-they will run.
+The unread `ai_review`, `bridge`, `checkpoints`, `feedback`, `grounding`,
+`learning.exploration_budget`, `learning.entropy_response`, and
+`learning.auto_apply` sections remain reserved and emit V327 instead;
+V329 does not promise that they will run.
 
 ## stale_detection
 
@@ -1627,7 +1641,10 @@ submission is refused.
 tick's admission so one run cannot overlap the next, and pause, resume, pending
 admission, and restart do not reset it. The root `max_wall_seconds` spelling
 remains an alias for one release and produces V328; it does not cap one-shot
-scores. The tick limit is immutable on resume (`mzt resume -c` with a
+scores. **Release change for the research skill:** its generated one-shot
+scores formerly carried this root key as a whole-run cap; the research
+generator now omits it, and its alias sheet timeouts remain in force. The tick
+limit is immutable on resume (`mzt resume -c` with a
 different value is refused). For one-shot scores, bound execution per sheet
 with `instrument_config.timeout_seconds` and
 `stale_detection`, which measure the attempt rather than the calendar and so

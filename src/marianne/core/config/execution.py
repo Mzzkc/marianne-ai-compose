@@ -41,8 +41,8 @@ class RetryConfig(BaseModel):
         default=50.0,
         gt=0,
         le=100,
-        description="Reserved: no runtime reader yet (V327 warns when set). "
-        "Minimum pass percentage to trigger completion mode (default: >50%)",
+        description="Validation pass percentage that an execution success must exceed "
+        "to enter completion mode; lower results consume normal retries (default: >50%).",
     )
 
     @model_validator(mode="after")
@@ -222,8 +222,8 @@ class CostLimitConfig(BaseModel):
     max_cost_per_sheet: float | None = Field(
         default=None,
         gt=0,
-        description="Reserved: no runtime reader yet (V327 warns when set). "
-        "Maximum allowed cost per sheet in USD. None = no limit.",
+        description="Maximum allowed cost per sheet in USD; the baton fails a "
+        "sheet that exceeds this limit. None means no per-sheet limit.",
     )
     max_cost_per_job: float | None = Field(
         default=None,

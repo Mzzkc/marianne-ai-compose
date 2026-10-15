@@ -100,6 +100,7 @@ class _JobRecord:
     max_concurrent: int | None = None
     fail_fast: bool = False
     stagger_delay_ms: int = 0
+    completion_threshold_percent: float = 0.0
     # Always-unique private identity used inside one BatonCore process to
     # protect await/callback/timer seams from same-job-id ABA.
     registration_token: int = 0
@@ -1245,6 +1246,7 @@ class BatonCore:
         max_concurrent: int | None = None,
         fail_fast: bool = False,
         stagger_delay_ms: int = 0,
+        completion_threshold_percent: float = 0.0,
         event_generation: int | None = None,
         workspace: Path | None = None,
         config_path: Path | None = None,
@@ -1319,6 +1321,7 @@ class BatonCore:
             max_concurrent=max_concurrent,
             fail_fast=fail_fast,
             stagger_delay_ms=stagger_delay_ms,
+            completion_threshold_percent=completion_threshold_percent,
             registration_token=self._registration_token_counter,
             event_generation=event_generation,
             flow=flow,
@@ -1870,6 +1873,12 @@ class BatonCore:
         # normal_attempts for non-rate-limited results).
         sheet.record_attempt(event)
 
+        # Every attempt spends its sheet budget, including a perfect pass or
+        # a queued skip. Check before any outcome can terminalize the sheet.
+        if self._check_sheet_cost_limit(event.job_id, event.sheet_num, sheet):
+            self._check_job_cost_limit(event.job_id)
+            return
+
         if self._settle_queued_skip_on_attempt_end(job, sheet, event):
             return
 
@@ -1938,6 +1947,11 @@ class BatonCore:
         effective_pass_rate = event.validation_pass_rate
         if event.execution_success and event.validations_total == 0 and effective_pass_rate < 100.0:
             effective_pass_rate = 100.0
+        enters_completion = (
+            event.execution_success
+            and 0.0 < effective_pass_rate < 100.0
+            and effective_pass_rate > job.completion_threshold_percent
+        )
 
         if (
             job.flow is not None
@@ -1999,7 +2013,7 @@ class BatonCore:
             self._check_job_cost_limit(event.job_id)
             return
 
-        if event.execution_success and effective_pass_rate > 0:
+        if enters_completion:
             # Partial validation pass — completion mode
             # The musician succeeded in execution but some validations failed.
             # Try re-dispatching with "finish your work" context.
@@ -2127,11 +2141,10 @@ class BatonCore:
                 self._check_job_cost_limit(event.job_id)
                 return
 
-        # F-065: execution_success + 0% validation is a complete validation
-        # failure. record_attempt() only counts execution failures toward
-        # retry budget, so we must manually count this case. Without this,
-        # the sheet retries forever since normal_attempts never increments.
-        if event.execution_success and effective_pass_rate == 0:
+        # F-065 generalized: execution successes below the completion gate
+        # still consume normal retries. Full success and completion mode
+        # returned above; record_attempt() counts only execution failures.
+        if event.execution_success and not enters_completion:
             sheet.normal_attempts += 1
 
         # Per-sheet cost enforcement — fail before retrying if over budget

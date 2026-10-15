@@ -53,10 +53,21 @@ def test_v327_reports_wholly_reserved_section_once(tmp_path: Path) -> None:
     assert "`rate_limit`" in issues[0].message
 
 
-def test_v327_fires_on_wildcard_path(tmp_path: Path) -> None:
+def test_v327_silent_for_wired_movement_voices(tmp_path: Path) -> None:
     config, path, raw = _config(tmp_path, "movements:\n  1:\n    voices: 3\n")
     issues = ReservedKeyUseCheck().check(config, path, raw)
-    assert any("movements.<k>.voices" in i.message for i in issues)
+    assert not any("voices" in i.message for i in issues)
+    assert config.sheet.total_sheets == 3
+
+
+def test_v327_warns_when_voices_cannot_expand(tmp_path: Path) -> None:
+    text = BASE.format(ws=tmp_path.as_posix()).replace("size: 1", "size: 2")
+    text += "movements:\n  1:\n    voices: 3\n"
+    path = tmp_path / "score.yaml"
+    path.write_text(text, encoding="utf-8")
+    config = JobConfig.from_yaml(path)
+    issues = ReservedKeyUseCheck().check(config, path, text)
+    assert any("sheet.size" in issue.message for issue in issues)
 
 
 def test_v327_silent_for_read_keys(tmp_path: Path) -> None:

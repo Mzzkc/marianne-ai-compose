@@ -30,9 +30,8 @@ class ExplorationBudgetConfig(BaseModel):
     enabled: bool = Field(
         default=False,
         description=(
-            "Enable dynamic exploration budget."
-            " When disabled, uses static exploration_rate."
-            " V329 warns this release if readable settings are set without this switch."
+            "Reserved: no runtime reader of this score section yet "
+            "(V327 warns when set). Intended to enable dynamic exploration budget."
         ),
     )
     floor: float = Field(
@@ -103,8 +102,8 @@ class EntropyResponseConfig(BaseModel):
 
     enabled: bool = Field(
         default=False,
-        description="Enable automatic entropy response. When disabled, entropy is only monitored. "
-        "V329 warns this release if settings are set without this switch.",
+        description="Reserved: no runtime reader of this score section yet "
+        "(V327 warns when set). Intended to enable automatic entropy response.",
     )
     entropy_threshold: float = Field(
         default=0.3,
@@ -161,10 +160,8 @@ class AutoApplyConfig(BaseModel):
 
     enabled: bool = Field(
         default=False,
-        description="Enable autonomous pattern application. "
-        "When true, high-trust patterns are applied without escalation. "
-        "Opt-in only - patterns are never auto-applied by default. "
-        "V329 warns this release if readable settings are set without this switch.",
+        description="Reserved: no runtime reader of this score section yet "
+        "(V327 warns when set). Intended to enable autonomous pattern application.",
     )
 
     trust_threshold: float = Field(
@@ -299,8 +296,8 @@ class LearningConfig(BaseModel):
     # v23 Evolution: Exploration Budget Maintenance
     exploration_budget: ExplorationBudgetConfig = Field(
         default_factory=ExplorationBudgetConfig,
-        description="Dynamic exploration budget configuration. "
-        "When enabled, modulates exploration_rate based on entropy.",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Exploration budget intended to modulate exploration_rate based on entropy.",
     )
     # v23 Evolution: Automatic Entropy Response
     entropy_response: EntropyResponseConfig = Field(
