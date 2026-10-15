@@ -133,6 +133,9 @@ Registered RPC methods:
 | `job.pause` | Pause a running job |
 | `job.resume` | Resume a paused job |
 | `job.cancel` | Cancel a running job |
+| `schedule.register` | Register a recurring source and return the daemon-accepted source digest with durable registry identity; does not submit an immediate job |
+| `schedule.current` | Read one schedule against its registry identity, ID, and accepted digest |
+| `schedule.cancel` | Cancel one bound registration and related active work, then report current state |
 | `job.list` | List all known jobs |
 | `job.diagnose` | Get diagnostic report for a job |
 | `job.errors` | Get error details for a job |
@@ -143,6 +146,20 @@ Registered RPC methods:
 | `daemon.health` | Liveness probe |
 | `daemon.ready` | Readiness probe |
 | `daemon.clear_rate_limits` | Clear cached rate limits (all or by instrument) |
+
+The schedule methods require available same-UID Unix peer credentials on both
+ends of the connection. Their results include `registry_identity`,
+`schedule_id`, `source_digest`, `pinned_source_digest`, `state`, `reason`,
+`observed_at`, and `cancelled`. `state` is `live`, `disabled`, `running`,
+`not_registered`, or `inconclusive`. A bound `not_registered` read is a current
+snapshot, not proof that no future registration can occur. Callers must hold
+their own lifecycle ordering across submit and erasure decisions. In
+particular, `schedule.register` does not replace `job.submit`; if both are
+needed, record a pending intent before either call and verify the bound digest
+again after submission. Missing methods on an older conductor, transport loss,
+wrong registry identity, changed digest, or unfinished work require a safe
+inconclusive decision. The registry identity survives service restarts with the
+same state database and changes when a new database is served at the socket.
 
 ### Backpressure
 

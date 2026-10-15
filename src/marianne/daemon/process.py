@@ -745,6 +745,17 @@ class DaemonProcess:
         """
         from marianne.daemon.types import JobRequest
 
+        def _require_schedule_peer(writer: Any) -> None:
+            """The venue methods fail closed if kernel peer identity is unavailable."""
+            from marianne.daemon.exceptions import DaemonAccessDeniedError
+            from marianne.daemon.ipc.peercred import read_peer_credentials
+
+            if not isinstance(writer, asyncio.StreamWriter):
+                raise DaemonAccessDeniedError()
+            credentials = read_peer_credentials(writer)
+            if credentials is None or credentials.uid != os.getuid():
+                raise DaemonAccessDeniedError()
+
         def _workspace_path(raw: str | None) -> Path | None:
             return Path(raw) if raw else None
 
@@ -837,6 +848,33 @@ class DaemonProcess:
         async def handle_daemon_status(_p: dict[str, Any], _w: Any) -> dict[str, Any]:
             return await manager.get_daemon_status()
 
+        async def handle_schedule_register(
+            params: dict[str, Any], writer: Any,
+        ) -> dict[str, Any]:
+            _require_schedule_peer(writer)
+            config_path = params["config_path"]
+            if not isinstance(config_path, str) or not config_path:
+                raise ValueError("config_path must be a non-empty string")
+            return await manager.register_schedule(Path(config_path))
+
+        async def handle_schedule_current(
+            params: dict[str, Any], writer: Any,
+        ) -> dict[str, Any]:
+            _require_schedule_peer(writer)
+            return await manager.current_schedule(
+                str(params["schedule_id"]), str(params["registry_identity"]),
+                str(params["source_digest"]),
+            )
+
+        async def handle_schedule_cancel(
+            params: dict[str, Any], writer: Any,
+        ) -> dict[str, Any]:
+            _require_schedule_peer(writer)
+            return await manager.cancel_schedule(
+                str(params["schedule_id"]), str(params["registry_identity"]),
+                str(params["source_digest"]),
+            )
+
         async def handle_shutdown(params: dict[str, Any], _w: Any) -> dict[str, Any]:
             graceful = params.get("graceful", True)
             task = asyncio.create_task(
@@ -927,6 +965,9 @@ class DaemonProcess:
         handler.register("job.recover", handle_recover)
 
         handler.register("daemon.status", handle_daemon_status)
+        handler.register("schedule.register", handle_schedule_register)
+        handler.register("schedule.current", handle_schedule_current)
+        handler.register("schedule.cancel", handle_schedule_cancel)
         handler.register("daemon.shutdown", handle_shutdown)
         handler.register("daemon.config", handle_config)
         handler.register("daemon.reload", handle_reload)

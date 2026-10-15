@@ -61,7 +61,12 @@ from marianne.daemon.registry import (
     JobRecord,
     JobRegistry,
 )
-from marianne.daemon.schedule_registry import ScheduleRecord, ScheduleRegistry
+from marianne.daemon.schedule_registry import (
+    ScheduleRecord,
+    ScheduleRegistry,
+    ScheduleRegistryBusyError,
+    ScheduleRegistryDataError,
+)
 from marianne.daemon.scheduler import GlobalSheetScheduler
 from marianne.daemon.semantic_analyzer import SemanticAnalyzer
 from marianne.daemon.snapshot import SnapshotManager
@@ -4070,10 +4075,16 @@ class JobManager:
         except Exception:
             _logger.error("modify.deferred_resume_failed", job_id=job_id, exc_info=True)
 
-    async def cancel_job(self, job_id: str, *, source: str = "unknown") -> bool:
+    async def cancel_job(
+        self, job_id: str, *, source: str = "unknown",
+        expected_source_digest: str | None = None,
+        require_schedule: bool = False,
+    ) -> bool:
         """Cancel active work and remove its recurrence, when present."""
         record = await JobManager._schedule_for_job(self, job_id)
         if record is None:
+            if require_schedule:
+                raise JobSubmissionError("Bound schedule disappeared before cancellation")
             if not self._try_reserve_job_admission(job_id, allow_active=True):
                 raise JobSubmissionError(
                     f"Score '{job_id}' is already being submitted"
@@ -4094,6 +4105,9 @@ class JobManager:
 
         def capture_authority(current: ScheduleRecord) -> None:
             nonlocal removal_entered
+            if (expected_source_digest is not None
+                    and current.source_digest != expected_source_digest):
+                raise JobSubmissionError("Bound schedule digest changed before cancellation")
             self._claim_related_job_admissions(current, owned_job_ids)
             removal_entered = True
 
@@ -4146,6 +4160,105 @@ class JobManager:
             self._release_lifecycle_admission(claims)
             for owned_job_id in reversed(owned_job_ids):
                 self._release_job_admission(owned_job_id)
+
+    async def register_schedule(self, config_path: Path) -> dict[str, Any]:
+        """Register a recurring source and expose its daemon-accepted bytes."""
+        identity = await self._schedule_registry.identity()
+        controller = self._recurrence_controller
+        if controller is None:
+            return self._schedule_venue_result(identity, "", "inconclusive", "registry_busy")
+        claims: list[tuple[str, ...]] = []
+        try:
+            record = await controller.register(
+                config_path,
+                before_wait=self._schedule_admission_available,
+                before_mutation=lambda ids: self._claim_lifecycle_admission(claims, ids),
+                require_schedule=True,
+            )
+            if record is None:
+                return self._schedule_venue_result(identity, "", "inconclusive", "no_schedule")
+            return self._schedule_venue_result(
+                identity, record.schedule_id,
+                "live" if record.enabled else "disabled",
+                source_digest=record.source_digest,
+                pinned_source_digest=record.pinned_source_digest,
+            )
+        except ScheduleRegistryBusyError:
+            return self._schedule_venue_result(identity, "", "inconclusive", "registry_busy")
+        except ScheduleRegistryDataError:
+            return self._schedule_venue_result(identity, "", "inconclusive", "damaged_state")
+        finally:
+            self._release_lifecycle_admission(claims)
+
+    @staticmethod
+    def _schedule_venue_result(
+        identity: str, schedule_id: str, state: str,
+        reason: str | None = None, *, source_digest: str | None = None,
+        pinned_source_digest: str | None = None,
+        cancelled: bool | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "registry_identity": identity, "schedule_id": schedule_id,
+            "state": state, "reason": reason,
+            "source_digest": source_digest,
+            "pinned_source_digest": pinned_source_digest,
+            "observed_at": time.time(), "cancelled": cancelled,
+        }
+
+    async def current_schedule(
+        self, schedule_id: str, registry_identity: str, source_digest: str,
+    ) -> dict[str, Any]:
+        """Read one exact schedule from one durable venue; uncertainty stays typed."""
+        actual = await self._schedule_registry.identity()
+        if actual != registry_identity:
+            return self._schedule_venue_result(
+                actual, schedule_id, "inconclusive", "identity_mismatch"
+            )
+        if not schedule_id or not source_digest:
+            return self._schedule_venue_result(
+                actual, schedule_id, "inconclusive", "digest_mismatch"
+            )
+        try:
+            record = await self._schedule_registry.get(schedule_id)
+        except ScheduleRegistryBusyError:
+            return self._schedule_venue_result(actual, schedule_id, "inconclusive", "registry_busy")
+        except ScheduleRegistryDataError:
+            return self._schedule_venue_result(actual, schedule_id, "inconclusive", "damaged_state")
+        if record is not None and record.source_digest != source_digest:
+            return self._schedule_venue_result(
+                actual, schedule_id, "inconclusive", "digest_mismatch"
+            )
+        if self._is_schedule_active(schedule_id):
+            state = "running"
+        elif record is None:
+            state = "not_registered"
+        else:
+            state = "live" if record.enabled else "disabled"
+        return self._schedule_venue_result(
+            actual, schedule_id, state, source_digest=source_digest,
+            pinned_source_digest=record.pinned_source_digest if record else None,
+        )
+
+    async def cancel_schedule(
+        self, schedule_id: str, registry_identity: str, source_digest: str,
+    ) -> dict[str, Any]:
+        """Cancel a bound schedule with a digest check inside lifecycle ownership."""
+        before = await self.current_schedule(schedule_id, registry_identity, source_digest)
+        if before["state"] == "inconclusive":
+            return before
+        if before["state"] == "not_registered":
+            return before
+        try:
+            await self.cancel_job(
+                schedule_id, source="schedule.cancel",
+                expected_source_digest=source_digest, require_schedule=True,
+            )
+        except (JobSubmissionError, ScheduleRegistryBusyError, ScheduleRegistryDataError):
+            actual = await self._schedule_registry.identity()
+            return self._schedule_venue_result(actual, schedule_id, "inconclusive", "race")
+        after = await self.current_schedule(schedule_id, registry_identity, source_digest)
+        after["cancelled"] = after["state"] == "not_registered"
+        return after
 
     async def _cancel_schedule_related(
         self,

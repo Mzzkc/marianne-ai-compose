@@ -205,6 +205,19 @@ class ScheduleStatus(BaseModel):
     )
 
 
+class ScheduleVenueResult(BaseModel):
+    """Bound recurring-schedule observation from the local conductor."""
+
+    registry_identity: str
+    schedule_id: str
+    state: Literal["live", "disabled", "running", "not_registered", "inconclusive"]
+    reason: str | None = None
+    source_digest: str | None = None
+    pinned_source_digest: str | None = None
+    observed_at: float
+    cancelled: bool | None = None
+
+
 class JobTimeoutCleanupStatus(BaseModel):
     """Truthful, secret-free evidence from Baton's timeout teardown."""
 

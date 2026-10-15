@@ -89,6 +89,7 @@ class RecurrenceController:
         before_wait: LifecycleProbe | None = None,
         before_mutation: LifecycleAdmission | None = None,
         pin: bool | None = None,
+        require_schedule: bool = False,
     ) -> ScheduleRecord | None:
         """Register or replace the current schedule declaration for one score.
 
@@ -111,6 +112,8 @@ class RecurrenceController:
                     score_path=str(resolved_path),
                 )
             config = source_config
+            if require_schedule and config.schedule is None:
+                return None
             priors = await self._registry.list()
             prior_ids = {
                 prior.schedule_id

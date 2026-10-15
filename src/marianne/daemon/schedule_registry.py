@@ -14,6 +14,7 @@ import sqlite3
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import UUID, uuid4
 
 import aiosqlite
 from pydantic import ValidationError
@@ -146,7 +147,35 @@ class ScheduleRegistry:
             "ON schedules (enabled, next_due_at)"
         )
         await _add_missing_columns(conn)
+        await conn.execute(
+            "CREATE TABLE IF NOT EXISTS registry_identity ("
+            "singleton INTEGER PRIMARY KEY CHECK (singleton = 1), "
+            "identity TEXT NOT NULL)"
+        )
+        await conn.execute(
+            "INSERT OR IGNORE INTO registry_identity (singleton, identity) VALUES (1, ?)",
+            (str(uuid4()),),
+        )
         await conn.commit()
+
+    async def identity(self) -> str:
+        """Return the identity of this durable state database, across restarts."""
+        try:
+            cursor = await self._db.execute(
+                "SELECT identity FROM registry_identity WHERE singleton = 1"
+            )
+            row = await cursor.fetchone()
+        except sqlite3.Error as exc:
+            self._raise_database_error("read registry identity", exc)
+        if row is None:
+            raise ScheduleRegistryDataError("Schedule registry identity is absent")
+        try:
+            identity = str(UUID(row["identity"]))
+        except (TypeError, ValueError, AttributeError, KeyError) as exc:
+            raise ScheduleRegistryDataError("Schedule registry identity is malformed") from exc
+        if identity != row["identity"]:
+            raise ScheduleRegistryDataError("Schedule registry identity is noncanonical")
+        return identity
 
     async def upsert(
         self,

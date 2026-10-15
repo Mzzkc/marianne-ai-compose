@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import errno
 import json
+import os
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -30,11 +31,17 @@ from marianne.daemon.exceptions import (
     DaemonNotRunningError,
     DaemonProtocolError,
     DaemonUnresponsiveError,
+    MethodNotFoundError,
     ResourceExhaustedError,
 )
 from marianne.daemon.ipc.errors import RESOURCE_EXHAUSTED, rpc_error_to_exception
 from marianne.daemon.ipc.protocol import JsonRpcRequest
-from marianne.daemon.types import DaemonStatus, JobRequest, JobResponse
+from marianne.daemon.types import (
+    DaemonStatus,
+    JobRequest,
+    JobResponse,
+    ScheduleVenueResult,
+)
 
 _logger = get_logger("daemon.ipc.client")
 
@@ -49,6 +56,7 @@ _SAFE_RETRY_METHODS = frozenset({
     "daemon.health", "daemon.status", "daemon.config", "daemon.ready",
     "daemon.rate_limits", "daemon.learning.patterns", "job.list", "job.status",
     "job.errors", "job.diagnose", "job.history",
+    "schedule.current",
 })
 _HEALTH_TIMEOUT_SECONDS = 2.0
 _CLOSE_TIMEOUT_SECONDS = 0.05
@@ -388,6 +396,12 @@ class DaemonClient:
         request: JsonRpcRequest,
     ) -> Any:
         """Send a request and read the response on an existing connection."""
+        if request.method.startswith("schedule."):
+            from marianne.daemon.ipc.peercred import read_peer_credentials
+
+            credentials = read_peer_credentials(writer)
+            if credentials is None or credentials.uid != os.getuid():
+                raise DaemonAccessDeniedError()
         async with asyncio.timeout(self._timeout):
             writer.write(request.model_dump_json().encode() + b"\n")
             await writer.drain()
@@ -437,7 +451,8 @@ class DaemonClient:
             try:
                 result = await self._send_and_receive(reader, writer, request)
             except (
-                asyncio.CancelledError, TimeoutError, DaemonProtocolError, ResourceExhaustedError,
+                asyncio.CancelledError, TimeoutError, DaemonProtocolError,
+                DaemonAccessDeniedError, ResourceExhaustedError,
             ):
                 pool.discard(writer)
                 raise
@@ -546,6 +561,65 @@ class DaemonClient:
         """Get daemon status."""
         result = await self.call("daemon.status")
         return DaemonStatus(**result)
+
+    async def register_schedule(self, config_path: Path) -> ScheduleVenueResult:
+        """Request daemon-side recurring registration and accepted digest."""
+        try:
+            raw = await self.call("schedule.register", {"config_path": str(config_path)})
+        except MethodNotFoundError:
+            return self._inconclusive_schedule("", "method_not_found")
+        return ScheduleVenueResult.model_validate(raw)
+
+    @staticmethod
+    def _inconclusive_schedule(schedule_id: str, reason: str) -> ScheduleVenueResult:
+        return ScheduleVenueResult(
+            registry_identity="", schedule_id=schedule_id,
+            state="inconclusive", reason=reason, observed_at=time.time(),
+        )
+
+    @staticmethod
+    def _bind_schedule_result(
+        raw: Any, schedule_id: str, registry_identity: str, source_digest: str,
+    ) -> ScheduleVenueResult:
+        try:
+            result = ScheduleVenueResult.model_validate(raw)
+        except (TypeError, ValueError) as exc:
+            raise DaemonProtocolError("Malformed schedule venue response") from exc
+        if result.registry_identity != registry_identity:
+            return DaemonClient._inconclusive_schedule(schedule_id, "identity_mismatch")
+        if result.schedule_id != schedule_id:
+            raise DaemonProtocolError("Schedule ID changed in venue response")
+        if result.state != "inconclusive" and result.source_digest != source_digest:
+            raise DaemonProtocolError("Schedule digest changed in venue response")
+        return result
+
+    async def current_schedule(
+        self, schedule_id: str, registry_identity: str, source_digest: str,
+    ) -> ScheduleVenueResult:
+        """Read only the venue and schedule bound by an accepted receipt."""
+        params = {"schedule_id": schedule_id, "registry_identity": registry_identity,
+                  "source_digest": source_digest}
+        try:
+            raw = await self.call("schedule.current", params)
+        except MethodNotFoundError:
+            return self._inconclusive_schedule(schedule_id, "method_not_found")
+        return self._bind_schedule_result(
+            raw, schedule_id, registry_identity, source_digest,
+        )
+
+    async def cancel_schedule(
+        self, schedule_id: str, registry_identity: str, source_digest: str,
+    ) -> ScheduleVenueResult:
+        """Cancel one bound schedule; never retry a lost mutation response."""
+        params = {"schedule_id": schedule_id, "registry_identity": registry_identity,
+                  "source_digest": source_digest}
+        try:
+            raw = await self.call("schedule.cancel", params)
+        except MethodNotFoundError:
+            return self._inconclusive_schedule(schedule_id, "method_not_found")
+        return self._bind_schedule_result(
+            raw, schedule_id, registry_identity, source_digest,
+        )
 
     async def submit_job(self, request: JobRequest) -> JobResponse:
         """Submit a job to the daemon."""
