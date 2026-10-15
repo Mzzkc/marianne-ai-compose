@@ -569,7 +569,8 @@ code-registry and corpus-sweep tests.
 | ERROR | V306 | A `path_in_scope` validation can traverse outside its declared scope |
 | ERROR | V310, V321, V323, V324 | Capability classes: a class-shaped name cannot resolve on this machine (V-CLS-02: vocabulary-only, tombstoned, or a chain with no registered entry — the same chains `mzt run` refuses); an instrument alias names a class as its profile; `instrument_config.model` applied to a class primary; an invalid classes layer file while the score uses a class |
 | ERROR | V213 | `interactive: true` set for an instrument without verified interactive support |
-| WARNING | V010, V208, V219–V220, V224, V226, V228, V231–V232, V315 | Likely typo; built-in shadowing (deprecation); advisory structure and flow risks |
+| WARNING | V010 | Unknown field at ANY depth — the curated hint names a working key wherever the mistake sits (a `timeout:` beside a trigger action, e.g. `sheet.triggers.1.on_fail[0].timeout`, points at `instrument_config.timeout_seconds`) |
+| WARNING | V208, V219–V220, V224, V226, V228, V231–V232, V315 | Built-in shadowing (deprecation); advisory structure and flow risks |
 | WARNING | V327 | A score sets a reserved key — accepted, but no runtime code reads it; also warns when `movements.<N>.voices` cannot expand with the sheet's size/start settings |
 | WARNING | V328 | Deprecated spelling or key: root `max_wall_seconds` (now `schedule.max_wall_seconds`), `checkpoints:` (now `approvals:`), hook-level `on_failure` (now `if_hook_fails`), root `conductor` |
 | WARNING | V329 | A readable default-off section has settings but no `enabled` key; set `enabled: true` now or explicit `enabled: false` to opt out of next release's auto-enable rule |

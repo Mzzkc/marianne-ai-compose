@@ -134,6 +134,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`mzt list` default behavior** — Shows active score runs only (queued, running, paused); use `--all` for everything
 - **`mzt list` requires daemon** — Routes through `marianned`; use `mzt status` for direct file-based status
 - **Default JSON output format** — Backends default to JSON output to prevent streaming mode errors
+- **Completion mode honors `retry.completion_threshold_percent`** — A result must exceed the threshold (default 50) to enter completion mode; results at or below it spend the ordinary retry budget, and a value of 100 never enters completion mode
+- **`cost_limits.max_cost_per_sheet` is enforced** — The baton arms the per-sheet cap at registration and recovery; an attempt that takes a sheet above its cap fails the sheet, including an otherwise successful attempt
+- **Root `max_wall_seconds` no longer caps a one-shot score** — It is now the scheduled-tick window `schedule.max_wall_seconds` (the root spelling warns V328 for one release); the research generator no longer emits it for one-shot scores, whose sheet timeouts remain in force
 
 ### Fixed
 - **SIGABRT crash** — Unified streaming with parallel CancelledError guard

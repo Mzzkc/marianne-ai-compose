@@ -97,7 +97,11 @@ def unknown_field_issue(field: UnknownScoreField, raw_yaml: str) -> ValidationIs
         field.candidates, key=lambda key: (edit_distance(field.key, key), key), default=None
     )
     near = nearest is not None and edit_distance(field.key, nearest) <= 2
-    override = _KNOWN_TYPOS.get(field.key) if not field.path else None
+    # Curated onboarding hints fire at ANY depth (a `timeout:` next to a
+    # trigger action is the same author mistake as a root `timeout:`); the
+    # walk only emits keys that are unknown AT that location, so a curated
+    # name can never collide with a legitimately known nested key.
+    override = _KNOWN_TYPOS.get(field.key)
     suggested = override or (nearest if near else None)
     # A curated onboarding hint is high-confidence even when the edit distance is high.
     severity = ValidationSeverity.WARNING if suggested else ValidationSeverity.INFO

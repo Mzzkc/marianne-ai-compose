@@ -1970,6 +1970,11 @@ class BatonCore:
                 and sheet.has_fallback_available
             )
         ):
+            # Instrument-HEALTH semantics, not budget: any executed non-zero
+            # pass credits the instrument (it can do the work), and zero-pass
+            # success gives no health signal. The completion BUDGET is decided
+            # by `enters_completion` alone, which both sites below share
+            # (~1950 gate and the F-065 charge at ~2147).
             if event.execution_success and effective_pass_rate > 0:
                 self._update_instrument_on_success(event.instrument_name)
             elif not event.execution_success:

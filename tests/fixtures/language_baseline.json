@@ -1,5 +1,5 @@
 {
   "description": "Known language gaps (GH #436). A finding not listed here fails the gate. Remove an entry in the same commit that closes the gap.",
-  "commit": "729ac721",
+  "commit": "ab2dffd8204960e19fdab1c8c8e456c0a61ea122",
   "findings": []
 }

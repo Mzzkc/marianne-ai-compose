@@ -134,9 +134,34 @@ def test_d6_distant_unknown_stays_info(tmp_path: Path) -> None:
     assert issue.severity.value == "info"
 
 
-def test_unknown_key_inside_trigger_action_is_tolerated(tmp_path: Path) -> None:
+def test_unknown_key_inside_trigger_action_warns_naming_sheet_timeout(tmp_path: Path) -> None:
     import yaml
 
+    # The w10 shape: a bare `timeout` beside a trigger ACTION. Curated typo
+    # hints fire at any depth, so this is V010 WARNING naming the sheet
+    # timeout — visible in default validate output, not a hidden V011 INFO.
+    raw = BASE.format(ws=tmp_path.as_posix()) + (
+        "sheet:\n  size: 1\n  total_items: 1\n  triggers:\n"
+        "    '1':\n      on_fail:\n        - pause: true\n"
+        "          timeout: 600\n"
+    )
+    clean, unknown = strip_unknown_score_fields(yaml.safe_load(raw), JobConfig)
+    assert clean["sheet"]["triggers"]["1"]["on_fail"][0]["pause"] is True
+    assert [(field.path, field.key) for field in unknown] == [
+        ("sheet.triggers.1.on_fail[0]", "timeout")
+    ]
+    issue = unknown_field_issue(unknown[0], raw)
+    assert issue.check_id == "V010"
+    assert issue.severity.value == "warning"
+    assert "instrument_config.timeout_seconds" in (issue.suggestion or "")
+
+
+def test_unknown_key_inside_run_action_is_tolerated_and_warns(tmp_path: Path) -> None:
+    import yaml
+
+    # Same contract one level deeper, inside the run action's own mapping:
+    # the walk still strips the key (the action runs without it) and the
+    # issue is V010 WARNING, not tolerated silence.
     raw = BASE.format(ws=tmp_path.as_posix()) + (
         "sheet:\n  size: 1\n  total_items: 1\n  triggers:\n"
         "    '1':\n      on_fail:\n        - run:\n"
@@ -147,3 +172,7 @@ def test_unknown_key_inside_trigger_action_is_tolerated(tmp_path: Path) -> None:
     assert [(field.path, field.key) for field in unknown] == [
         ("sheet.triggers.1.on_fail[0].run", "timeout")
     ]
+    issue = unknown_field_issue(unknown[0], raw)
+    assert issue.check_id == "V010"
+    assert issue.severity.value == "warning"
+    assert "instrument_config.timeout_seconds" in (issue.suggestion or "")
