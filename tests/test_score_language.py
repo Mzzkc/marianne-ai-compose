@@ -15,13 +15,33 @@ the correct form live in ``tests/test_check_language_controls.py``.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 CHECKER = ROOT / "tests" / "scripts" / "check_language.py"
 BASELINE = ROOT / "tests" / "fixtures" / "language_baseline.json"
+SKILL_SURFACE = ROOT / "plugins" / "marianne" / "skills" / "score-authoring" / "SKILL.md"
+
+_SURFACE_REASON = (
+    "plugins submodule not checked out: the gate reads the skill layer and "
+    "cannot judge the language without it (git submodule update --init plugins)"
+)
+# Locally a bare worktree may skip with the reason. In CI a missing skill
+# layer is RED: a gate that skips itself in the one place it guards is the
+# accepted-but-silent class it exists to remove (Lens Inspect F6).
+pytestmark = pytest.mark.skipif(
+    not SKILL_SURFACE.exists() and not os.environ.get("CI"), reason=_SURFACE_REASON
+)
+
+
+def test_skill_surface_is_present_in_ci() -> None:
+    if os.environ.get("CI"):
+        assert SKILL_SURFACE.exists(), _SURFACE_REASON
 
 
 def _run(*extra: str) -> subprocess.CompletedProcess[str]:
@@ -31,13 +51,25 @@ def _run(*extra: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _regressions(stdout: str) -> str:
+    """The NEW findings, which the JSON serialises first and a tail would hide."""
+    try:
+        report = json.loads(stdout)
+    except json.JSONDecodeError:
+        return stdout[-4000:]
+    return "\n".join(
+        f"NEW {r['id']}  {r.get('detail', '')}  {' '.join(r.get('where', []))}"
+        for r in report.get("regressions", [])
+    ) or "(no regression rows; see stderr)"
+
+
 def test_no_language_regression_outside_the_baseline() -> None:
     result = _run("--baseline", str(BASELINE))
     assert result.returncode == 0, (
         "A schema key, validator code, doc or skill line disagrees with the "
         "others and is not in the baseline. Fix the language (all four layers "
         "in one commit, CLAUDE.md) rather than adding to the fixture:\n"
-        + result.stdout[-4000:] + result.stderr[-2000:]
+        + _regressions(result.stdout) + "\n" + result.stderr[-2000:]
     )
 
 

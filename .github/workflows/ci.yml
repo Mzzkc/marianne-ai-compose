@@ -14,11 +14,13 @@ concurrency:
 permissions:
   contents: read
 
-# NOTE: submodules are intentionally NOT checked out. The bundled submodules
-# (compiler, plugins, rosetta-corpus) live in separate repos that the default
-# Actions token cannot clone. No core test depends on them; the compile-command
-# tests `importorskip` the optional `marianne_compiler` package and skip cleanly
-# when it is absent, so the suite is fully hermetic on a bare checkout.
+# NOTE on submodules: `compiler` and `scores/rosetta-corpus` are NOT checked
+# out — no core test depends on them (the compile-command tests `importorskip`
+# the optional `marianne_compiler` package). `plugins` IS checked out in the
+# test jobs: the score-language gate (tests/test_score_language.py, GH #436)
+# reads the skill layer, and the repo is public so no token is needed. Without
+# it the gate would skip itself and CI could never fail on a language gap
+# (Lens Inspect F6, 2026-10-14).
 
 jobs:
   lint:
@@ -58,6 +60,8 @@ jobs:
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
+      - name: Check out the public plugins submodule (score-language gate)
+        run: git submodule update --init --depth 1 plugins
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:

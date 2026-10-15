@@ -107,8 +107,10 @@ registered profile, and a registered profile takes precedence over a class.
 The resolved class chain is saved with the job, so editing the map changes new
 jobs while an existing job keeps its original routes on resume. A chain may
 name profiles this machine lacks: the job is admitted and starts at the first
-entry that can run (`mzt validate` says which, as a V311 warning); only a
-class with no registered entry at all is refused (V310). Use `mzt
+entry that can run (`mzt validate` says which, as a V311 warning; when no
+entry is installed yet the same warning says so and names the install — the
+score is still admitted); only a class with no registered entry at all is
+refused (V310). Use `mzt
 instruments classes show --json` to inspect the winning layers and `mzt
 instruments classes check` to inspect current availability. `mzt instruments
 classes write --if-absent` creates a machine-specific user map without

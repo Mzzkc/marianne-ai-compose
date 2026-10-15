@@ -210,7 +210,11 @@ class TestV311ChainAvailability:
         assert "1 of 2 entries cannot run here" in issues[0].message
         assert "the job will start at 'claude-code'" in issues[0].message
 
-    def test_fully_unavailable_chain_escalates_to_v310(self, monkeypatch, tmp_path) -> None:
+    def test_fully_unavailable_chain_warns_and_never_refuses(self, monkeypatch, tmp_path) -> None:
+        """V-CLS-03 / A-C5: every entry missing on THIS machine is a WARNING naming
+        the install, not a V310 ERROR — `mzt run` admits the score, so `mzt
+        validate` must not refuse it (this is what failed init → validate on a
+        fresh install and on every CI runner)."""
         _Layers(
             monkeypatch,
             tmp_path,
@@ -226,8 +230,10 @@ class TestV311ChainAvailability:
             },
         )
         issues = _run(ClassChainAvailabilityCheck(), _config(instrument="dead"))
-        assert [i.check_id for i in issues] == ["V310"]
-        assert issues[0].severity == ValidationSeverity.ERROR
+        assert [i.check_id for i in issues] == ["V311"]
+        assert issues[0].severity == ValidationSeverity.WARNING
+        assert "none of its 2 entries can run here" in issues[0].message
+        assert "will be admitted" in issues[0].message
 
     def test_shadowed_default_class_warns(self, monkeypatch, tmp_path) -> None:
         # A loaded profile named like a packaged-default class: the profile

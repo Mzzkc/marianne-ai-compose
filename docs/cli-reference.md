@@ -567,7 +567,7 @@ code-registry and corpus-sweep tests.
 | ERROR | V221–V223, V227, V229, V312–V314, V316–V317, V320 | Flow load errors and invalid flow references, reported with a code and hint rather than a raw schema trace |
 | ERROR | V305 | Bash `'${#...}'` length syntax in a prompt the Jinja engine eats as a comment |
 | ERROR | V306 | A `path_in_scope` validation can traverse outside its declared scope |
-| ERROR | V310, V321, V323, V324 | Capability classes: a class-shaped name cannot resolve on this machine (V-CLS-02, including a chain with no runnable entry); an instrument alias names a class as its profile; `instrument_config.model` applied to a class primary; an invalid classes layer file while the score uses a class |
+| ERROR | V310, V321, V323, V324 | Capability classes: a class-shaped name cannot resolve on this machine (V-CLS-02: vocabulary-only, tombstoned, or a chain with no registered entry — the same chains `mzt run` refuses); an instrument alias names a class as its profile; `instrument_config.model` applied to a class primary; an invalid classes layer file while the score uses a class |
 | ERROR | V213 | `interactive: true` set for an instrument without verified interactive support |
 | WARNING | V010, V208, V219–V220, V224, V226, V228, V231–V232, V315 | Likely typo; built-in shadowing (deprecation); advisory structure and flow risks |
 | WARNING | V327 | A score sets a reserved key — accepted, but no runtime code reads it (P1: nothing a score sets is silently inert) |
@@ -590,7 +590,7 @@ code-registry and corpus-sweep tests.
 | WARNING | V304 | Code execution would run unsandboxed (bwrap unavailable and `require_sandbox` false) |
 | WARNING | V308 | Partial concrete instrument coverage inside fan-out movements |
 | WARNING | V309 | An exact section-label validation the prompt never teaches the agent |
-| WARNING | V311, V322 | Capability classes: part of a used class's chain cannot run here (binary missing, unsupported, local server not serving the profile's model, or unable to enforce the sheet's `response_format`) — the job starts at the first available entry; a default-layer class shadowed by a same-named profile; a score alias shadowing a class name |
+| WARNING | V311, V322 | Capability classes: part of a used class's chain cannot run here (binary missing, unsupported, local server not serving the profile's model, or unable to enforce the sheet's `response_format`) — the job starts at the first available entry; when no entry can run here the warning says so and names the install (availability is a fact about this machine, so the score is still admitted); a default-layer class shadowed by a same-named profile; a score alias shadowing a class name |
 | INFO | V011, V104, V110, V218, V225 | Distant unknown field; timeout above 7200 seconds (2 hours); unused variable; ambiguous file reference; mixed fan-out keying |
 | INFO | V205 | All validations are `file_exists` only — nothing checks content |
 | INFO | V207 | Fan-out declared without `parallel.enabled` (instances still run sequentially) |

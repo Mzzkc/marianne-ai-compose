@@ -18,6 +18,7 @@ from marianne.core.config.flow import RunTrigger
 from marianne.core.expressions import FileFacts
 from marianne.core.logging import get_logger
 from marianne.execution.validation.expansion import expand_known
+from marianne.utils import run_supervisor
 from marianne.utils.process import (
     run_bounded_command,
 )
@@ -135,12 +136,15 @@ async def execute_run_action(
             flags |= os.O_NOFOLLOW
         descriptor = os.open(log_path, flags, 0o600)
         with os.fdopen(descriptor, "wb") as log:
-            # ``-P`` (safe_path, Python 3.11+): never put the action's cwd on
-            # sys.path, so a workspace that happens to contain a ``marianne``
-            # package cannot shadow the installed supervisor module (Forge
-            # Inspect P2, 2026-10-14). The shell still runs in ``cwd``.
+            # ``-I`` (isolated): ignore PYTHONPATH and never put the action's
+            # cwd on sys.path, and run the supervisor by its absolute FILE so
+            # no ``marianne`` package in the workspace or on PYTHONPATH can
+            # shadow it (Forge Inspect P2; Circuit V3: ``-P -m`` was still
+            # shadowed by PYTHONPATH="." or an empty entry, GH #445). The
+            # supervisor imports nothing from marianne. The shell still runs
+            # in ``cwd``.
             argv = (
-                [sys.executable, "-P", "-m", "marianne.utils.run_supervisor",
+                [sys.executable, "-I", str(run_supervisor.__file__),
                  str(state_path), command]
                 if state_path is not None else ["bash", "-c", command]
             )

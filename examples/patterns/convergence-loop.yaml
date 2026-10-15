@@ -3,7 +3,7 @@
 # the second writes the completion marker. A failed attempt escalates.
 name: convergence-loop
 description: A CLI-only convergence loop with an expression gate and failure trigger.
-workspace: ~/Projects/WORKSPACES/marianne-expansion-20261009/convergence-loop-example
+workspace: ../../workspaces/convergence-loop
 instrument: cli
 workspace_lifecycle:
   archive_on_fresh: true

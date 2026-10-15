@@ -99,3 +99,42 @@ def test_linux_start_ticks_refuse_recycled_pid_despite_matching_float(monkeypatc
 
     assert counts.skipped_identity_mismatch == 1
     assert signals == []
+
+
+def test_float_only_caller_survives_a_wall_clock_step(monkeypatch) -> None:
+    """GH #446 (Circuit): CLI-instrument musicians and piped skip_when /
+    command_succeeds pass only the spawn-time float. psutil's create_time moves
+    with every wall-clock step (btime is re-read per call), so an exact compare
+    went blind for the parent's life after the first step: a child forked after
+    the step was never captured. A step-sized delta must still capture; a
+    recycled-PID-sized delta must still refuse."""
+    import subprocess
+
+    current = psutil.Process()
+    spawn_float = current.create_time()
+    child = subprocess.Popen(["sleep", "30"])
+    try:
+        stepped = spawn_float + 3.0  # Circuit measured +3.00 s steps on WSL
+        real_create_time = psutil.Process.create_time
+        monkeypatch.setattr(
+            psutil.Process, "create_time",
+            lambda self: stepped if self.pid == current.pid else real_create_time(self),
+        )
+        # same process, stepped clock: the child is still captured
+        captured = process.snapshot_descendant_trees(current.pid, spawn_float)
+        assert child.pid in {c.pid for c in captured}
+        # a recycled PID: the dead process's float is hours away, refused
+        assert process.snapshot_descendant_trees(current.pid, spawn_float - 7200.0) == ()
+        # the tick-bound caller ignores the float entirely
+        ticks = process._proc_start_ticks(current.pid)
+        assert ticks is not None
+        tick_bound = process.snapshot_descendant_trees(
+            current.pid, spawn_float - 7200.0, parent_start_ticks=ticks
+        )
+        assert child.pid in {c.pid for c in tick_bound}
+        assert process.snapshot_descendant_trees(
+            current.pid, spawn_float, parent_start_ticks=ticks + 1
+        ) == ()
+    finally:
+        child.kill()
+        child.wait()

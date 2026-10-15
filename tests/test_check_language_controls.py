@@ -263,12 +263,13 @@ def test_baseline_turns_known_gaps_green_and_a_new_gap_red(
 
     monkeypatch.setattr(job_module, "JobConfig", Root)
     baseline = tmp_path / "baseline.json"
-    assert cl.main(["--repo", str(repo), "--write-baseline", str(baseline), "--json"]) == 1
-    assert cl.main(["--repo", str(repo), "--baseline", str(baseline), "--json"]) == 0
+    foreign = ["--json", "--allow-foreign-import"]  # the synthetic repo has no src/marianne
+    assert cl.main(["--repo", str(repo), "--write-baseline", str(baseline), *foreign]) == 1
+    assert cl.main(["--repo", str(repo), "--baseline", str(baseline), *foreign]) == 0
     data = json.loads(baseline.read_text())
     data["findings"].remove("L03:max_wall_seconds")
     baseline.write_text(json.dumps(data))
-    assert cl.main(["--repo", str(repo), "--baseline", str(baseline), "--json"]) == 1
+    assert cl.main(["--repo", str(repo), "--baseline", str(baseline), *foreign]) == 1
 
 
 class Rule(BaseModel):
@@ -295,3 +296,22 @@ def test_l05_does_not_credit_a_root_key_for_a_homonym_taught_elsewhere(repo: Pat
     ids = {f.id for f in findings}
     assert "L05:source_path" in ids, "root source_path is not taught by the rule-field mention"
     assert "L05:validations[].source_path" not in ids, "the rule field IS taught"
+
+
+def test_a_missing_skill_surface_fails_loud_instead_of_scoring_empty(repo: Path) -> None:
+    """Gate seam (Lens Integration P2 #1): a bare checkout has no plugins
+    submodule; scoring a missing skill file as "" would report every
+    skill-taught key as an L05 orphan with a straight face."""
+    (repo / "plugins/marianne/skills/score-authoring/SKILL.md").unlink()
+    with pytest.raises(cl.SurfaceMissing, match="plugins submodule"):
+        cl.run_checks(repo, Root)
+
+
+def test_main_refuses_a_marianne_imported_from_outside_the_repo(
+    repo: Path, capsys: Any
+) -> None:
+    """Gate seam (Lens Integration P2 #3): the schema and validator registry
+    must come from the same tree as the docs and skills."""
+    assert cl.main(["--repo", str(repo), "--json"]) == 2
+    assert "not under" in capsys.readouterr().err
+    assert cl.main(["--repo", str(repo), "--json", "--allow-foreign-import"]) != 2
