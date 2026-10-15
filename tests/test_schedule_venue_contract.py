@@ -120,6 +120,27 @@ def test_forged_venue_response_is_inconclusive() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("missing_field", ["registry_identity", "source_digest"])
+async def test_registration_rejects_unbound_live_receipt(
+    tmp_path: Path, missing_field: str,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    from marianne.daemon.exceptions import DaemonProtocolError
+    from marianne.daemon.ipc.client import DaemonClient
+
+    response = {
+        "registry_identity": "durable-registry", "schedule_id": "daily",
+        "source_digest": "accepted-digest", "state": "live", "observed_at": 1.0,
+    }
+    response.pop(missing_field)
+    client = DaemonClient(tmp_path / "unused.sock")
+    client.call = AsyncMock(return_value=response)
+    with pytest.raises(DaemonProtocolError, match="Unbound schedule registration"):
+        await client.register_schedule(tmp_path / "daily.yaml")
+
+
+@pytest.mark.asyncio
 async def test_schedule_wire_refuses_missing_peer_credentials() -> None:
     from unittest.mock import MagicMock
 

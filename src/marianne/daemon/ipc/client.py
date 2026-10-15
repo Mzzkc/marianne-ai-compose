@@ -568,7 +568,15 @@ class DaemonClient:
             raw = await self.call("schedule.register", {"config_path": str(config_path)})
         except MethodNotFoundError:
             return self._inconclusive_schedule("", "method_not_found")
-        return ScheduleVenueResult.model_validate(raw)
+        try:
+            result = ScheduleVenueResult.model_validate(raw)
+        except (TypeError, ValueError) as exc:
+            raise DaemonProtocolError("Unbound schedule registration response") from exc
+        if result.state in {"live", "disabled"} and not (
+            result.registry_identity and result.schedule_id and result.source_digest
+        ):
+            raise DaemonProtocolError("Unbound schedule registration response")
+        return result
 
     @staticmethod
     def _inconclusive_schedule(schedule_id: str, reason: str) -> ScheduleVenueResult:
