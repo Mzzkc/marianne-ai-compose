@@ -181,7 +181,8 @@ def format_dispatch_wait(sheet: SheetState) -> str | None:
 def status(
     job_id: str | None = typer.Argument(
         None,
-        help="Score ID to check status for. Omit to see all active scores.",
+        help="The score's run id (job id) to check status for. "
+        "Omit to see all active scores.",
     ),
     json_output: bool = typer.Option(
         False,

@@ -41,7 +41,7 @@ from ..output import console, output_error
 
 
 def pause(
-    job_id: str = typer.Argument(..., help="Score ID to pause"),
+    job_id: str = typer.Argument(..., help="The score's run id (job id) to pause"),
     wait: bool = typer.Option(
         False,
         "--wait",
@@ -240,7 +240,7 @@ async def _pause_via_conductor(
 
 
 def modify(
-    job_id: str = typer.Argument(..., help="Score ID to modify"),
+    job_id: str = typer.Argument(..., help="The score's run id (job id) to modify"),
     config: Path = typer.Option(
         ...,
         "--config",

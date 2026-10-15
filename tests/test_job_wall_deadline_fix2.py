@@ -49,6 +49,8 @@ def _write_score(path: Path, workspace: Path) -> None:
         "  total_items: 1\n"
         "prompt:\n"
         "  template: generation proof\n"
+        "schedule:\n"
+        "  interval: 1h\n"
         "max_wall_seconds: 60\n",
         encoding="utf-8",
     )
@@ -164,7 +166,7 @@ async def test_fresh_stable_id_expiry_while_concurrency_queued_is_generation_cle
     monkeypatch.setattr(manager, "_run_job_task", run_managed)
     try:
         response = await manager.submit_job(
-            JobRequest(config_path=score, job_id="stable-queued", fresh=True),
+            JobRequest(config_path=score, job_id="stable-queued", fresh=True, schedule_id="test"),
         )
         assert response.status == "accepted"
         clock.value = 1_061.0
@@ -226,7 +228,7 @@ async def test_pending_stable_id_expiry_is_generation_clean(
     monkeypatch.setattr(manager, "_run_job_task", run_managed)
     try:
         response = await manager._queue_pending_job(
-            JobRequest(config_path=score, job_id="stable-pending", fresh=True),
+            JobRequest(config_path=score, job_id="stable-pending", fresh=True, schedule_id="test"),
         )
         assert response.status == "pending"
         clock.value = 2_061.0
@@ -282,7 +284,7 @@ async def test_fresh_stable_id_expiry_during_observer_start_is_generation_clean(
     monkeypatch.setattr(manager, "_run_job_task", run_managed)
     try:
         response = await manager.submit_job(
-            JobRequest(config_path=score, job_id="stable-observer", fresh=True),
+            JobRequest(config_path=score, job_id="stable-observer", fresh=True, schedule_id="test"),
         )
         assert response.status == "accepted"
         await entered.wait()

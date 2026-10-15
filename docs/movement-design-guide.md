@@ -168,14 +168,11 @@ counts explicitly.
 movements:
   1:
     name: "Setup"
-    description: "Initialize workspace and load requirements"
   2:
     name: "Implementation"
-    description: "Write code in parallel"
     voices: 4
   3:
     name: "Review"
-    description: "Final review and commit"
 ```
 
 Movement names appear in `mzt status` output:
@@ -653,15 +650,12 @@ instruments:
 movements:
   1:
     name: "Planning"
-    description: "Create an implementation plan"
   2:
     name: "Parallel Implementation"
-    description: "Implement features in parallel"
     voices: 3
     instrument: fast-writer
   3:
     name: "Integration"
-    description: "Combine and test all features"
 
 sheet:
   size: 1

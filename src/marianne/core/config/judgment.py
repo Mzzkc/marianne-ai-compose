@@ -42,7 +42,8 @@ class JudgmentConfig(BaseModel):
         description="Enable the AI judgment client for this score's FERMATA "
         "sheets. Requires escalation to be enabled on the run "
         "(--escalation/--self-healing); without FERMATA there is nothing "
-        "to judge. Default off — composer resolution is the default.",
+        "to judge. Default off — composer resolution is the default. "
+        "V329 warns this release if settings are set without this switch.",
     )
     instrument: str = Field(
         default="claude-code",

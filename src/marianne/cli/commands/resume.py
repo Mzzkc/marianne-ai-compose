@@ -35,7 +35,7 @@ from ..output import console, output_error
 
 _logger = get_logger("cli.resume")
 def resume(
-    job_id: str = typer.Argument(..., help="Score ID to resume"),
+    job_id: str = typer.Argument(..., help="The score's run id (job id) to resume"),
     config_file: Path | None = typer.Option(
         None,
         "--config",

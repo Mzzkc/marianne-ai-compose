@@ -96,33 +96,39 @@ class BridgeConfig(BaseModel):
 
     enabled: bool = Field(
         default=False,
-        description="Enable bridge mode (Ollama with MCP tools)",
+        description="Reserved: no score runtime reader yet (V327 warns when set). "
+        "Intended to enable bridge mode (Ollama with MCP tools)",
     )
 
     # MCP Proxy settings
     mcp_proxy_enabled: bool = Field(
         default=True,
-        description="Enable MCP server proxy for tool access",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Enable MCP server proxy for tool access",
     )
     mcp_servers: list[MCPServerConfig] = Field(
         default_factory=list,
-        description="MCP servers to connect to",
+        description="Reserved: no score runtime reader yet (V327 warns when set). "
+        "Intended MCP servers to connect to",
     )
 
     # Hybrid routing
     hybrid_routing_enabled: bool = Field(
         default=False,
-        description="Enable hybrid routing between Ollama and Claude",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Enable hybrid routing between Ollama and Claude",
     )
     complexity_threshold: float = Field(
         default=0.7,
         ge=0.0,
         le=1.0,
-        description="Complexity threshold for routing to Claude (0.0-1.0)",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Complexity threshold for routing to Claude (0.0-1.0)",
     )
     fallback_to_claude: bool = Field(
         default=True,
-        description="Fall back to Claude if Ollama execution fails",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Fall back to Claude if Ollama execution fails",
     )
 
     # Context budget
@@ -130,7 +136,7 @@ class BridgeConfig(BaseModel):
         default=75,
         ge=10,
         le=95,
-        description="Percent of context window to use for tools (rest for conversation)",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Percent of context window to use for tools (rest for conversation)",
     )
-
 

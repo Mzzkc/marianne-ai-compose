@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 # croniter does not publish PEP 561 type information.
 from croniter import croniter  # type: ignore[import-untyped]
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from marianne.core.scheduling import parse_interval_seconds
 
@@ -37,11 +37,21 @@ class ScheduleConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(default=True, description="Whether future ticks are enabled")
+    max_wall_seconds: float | None = Field(
+        default=None,
+        ge=60.0,
+        description="Maximum elapsed seconds from admission for one scheduled tick; "
+        "pauses count against this recurrence window.",
+    )
     cron: str | None = Field(default=None, description="Five-field cron expression")
     interval: str | None = Field(default=None, description="Positive s/m/h/d interval")
     timezone: str | None = Field(default=None, description="Optional IANA timezone")
     misfire: MisfirePolicy = Field(default=MisfirePolicy.SKIP, description="Downtime policy")
-    overlap: OverlapPolicy = Field(default=OverlapPolicy.SKIP, description="Active-run policy")
+    overlap: OverlapPolicy = Field(
+        default=OverlapPolicy.SKIP,
+        description="Reserved: no runtime reader yet; an overlapping tick is "
+        "always skipped (overlap_skipped) and V327 warns when set",
+    )
     jitter_seconds: int = Field(default=0, ge=0, description="Bounded dispatch jitter")
     pin_source_digest: bool = Field(
         default=False,
@@ -94,22 +104,26 @@ class ConductorPreferences(BaseModel):
 
     prefer_minimal_output: bool = Field(
         default=False,
-        description="Reduce console output verbosity when True",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Reduce console output verbosity when True",
     )
     escalation_response_timeout_seconds: float = Field(
         default=300.0,
         gt=0,
-        description="Maximum time to wait for conductor's escalation response. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Maximum time to wait for conductor's escalation response. "
         "After timeout, escalation defaults to abort (safe default).",
     )
     auto_retry_on_transient_errors: bool = Field(
         default=True,
-        description="Automatically retry on transient errors before escalating. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Automatically retry on transient errors before escalating. "
         "AI conductors may prefer True, humans may prefer more control.",
     )
     notification_channels: list[str] = Field(
         default_factory=list,
-        description="Preferred notification channels for this conductor. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Preferred notification channels for this conductor. "
         "Empty list means use job-level notification settings.",
     )
 
@@ -151,13 +165,15 @@ class ConductorConfig(BaseModel):
     identity_context: str | None = Field(
         default=None,
         max_length=500,
-        description="Brief description of the conductor's identity/purpose. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Brief description of the conductor's identity/purpose. "
         "Useful for logging and for future RLF integration.",
     )
 
     preferences: ConductorPreferences = Field(
         default_factory=ConductorPreferences,
-        description="Conductor preferences for interaction patterns",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Conductor preferences for interaction patterns",
     )
 
 
@@ -166,7 +182,9 @@ class NotificationConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["desktop", "slack", "webhook", "email"]
+    type: Literal["desktop", "slack", "webhook", "email"] = Field(
+        description="Notification channel: desktop, slack, webhook, or email."
+    )
     on_events: list[Literal[
         "job_start",
         "sheet_start",
@@ -175,7 +193,12 @@ class NotificationConfig(BaseModel):
         "job_complete",
         "job_failed",
         "job_paused",
-    ]] = Field(default=["job_complete", "job_failed"])
+    ]] = Field(
+        default=["job_complete", "job_failed"],
+        description="Score events that trigger this notification: job_start, "
+        "sheet_start, sheet_complete, sheet_failed, job_complete, job_failed, "
+        "or job_paused.",
+    )
     config: dict[str, Any] = Field(
         default_factory=dict, description="Channel-specific configuration"
     )
@@ -245,7 +268,8 @@ class PostSuccessHookConfig(BaseModel):
     )
     inherit_learning: bool = Field(
         default=True,
-        description="Whether chained job shares outcome store with parent",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Whether chained job shares outcome store with parent",
     )
 
     # For run_command/run_script types
@@ -266,7 +290,11 @@ class PostSuccessHookConfig(BaseModel):
     )
     on_failure: Literal["continue", "abort"] = Field(
         default="continue",
-        description="What to do if hook fails: continue to next hook, or abort remaining hooks",
+        validation_alias=AliasChoices("if_hook_fails", "on_failure"),
+        description="What to do if this hook fails: continue to next hook, "
+        "or abort remaining hooks. Prefer the unambiguous `if_hook_fails` "
+        "spelling (V328 warns on `on_failure` here — at the sheet trigger "
+        "level `on_failure` means something else).",
     )
     timeout_seconds: float = Field(
         default=300.0,
@@ -275,7 +303,8 @@ class PostSuccessHookConfig(BaseModel):
     )
     detached: bool = Field(
         default=False,
-        description="For run_job hooks: if true, spawn the job and don't wait for completion. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "For run_job hooks: if true, spawn the job and don't wait for completion. "
         "Use this for infinite chaining where each job spawns the next.",
     )
     fresh: bool = Field(
@@ -325,7 +354,8 @@ class ConcertConfig(BaseModel):
 
     enabled: bool = Field(
         default=False,
-        description="Enable concert mode (job chaining via on_success hooks)",
+        description="Enable concert mode (job chaining via on_success hooks). "
+        "V329 warns this release if settings are set without this switch.",
     )
     max_chain_depth: int = Field(
         default=5,
@@ -345,7 +375,8 @@ class ConcertConfig(BaseModel):
     )
     concert_log_path: Path | None = Field(
         default=None,
-        description="Consolidated log for the entire concert (default: workspace/concert.log)",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Consolidated log for the entire concert (default: workspace/concert.log)",
     )
     abort_concert_on_hook_failure: bool = Field(
         default=False,

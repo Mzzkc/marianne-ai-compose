@@ -242,7 +242,6 @@ on_success:
   - type: run_job
     job_path: "[CHANGE THIS: /absolute/path/to/codebase-rewrite.yaml]"
     description: "Cathedral Construction: self-chain for next iteration"
-    detached: true
     fresh: true
 
 # ═══════════════════════════════════════════════════════════════════════════════

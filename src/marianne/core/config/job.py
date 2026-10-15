@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -48,6 +49,7 @@ from marianne.core.config.flow import (
     span_bounds,
     span_range,
 )
+from marianne.core.config.instrument_settings import InstrumentSettings
 from marianne.core.config.judgment import JudgmentConfig
 from marianne.core.config.learning import (
     CheckpointConfig,
@@ -168,10 +170,11 @@ class InstrumentDef(BaseModel):
         min_length=1,
         description="Name of the registered instrument profile, e.g. 'gemini-cli'",
     )
-    config: dict[str, Any] = Field(
-        default_factory=dict,
+    config: InstrumentSettings = Field(
+        default_factory=InstrumentSettings,
         description="Configuration overrides for this instrument definition. "
-        "Flat key-value pairs merged with the profile's defaults.",
+        "Typed instrument settings merged with the profile's defaults; "
+        "unknown keys warn as V010/V011.",
     )
 
 
@@ -209,15 +212,17 @@ class MovementDef(BaseModel):
         "Overrides the score-level instrument: but is overridden "
         "by per-sheet assignments.",
     )
-    instrument_config: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Instrument configuration overrides for this movement",
+    instrument_config: InstrumentSettings = Field(
+        default_factory=InstrumentSettings,
+        description="Typed instrument settings for this movement; unknown "
+        "keys warn as V010/V011 and override score settings.",
     )
     voices: int | None = Field(
         default=None,
         ge=1,
-        description="Number of parallel voices in this movement. "
-        "Shorthand for fan_out: {N: voices}.",
+        description="Number of parallel voices in this movement. For size=1 "
+        "and start_item=1, this expands like sheet.fan_out at the same "
+        "movement; an explicit fan_out count takes precedence.",
     )
     instrument_fallbacks: list[str] = Field(
         default_factory=list,
@@ -361,10 +366,10 @@ class SheetConfig(BaseModel):
         ),
     )
 
-    per_sheet_instrument_config: dict[int, dict[str, Any]] = Field(
+    per_sheet_instrument_config: dict[int, InstrumentSettings] = Field(
         default_factory=dict,
         description=(
-            "Per-sheet instrument configuration overrides. "
+            "Per-sheet typed instrument settings; unknown keys warn as V010/V011. "
             "Map of sheet_num -> config dict. "
             "Merged with the resolved instrument's defaults for that sheet. "
             "Example: {3: {model: 'gemini-2.5-flash', timeout_seconds: 300}}"
@@ -895,7 +900,13 @@ class ValidateConfig(BaseModel):
     """Score-local acknowledgement of advisory validator findings."""
 
     model_config = ConfigDict(extra="forbid")
-    suppress: list[str] = Field(default_factory=list)
+
+    suppress: list[str] = Field(
+        default_factory=list,
+        description="V-codes whose advisory findings this score acknowledges "
+        "and hides (WARN/INFO only; ERROR-tier and unknown codes are refused "
+        "by V012).",
+    )
 
 
 class JobConfig(BaseModel):
@@ -909,11 +920,23 @@ class JobConfig(BaseModel):
         """Fields removed by the tolerant score-file loader."""
         return tuple(self._unknown_fields)
 
-    validation_settings: ValidateConfig = Field(default_factory=ValidateConfig, alias="validate")
+    validation_settings: ValidateConfig = Field(
+        default_factory=ValidateConfig,
+        alias="validate",
+        description="Validator acknowledgements for this score: `suppress` hides "
+        "advisory findings by V-code (WARN/INFO only; ERROR can never be suppressed).",
+    )
 
-    name: str = Field(description="Unique job name")
+    name: str = Field(
+        description="Name of this score — its runs are identified by this name "
+        "(the score's run id shown by mzt status)."
+    )
     description: str | None = Field(default=None, description="Human-readable description")
-    workspace: Path = Field(default=Path("./workspace"), description="Output directory")
+    workspace: Path = Field(
+        default=Path("./workspace"),
+        description="Workspace directory for this score's runs: outputs, logs, "
+        "and state live under it.",
+    )
 
     # Instrument plugin system — the only execution-config path
     # (the legacy backend: field was stripped, #347).
@@ -924,10 +947,11 @@ class JobConfig(BaseModel):
         "Resolved to an InstrumentProfile at job submission. "
         "When omitted, the default instrument (claude-code) executes.",
     )
-    instrument_config: dict[str, Any] = Field(
-        default_factory=dict,
+    instrument_config: InstrumentSettings = Field(
+        default_factory=InstrumentSettings,
         description="Score-level overrides for the resolved instrument's defaults. "
-        "Flat key-value pairs: {model: gemini-2.5-flash, timeout_seconds: 600}. "
+        "Typed settings: {model: gemini-2.5-flash, timeout_seconds: 600}; "
+        "unknown keys warn as V010/V011. "
         "Only meaningful when instrument: is set.",
     )
     instrument_fallbacks: list[str] = Field(
@@ -955,8 +979,14 @@ class JobConfig(BaseModel):
         "instrument: but are overridden by per-sheet assignments.",
     )
 
-    sheet: SheetConfig
-    prompt: PromptConfig
+    sheet: SheetConfig = Field(
+        description="Sheets of this score: how the work divides into numbered "
+        "execution units (size, dependencies, fan-out, loops, triggers)."
+    )
+    prompt: PromptConfig = Field(
+        description="Prompt for every sheet: template or template_file, plus "
+        "variables, stakes, and thinking method."
+    )
     spec: SpecCorpusConfig = Field(
         default_factory=SpecCorpusConfig,
         description="Specification corpus configuration. "
@@ -965,14 +995,51 @@ class JobConfig(BaseModel):
         "to enable.",
     )
 
-    retry: RetryConfig = Field(default_factory=RetryConfig)
-    rate_limit: RateLimitConfig = Field(default_factory=RateLimitConfig)
-    circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)
-    cost_limits: CostLimitConfig = Field(default_factory=CostLimitConfig)
-    learning: LearningConfig = Field(default_factory=LearningConfig)
-    grounding: GroundingConfig = Field(default_factory=GroundingConfig)
-    ai_review: AIReviewConfig = Field(default_factory=AIReviewConfig)
-    logging: LogConfig = Field(default_factory=LogConfig)
+    retry: RetryConfig = Field(
+        default_factory=RetryConfig,
+        description="Retry behaviour for failed sheets: attempts, backoff, "
+        "and partial-completion recovery.",
+    )
+    rate_limit: RateLimitConfig = Field(
+        default_factory=RateLimitConfig,
+        description="Reserved: no runtime reader of this score section yet "
+        "(V327 warns when set). Rate-limit handling was intended to use detection patterns, "
+        "wait minutes, and quota waits.",
+    )
+    circuit_breaker: CircuitBreakerConfig = Field(
+        default_factory=CircuitBreakerConfig,
+        description="Reserved: no runtime reader of this score section yet "
+        "(V327 warns when set). Circuit-breaker behaviour was intended to use failure "
+        "thresholds and recovery waits before an instrument is retried.",
+    )
+    cost_limits: CostLimitConfig = Field(
+        default_factory=CostLimitConfig,
+        description="Cost limits for this score: per-sheet and per-job caps "
+        "in USD, and the token rates used to estimate them.",
+    )
+    learning: LearningConfig = Field(
+        default_factory=LearningConfig,
+        description="Learning store for this score: outcome memory fed "
+        "forward between sheets and runs.",
+    )
+    grounding: GroundingConfig = Field(
+        default_factory=GroundingConfig,
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Grounding for this score: corpus passages intended to keep sheets "
+        "on source material.",
+    )
+    ai_review: AIReviewConfig = Field(
+        default_factory=AIReviewConfig,
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "AI review of sheet outputs: a reviewer model pass intended to run "
+        "before validation.",
+    )
+    logging: LogConfig = Field(
+        default_factory=LogConfig,
+        description="Reserved: no runtime reader of this score section yet "
+        "(V327 warns when set). Logging settings were intended to set level, file outputs, and "
+        "retention.",
+    )
     workspace_lifecycle: WorkspaceLifecycleConfig = Field(
         default_factory=WorkspaceLifecycleConfig,
         description="Workspace lifecycle management. "
@@ -990,8 +1057,9 @@ class JobConfig(BaseModel):
     )
     conductor: ConductorConfig = Field(
         default_factory=ConductorConfig,
-        description="Conductor identity and preferences. "
-        "Identifies who (human or AI) is conducting this job.",
+        description="Deprecated: identity metadata for who conducts this "
+        "score. No runtime reader (V327/V328 warn when set); conductor "
+        "behaviour is configured in ~/.marianne/conductor.yaml, not here.",
     )
     parallel: ParallelConfig = Field(
         default_factory=ParallelConfig,
@@ -1005,13 +1073,17 @@ class JobConfig(BaseModel):
     )
     checkpoints: CheckpointConfig = Field(
         default_factory=CheckpointConfig,
-        description="Proactive checkpoint configuration. "
-        "Enables pre-execution approval for configurable triggers.",
+        validation_alias=AliasChoices("approvals", "checkpoints"),
+        serialization_alias="approvals",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Approval gates before execution; the old `checkpoints:` spelling "
+        "works this release and warns (V328) — write `approvals:`.",
     )
     bridge: BridgeConfig | None = Field(
         default=None,
-        description="Marianne-Ollama bridge configuration. "
-        "Enables Ollama backend with MCP tool support.",
+        description="Reserved: no runtime reader of this score section yet "
+        "(V327 warns when set). Bridge settings were intended to connect "
+        "Ollama with MCP tool support.",
     )
     cross_sheet: CrossSheetConfig | None = Field(
         default=None,
@@ -1030,8 +1102,9 @@ class JobConfig(BaseModel):
     )
     feedback: FeedbackConfig = Field(
         default_factory=FeedbackConfig,
-        description="Developer feedback collection configuration (GH#15). "
-        "When enabled, extracts structured feedback from agent output after each sheet.",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Developer feedback collection configuration (GH#15): intended to "
+        "extract structured feedback from agent output after each sheet.",
     )
 
     # Technique system — composable ECS components for agents
@@ -1051,8 +1124,16 @@ class JobConfig(BaseModel):
         "other agents can discover and delegate tasks.",
     )
 
-    validations: list[ValidationRule] = Field(default_factory=list)
-    notifications: list[NotificationConfig] = Field(default_factory=list)
+    validations: list[ValidationRule] = Field(
+        default_factory=list,
+        description="Validations every sheet must pass: the acceptance "
+        "criteria that define done for this score.",
+    )
+    notifications: list[NotificationConfig] = Field(
+        default_factory=list,
+        description="Notifications for this score's events: channels and the "
+        "events that trigger them.",
+    )
 
     # Concert orchestration (job chaining)
     on_success: list[PostSuccessHookConfig] = Field(
@@ -1076,14 +1157,16 @@ class JobConfig(BaseModel):
     )
     state_path: Path | None = Field(
         default=None,
-        description="Path for state storage (default: workspace/.marianne-state)",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Path for state storage (default: workspace/.marianne-state)",
     )
     source_path: Path | None = Field(
         default=None,
         exclude=True,
-        description="Absolute path of the YAML file this config was loaded from. "
-        "Set by from_yaml() only; anchors the score_dir template/hook variable. "
-        "Excluded from serialization — state files never record it.",
+        description="Loader-owned (D8): the absolute path of the YAML file "
+        "this config was loaded from. Set by from_yaml() only; a score that "
+        "sets it is warned (V327). Excluded from serialization — state files "
+        "never record it.",
     )
 
     pause_between_sheets_seconds: int = Field(
@@ -1093,13 +1176,51 @@ class JobConfig(BaseModel):
     )
     schedule: ScheduleConfig | None = Field(
         default=None,
-        description="Optional recurring execution declaration for this score.",
+        description="Recurring schedule for this score — when ticks fire "
+        "(cron or interval), plus misfire and overlap policy.",
     )
     max_wall_seconds: float | None = Field(
         default=None,
         ge=60.0,
-        description="Maximum wall-clock duration for a scheduled run in seconds.",
+        description="Deprecated: this root spelling remains a runtime reader for "
+        "scheduled ticks for one release. Set schedule.max_wall_seconds instead; "
+        "one-shot scores use instrument_config.timeout_seconds and stale_detection.",
     )
+
+    @property
+    def tick_wall_seconds(self) -> float | None:
+        """The tick cap, with the legacy root spelling as a one-release alias."""
+        if self.schedule is None:
+            return None
+        if self.schedule.max_wall_seconds is not None:
+            return self.schedule.max_wall_seconds
+        return self.max_wall_seconds
+
+    @model_validator(mode="before")
+    @classmethod
+    def _expand_movement_voices(cls, data: object) -> object:
+        """Feed movement voice counts into the existing fan-out expansion."""
+        if not isinstance(data, dict):
+            return data
+        movements = data.get("movements")
+        sheet = data.get("sheet")
+        if not isinstance(movements, dict) or not isinstance(sheet, dict):
+            return data
+        if sheet.get("size", 1) != 1 or sheet.get("start_item", 1) != 1:
+            return data
+        fan_out = dict(sheet.get("fan_out") or {})
+        explicit_stages = {str(key) for key in fan_out}
+        for key, movement in movements.items():
+            voices = (
+                movement.get("voices") if isinstance(movement, dict)
+                else getattr(movement, "voices", None)
+            )
+            if voices is not None and str(key) not in explicit_stages:
+                fan_out[key] = voices
+        if fan_out:
+            data = dict(data)
+            data["sheet"] = {**sheet, "fan_out": fan_out}
+        return data
 
     @field_validator("movements")
     @classmethod

@@ -11,6 +11,7 @@ reported once, under the code that names the fix.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -561,7 +562,7 @@ class ClassModelConfigCheck:
             if resolution is None:
                 continue
             movement = config.movements.get(sheet.movement)
-            scopes = (
+            scopes: tuple[tuple[str, Mapping[str, Any]], ...] = (
                 ("score", config.instrument_config),
                 ("movement", movement.instrument_config if movement is not None else {}),
                 ("sheet", config.sheet.per_sheet_instrument_config.get(sheet.num, {})),

@@ -53,10 +53,14 @@ from marianne.validation.checks.paths import (
     AbsoluteHomePathCheck,
     CadenzaOrderingCheck,
     PreludeCadenzaFileCheck,
-    SkillFilesExistCheck,
     TemplateFileExistsCheck,
     ValidationPathScopeCheck,
     WorkspaceParentExistsCheck,
+)
+from marianne.validation.checks.reserved import (
+    DeprecatedSpellingCheck,
+    EnabledSettingsWarningCheck,
+    ReservedKeyUseCheck,
 )
 from marianne.validation.checks.techniques import (
     TechniqueMcpInstrumentCheck,
@@ -64,6 +68,9 @@ from marianne.validation.checks.techniques import (
 )
 
 __all__ = [
+    "DeprecatedSpellingCheck",
+    "EnabledSettingsWarningCheck",
+    "ReservedKeyUseCheck",
     "CadenzaOrderingCheck",
     "CodeExecutionSandboxCheck",
     # Jinja checks
@@ -79,7 +86,6 @@ __all__ = [
     "AbsoluteHomePathCheck",
     "TemplateFileExistsCheck",
     "PreludeCadenzaFileCheck",
-    "SkillFilesExistCheck",
     "ValidationPathScopeCheck",
     # Config checks
     "FoldedCommandScalarCheck",

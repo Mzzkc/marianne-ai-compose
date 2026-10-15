@@ -191,9 +191,12 @@ class TestSelfChainConfigured:
         assert hook.job_path is not None
         assert str(hook.job_path) == "{workspace}/self-chain.yaml"
 
-    def test_on_success_is_detached(self, config: JobConfig) -> None:
+    def test_on_success_not_detached(self, config: JobConfig) -> None:
+        # Hook-level `detached` is reserved (V327): no runtime reader. The
+        # example must not teach it; the trigger-level concert action owns
+        # detach semantics.
         hook = config.on_success[0]
-        assert hook.detached is True
+        assert hook.detached is False
 
     def test_on_success_is_fresh(self, config: JobConfig) -> None:
         hook = config.on_success[0]

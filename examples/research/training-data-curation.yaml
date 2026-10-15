@@ -131,10 +131,6 @@ retry:
   base_delay_seconds: 45   # Longer delay for annotation tasks
   max_completion_attempts: 2
 
-rate_limit:
-  wait_minutes: 60
-  max_waits: 3
-
 stale_detection:
   enabled: true
   idle_timeout_seconds: 2400  # 40 minutes — annotation phases may legitimately stall

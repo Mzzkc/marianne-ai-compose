@@ -93,9 +93,6 @@ retry:
   base_delay_seconds: 60   # Longer delay for complex research tasks
   max_completion_attempts: 2
 
-rate_limit:
-  wait_minutes: 60
-  max_waits: 3
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CUSTOMIZATION SECTION

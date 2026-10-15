@@ -93,6 +93,8 @@ def _write_score(path: Path, workspace: Path, *, limit: float = 300.0) -> None:
         "  total_items: 1\n"
         "prompt:\n"
         "  template: deadline proof\n"
+        "schedule:\n"
+        "  interval: 1h\n"
         f"max_wall_seconds: {limit}\n",
         encoding="utf-8",
     )
@@ -160,7 +162,7 @@ async def test_terminal_fresh_resubmission_publishes_one_new_authority(
         )
 
         response = await manager.submit_job(
-            JobRequest(config_path=score, job_id="stable", fresh=True),
+            JobRequest(config_path=score, job_id="stable", fresh=True, schedule_id="test"),
         )
         record = await manager._registry.get_job("stable")
         meta = manager._job_meta["stable"]
@@ -218,7 +220,7 @@ async def test_rejected_active_duplicate_changes_no_authority(
         manager._job_meta["active"] = meta
 
         response = await manager.submit_job(
-            JobRequest(config_path=score, job_id="active", fresh=True),
+            JobRequest(config_path=score, job_id="active", fresh=True, schedule_id="test"),
         )
         record = await manager._registry.get_job("active")
 
@@ -260,7 +262,7 @@ async def test_pending_autostart_uses_first_accepted_deadline(
     monkeypatch.setattr(manager, "_run_job_task", run_pending)
     try:
         response = await manager._queue_pending_job(
-            JobRequest(config_path=score, job_id="pending", fresh=True),
+            JobRequest(config_path=score, job_id="pending", fresh=True, schedule_id="test"),
         )
         record = await manager._registry.get_job("pending")
         assert response.status == "pending"

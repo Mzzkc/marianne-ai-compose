@@ -91,8 +91,7 @@ cross_sheet:
 # In production, you would typically use level: INFO.
 
 logging:
-  level: DEBUG              # Capture all log levels for learning
-  include_context: true     # Add job_id, sheet_num to log entries
+  level: DEBUG              # Capture all log levels for learning     # Add job_id, sheet_num to log entries
 
 # Job state lives in the conductor's registry (inspect it with
 # `mzt status <job> --json`); there is no per-workspace state file to pick.
@@ -113,13 +112,8 @@ retry:
   exponential_base: 2.0
   jitter: true
   max_completion_attempts: 2
-  completion_threshold_percent: 50.0
 
 # Rate limit handling
-rate_limit:
-  wait_minutes: 60
-  max_waits: 24
-
 prompt:
   variables:
     project_path: "[CHANGE THIS: absolute path to the project you want to analyze, e.g. /home/user/my-project]"

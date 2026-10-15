@@ -84,6 +84,7 @@ class JobRecord:
     status: DaemonJobStatus = DaemonJobStatus.QUEUED
     pid: int | None = None
     submitted_at: float = field(default_factory=time.time)
+    running_seconds: float = 0.0
     started_at: float | None = None
     completed_at: float | None = None
     error_message: str | None = None
@@ -110,6 +111,7 @@ class JobRecord:
             "status": self.status,
             "pid": self.pid,
             "submitted_at": self.submitted_at,
+            "running_seconds": self.running_seconds,
             "started_at": self.started_at,
             "completed_at": self.completed_at,
             "current_sheet": self.current_sheet,
@@ -228,6 +230,7 @@ class JobRegistry:
             ("chain_depth", "INTEGER"),
             ("max_wall_seconds", "REAL"),
             ("wall_deadline_at", "REAL"),
+            ("running_seconds", "REAL NOT NULL DEFAULT 0"),
             ("terminal_reason", "TEXT"),
         ]
         for col_name, col_type in new_columns:
@@ -303,6 +306,7 @@ class JobRegistry:
                 concert_config_json = excluded.concert_config_json,
                 chain_depth = excluded.chain_depth,
                 submitted_at = excluded.submitted_at,
+                running_seconds = 0,
                 max_wall_seconds = excluded.max_wall_seconds,
                 wall_deadline_at = excluded.wall_deadline_at,
                 terminal_reason = NULL
@@ -341,6 +345,7 @@ class JobRegistry:
         error_message: str | None = None,
         snapshot_path: str | None = None,
         terminal_reason: str | None = None,
+        running_seconds: float | None = None,
     ) -> None:
         """Update a job's status and optional fields in the registry only.
 
@@ -356,6 +361,11 @@ class JobRegistry:
         """
         updates = ["status = ?"]
         params: list[Any] = [status]
+        if running_seconds is not None:
+            if not math.isfinite(running_seconds) or running_seconds < 0:
+                raise ValueError("running_seconds must be finite and non-negative")
+            updates.append("running_seconds = ?")
+            params.append(running_seconds)
 
         if pid is not None:
             updates.append("pid = ?")
@@ -780,6 +790,15 @@ class JobRegistry:
 
         max_wall_seconds = _optional_positive_float("max_wall_seconds")
         wall_deadline_at = _optional_positive_float("wall_deadline_at")
+        raw_running_seconds = row["running_seconds"]
+        try:
+            running_seconds = float(raw_running_seconds)
+        except (TypeError, ValueError):
+            running_seconds = 0.0
+            diagnostics.append("running_seconds:not_numeric")
+        if not math.isfinite(running_seconds) or running_seconds < 0:
+            running_seconds = 0.0
+            diagnostics.append("running_seconds:not_nonnegative_finite")
         if max_wall_seconds is not None and wall_deadline_at is None:
             diagnostics.append("wall_deadline_at:missing_for_score_limit")
 
@@ -808,6 +827,7 @@ class JobRegistry:
             status=DaemonJobStatus(row["status"]),
             pid=row["pid"],
             submitted_at=row["submitted_at"],
+            running_seconds=running_seconds,
             started_at=row["started_at"],
             completed_at=row["completed_at"],
             error_message=row["error_message"],

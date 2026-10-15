@@ -2003,7 +2003,6 @@ on_success:
   - type: run_job
     job_path: "{workspace}/self-chain.yaml"
     description: "Chain to next quality iteration"
-    detached: true
     fresh: true
 
 concert:

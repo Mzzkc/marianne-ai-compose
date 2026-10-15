@@ -553,15 +553,49 @@ code-registry and corpus-sweep tests.
 
 | Tier | Codes | Meaning |
 |------|-------|---------|
+| ERROR | V001 | Score-level or sheet prompt template is not valid Jinja2 syntax |
+| ERROR | V002 | Workspace parent directory does not exist |
+| ERROR | V003 | `prompt.template_file` does not exist |
+| ERROR | V004 | A validation or injection path is absolute under the current user's home directory |
+| ERROR | V007 | A `content_regex` (or detection) pattern does not compile |
+| ERROR | V008 | A validation rule is missing the field its type requires |
+| ERROR | V009 | An evolved score references its previous version's paths |
 | ERROR | V012 | Invalid `validate.suppress` entry (unknown code or ERROR-tier code) |
 | ERROR | V105, V108 | Undefined validation variable; missing static prelude/cadenza input |
 | ERROR | V209, V214, V216, V217 | Dependency cycle; expanded-sheet incoherence; missing cadenza target; missing or invalid static concert target |
 | ERROR | V210, V211 | Instrument or fallback name cannot resolve to a known profile, score alias, or capability class |
 | ERROR | V221–V223, V227, V229, V312–V314, V316–V317, V320 | Flow load errors and invalid flow references, reported with a code and hint rather than a raw schema trace |
+| ERROR | V305 | Bash `'${#...}'` length syntax in a prompt the Jinja engine eats as a comment |
+| ERROR | V306 | A `path_in_scope` validation can traverse outside its declared scope |
 | ERROR | V310, V321, V323, V324 | Capability classes: a class-shaped name cannot resolve on this machine (V-CLS-02: vocabulary-only, tombstoned, or a chain with no registered entry — the same chains `mzt run` refuses); an instrument alias names a class as its profile; `instrument_config.model` applied to a class primary; an invalid classes layer file while the score uses a class |
-| WARNING | V010, V208, V219–V220, V224, V226, V228, V231–V232, V315 | Likely typo; built-in shadowing (deprecation); advisory structure and flow risks |
-| WARNING | V311, V322 | Capability classes: part of a used class's chain cannot run here (binary missing, unsupported, local server not serving the profile's model, or unable to enforce the sheet's `response_format`) — the job starts at the first available entry; when NO entry can run here the warning says so and names the install (availability is a fact about this machine, so the score is still admitted — a fresh install sees this on every class until one instrument is installed); a default-layer class shadowed by a same-named profile; a score alias shadowing a class name |
+| ERROR | V213 | `interactive: true` set for an instrument without verified interactive support |
+| WARNING | V010 | Unknown field at ANY depth — the curated hint names a working key wherever the mistake sits (a `timeout:` beside a trigger action, e.g. `sheet.triggers.1.on_fail[0].timeout`, points at `instrument_config.timeout_seconds`) |
+| WARNING | V208, V219–V220, V224, V226, V228, V231–V232, V315 | Built-in shadowing (deprecation); advisory structure and flow risks |
+| WARNING | V327 | A score sets a reserved key — accepted, but no runtime code reads it; also warns when `movements.<N>.voices` cannot expand with the sheet's size/start settings |
+| WARNING | V328 | Deprecated spelling or key: root `max_wall_seconds` (now `schedule.max_wall_seconds`), `checkpoints:` (now `approvals:`), hook-level `on_failure` (now `if_hook_fails`), root `conductor` |
+| WARNING | V329 | A readable default-off section has settings but no `enabled` key; set `enabled: true` now or explicit `enabled: false` to opt out of next release's auto-enable rule |
+| WARNING | V101 | Template references a variable the score never declares (and no built-in provides) |
+| WARNING | V102 | `\| string` filter applied to a subscript of an int-keyed variable dict |
+| WARNING | V103 | Sheet or instrument timeout outside the reasonable range (V103/V104) |
+| WARNING | V106 | Empty pattern in a `content_contains`/`content_regex` validation |
+| WARNING | V109 | A cadenza reads a file a later sheet produces |
+| WARNING | V201 | Jinja `{{ }}` syntax inside a validation path (paths are not rendered) |
+| WARNING | V202 | Python format-string (`%s`, `{x}`) syntax inside a Jinja template |
+| WARNING | V203 | No validation rules exist — nothing defines done |
+| WARNING | V206 | Fan-out declared without stage dependencies |
+| WARNING | V212 | A `skip_when` key names a sheet outside the expanded range |
+| WARNING | V215 | No instrument in the score's chain appears installed on this machine |
+| WARNING | V230 | Flow configuration error rendered from the loader (loops/triggers/goto) with position and hint |
+| WARNING | V301 | A skill technique's `path` does not exist — the agent would never receive that methodology |
+| WARNING | V302 | An MCP technique targets an instrument with no MCP access path (native config or generated bridge) |
+| WARNING | V303 | Folded YAML scalar on a command field (newlines collapse — usually not what the author meant) |
+| WARNING | V304 | Code execution would run unsandboxed (bwrap unavailable and `require_sandbox` false) |
+| WARNING | V308 | Partial concrete instrument coverage inside fan-out movements |
+| WARNING | V309 | An exact section-label validation the prompt never teaches the agent |
+| WARNING | V311, V322 | Capability classes: part of a used class's chain cannot run here (binary missing, unsupported, local server not serving the profile's model, or unable to enforce the sheet's `response_format`) — the job starts at the first available entry; when no entry can run here the warning says so and names the install (availability is a fact about this machine, so the score is still admitted); a default-layer class shadowed by a same-named profile; a score alias shadowing a class name |
 | INFO | V011, V104, V110, V218, V225 | Distant unknown field; timeout above 7200 seconds (2 hours); unused variable; ambiguous file reference; mixed fan-out keying |
+| INFO | V205 | All validations are `file_exists` only — nothing checks content |
+| INFO | V207 | Fan-out declared without `parallel.enabled` (instances still run sequentially) |
 | INFO | V325 | Capability classes: per-used-class resolution summary (`Instruments: strong → claude-code, … (user layer, sha256 …)`) |
 | INFO | V326 | A score uses a `run:` trigger on a host without Linux subreaper support. Detached orphans with closed stdio may outlive the action; Linux reaps them under the per-action supervisor. |
 
@@ -590,8 +624,10 @@ A broken layer file is reported (V324) only when the score names a class;
 scores that never touch classes stay silent about machine class state.
 
 V107's warning on validation output paths is retired: an output need not exist
-before a job runs. INFO findings appear in terminal output only with
-`--verbose`. `--json` includes them by default.
+before a job runs. The dead check class is deleted (GH #439); V301 and V302
+(technique consistency) are registered with fixtures in the same change.
+INFO findings appear in terminal output only with `--verbose`. `--json`
+includes them by default.
 
 `validate.suppress: [Vxxx]` may hide WARN and INFO findings. Suppressed findings
 leave `issues` and the visible counts and appear as `{check_id, count}` entries

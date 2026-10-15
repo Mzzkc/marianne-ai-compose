@@ -109,9 +109,12 @@ use their declared IANA timezone across DST, `skip` is the default misfire and
 overlap behavior, and `latest` collapses downtime to one catch-up action.
 Each scheduled child is an ordinary job with schedule lineage.
 
-The effective wall limit is the stricter of daemon `job_timeout_seconds` and a
-score's `max_wall_seconds`. The score limit is an absolute admission deadline:
-pending time, pause/resume, and restart consume it rather than extending it.
+The effective tick limit is the stricter of the conductor's remaining
+`job_timeout_seconds` RUNNING budget and `schedule.max_wall_seconds`.
+The tick window is an absolute admission deadline: pending time, pause and
+restart consume it. The conductor budget accumulates only RUNNING intervals;
+pause and downtime do not consume it. The old root `max_wall_seconds` spelling
+remains a warned alias for one release and does not cap a one-shot score.
 `mzt status` exposes the public schedule projection: enabled state, last/next
 due, last child/outcome, consecutive-drop decisions, and configured/effective
 deadline evidence. The private durable due lease identity is not exposed.

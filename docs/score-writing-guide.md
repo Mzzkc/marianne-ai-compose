@@ -226,12 +226,12 @@ Marianne score for complex fixes. Self-chains to the next issue.
 instrument: claude-code
 instrument_config:
   timeout_seconds: 3600
-  timeout_overrides:
-    7: 28800            # 8 hours for monitoring subordinate jobs
 
 sheet:
   size: 1
   total_items: 16
+  per_sheet_instrument_config:
+    7: {timeout_seconds: 28800}  # 8 hours for monitoring subordinate jobs
   fan_out:
     15: 3               # 3 parallel code reviewers
   dependencies:
@@ -2327,9 +2327,9 @@ sheet:
 | `max_output_capture_bytes` | — | No score-level equivalent |
 | `working_directory` | — | Execution runs in the workspace |
 
-Keys without a score-level equivalent are **silently ignored** if left
-inside `instrument_config:` — remove them so the score doesn't imply
-behavior it no longer has.
+Keys without a score-level equivalent receive V010/V011 when left inside
+`instrument_config:` and are ignored. Remove them so the score describes
+only behavior it has.
 
 ### What You Gain
 

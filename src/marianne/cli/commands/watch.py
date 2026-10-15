@@ -27,7 +27,7 @@ from ..output import console, output_error
 def watch(
     job_id: str = typer.Argument(
         ...,
-        help="Score ID to tail (see `mzt status`)",
+        help="The score's run id (job id) to tail (see `mzt status`)",
     ),
     sheet_num: int | None = typer.Argument(
         None,

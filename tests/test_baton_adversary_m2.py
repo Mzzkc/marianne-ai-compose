@@ -898,10 +898,7 @@ class TestZeroCostLimit:
     async def test_zero_sheet_cost_limit_fails_on_retry_path(self) -> None:
         """Sheet with $0 cost limit fails when a retry would exceed it.
 
-        NOTE: Per-sheet cost limits only apply on the retry/failure path,
-        not the success path. A successful execution completes regardless
-        of per-sheet cost limits. This is asymmetric with per-job cost
-        limits, which apply on ALL paths. See F-080.
+        The limit applies to every attempt outcome, including a retry.
         """
         baton = _make_baton_with_job(max_retries=5)
         baton.set_sheet_cost_limit("test-job", 1, 0.0)
@@ -923,12 +920,8 @@ class TestZeroCostLimit:
         assert sheet.status == BatonSheetStatus.FAILED
 
     @pytest.mark.asyncio
-    async def test_zero_sheet_cost_limit_does_not_block_success(self) -> None:
-        """A successful execution completes even with $0 per-sheet cost limit.
-
-        Per-sheet cost limits only apply on the retry path. This is by design
-        but is an asymmetry worth documenting (F-080).
-        """
+    async def test_zero_sheet_cost_limit_blocks_over_budget_success(self) -> None:
+        """A successful execution cannot bypass the sheet's spent budget."""
         baton = _make_baton_with_job()
         baton.set_sheet_cost_limit("test-job", 1, 0.0)
 
@@ -936,11 +929,8 @@ class TestZeroCostLimit:
         assert sheet is not None
         sheet.status = BatonSheetStatus.DISPATCHED
 
-        await baton.handle_event(
-            _attempt_result(cost_usd=0.50)  # High cost, but succeeds
-        )
-        # Success path bypasses per-sheet cost check
-        assert sheet.status == BatonSheetStatus.COMPLETED
+        await baton.handle_event(_attempt_result(cost_usd=0.50))
+        assert sheet.status == BatonSheetStatus.FAILED
 
     @pytest.mark.asyncio
     async def test_zero_cost_attempt_survives_zero_limit(self) -> None:

@@ -19,7 +19,7 @@ from ..output import console, output_error, output_json
 
 
 def cancel(
-    job_id: str = typer.Argument(..., help="Score ID to cancel"),
+    job_id: str = typer.Argument(..., help="The score's run id (job id) to cancel"),
     json_output: bool = typer.Option(
         False,
         "--json",
