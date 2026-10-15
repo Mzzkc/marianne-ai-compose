@@ -543,6 +543,7 @@ async def _run_file_output_command(
     shell_exit_code: int | None = None
     state_error: str | None = None
     reparented: set[tuple[int, int | float]] = set()
+    supervisor_killed_here = False
 
     def read_shell_state() -> None:
         nonlocal shell_pid, shell_exit_code, pgid, state_error
@@ -706,6 +707,7 @@ async def _run_file_output_command(
                                 pass
                     await asyncio.sleep(0.02)
                 if proc.returncode is None:
+                    supervisor_killed_here = True
                     proc.kill()
                     await proc.wait()
         if supervisor_state_path is not None:
@@ -713,6 +715,21 @@ async def _run_file_output_command(
             if shell_exit_code is None and not timed_out and not output_capped:
                 raise ValueError(
                     state_error or "run supervisor did not report the shell exit"
+                )
+            # GH #444: the subreaper is the #421 guarantee only while it lives.
+            # A supervisor that died by a signal this settle did not send (OOM
+            # killer, an operator's kill -9, a cgroup kill) lost every child
+            # it had adopted to init, and none of the capture sources can see
+            # them. The shell's recorded exit is NOT the action's outcome then;
+            # refuse to report success over an escape nobody can census.
+            if (
+                proc.returncode is not None
+                and proc.returncode < 0
+                and not supervisor_killed_here
+            ):
+                raise ValueError(
+                    f"run supervisor died by signal {-proc.returncode} after the "
+                    "shell reported; adopted children may have escaped unsettled"
                 )
     return BoundedCommandResult(
         shell_exit_code if supervisor_state_path is not None else proc.returncode,

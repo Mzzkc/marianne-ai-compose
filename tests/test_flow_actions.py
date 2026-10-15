@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 import signal
@@ -363,6 +364,55 @@ async def test_malformed_supervisor_state_refuses_and_stops_process(
             supervisor_state_path=state,
         )
     assert proc.returncode is not None
+
+
+async def test_supervisor_killed_after_shell_reports_is_an_error_not_success(
+    tmp_path: Path,
+) -> None:
+    """GH #444 (Circuit V1d): the subreaper is the #421 guarantee only while it
+    lives. SIGKILL it after the shell has recorded its exit and an adopted
+    orphan reparents to init where no capture source can see it. The settle
+    must refuse to report the shell's clean exit as the action's outcome."""
+    from marianne.utils import run_supervisor
+
+    state = tmp_path / "killed.state"
+    log_path = tmp_path / "killed.log"
+    marker = tmp_path / "orphan.pid"
+    # The shell exits at once; its backgrounded child outlives it and is
+    # adopted by the supervisor (the orphan #421 exists to settle).
+    command = (
+        f"(sleep 30 & echo $! > {marker}) ; exit 0"
+    )
+    with log_path.open("wb") as log:
+        proc = await asyncio.create_subprocess_exec(
+            os.sys.executable, "-I", str(run_supervisor.__file__), str(state), command,
+            stdout=log, stderr=log, start_new_session=True,
+        )
+    created = psutil.Process(proc.pid).create_time()
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            if json.loads(state.read_text()).get("exit_code") is not None:
+                break
+        except (OSError, ValueError):
+            pass
+        await asyncio.sleep(0.01)
+    else:
+        pytest.fail("supervisor never recorded the shell exit")
+    orphan_pid = int(marker.read_text().strip())
+    try:
+        os.kill(proc.pid, signal.SIGKILL)  # the operator / OOM killer, not the settle
+        with pytest.raises(ValueError, match="run supervisor died by signal 9"):
+            await run_bounded_command(
+                proc, timeout_seconds=3, pgid=proc.pid, context="killed_supervisor",
+                file_output_path=log_path, parent_create_time=created,
+                supervisor_state_path=state, kill_grace_seconds=0.2,
+            )
+    finally:
+        try:
+            os.kill(orphan_pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
 
 async def test_run_log_identity_is_unique_across_repeated_and_fresh_jobs(tmp_path: Path) -> None:
