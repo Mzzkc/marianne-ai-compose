@@ -463,6 +463,12 @@ class TestDaemonProcess:
             "daemon.rate_limits",
             "daemon.clear_rate_limits",
             "daemon.learning.patterns",
+            "schedule.register",
+            "schedule.current",
+            "schedule.cancel",
+            "schedule.register_v2",
+            "schedule.current_v2",
+            "schedule.cancel_v2",
         }
         assert registered_methods == expected
 

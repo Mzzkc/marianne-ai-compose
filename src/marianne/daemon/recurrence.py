@@ -90,6 +90,7 @@ class RecurrenceController:
         before_mutation: LifecycleAdmission | None = None,
         pin: bool | None = None,
         require_schedule: bool = False,
+        registration_id: str | None = None,
     ) -> ScheduleRecord | None:
         """Register or replace the current schedule declaration for one score.
 
@@ -149,6 +150,7 @@ class RecurrenceController:
                     source_digest,
                     due.timestamp(),
                     pinned_source_digest=source_digest if pin_source else None,
+                    registration_id=registration_id,
                 )
                 self._cancel_timer(config.name)
                 record = await self._registry.get(config.name)

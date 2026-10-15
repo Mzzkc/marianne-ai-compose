@@ -62,6 +62,7 @@ class ScheduleRecord:
     consecutive_drops: int
     pinned_source_digest: str | None = None
     diagnostic: str | None = None
+    registration_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -112,7 +113,9 @@ class ScheduleRegistry:
             await conn.execute(
                 f"PRAGMA busy_timeout={int(self._busy_timeout_seconds * 1000)}"
             )
-            new_identity = await self._create_tables(conn)
+            new_identity = await self._create_tables(
+                conn, allow_pre_witness_migration=not self._custody_path.exists(),
+            )
             if new_identity is not None and (
                 new_database or not self._custody_path.exists()
             ):
@@ -133,7 +136,9 @@ class ScheduleRegistry:
         return self._conn
 
     @staticmethod
-    async def _create_tables(conn: aiosqlite.Connection) -> str | None:
+    async def _create_tables(
+        conn: aiosqlite.Connection, *, allow_pre_witness_migration: bool = False,
+    ) -> str | None:
         """Create additive schedule storage alongside existing conductor tables."""
         await conn.execute(
             """
@@ -162,6 +167,23 @@ class ScheduleRegistry:
         )
         await _add_missing_columns(conn)
         await conn.execute(
+            "CREATE TABLE IF NOT EXISTS schedule_terminals ("
+            "registration_id TEXT PRIMARY KEY, schedule_id TEXT NOT NULL, "
+            "registry_identity TEXT NOT NULL, source_digest TEXT NOT NULL, "
+            "retired_at REAL NOT NULL)"
+        )
+        await conn.execute(
+            "CREATE TRIGGER IF NOT EXISTS schedule_registration_replaced_insert "
+            "AFTER INSERT ON schedules BEGIN "
+            "DELETE FROM schedule_terminals WHERE schedule_id = NEW.schedule_id; END"
+        )
+        await conn.execute(
+            "CREATE TRIGGER IF NOT EXISTS schedule_registration_replaced_update "
+            "AFTER UPDATE OF registration_id ON schedules "
+            "WHEN NEW.registration_id IS NOT OLD.registration_id BEGIN "
+            "DELETE FROM schedule_terminals WHERE schedule_id = NEW.schedule_id; END"
+        )
+        await conn.execute(
             "CREATE TABLE IF NOT EXISTS registry_identity ("
             "singleton INTEGER PRIMARY KEY CHECK (singleton = 1), "
             "identity TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0)"
@@ -169,7 +191,8 @@ class ScheduleRegistry:
         columns = {row["name"] for row in await (await conn.execute(
             "PRAGMA table_info(registry_identity)"
         )).fetchall()}
-        if "revision" not in columns:
+        pre_witness_schema = "revision" not in columns
+        if pre_witness_schema:
             await conn.execute(
                 "ALTER TABLE registry_identity ADD COLUMN revision INTEGER NOT NULL DEFAULT 0"
             )
@@ -178,6 +201,15 @@ class ScheduleRegistry:
             "INSERT OR IGNORE INTO registry_identity (singleton, identity) VALUES (1, ?)",
             (identity,),
         )
+        if cursor.rowcount == 0 and pre_witness_schema and allow_pre_witness_migration:
+            # Old identity predates independent custody. Rotate it so no old
+            # receipt can authenticate the newly witnessed registry.
+            await conn.execute(
+                "UPDATE registry_identity SET identity = ?, revision = 0 WHERE singleton = 1",
+                (identity,),
+            )
+            await conn.commit()
+            return identity
         await conn.commit()
         return identity if cursor.rowcount == 1 else None
 
@@ -258,6 +290,7 @@ class ScheduleRegistry:
         next_due_at: float,
         *,
         pinned_source_digest: str | None = None,
+        registration_id: str | None = None,
     ) -> None:
         """Insert or replace a schedule declaration without losing its creation time.
 
@@ -274,14 +307,15 @@ class ScheduleRegistry:
             INSERT INTO schedules (
                 schedule_id, score_name, score_path, schedule_json,
                 source_digest, pinned_source_digest, enabled, next_due_at,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_at, updated_at, registration_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(schedule_id) DO UPDATE SET
                 score_name = excluded.score_name,
                 score_path = excluded.score_path,
                 schedule_json = excluded.schedule_json,
                 source_digest = excluded.source_digest,
                 pinned_source_digest = excluded.pinned_source_digest,
+                registration_id = excluded.registration_id,
                 enabled = excluded.enabled,
                 next_due_at = excluded.next_due_at,
                 updated_at = excluded.updated_at
@@ -297,9 +331,39 @@ class ScheduleRegistry:
                 next_due_at,
                 now,
                 now,
+                registration_id,
             ),
             schedule_id=schedule_id,
         )
+
+    async def terminal_for(self, registration_id: str) -> tuple[str, str, str] | None:
+        """Read a completed cancellation bound to one caller-held registration."""
+        await self.identity()
+        try:
+            cursor = await self._db.execute(
+                "SELECT schedule_id, registry_identity, source_digest FROM schedule_terminals "
+                "WHERE registration_id = ?", (registration_id,),
+            )
+            row = await cursor.fetchone()
+        except sqlite3.Error as exc:
+            self._raise_database_error("read terminal", exc)
+        return (row["schedule_id"], row["registry_identity"], row["source_digest"]) if row else None
+
+    async def record_terminal(
+        self, registration_id: str, schedule_id: str, source_digest: str,
+    ) -> bool:
+        """Record completed stop only while no later registration owns this ID."""
+        identity = await self.identity()
+        cursor = await self._execute_mutation(
+            "record terminal",
+            "INSERT OR IGNORE INTO schedule_terminals "
+            "(registration_id, schedule_id, registry_identity, source_digest, retired_at) "
+            "SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS "
+            "(SELECT 1 FROM schedules WHERE schedule_id = ?)",
+            (registration_id, schedule_id, identity, source_digest, time.time(), schedule_id),
+            schedule_id=schedule_id,
+        )
+        return cursor.rowcount == 1
 
     async def get(self, schedule_id: str) -> ScheduleRecord | None:
         """Return one durable schedule record, or ``None`` when it is absent."""
@@ -625,6 +689,7 @@ class ScheduleRegistry:
             last_outcome=last_outcome,
             consecutive_drops=_drop_count(row["consecutive_drops"]),
             pinned_source_digest=_pinned_digest(row["pinned_source_digest"]),
+            registration_id=row["registration_id"],
         )
 
     @staticmethod
@@ -679,6 +744,8 @@ async def _add_missing_columns(conn: aiosqlite.Connection) -> None:
     columns = {row["name"] for row in await cursor.fetchall()}
     if "pinned_source_digest" not in columns:
         await conn.execute("ALTER TABLE schedules ADD COLUMN pinned_source_digest TEXT")
+    if "registration_id" not in columns:
+        await conn.execute("ALTER TABLE schedules ADD COLUMN registration_id TEXT")
 
 
 def _require_epoch(value: float, *, name: str) -> None:

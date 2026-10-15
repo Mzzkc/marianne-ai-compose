@@ -875,6 +875,39 @@ class DaemonProcess:
                 str(params["source_digest"]),
             )
 
+        async def handle_schedule_register_v2(
+            params: dict[str, Any], writer: Any,
+        ) -> dict[str, Any]:
+            _require_schedule_peer(writer)
+            config_path = params.get("config_path")
+            if not isinstance(config_path, str) or not config_path:
+                raise ValueError("config_path must be a non-empty string")
+            return await manager.register_schedule_v2(Path(config_path))
+
+        async def handle_schedule_current_v2(
+            params: dict[str, Any], writer: Any,
+        ) -> dict[str, Any]:
+            _require_schedule_peer(writer)
+            return await manager.current_schedule_v2(
+                str(params.get("schedule_id", "")),
+                str(params.get("registry_identity", "")),
+                str(params.get("source_digest", "")),
+                str(params.get("registration_id", "")),
+                params.get("receipt_version", 0),
+            )
+
+        async def handle_schedule_cancel_v2(
+            params: dict[str, Any], writer: Any,
+        ) -> dict[str, Any]:
+            _require_schedule_peer(writer)
+            return await manager.cancel_schedule_v2(
+                str(params.get("schedule_id", "")),
+                str(params.get("registry_identity", "")),
+                str(params.get("source_digest", "")),
+                str(params.get("registration_id", "")),
+                params.get("receipt_version", 0),
+            )
+
         async def handle_shutdown(params: dict[str, Any], _w: Any) -> dict[str, Any]:
             graceful = params.get("graceful", True)
             task = asyncio.create_task(
@@ -968,6 +1001,9 @@ class DaemonProcess:
         handler.register("schedule.register", handle_schedule_register)
         handler.register("schedule.current", handle_schedule_current)
         handler.register("schedule.cancel", handle_schedule_cancel)
+        handler.register("schedule.register_v2", handle_schedule_register_v2)
+        handler.register("schedule.current_v2", handle_schedule_current_v2)
+        handler.register("schedule.cancel_v2", handle_schedule_cancel_v2)
         handler.register("daemon.shutdown", handle_shutdown)
         handler.register("daemon.config", handle_config)
         handler.register("daemon.reload", handle_reload)

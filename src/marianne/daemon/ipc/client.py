@@ -18,7 +18,7 @@ import errno
 import json
 import os
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, cast
@@ -628,6 +628,70 @@ class DaemonClient:
         return self._bind_schedule_result(
             raw, schedule_id, registry_identity, source_digest,
         )
+
+    async def register_schedule_v2(self, config_path: Path) -> ScheduleVenueResult:
+        """Request a daemon-minted receipt for caller-owned durable custody."""
+        try:
+            raw = await self.call("schedule.register_v2", {"config_path": str(config_path)})
+        except MethodNotFoundError:
+            return self._inconclusive_schedule("", "method_not_found")
+        try:
+            result = ScheduleVenueResult.model_validate(raw)
+        except (TypeError, ValueError) as exc:
+            raise DaemonProtocolError("Malformed v2 registration response") from exc
+        if result.state in {"live", "disabled"} and not (
+            result.receipt_version == 2 and result.registration_id
+            and result.registry_identity and result.schedule_id and result.source_digest
+        ):
+            raise DaemonProtocolError("Unbound v2 registration response")
+        return result
+
+    @staticmethod
+    def _v2_params(receipt: Mapping[str, Any] | ScheduleVenueResult) -> dict[str, Any]:
+        data = receipt.model_dump() if isinstance(receipt, ScheduleVenueResult) else receipt
+        return {
+            "receipt_version": data.get("receipt_version"),
+            "registration_id": data.get("registration_id"),
+            "registry_identity": data.get("registry_identity"),
+            "schedule_id": data.get("schedule_id"),
+            "source_digest": data.get("source_digest"),
+        }
+
+    async def _v2_call(
+        self, method: str, receipt: Mapping[str, Any] | ScheduleVenueResult,
+    ) -> ScheduleVenueResult:
+        params = self._v2_params(receipt)
+        schedule_id = params["schedule_id"]
+        if not (
+            params["receipt_version"] == 2 and isinstance(params["registration_id"], str)
+            and params["registration_id"] and isinstance(schedule_id, str) and schedule_id
+            and isinstance(params["registry_identity"], str) and params["registry_identity"]
+            and isinstance(params["source_digest"], str) and params["source_digest"]
+        ):
+            return self._inconclusive_schedule(str(schedule_id or ""), "invalid_receipt")
+        try:
+            raw = await self.call(method, params)
+        except MethodNotFoundError:
+            return self._inconclusive_schedule(schedule_id, "method_not_found")
+        result = self._bind_schedule_result(
+            raw, schedule_id, params["registry_identity"], params["source_digest"],
+        )
+        if result.state != "inconclusive" and (
+            result.receipt_version != 2
+            or result.registration_id != params["registration_id"]
+        ):
+            raise DaemonProtocolError("Unbound v2 venue response")
+        return result
+
+    async def current_schedule_v2(
+        self, receipt: Mapping[str, Any] | ScheduleVenueResult,
+    ) -> ScheduleVenueResult:
+        return await self._v2_call("schedule.current_v2", receipt)
+
+    async def cancel_schedule_v2(
+        self, receipt: Mapping[str, Any] | ScheduleVenueResult,
+    ) -> ScheduleVenueResult:
+        return await self._v2_call("schedule.cancel_v2", receipt)
 
     async def submit_job(self, request: JobRequest) -> JobResponse:
         """Submit a job to the daemon."""

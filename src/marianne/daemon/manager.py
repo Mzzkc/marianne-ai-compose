@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from marianne.core.config import JobConfig
@@ -4078,6 +4079,7 @@ class JobManager:
     async def cancel_job(
         self, job_id: str, *, source: str = "unknown",
         expected_source_digest: str | None = None,
+        expected_registration_id: str | None = None,
         require_schedule: bool = False,
     ) -> bool:
         """Cancel active work and remove its recurrence, when present."""
@@ -4108,6 +4110,9 @@ class JobManager:
             if (expected_source_digest is not None
                     and current.source_digest != expected_source_digest):
                 raise JobSubmissionError("Bound schedule digest changed before cancellation")
+            if (expected_registration_id is not None
+                    and current.registration_id != expected_registration_id):
+                raise JobSubmissionError("Bound registration changed before cancellation")
             self._claim_related_job_admissions(current, owned_job_ids)
             removal_entered = True
 
@@ -4155,13 +4160,20 @@ class JobManager:
                 raise
             if removal_error is not None:
                 raise removal_error
+            token = getattr(record, "registration_id", None)
+            if isinstance(token, str) and token:
+                await self._schedule_registry.record_terminal(
+                    token, record.schedule_id, record.source_digest,
+                )
             return True
         finally:
             self._release_lifecycle_admission(claims)
             for owned_job_id in reversed(owned_job_ids):
                 self._release_job_admission(owned_job_id)
 
-    async def register_schedule(self, config_path: Path) -> dict[str, Any]:
+    async def register_schedule(
+        self, config_path: Path, *, registration_id: str | None = None,
+    ) -> dict[str, Any]:
         """Register a recurring source and expose its daemon-accepted bytes."""
         try:
             identity = await self._schedule_registry.identity()
@@ -4179,6 +4191,7 @@ class JobManager:
                 before_wait=self._schedule_admission_available,
                 before_mutation=lambda ids: self._claim_lifecycle_admission(claims, ids),
                 require_schedule=True,
+                registration_id=registration_id,
             )
             if record is None:
                 return self._schedule_venue_result(identity, "", "inconclusive", "no_schedule")
@@ -4194,6 +4207,78 @@ class JobManager:
             return self._schedule_venue_result(identity, "", "inconclusive", "damaged_state")
         finally:
             self._release_lifecycle_admission(claims)
+
+    async def register_schedule_v2(self, config_path: Path) -> dict[str, Any]:
+        """Mint one durable caller-held receipt in the registration transaction."""
+        token = uuid4().hex
+        result = await self.register_schedule(config_path, registration_id=token)
+        result["receipt_version"] = 2
+        if result["state"] in {"live", "disabled"}:
+            result["registration_id"] = token
+        return result
+
+    async def current_schedule_v2(
+        self, schedule_id: str, registry_identity: str, source_digest: str,
+        registration_id: str, receipt_version: int,
+    ) -> dict[str, Any]:
+        """A row or terminal must match the caller's exact v2 receipt."""
+        if receipt_version != 2 or not registration_id:
+            return self._schedule_venue_result(
+                registry_identity, schedule_id, "inconclusive", "invalid_receipt"
+            )
+        result = await self.current_schedule(schedule_id, registry_identity, source_digest)
+        result["receipt_version"] = 2
+        if result["state"] == "inconclusive":
+            return result
+        try:
+            record = await self._schedule_registry.get(schedule_id)
+            if record is not None:
+                if record.registration_id != registration_id:
+                    result.update(state="inconclusive", reason="registration_changed")
+                else:
+                    result["registration_id"] = registration_id
+                return result
+            terminal = await self._schedule_registry.terminal_for(registration_id)
+        except ScheduleRegistryBusyError:
+            result.update(state="inconclusive", reason="registry_busy")
+            return result
+        except ScheduleRegistryDataError:
+            result.update(state="inconclusive", reason="damaged_state")
+            return result
+        if terminal != (schedule_id, registry_identity, source_digest):
+            result.update(state="inconclusive", reason="receipt_not_found")
+        else:
+            result["registration_id"] = registration_id
+        return result
+
+    async def cancel_schedule_v2(
+        self, schedule_id: str, registry_identity: str, source_digest: str,
+        registration_id: str, receipt_version: int,
+    ) -> dict[str, Any]:
+        before = await self.current_schedule_v2(
+            schedule_id, registry_identity, source_digest, registration_id, receipt_version,
+        )
+        if before["state"] in {"inconclusive", "not_registered"}:
+            return before
+        try:
+            await self.cancel_job(
+                schedule_id, source="schedule.cancel_v2",
+                expected_source_digest=source_digest,
+                expected_registration_id=registration_id, require_schedule=True,
+            )
+        except ScheduleRegistryDataError:
+            return self._schedule_venue_result(
+                registry_identity, schedule_id, "inconclusive", "damaged_state"
+            )
+        except (JobSubmissionError, ScheduleRegistryBusyError):
+            return self._schedule_venue_result(
+                registry_identity, schedule_id, "inconclusive", "race"
+            )
+        after = await self.current_schedule_v2(
+            schedule_id, registry_identity, source_digest, registration_id, receipt_version,
+        )
+        after["cancelled"] = after["state"] == "not_registered"
+        return after
 
     @staticmethod
     def _schedule_venue_result(

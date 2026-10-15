@@ -216,6 +216,8 @@ class ScheduleVenueResult(BaseModel):
     pinned_source_digest: str | None = None
     observed_at: float
     cancelled: bool | None = None
+    receipt_version: int | None = None
+    registration_id: str | None = None
 
 
 class JobTimeoutCleanupStatus(BaseModel):
