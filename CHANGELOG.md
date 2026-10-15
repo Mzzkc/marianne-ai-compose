@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Score-language release note (2026-10-15)
+
+The score language is the product's type system: a key's name, its validator
+message, its doc line and its skill line are one contract. This release makes
+the language say what it does. Nothing you have written stops working; some
+of it now warns so you can move before the next release removes the alias.
+
+**Three timers, three keys — read this first.** Confusing them is how work gets
+lost. `instrument_config.timeout_seconds` bounds one sheet's execution and is
+typed at all four scopes (root, `movements.<N>`, `sheet.per_sheet_instrument_config.<N>`,
+`instruments.<alias>.config`); a misspelling at any of them is a V010/V011
+warning. `stale_detection.idle_timeout_seconds` is the opt-in no-output timer.
+`schedule.max_wall_seconds` is the window of ONE scheduled tick of a recurring
+score. A one-shot score has no absolute deadline: its envelope is the per-sheet
+timeouts, idle detection and the conductor's `job_timeout_seconds`, which counts
+accumulated RUNNING time only (pauses and downtime are free).
+
+**Behaviour changes** (each also listed under *Changed*):
+- Root `max_wall_seconds` no longer caps a one-shot score. It was the tick window
+  mislabelled as a job budget (GH #435). Write `schedule.max_wall_seconds` for a
+  recurring score; the root spelling keeps working for one release and warns V328.
+- `retry.completion_threshold_percent` is a strict gate: a pass rate must exceed it
+  (default 50) to enter completion mode. Older releases sent any partial pass to
+  completion mode; review scores that lean on the default.
+- `cost_limits.max_cost_per_sheet` is enforced on every attempt, including a
+  successful one that takes the sheet over its cap.
+
+**Renamed spellings (one-release aliases, V328):** `checkpoints:` → `approvals:`;
+inside an `on_success`/`on_failure` hook, `on_failure` → `if_hook_fails` (at the
+trigger level `on_failure` keeps its own meaning). The root `conductor:` block is
+deprecated identity metadata with no reader; conductor settings live in
+`~/.marianne/conductor.yaml`.
+
+**Keys that were accepted and ignored now say so.** `mzt validate` emits V327 for
+a reserved section the runtime does not read (`rate_limit`, `circuit_breaker`,
+`logging`, `bridge`, `learning.exploration_budget`, `learning.entropy_response`,
+`learning.auto_apply`): remove the key rather than suppress the warning. A
+readable default-off section (`parallel`, `stale_detection`, `isolation`,
+`code_execution`, `judgment`, `concert`) with settings but no `enabled:` warns
+V329 this release; from the next release those settings enable their section.
+Write `enabled: true` now, or explicit `enabled: false` to keep it off.
+
+**New checks you may see:** V010 curated typo hints now fire at any depth (an
+unknown `timeout` beside a trigger action names `instrument_config.timeout_seconds`);
+V301/V302 technique paths and MCP instrument references; the language gate
+(`tests/scripts/check_language.py`, baseline only shrinks) runs in CI so these
+four layers cannot drift apart again.
+
+**For instrument hygiene:** `mzt doctor` now lists user- and venue-layer profiles
+that no submitted score names and no class chain includes (GH #443). A seat is
+an alias over an existing profile; archive what nothing names.
+
 ### Added
 
 #### Daemon Mode (marianned) — 2026-02-11
