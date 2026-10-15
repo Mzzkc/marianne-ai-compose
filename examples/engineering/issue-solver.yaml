@@ -1860,7 +1860,6 @@ on_success:
   - type: run_job
     job_path: "{workspace}/self-chain.yaml"
     description: "Chain to solve next issue from the DAG"
-    detached: true
     fresh: true
 
 concert:

@@ -283,7 +283,8 @@ workspace_lifecycle:
 
 *Source: `src/marianne/core/config/backend.py` — `BridgeConfig`*
 
-The bridge enables Ollama models to use MCP tools through a proxy service. Set at the top level of the score. Defaults to `None` (bridge disabled).
+Reserved score section: no runtime reader consumes `bridge:`. A score that sets
+it receives V327; the retained syntax below does not enable Ollama MCP tools.
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -343,6 +344,7 @@ Defines how the work is divided into sheets (execution units).
 | `fan_out` | `dict[int, int]` | `{}` | Requires `size=1`, `start_item=1` | Fan-out declarations. Map of `stage_num -> instance_count`. Creates parallel instances of stages. Cleared after expansion. |
 | `fan_out_stage_map` | `dict[int, dict[str, int]] \| None` | `None` | | Per-sheet fan-out metadata, populated by expansion. Survives serialization for resume support. |
 | `spec_tags` | `dict[int, list[str]]` | `{}` | | Per-sheet spec fragment tag filters. Map of `sheet_num -> list of tags`. Only fragments matching at least one tag are injected for that sheet. Sheets without entries receive all fragments. |
+| `descriptions` | `dict[int, str]` | `{}` | | Human-readable labels for sheets (`sheet.descriptions`), map of `sheet_num -> description`; shown in `mzt status`. |
 | `per_sheet_instruments` | `dict[int, str]` | `{}` | Positive int keys | Per-sheet instrument overrides. Map of `sheet_num -> instrument_name`. Highest precedence in the instrument resolution chain. Example: `{3: 'gemini-cli', 5: 'codex-cli'}`. |
 | `per_sheet_instrument_config` | `dict[int, dict]` | `{}` | | Per-sheet instrument configuration overrides. Map of `sheet_num -> config dict`. Merged with the resolved instrument's defaults for that sheet. Example: `{3: {model: 'gemini-2.5-flash'}}`. |
 | `instrument_map` | `dict[str, list[int]]` | `{}` | No duplicate sheets | Batch instrument assignment. Map of `instrument_name -> list of sheet numbers`. Overrides score-level instrument for listed sheets. Overridden by `per_sheet_instruments`. A sheet cannot appear in multiple instrument lists. |
@@ -519,6 +521,16 @@ via `sheet.spec_tags` in `SheetConfig` — a map of `sheet_num -> list of tags`.
 with spec_tags receive only fragments matching those tags; sheets without spec_tags
 receive all fragments.
 
+Each fragment file follows this schema (`spec.fragments`):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `str` | Fragment identifier used in filtering logs |
+| `tags` | `list[str]` | Tags matched against `sheet.spec_tags` |
+| `kind` | `str` | Fragment kind label |
+| `content` | `str` | The fragment body injected into prompts |
+| `data` | `dict` | Structured payload for tool-driven fragments |
+
 ---
 
 ## prompt
@@ -612,6 +624,10 @@ retry:
 
 *Source: `src/marianne/core/config/execution.py` — `RateLimitConfig`*
 
+Reserved score section: the runtime does not read `rate_limit:`. A score that
+sets it receives V327. Use a configured instrument profile for provider rate
+handling; the table below describes retained syntax, not active behaviour.
+
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `detection_patterns` | `list[str]` | `["rate.?limit", "usage.?limit", "quota", "too many requests", "429", "capacity", "try again later"]` | Must be valid regex | Regex patterns to detect rate limiting in output |
@@ -635,7 +651,9 @@ rate_limit:
 
 *Source: `src/marianne/core/config/execution.py` — `CircuitBreakerConfig`*
 
-Prevents cascading failures by temporarily blocking requests after repeated failures. State transitions: CLOSED (normal) → OPEN (blocking) → HALF_OPEN (testing recovery).
+Reserved score section: the runtime does not read `circuit_breaker:`. A score
+that sets it receives V327. The table below describes retained syntax, not
+active CLOSED → OPEN → HALF_OPEN behaviour.
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -693,6 +711,7 @@ Detects hung sheet executions that produce no output.
 | `enabled` | `bool` | `false` | | Enable stale execution detection |
 | `idle_timeout_seconds` | `float` | `300.0` | `> 0` | Maximum seconds of inactivity before marking stale. Recommended minimum 120s for LLM workloads. |
 | `check_interval_seconds` | `float` | `30.0` | `> 0`, must be `< idle_timeout_seconds` | How often to check for idle executions |
+| `max_idle_checks_before_kill` | `int` | `3` | `>= 1` | Consecutive idle-and-still-alive checks before an idle sheet is killed (#344). 1 = kill on first idle check. |
 
 ```yaml
 stale_detection:
@@ -996,7 +1015,15 @@ concert:
 
 *Source: `src/marianne/core/config/orchestration.py` — `PostSuccessHookConfig`*
 
-A list of hooks that execute after successful job completion.
+A list of hooks that execute after successful job completion. The root
+`on_failure:` key takes the same hook list for terminal job failure:
+
+```yaml
+on_failure:
+  - type: run_command
+    command: "cleanup-on-failure.sh"
+```
+
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -1007,9 +1034,10 @@ A list of hooks that execute after successful job completion.
 | `command` | `str \| None` | `None` | Required for `run_command`/`run_script` | Shell command or script path. Supports `{workspace}`, `{job_id}`, `{sheet_count}`. |
 | `working_directory` | `Path \| None` | `None` | | Working directory for command (default: job workspace) |
 | `description` | `str \| None` | `None` | | Human-readable description |
-| `on_failure` | `"continue" \| "abort"` | `"continue"` | | Action if hook fails: continue to next or abort remaining |
+| `on_failure` | `"continue" \| "abort"` | `"continue"` | | Action if hook fails: continue to next or abort remaining. Prefer the `if_hook_fails` spelling — `on_failure` here collides with the sheet-trigger key of the same name (V328 warns). |
 | `timeout_seconds` | `float` | `300.0` | `> 0` | Maximum hook execution time (5 min default) |
-| `detached` | `bool` | `false` | | For `run_job`: spawn and don't wait. Routes through daemon IPC when available (enabling tracking, rate coordination, backpressure). Falls back to subprocess if no daemon is running. |
+| `detached` | `bool` | `false` | | Reserved: no runtime reader for hook-level detach (V327 warns when set); the trigger-level `concert: {detached: true}` action is the one that detaches. |
+| `pause_before_chain` | `bool` | `false` | | For `run_job`: hold the chain trigger after this job completes (PAUSED_AT_CHAIN) until `mzt resume`. |
 | `fresh` | `bool` | `false` | | For `run_job`: pass `--fresh` to start with clean state. Required for self-chaining jobs. |
 
 ```yaml
@@ -1206,10 +1234,9 @@ ai_review:
 
 *Source: `src/marianne/core/config/workspace.py` — `LogConfig`*
 
-Score-level logging config controls score/workspace log formatting for
-compatibility and explicit offline debugging. It does not choose the conductor's
-daemon event-log destination. Daemon logging is controlled by `DaemonConfig`
-under `~/.marianne/conductor.yaml`.
+Reserved score section: the runtime does not read `logging:`. A score that sets
+it receives V327. Set daemon logging under `~/.marianne/conductor.yaml`; the
+table below describes retained score syntax, not active log routing.
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -1251,6 +1278,86 @@ feedback:
 
 ---
 
+## schedule
+
+*Source: `src/marianne/core/config/orchestration.py` — `ScheduleConfig`*
+
+Recurring execution for a score: when ticks fire, and how misses and
+overlaps are handled. One-shot scores omit this section entirely.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | `bool` | `true` | Whether future ticks are enabled |
+| `cron` | `str \| None` | `None` | Five-field cron expression (`schedule.cron`); exactly one of cron/interval |
+| `interval` | `str \| None` | `None` | Positive s/m/h/d interval; exactly one of cron/interval |
+| `timezone` | `str \| None` | `None` | Optional IANA timezone for tick times |
+| `misfire` | `"skip" \| "latest"` | `"skip"` | Policy for ticks missed while the conductor was down |
+| `overlap` | `"skip"` | `"skip"` | Policy for a tick arriving while a previous run is active |
+| `jitter_seconds` | `int` | `0` | Bounded dispatch jitter |
+| `pin_source_digest` | `bool` | `false` | Opt in to daemon-side source pinning |
+
+```yaml
+schedule:
+  cron: "0 */6 * * *"
+  timezone: "Australia/Melbourne"
+```
+
+---
+
+## judgment
+
+*Source: `src/marianne/core/config/judgment.py` — `JudgmentConfig`*
+
+The `judgment` section configures the AI judgment client for FERMATA'd
+sheets (#203). Off by default; when
+enabled, an LLM judge may resolve a sheet paused for a composer decision
+with confidence gating and a durable per-sheet cap.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | `bool` | `false` | Enable the judgment client |
+| `instrument` | `str \| None` | `None` | Instrument the judge runs through |
+| `model` | `str \| None` | `None` | Model override for the judge |
+| `min_confidence` | `float` | `0.8` | Confidence below which a judgment is refused |
+| `allowed_decisions` | `list[str]` | `["retry", "fail"]` | Decisions a judge may make (never accept) |
+| `max_judgments_per_sheet` | `int` | `3` | Durable per-sheet cap on automated judgments |
+
+---
+
+## agent_card
+
+*Source: `src/marianne/core/config/a2a.py` — `AgentCard`*
+
+The `agent_card` block is the agent identity card for A2A protocol
+discovery. When set, the conductor
+registers this card on job start so other agents can discover and
+delegate tasks to this score's agent.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `str` | Agent display name |
+| `description` | `str \| None` | What this agent does |
+| `skills` | `list[Skill]` | Advertised skills; each entry's `id` names the skill |
+| `url` | `str \| None` | Endpoint for A2A requests |
+
+---
+
+## code_execution
+
+*Source: `src/marianne/core/config/execution.py` — `CodeExecutionConfig`*
+
+The `code_execution` section opts in to execution of agent-generated
+code blocks (#209). Default off — agent code never runs unless a score
+explicitly opts in.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | `bool` | `false` | Execute agent-generated code blocks in a sandbox |
+| `require_sandbox` | `bool` | `false` | Refuse to run code mode when bwrap is unavailable (fail-closed); default runs unsandboxed with a loud V304 warning |
+| `timeout_seconds` | `float` | `30.0` | Maximum wall-clock time for a single code block |
+
+---
+
 ## State and Misc
 
 *Source: `src/marianne/core/config/job.py` — `JobConfig`*
@@ -1258,7 +1365,8 @@ feedback:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `state_backend` | `"json" \| "sqlite"` | `"sqlite"` | **Legacy, no effect on job state.** The conductor registry is the sole state authority (#50, #333); this key only picks the workspace-local filename used for learning/outcome data. Omit it. |
-| `state_path` | `Path \| None` | `None` | Legacy companion to `state_backend`; omit. |
+| `state_path` | `Path \| None` | `None` | Reserved: no runtime reader (V327 warns when set). Legacy companion to `state_backend`; omit. |
+| `source_path` | `Path \| None` | `None` | Loader-owned (D8): set by the loader to the score file's own path; a score that sets it is warned (V327). Never serialized. |
 | `pause_between_sheets_seconds` | `int` | `2` | Seconds to wait between sheets. `>= 0`. |
 
 ---
@@ -1592,6 +1700,9 @@ a per-attempt log under `.marianne-flow/`, capped at 1 MiB, and a command that
 passes the cap while running is ended like a timeout, with the outcome's error
 naming the cap. `concert` submits a child score and does not wait for that child. Commands may repeat after a
 conductor crash, so make their effects idempotent using `MARIANNE_FLOW_ATTEMPT`.
+`concert` submits a child score and does not wait for that child: the action's
+`score` names the child score file (`sheet.triggers.<span>.on_success[].concert.score`),
+with `detached: true` releasing the conductor from waiting on it.
 Loop and trigger state is saved in the same checkpoint as sheet state.
 
 See [convergence-loop](../examples/patterns/convergence-loop.yaml) for a

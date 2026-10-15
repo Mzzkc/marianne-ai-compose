@@ -1,29 +1,9 @@
 {
   "description": "Known language gaps (GH #436). A finding not listed here fails the gate. Remove an entry in the same commit that closes the gap.",
-  "commit": "daed145aa32183fa3eff7af451ebb1b5a4d83387",
+  "commit": "797a6999325224befeaf112f8d3ba5b22f29070f",
   "findings": [
     "L03:max_wall_seconds",
     "L04:instrument_config.model",
-    "L04:instrument_config.response_format",
-    "L05:agent_card",
-    "L05:agent_card.skills",
-    "L05:agent_card.skills[].id",
-    "L05:code_execution",
-    "L05:code_execution.require_sandbox",
-    "L05:judgment",
-    "L05:judgment.allowed_decisions",
-    "L05:judgment.max_judgments_per_sheet",
-    "L05:judgment.min_confidence",
-    "L05:on_failure",
-    "L05:on_success[].pause_before_chain",
-    "L05:schedule.cron",
-    "L05:sheet.descriptions",
-    "L05:sheet.triggers.<k>.on_success[].concert.score",
-    "L05:source_path",
-    "L05:spec.fragments",
-    "L05:spec.fragments[].content",
-    "L05:spec.fragments[].data",
-    "L05:spec.fragments[].tags",
-    "L05:stale_detection.max_idle_checks_before_kill"
+    "L04:instrument_config.response_format"
   ]
 }

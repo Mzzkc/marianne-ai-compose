@@ -126,7 +126,6 @@ on_success:
   - type: run_job
     job_path: "{workspace}/06-lab-wrapper.yaml"
     description: "Chain to per-run lab wrapper (which chains to refresh-fold)"
-    detached: true
     fresh: true
 
 prompt:

@@ -38,35 +38,40 @@ class ExplorationBudgetConfig(BaseModel):
         default=0.05,
         ge=0.0,
         le=1.0,
-        description="Minimum exploration budget. Budget never drops below this floor. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Minimum exploration budget. Budget never drops below this floor. "
         "Default 0.05 = always explore at least 5%% of the time.",
     )
     ceiling: float = Field(
         default=0.50,
         ge=0.0,
         le=1.0,
-        description="Maximum exploration budget. Budget never exceeds this ceiling. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Maximum exploration budget. Budget never exceeds this ceiling. "
         "Default 0.50 = never explore more than 50%% of the time.",
     )
     decay_rate: float = Field(
         default=0.95,
         ge=0.0,
         le=1.0,
-        description="Decay rate per check interval. budget = max(floor, budget * decay_rate). "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Decay rate per check interval. budget = max(floor, budget * decay_rate). "
         "Default 0.95 = 5%% decay per interval toward floor.",
     )
     boost_amount: float = Field(
         default=0.10,
         ge=0.0,
         le=0.5,
-        description="Amount to boost budget when entropy is low. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Amount to boost budget when entropy is low. "
         "budget = min(ceiling, budget + boost_amount). Default 0.10 = +10%% boost.",
     )
     initial_budget: float = Field(
         default=0.15,
         ge=0.0,
         le=1.0,
-        description="Initial exploration budget when starting fresh. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Initial exploration budget when starting fresh. "
         "Default 0.15 matches static exploration_rate default.",
     )
 
@@ -163,7 +168,8 @@ class AutoApplyConfig(BaseModel):
         default=0.85,
         ge=0.0,
         le=1.0,
-        description="Minimum trust score for autonomous application. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Minimum trust score for autonomous application. "
         "Default 0.85 is conservative - patterns must have proven reliability. "
         "Lower values increase auto-apply rate but also increase risk.",
     )
@@ -172,20 +178,23 @@ class AutoApplyConfig(BaseModel):
         default=3,
         ge=1,
         le=10,
-        description="Maximum patterns to auto-apply per sheet. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Maximum patterns to auto-apply per sheet. "
         "Limits prompt size growth from pattern injection.",
     )
 
     require_validated_status: bool = Field(
         default=True,
-        description="Require patterns to have VALIDATED quarantine status. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Require patterns to have VALIDATED quarantine status. "
         "When true, only explicitly validated patterns can be auto-applied. "
         "Provides additional safety layer beyond trust score.",
     )
 
     log_applications: bool = Field(
         default=True,
-        description="Log when patterns are auto-applied. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Log when patterns are auto-applied. "
         "Always recommended for auditability.",
     )
 
@@ -209,19 +218,22 @@ class LearningConfig(BaseModel):
     )
     outcome_store_path: Path | None = Field(
         default=None,
-        description="Path for outcome store (default: workspace/.marianne-outcomes.json)",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Path for outcome store (default: workspace/.marianne-outcomes.json)",
     )
     min_confidence_threshold: float = Field(
         default=0.3,
         ge=0.0,
         le=1.0,
-        description="Confidence below this triggers escalation (if enabled)",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Confidence below this triggers escalation (if enabled)",
     )
     high_confidence_threshold: float = Field(
         default=0.7,
         ge=0.0,
         le=1.0,
-        description="Confidence above this uses completion mode for partial failures",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Confidence above this uses completion mode for partial failures",
     )
     escalation_enabled: bool = Field(
         default=False,
@@ -237,7 +249,8 @@ class LearningConfig(BaseModel):
         default=0.15,
         ge=0.0,
         le=1.0,
-        description="Exploration rate for pattern selection (epsilon in epsilon-greedy). "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Exploration rate for pattern selection (epsilon in epsilon-greedy). "
         "When random() < exploration_rate, include lower-priority patterns "
         "to collect effectiveness data. 0.0 = pure exploitation, 1.0 = try everything.",
     )
@@ -245,7 +258,8 @@ class LearningConfig(BaseModel):
         default=0.05,
         ge=0.0,
         le=1.0,
-        description="Minimum priority threshold for exploration candidates. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Minimum priority threshold for exploration candidates. "
         "Patterns below this are excluded even in exploration mode.",
     )
     # v21 Evolution: Pattern Entropy Monitoring
@@ -253,26 +267,30 @@ class LearningConfig(BaseModel):
         default=0.5,
         ge=0.0,
         le=1.0,
-        description="Shannon entropy below this triggers alert for low pattern diversity. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Shannon entropy below this triggers alert for low pattern diversity. "
         "0.0 = single dominant pattern, 1.0 = maximum diversity.",
     )
     entropy_check_interval: int = Field(
         default=100,
         ge=1,
-        description="Check entropy every N pattern applications. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Check entropy every N pattern applications. "
         "Lower values = more frequent checks but higher overhead.",
     )
     # v21 Evolution: Confidence Threshold Auto-Apply
     auto_apply_enabled: bool = Field(
         default=False,
-        description="Enable auto-apply for high-trust patterns. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Enable auto-apply for high-trust patterns. "
         "When True, patterns with trust_score >= auto_apply_trust_threshold bypass escalation.",
     )
     auto_apply_trust_threshold: float = Field(
         default=0.85,
         ge=0.0,
         le=1.0,
-        description="Minimum trust score required to auto-apply a pattern. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Minimum trust score required to auto-apply a pattern. "
         "0.85 is conservative (>85% success rate with validated status).",
     )
     # v23 Evolution: Exploration Budget Maintenance
@@ -284,13 +302,15 @@ class LearningConfig(BaseModel):
     # v23 Evolution: Automatic Entropy Response
     entropy_response: EntropyResponseConfig = Field(
         default_factory=EntropyResponseConfig,
-        description="Automatic entropy response configuration. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Automatic entropy response configuration. "
         "When enabled, injects diversity when entropy drops.",
     )
     # v22: Trust-Aware Autonomous Application
     auto_apply: AutoApplyConfig | None = Field(
         default=None,
-        description="Configuration for autonomous pattern application. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Configuration for autonomous pattern application. "
         "When set with enabled=true, high-trust patterns are applied "
         "without human confirmation. Opt-in only.",
     )
@@ -358,11 +378,13 @@ class GroundingHookConfig(BaseModel):
     )
     expected_checksums: dict[str, str] = Field(
         default_factory=dict,
-        description="For file_checksum: map of file path to expected checksum",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "For file_checksum: map of file path to expected checksum",
     )
     checksum_algorithm: Literal["md5", "sha256"] = Field(
         default="sha256",
-        description="For file_checksum: algorithm for checksums",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "For file_checksum: algorithm for checksums",
     )
 
     @model_validator(mode="after")
@@ -404,11 +426,13 @@ class GroundingConfig(BaseModel):
     )
     fail_on_grounding_failure: bool = Field(
         default=True,
-        description="Whether to fail validation if grounding fails",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Whether to fail validation if grounding fails",
     )
     escalate_on_failure: bool = Field(
         default=True,
-        description="Whether to escalate to human if grounding fails (requires escalation handler)",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Whether to escalate to human if grounding fails (requires escalation handler)",
     )
     timeout_seconds: float = Field(
         default=30.0,

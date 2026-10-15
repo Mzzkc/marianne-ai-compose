@@ -122,7 +122,12 @@ class TriggerAction(BaseModel):
     skip: SkipTarget | None = Field(
         default=None, description="Mark this sheet span deliberately skipped."
     )
-    continue_: bool | None = Field(default=None, alias="continue", description="Explicit no-op.")
+    continue_: bool | None = Field(
+        default=None,
+        alias="continue",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Explicit no-op.",
+    )
 
     @model_validator(mode="after")
     def exactly_one(self) -> TriggerAction:

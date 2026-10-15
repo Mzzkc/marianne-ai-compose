@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
+from types import UnionType
+from typing import Any, get_args, get_origin
+
+from pydantic import AliasChoices, BaseModel
 
 from marianne.core.config import JobConfig
 from marianne.core.config.schema_walk import UnknownScoreField
@@ -38,6 +43,58 @@ _KNOWN_TYPOS = {
 }
 
 
+def _container_suffix(annotation: Any) -> str:
+    origin = get_origin(annotation)
+    if origin in (UnionType, __import__("typing").Union):
+        for arg in get_args(annotation):
+            suffix = _container_suffix(arg)
+            if suffix:
+                return suffix
+        return ""
+    if origin in (list, tuple):
+        return "[]"
+    if origin is dict:
+        return ".<k>"
+    return ""
+
+
+def _models_in(annotation: Any) -> list[type[BaseModel]]:
+    out: list[type[BaseModel]] = []
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        out.append(annotation)
+    for arg in get_args(annotation):
+        out.extend(_models_in(arg))
+    return out
+
+
+@lru_cache(maxsize=1)
+def _known_leaf_locations() -> dict[str, tuple[str, ...]]:
+    """Bare key name -> the real paths it lives at (D6 wrong-place map)."""
+    locations: dict[str, set[str]] = {}
+    expanded: set[type[BaseModel]] = set()
+
+    def walk(model: type[BaseModel], prefix: str) -> None:
+        if model in expanded:
+            return
+        expanded.add(model)
+        for name, info in model.model_fields.items():
+            key = info.alias if isinstance(info.alias, str) else name
+            for attr in ("alias", "validation_alias"):
+                value = getattr(info, attr, None)
+                if isinstance(value, AliasChoices) and isinstance(value.choices[0], str):
+                    key = value.choices[0]
+            path = f"{prefix}.{key}" if prefix else key
+            if len(key) >= 4:  # short names (size, type) match too much prose
+                locations.setdefault(key, set()).add(
+                    path.replace("[]", "").replace(".<k>", "")
+                )
+            for child in _models_in(info.annotation):
+                walk(child, path + _container_suffix(info.annotation))
+
+    walk(JobConfig, "")
+    return {name: tuple(sorted(paths)) for name, paths in locations.items()}
+
+
 def unknown_field_issue(field: UnknownScoreField, raw_yaml: str) -> ValidationIssue:
     """Classify one unknown key without rejecting the rest of the score."""
     nearest = min(
@@ -57,6 +114,22 @@ def unknown_field_issue(field: UnknownScoreField, raw_yaml: str) -> ValidationIs
         ),
         None,
     )
+    # D6: a correctly spelled key in the wrong place is a WARNING that names
+    # its real path, not a hidden INFO. The bare name matching a known leaf
+    # elsewhere (the walk already proved this spot unknown) means the author
+    # moved a real key, not misspelled one.
+    real_paths = _known_leaf_locations().get(field.key)
+    if real_paths and not suggested:
+        shown = " or ".join(f"`{p}`" for p in real_paths[:2])
+        return ValidationIssue(
+            check_id="V010",
+            severity=ValidationSeverity.WARNING,
+            message=f"Unknown field `{location}` will be ignored; "
+            f"`{field.key}` is a score key that lives at {shown}",
+            line=line,
+            suggestion=f"Move `{field.key}` under {shown}",
+            metadata={"field": location},
+        )
     return ValidationIssue(
         check_id="V010" if severity == ValidationSeverity.WARNING else "V011",
         severity=severity,

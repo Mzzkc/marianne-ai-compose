@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -216,7 +217,8 @@ class MovementDef(BaseModel):
     voices: int | None = Field(
         default=None,
         ge=1,
-        description="Number of parallel voices in this movement. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Number of parallel voices in this movement. "
         "Shorthand for fan_out: {N: voices}.",
     )
     instrument_fallbacks: list[str] = Field(
@@ -996,12 +998,14 @@ class JobConfig(BaseModel):
     )
     rate_limit: RateLimitConfig = Field(
         default_factory=RateLimitConfig,
-        description="Rate-limit handling for this score: detection patterns, "
+        description="Reserved: no runtime reader of this score section yet "
+        "(V327 warns when set). Rate-limit handling was intended to use detection patterns, "
         "wait minutes, and quota waits.",
     )
     circuit_breaker: CircuitBreakerConfig = Field(
         default_factory=CircuitBreakerConfig,
-        description="Circuit-breaker behaviour for this score: failure "
+        description="Reserved: no runtime reader of this score section yet "
+        "(V327 warns when set). Circuit-breaker behaviour was intended to use failure "
         "thresholds and recovery waits before an instrument is retried.",
     )
     cost_limits: CostLimitConfig = Field(
@@ -1016,17 +1020,20 @@ class JobConfig(BaseModel):
     )
     grounding: GroundingConfig = Field(
         default_factory=GroundingConfig,
-        description="Grounding for this score: corpus passages injected to "
-        "keep sheets on source material.",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Grounding for this score: corpus passages intended to keep sheets "
+        "on source material.",
     )
     ai_review: AIReviewConfig = Field(
         default_factory=AIReviewConfig,
-        description="AI review of sheet outputs: a reviewer model pass before "
-        "validation.",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "AI review of sheet outputs: a reviewer model pass intended to run "
+        "before validation.",
     )
     logging: LogConfig = Field(
         default_factory=LogConfig,
-        description="Logging for this score's runs: level, file outputs, and "
+        description="Reserved: no runtime reader of this score section yet "
+        "(V327 warns when set). Logging settings were intended to set level, file outputs, and "
         "retention.",
     )
     workspace_lifecycle: WorkspaceLifecycleConfig = Field(
@@ -1046,8 +1053,9 @@ class JobConfig(BaseModel):
     )
     conductor: ConductorConfig = Field(
         default_factory=ConductorConfig,
-        description="Conductor identity and preferences. "
-        "Identifies who (human or AI) is conducting this job.",
+        description="Deprecated: identity metadata for who conducts this "
+        "score. No runtime reader (V327/V328 warn when set); conductor "
+        "behaviour is configured in ~/.marianne/conductor.yaml, not here.",
     )
     parallel: ParallelConfig = Field(
         default_factory=ParallelConfig,
@@ -1061,13 +1069,17 @@ class JobConfig(BaseModel):
     )
     checkpoints: CheckpointConfig = Field(
         default_factory=CheckpointConfig,
-        description="Proactive checkpoint configuration. "
-        "Enables pre-execution approval for configurable triggers.",
+        validation_alias=AliasChoices("approvals", "checkpoints"),
+        serialization_alias="approvals",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Approval gates before execution; the old `checkpoints:` spelling "
+        "works this release and warns (V328) — write `approvals:`.",
     )
     bridge: BridgeConfig | None = Field(
         default=None,
-        description="Marianne-Ollama bridge configuration. "
-        "Enables Ollama backend with MCP tool support.",
+        description="Reserved: no runtime reader of this score section yet "
+        "(V327 warns when set). Bridge settings were intended to connect "
+        "Ollama with MCP tool support.",
     )
     cross_sheet: CrossSheetConfig | None = Field(
         default=None,
@@ -1086,8 +1098,9 @@ class JobConfig(BaseModel):
     )
     feedback: FeedbackConfig = Field(
         default_factory=FeedbackConfig,
-        description="Developer feedback collection configuration (GH#15). "
-        "When enabled, extracts structured feedback from agent output after each sheet.",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Developer feedback collection configuration (GH#15): intended to "
+        "extract structured feedback from agent output after each sheet.",
     )
 
     # Technique system — composable ECS components for agents
@@ -1140,14 +1153,16 @@ class JobConfig(BaseModel):
     )
     state_path: Path | None = Field(
         default=None,
-        description="Path for state storage (default: workspace/.marianne-state)",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Path for state storage (default: workspace/.marianne-state)",
     )
     source_path: Path | None = Field(
         default=None,
         exclude=True,
-        description="Absolute path of the YAML file this config was loaded from. "
-        "Set by from_yaml() only; anchors the score_dir template/hook variable. "
-        "Excluded from serialization — state files never record it.",
+        description="Loader-owned (D8): the absolute path of the YAML file "
+        "this config was loaded from. Set by from_yaml() only; a score that "
+        "sets it is warned (V327). Excluded from serialization — state files "
+        "never record it.",
     )
 
     pause_between_sheets_seconds: int = Field(

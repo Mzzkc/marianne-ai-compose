@@ -1644,7 +1644,6 @@ on_success:
   - type: run_job
     job_path: "[CHANGE THIS: ABSOLUTE path to examples/engineering/issue-solver.yaml]"
     description: "Chain to issue-solver. Quality-triage emits issue-triage-dag-v1 schema, so issue-solver consumes directly."
-    detached: true
     fresh: true
 
 concert:

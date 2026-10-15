@@ -34,13 +34,15 @@ class RetryConfig(BaseModel):
     completion_delay_seconds: float = Field(
         default=5.0,
         ge=0,
-        description="Delay between completion attempts (seconds)",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Delay between completion attempts (seconds)",
     )
     completion_threshold_percent: float = Field(
         default=50.0,
         gt=0,
         le=100,
-        description="Minimum pass percentage to trigger completion mode (default: >50%)",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Minimum pass percentage to trigger completion mode (default: >50%)",
     )
 
     @model_validator(mode="after")
@@ -68,7 +70,8 @@ class RateLimitConfig(BaseModel):
             r"capacity",
             r"try again later",
         ],
-        description="Regex patterns to detect rate limiting in output",
+        description="Reserved: no score runtime reader yet (V327 warns when set). "
+        "Regex patterns intended to detect rate limiting in output",
     )
 
     @field_validator("detection_patterns")
@@ -83,12 +86,23 @@ class RateLimitConfig(BaseModel):
                 ) from e
         return v
 
-    wait_minutes: int = Field(default=60, ge=1, description="Minutes to wait when rate limited")
-    max_waits: int = Field(default=24, ge=1, description="Maximum wait cycles (24 = 24 hours)")
+    wait_minutes: int = Field(
+        default=60,
+        ge=1,
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Minutes to wait when rate limited",
+    )
+    max_waits: int = Field(
+        default=24,
+        ge=1,
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Maximum wait cycles (24 = 24 hours)",
+    )
     max_quota_waits: int = Field(
         default=48,
         ge=1,
-        description="Maximum quota exhaustion wait cycles before failing "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Maximum quota exhaustion wait cycles before failing "
         "(48 = 48 hours at 60min/wait)",
     )
 
@@ -122,19 +136,22 @@ class CircuitBreakerConfig(BaseModel):
 
     enabled: bool = Field(
         default=True,
-        description="Enable circuit breaker pattern for resilient execution",
+        description="Reserved: no score runtime reader yet (V327 warns when set). "
+        "Intended to enable the circuit breaker pattern",
     )
     failure_threshold: int = Field(
         default=5,
         ge=1,
         le=100,
-        description="Number of consecutive failures before opening circuit",
+        description="Reserved: no score runtime reader yet (V327 warns when set). "
+        "Intended number of consecutive failures before opening the circuit",
     )
     recovery_timeout_seconds: float = Field(
         default=300.0,
         gt=0,
         le=3600,
-        description="Seconds to wait in OPEN state before testing recovery (max 1 hour)",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Seconds to wait in OPEN state before testing recovery (max 1 hour)",
     )
     # Evolution #8: Cross-Workspace Circuit Breaker options.
     #
@@ -205,7 +222,8 @@ class CostLimitConfig(BaseModel):
     max_cost_per_sheet: float | None = Field(
         default=None,
         gt=0,
-        description="Maximum allowed cost per sheet in USD. None = no limit.",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Maximum allowed cost per sheet in USD. None = no limit.",
     )
     max_cost_per_job: float | None = Field(
         default=None,
@@ -215,18 +233,21 @@ class CostLimitConfig(BaseModel):
     cost_per_1k_input_tokens: float = Field(
         default=0.003,
         gt=0,
-        description="Cost per 1000 input tokens in USD (Claude Sonnet default: $0.003)",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Cost per 1000 input tokens in USD (Claude Sonnet default: $0.003)",
     )
     cost_per_1k_output_tokens: float = Field(
         default=0.015,
         gt=0,
-        description="Cost per 1000 output tokens in USD (Claude Sonnet default: $0.015)",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Cost per 1000 output tokens in USD (Claude Sonnet default: $0.015)",
     )
     warn_at_percent: float = Field(
         default=80.0,
         gt=0,
         le=100,
-        description="Emit warning when this percentage of limit is reached",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Emit warning when this percentage of limit is reached",
     )
 
     @model_validator(mode="before")
@@ -433,7 +454,8 @@ class ParallelConfig(BaseModel):
     )
     budget_partition: bool = Field(
         default=True,
-        description="Partition cost budget across parallel branches. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Partition cost budget across parallel branches. "
         "When True, each parallel sheet gets (remaining_budget / max_concurrent). "
         "When False, each sheet has access to full remaining budget. "
         "NOTE: Not yet implemented — this field is accepted but not enforced. "

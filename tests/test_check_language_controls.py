@@ -279,7 +279,7 @@ class Rule(BaseModel):
 class RootWithHomonym(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(description="Score name")
-    source_path: str | None = Field(default=None, description="Loader-owned path of the score file")
+    source_path: str | None = Field(default=None, description="Path of the score file (loader-set)")
     validations: list[Rule] = Field(default_factory=list, description="Validation rules")
 
 

@@ -261,8 +261,6 @@ retry:
   exponential_base: 2.0
 
 rate_limit:
-  wait_minutes: 1
-  max_waits: 10
   detection_patterns:
     - "rate_limit"
     - "429"

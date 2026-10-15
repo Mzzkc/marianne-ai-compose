@@ -10,13 +10,23 @@ Check IDs:
 
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
 from marianne.core.config import JobConfig
+from marianne.core.config.instruments import InstrumentProfile
 from marianne.core.config.techniques import TechniqueKind
 from marianne.instruments.loader import InstrumentProfileLoader
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml
+
+
+@lru_cache(maxsize=1)
+def _builtin_profiles() -> dict[str, InstrumentProfile]:
+    """Built-in profiles, loaded once per process (148+ user profiles ride along)."""
+    loader = InstrumentProfileLoader()
+    builtins_dir = Path(__file__).parent.parent.parent / "instruments" / "builtins"
+    return loader.load_directory(builtins_dir)
 
 
 class TechniqueSkillPathCheck:
@@ -121,12 +131,7 @@ class TechniqueMcpInstrumentCheck:
 
         # Try loading the instrument profile to check for direct MCP config.
         try:
-            loader = InstrumentProfileLoader()
-            builtins_dir = (
-                Path(__file__).parent.parent.parent
-                / "instruments" / "builtins"
-            )
-            profiles = loader.load_directory(builtins_dir)
+            profiles = _builtin_profiles()
             profile = profiles.get(instrument_name)
         except Exception:
             # Can't load profiles — skip the check rather than

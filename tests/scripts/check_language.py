@@ -523,6 +523,25 @@ def orphan_check_definitions(repo: Path) -> list[tuple[str, str]]:
 # --------------------------------------------------------------------------
 
 
+# Fields whose only runtime reader is a model method the name-scan cannot
+# see through. Each entry names its verified reader; removing an entry
+# requires re-verifying by grep.
+_VERIFIED_READERS = {
+    "isolation.worktree_base": "IsolationConfig.get_worktree_base, called at daemon/manager.py:399",
+}
+
+# These score sections have no receiver. The name-only L08 heuristic misses
+# common leaves such as ``enabled`` and ``level``; keep their contract explicit
+# until a receiver-aware census replaces it. A future runtime reader must
+# remove its row and prove that reader in the same change.
+_UNREAD_ROOT_SECTIONS = frozenset(
+    {
+        "ai_review", "bridge", "checkpoints", "circuit_breaker",
+        "conductor", "feedback", "grounding", "logging", "rate_limit",
+    }
+)
+
+
 def unread_fields(repo: Path, keys: list[KeyInfo]) -> dict[str, int]:
     """Read counts for every model field outside ``core/config``.
 
@@ -654,9 +673,14 @@ def run_checks(
 
     # L05 orphan: no author surface names the key path. A leaf spelled the same
     # at two levels must be pinned to its level to count (see _mentions).
+    # A reserved or deprecated key is deliberately untaught (P1/D4): its
+    # description carries the contract, so the orphan check spares it.
+    reserved_mark = ("Reserved:", "Reserved.", "Loader-owned", "Deprecated:")
     surfaces = skills + "\n" + config_ref
     homonyms = homonym_leaves(keys)
     for key in keys:
+        if key.description.startswith(reserved_mark):
+            continue
         if not _mentions(surfaces, key, homonyms):
             findings.append(
                 Finding("L05", key.path, "no skill, ref, or configuration-reference.md mention")
@@ -686,13 +710,32 @@ def run_checks(
             )
         )
 
-    # L08 unread fields (advisory)
+    # L08's name-only read heuristic remains advisory. It counts unrelated
+    # ``enabled`` and ``level`` reads as score readers; it cannot be a gate.
+    # The traced root sections below are gated until a receiver-aware census
+    # replaces this explicit list.
     counts = unread_fields(repo, keys)
+    for section in sorted(_UNREAD_ROOT_SECTIONS):
+        key = by_path.get(section)
+        if key is not None and not key.description.startswith(reserved_mark):
+            findings.append(Finding(
+                "L08", section,
+                "unread score section is not marked Reserved or Deprecated",
+                where=[key.source],
+            ))
     for key in keys:
         if counts.get(key.field, 1) == 0:
+            if key.path in _VERIFIED_READERS:
+                continue
+            marked = key.description.startswith(reserved_mark)
             findings.append(
                 Finding(
-                    "L08", key.path, "no read outside core/config", gating=False, where=[key.source]
+                    "L08",
+                    key.path,
+                    "no read outside core/config"
+                    + ("" if marked else " and not marked reserved"),
+                    gating=False,
+                    where=[key.source],
                 )
             )
 

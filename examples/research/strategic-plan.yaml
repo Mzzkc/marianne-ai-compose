@@ -131,10 +131,6 @@ retry:
   base_delay_seconds: 60   # Longer delay for analytical tasks
   max_completion_attempts: 2
 
-rate_limit:
-  wait_minutes: 60
-  max_waits: 3
-
 stale_detection:
   enabled: true
   idle_timeout_seconds: 2400  # 40 minutes — strategic analysis can legitimately stall

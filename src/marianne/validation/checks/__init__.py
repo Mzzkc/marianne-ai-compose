@@ -57,12 +57,18 @@ from marianne.validation.checks.paths import (
     ValidationPathScopeCheck,
     WorkspaceParentExistsCheck,
 )
+from marianne.validation.checks.reserved import (
+    DeprecatedSpellingCheck,
+    ReservedKeyUseCheck,
+)
 from marianne.validation.checks.techniques import (
     TechniqueMcpInstrumentCheck,
     TechniqueSkillPathCheck,
 )
 
 __all__ = [
+    "DeprecatedSpellingCheck",
+    "ReservedKeyUseCheck",
     "CadenzaOrderingCheck",
     "CodeExecutionSandboxCheck",
     # Jinja checks

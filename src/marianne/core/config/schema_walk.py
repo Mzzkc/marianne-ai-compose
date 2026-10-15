@@ -38,7 +38,10 @@ def _walk_value(value: Any, annotation: Any, path: str, found: list[UnknownScore
     args = get_args(annotation)
     if origin in (UnionType, __import__("typing").Union):
         for arg in args:
-            if _model_for(arg) is not None and isinstance(value, dict):
+            arg_origin = get_origin(arg)
+            if isinstance(value, dict) and (_model_for(arg) is not None or arg_origin is dict):
+                return _walk_value(value, arg, path, found)
+            if isinstance(value, list) and arg_origin in (list, tuple):
                 return _walk_value(value, arg, path, found)
         return value
     if origin in (list, tuple) and args and isinstance(value, list):
@@ -53,6 +56,24 @@ def _walk_value(value: Any, annotation: Any, path: str, found: list[UnknownScore
     return value
 
 
+def _alias_names(field_info: Any) -> list[str]:
+    """Every spelling the strict parser accepts for this field.
+
+    Covers ``alias`` and ``validation_alias`` (a bare string or
+    ``AliasChoices``), so the tolerant walk never strips a legal spelling.
+    """
+    from pydantic import AliasChoices
+
+    names: list[str] = []
+    for attr in ("alias", "validation_alias"):
+        value = getattr(field_info, attr, None)
+        if isinstance(value, str):
+            names.append(value)
+        elif isinstance(value, AliasChoices):
+            names.extend(choice for choice in value.choices if isinstance(choice, str))
+    return names
+
+
 def _walk_model(
     value: dict[Any, Any],
     model: type[BaseModel],
@@ -61,10 +82,13 @@ def _walk_model(
 ) -> dict[Any, Any]:
     fields: dict[str, Any] = {}
     for name, field_info in model.model_fields.items():
-        if field_info.alias is None or model.model_config.get("populate_by_name"):
+        aliases = _alias_names(field_info)
+        # The field's own name is accepted when there is no alias, when
+        # populate_by_name is set, or when an AliasChoices names it.
+        if not aliases or model.model_config.get("populate_by_name") or name in aliases:
             fields[name] = field_info
-        if isinstance(field_info.alias, str):
-            fields[field_info.alias] = field_info
+        for alias in aliases:
+            fields[alias] = field_info
     cleaned: dict[Any, Any] = {}
     for key, item in value.items():
         matched_field = fields.get(key) if isinstance(key, str) else None

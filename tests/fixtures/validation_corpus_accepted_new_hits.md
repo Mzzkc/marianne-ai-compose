@@ -34,3 +34,15 @@ filed as `shared/findings/P1-bedrock-stock-prompt-variables-shadow-stakes.md`
 in the S3 Work workspace. The 102 rows each gain V208 ×2 in the baseline;
 the warnings remain visible and are not suppressed. T6 score migration owns
 their correction and a different agent must verify it.
+
+# loud_silence stage refresh (score-language build, 2026-10-14)
+
+V327 (reserved key set) landed with the D4 reserve sweep; every new hit was
+read in score context before this refresh. True positives, not exceptions.
+
+| Score | Code and count | Context |
+| --- | --- | --- |
+| `agents:adversary/scores/full-lifecycle.yaml` | V327 ×3 | Sets `rate_limit.wait_minutes`, `rate_limit.max_waits`, and `retry.completion_threshold_percent` — all accepted-but-unread today (the first two also equal their defaults). The warning is the designed behaviour; agent-owned score, left for its owner. |
+| `agents:adversary/scores/lifecycle-integration.yaml` | V327 ×3 | Same shape as full-lifecycle: `retry.completion_threshold_percent`, `rate_limit.wait_minutes`, `rate_limit.max_waits` — accepted-but-unread; agent-owned, left for its owner. |
+| 106 agent and venue scores (stock shapes; see `/tmp` sweep summary in the
+stage report) | V327 ×1–3 each | Stock engagement shapes set `rate_limit.wait_minutes`, `rate_limit.max_waits`, and/or `retry.completion_threshold_percent` — accepted-but-unread today (mostly at their defaults). Agent-owned scores left for owners; rosetta mirrors (byte-identical to the submodule) and `negative-treatment-watch.yaml`'s `cost_limits.max_cost_per_sheet` (stage-7 wiring pending) absorbed here rather than edited. |

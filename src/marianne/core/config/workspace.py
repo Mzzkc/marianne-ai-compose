@@ -93,12 +93,14 @@ class IsolationConfig(BaseModel):
         description=(
             "Directory for worktrees. None means resolved"
             " dynamically to <repo>/.worktrees at runtime."
+            " Read through IsolationConfig.get_worktree_base."
         ),
     )
 
     branch_prefix: str = Field(
         default="marianne",
-        description="Prefix for worktree branch names. "
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Prefix for worktree branch names. "
         "Branch format: {prefix}/{job-id}",
         pattern=r"^[a-zA-Z][a-zA-Z0-9_-]*$",  # Valid git ref prefix
     )
@@ -229,36 +231,43 @@ class LogConfig(BaseModel):
 
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
         default="INFO",
-        description="Minimum log level to capture",
+        description="Reserved: no score runtime reader yet (V327 warns when set). "
+        "Intended minimum log level to capture",
     )
     format: Literal["json", "console", "both"] = Field(
         default="console",
-        description="Output format: json for structured, console for human-readable, "
+        description="Reserved: no score runtime reader yet (V327 warns when set). "
+        "Intended output format: json for structured, console for human-readable, "
         "both for console to stderr and JSON to file",
     )
     file_path: Path | None = Field(
         default=None,
-        description="Path for log file output (required if format='both')",
+        description="Reserved: no score runtime reader yet (V327 warns when set). "
+        "Intended log file path (required if format='both')",
     )
     max_file_size_mb: int = Field(
         default=50,
         gt=0,
         le=1000,
-        description="Maximum log file size before rotation (MB)",
+        description="Reserved: no score runtime reader yet (V327 warns when set). "
+        "Intended maximum log file size before rotation (MB)",
     )
     backup_count: int = Field(
         default=5,
         ge=0,
         le=100,
-        description="Number of rotated log files to keep",
+        description="Reserved: no score runtime reader yet (V327 warns when set). "
+        "Intended number of rotated log files to keep",
     )
     include_timestamps: bool = Field(
         default=True,
-        description="Include ISO8601 UTC timestamps in log entries",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Include ISO8601 UTC timestamps in log entries",
     )
     include_context: bool = Field(
         default=True,
-        description="Include bound context (job_id, sheet_num) in log entries",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Include bound context (job_id, sheet_num) in log entries",
     )
 
     @model_validator(mode="after")
@@ -297,13 +306,15 @@ class AIReviewConfig(BaseModel):
     )
     on_low_score: Literal["retry", "warn", "fail"] = Field(
         default="warn",
-        description="Action when score < min_score: retry, warn, or fail",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Action when score < min_score: retry, warn, or fail",
     )
     max_retry_for_review: int = Field(
         default=2,
         ge=0,
         le=5,
-        description="Maximum retries when score is too low",
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Maximum retries when score is too low",
     )
     review_prompt_template: str | None = Field(
         default=None,
