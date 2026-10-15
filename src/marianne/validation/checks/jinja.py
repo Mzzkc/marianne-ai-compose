@@ -8,7 +8,7 @@ import difflib
 from pathlib import Path
 from typing import Any
 
-from marianne.core.constants import SHEET_NUM_KEY
+from marianne.core.constants import FLOW_RESERVED_NAMES
 from marianne.core.logging import get_logger
 
 _logger = get_logger("validation.jinja")
@@ -161,40 +161,11 @@ class JinjaUndefinedVariableCheck:
     Uses fuzzy matching to suggest corrections for typos.
     """
 
-    # Built-in variables always available in sheet context
-    BUILTIN_VARIABLES = frozenset({
-        SHEET_NUM_KEY,
-        "total_sheets",
-        "start_item",
-        "end_item",
-        "workspace",
-        "stakes",
-        "thinking_method",
-        "instrument_name",
-        "native_execution",
-        # Fan-out variables — old terminology (kept forever)
-        "stage",
-        "instance",
-        "fan_count",
-        "total_stages",
-        # Fan-out variables — new terminology (aliases)
-        "movement",
-        "voice",
-        "voice_count",
-        "total_movements",
-        # Cross-sheet context variables
-        "previous_outputs",
-        "previous_files",
-        # Jinja built-ins
-        "loop",
-        "self",
-        "range",
-        "dict",
-        "lipsum",
-        "cycler",
-        "joiner",
-        "namespace",
-    })
+    # Every name the runtime emits into a template, from the ONE list the
+    # runtime and the structural checks share (GH #448: a third hand-kept
+    # copy here lacked score_dir, loops, skipped_upstream and injected_*, so
+    # documented built-ins warned and the hint told authors to shadow them).
+    BUILTIN_VARIABLES = FLOW_RESERVED_NAMES
 
     @property
     def check_id(self) -> str:
@@ -221,6 +192,8 @@ class JinjaUndefinedVariableCheck:
         # Collect all defined variables
         defined_vars = set(self.BUILTIN_VARIABLES)
         defined_vars.update(config.prompt.variables.keys())
+        # A declared loop index is emitted bare and under `loops.<index>`.
+        defined_vars.update(loop.index for loop in (config.sheet.loops or {}).values())
 
         # Check inline template
         if config.prompt.template:

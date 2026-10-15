@@ -1002,14 +1002,12 @@
     },
     "venue:examples/rosetta/cathedral-construction.yaml": {
       "issues": {
-        "V101": 1,
         "V202": 1
       },
       "parse": "ok"
     },
     "venue:examples/rosetta/condorcet-s-premise.yaml": {
       "issues": {
-        "V101": 1,
         "V210": 5
       },
       "parse": "ok"
@@ -1031,9 +1029,7 @@
       "parse": "ok"
     },
     "venue:examples/rosetta/rashomon-gate.yaml": {
-      "issues": {
-        "V101": 1
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:examples/rosetta/the-attested-merge-gate.yaml": {

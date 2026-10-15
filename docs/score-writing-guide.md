@@ -2114,7 +2114,7 @@ done
 | V002 | Workspace parent directory missing | Create the parent directory or choose a workspace path whose parent exists |
 | V003 | Template file not found | Check `prompt.template_file` path |
 | V007 | Invalid regex in validation pattern | Fix regex in `content_regex` or `rate_limit.detection_patterns` |
-| V101 | Undefined template variable (warning) | Add variable to `prompt.variables` or check spelling |
+| V101 | Undefined template variable (warning) | Check spelling against the built-ins (`workspace`, `score_dir`, `sheet_num`, loop indices, …) or add the variable to `prompt.variables` |
 | V103 | Very short timeout (warning) | Increase `instrument_config.timeout_seconds` |
 | V108 | Missing prelude/cadenza file (warning) | Check file path in `sheet.prelude` or `sheet.cadenzas`. Jinja-templated paths are skipped. |
 | V305/V307/V308/V309 | Static launch-safety warning | Review the rendered prompt, raw CLI command, fan-out instrument map, or validation prompt labels before running |
