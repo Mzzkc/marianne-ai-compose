@@ -330,6 +330,7 @@ async def sheet_task(
             validation_details=val_details,
             error_classification=error_class,
             error_message=error_msg,
+            exit_reason=exec_result.exit_reason,
             error_code=classification.error_code,
             rate_limited=exec_result.rate_limited,
             rate_limit_wait_seconds=exec_result.rate_limit_wait_seconds,
@@ -386,6 +387,7 @@ async def sheet_task(
             duration_seconds=duration,
             error_classification="TRANSIENT",
             error_message=error_msg,
+            exit_reason="error",
             rate_limited=False,
             preflight_warnings=preflight_warnings,
         )

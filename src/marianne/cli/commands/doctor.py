@@ -23,6 +23,7 @@ import typer
 from marianne import __version__
 from marianne.cli.output import console as default_console
 from marianne.core.config.instruments import InstrumentProfile
+from marianne.instruments.availability import probe_profile
 from marianne.instruments.loader import load_all_profiles
 
 _DOCTOR_RUNTIME_TIMEOUT_SECONDS = 1.0
@@ -106,17 +107,6 @@ def _check_pid_file() -> int | None:
         return pid
 
 
-def _check_instrument_binary(profile: InstrumentProfile) -> tuple[bool, str | None]:
-    """Check if a CLI instrument's binary is available on PATH.
-
-    Returns:
-        Tuple of (is_available, binary_path_or_none).
-    """
-    from marianne.instruments.availability import check_profile_available
-
-    available, _ = check_profile_available(profile)
-    executable = profile.cli.command.executable if profile.cli is not None else None
-    return available, shutil.which(executable) if executable else None
 
 
 async def _fetch_active_rate_limited_instruments() -> dict[str, float | None]:
@@ -406,65 +396,49 @@ def doctor(
     ready_count = 0
 
     for profile in all_profiles.values():
-        available, binary_path = _check_instrument_binary(profile)
+        # One probe for every command that answers "can this run here"
+        # (GH #447). Its four states have one definition in availability.py.
+        probe = probe_profile(profile)
         is_rate_limited = profile.name in active_rate_limits
         limit_seconds = active_rate_limits.get(profile.name)
         execution_status, execution_note = _profile_execution_state(profile)
         execution_ready = execution_status != "unsupported"
 
-        if profile.kind == "http":
-            # HTTP instruments: report as available (we don't probe endpoints)
-            status = (
-                "warning"
-                if is_rate_limited or not execution_ready
-                else "ok"
-            )
-            detail_str = f"{profile.display_name}"
-            if profile.http and profile.http.base_url:
+        if probe.state == "ready":
+            status = "warning" if is_rate_limited or not execution_ready else "ok"
+            detail_str = probe.binary_path or profile.display_name
+            if profile.kind == "http" and profile.http and profile.http.base_url:
                 detail_str += f" ({profile.http.base_url})"
             if not execution_ready:
                 detail_str += (
                     f" — {execution_status}"
                     f"{(': ' + execution_note) if execution_note else ''}"
                 )
-                warnings.append(
-                    f"Instrument {profile.name} is {execution_status}"
-                )
+                warnings.append(f"Instrument {profile.name} is {execution_status}")
             if is_rate_limited:
                 detail_str += f" — rate-limited {_format_seconds(limit_seconds)}"
                 warnings.append(f"Instrument {profile.name} is rate-limited")
-            if not is_rate_limited and execution_ready:
+            if not is_rate_limited and execution_ready and not profile.raw_prompt:
+                # A raw shell profile (`cli`) always "runs"; it is not an agent
+                # and must not make a fresh install read as ready.
                 ready_count += 1
-        elif available:
-            status = (
-                "warning"
-                if is_rate_limited or not execution_ready
-                else "ok"
-            )
-            detail_str = f"{binary_path}" if binary_path else profile.display_name
-            if not execution_ready:
-                detail_str += (
-                    f" — {execution_status}"
-                    f"{(': ' + execution_note) if execution_note else ''}"
-                )
-                warnings.append(
-                    f"Instrument {profile.name} is {execution_status}"
-                )
-            if is_rate_limited:
-                detail_str += f" — rate-limited {_format_seconds(limit_seconds)}"
-                warnings.append(f"Instrument {profile.name} is rate-limited")
-            if not is_rate_limited and execution_ready:
-                ready_count += 1
+        elif probe.state == "unchecked":
+            # A remote endpoint is never probed; say so instead of "ok".
+            status = "unchecked"
+            detail_str = f"{profile.display_name} — {probe.reason}"
+        elif probe.state == "unreachable":
+            status = "optional"
+            detail_str = f"not answering ({probe.reason})"
         else:
             status = "optional"
-            executable = profile.cli.command.executable if profile.cli else "unknown"
-            detail_str = f"not found ({executable})"
+            detail_str = f"not found ({probe.reason})"
 
         instrument_results.append({
             "name": profile.name,
             "display_name": profile.display_name,
             "kind": profile.kind,
             "status": status,
+            "probe": probe.state,
             "detail": detail_str,
             "execution_status": execution_status,
             "execution_status_detail": execution_note,
@@ -472,6 +446,16 @@ def doctor(
             "rate_limited": is_rate_limited,
             "rate_limit_seconds_remaining": limit_seconds,
         })
+
+    # "Marianne is ready" means a score can run: at least one agent instrument
+    # is runnable now. Zero runnable instruments is an error, not a warning —
+    # `doctor` used to say "ready" on a fresh install with none (GH #447).
+    if ready_count == 0:
+        errors.append(
+            "No runnable instrument: nothing on PATH and no local server serving "
+            "its model. Install one agent CLI (e.g. claude-code, codex-cli, "
+            "opencode) or pull the local model `mzt instruments check ollama` names."
+        )
 
     # --- Safety checks ---
     safety_warnings: list[str] = []
@@ -572,10 +556,14 @@ def doctor(
         )
     elif total_warnings > 0:
         out.print(
-            f"[yellow]{total_warnings} warning(s).[/yellow] Marianne is ready."
+            f"[yellow]{total_warnings} warning(s).[/yellow] Marianne is ready "
+            f"({ready_count} runnable instrument(s))."
         )
     else:
-        out.print("[green]No issues found. Marianne is ready.[/green]")
+        out.print(
+            f"[green]No issues found. Marianne is ready "
+            f"({ready_count} runnable instrument(s)).[/green]"
+        )
 
     out.print()
 
@@ -587,5 +575,6 @@ def _status_icon(status: str) -> str:
         "warning": "[yellow]![/yellow]",
         "error": "[red]✗[/red]",
         "optional": "[dim]·[/dim]",
+        "unchecked": "[dim]?[/dim]",
     }
     return icons.get(status, "[dim]?[/dim]")

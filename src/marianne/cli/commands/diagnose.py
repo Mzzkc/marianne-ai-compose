@@ -1313,6 +1313,8 @@ def _build_diagnostic_report(
             "started_at": sheet.started_at.isoformat() if sheet.started_at else None,
             "completed_at": sheet.completed_at.isoformat() if sheet.completed_at else None,
             "duration_seconds": sheet.execution_duration_seconds,
+            "total_duration_seconds": sheet.total_duration_seconds,
+            "attempt_history": list(sheet.attempt_history),
             "attempt_count": sheet.attempt_count,
             "completion_attempts": sheet.completion_attempts,
             "validation_passed": sheet.validation_passed,
@@ -1565,6 +1567,28 @@ def _display_diagnostic_report(job: CheckpointState, report: dict[str, Any]) -> 
             )
 
         console.print(timeline_table)
+        # GH #434: per-instrument attempt history, so the time a fallen
+        # instrument spent is visible next to the winner's duration.
+        for entry in timeline[:20]:
+            history = entry.get("attempt_history") or []
+            if len(history) < 2 and not any(
+                (a.get("exit_reason") or "completed") != "completed" for a in history
+            ):
+                continue
+            total = entry.get("total_duration_seconds") or 0.0
+            console.print(
+                f"  Sheet {entry.get(SHEET_NUM_KEY)} attempts "
+                f"({format_duration(total)} total):"
+            )
+            for a in history:
+                outcome = "ok" if a.get("success") else (
+                    a.get("error_classification") or a.get("exit_reason") or "failed"
+                )
+                model = f" ({a['model']})" if a.get("model") else ""
+                console.print(
+                    f"    {a.get('attempt')}. {a.get('instrument')}{model}: "
+                    f"{format_duration(a.get('duration_seconds') or 0.0)} → {outcome}"
+                )
         if len(timeline) > 20:
             console.print(f"[dim]... and {len(timeline) - 20} more sheets[/dim]")
 

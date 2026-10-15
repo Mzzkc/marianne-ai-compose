@@ -8,11 +8,13 @@ TDD: These tests define the contract for the doctor command.
 
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 from typer.testing import CliRunner
 
 from marianne.cli import app
+from marianne.instruments.availability import ProfileProbe
 
 runner = CliRunner()
 
@@ -138,6 +140,60 @@ class TestDoctorInstrumentChecks:
 # ---------------------------------------------------------------------------
 
 
+class TestDoctorOneProbe:
+    """GH #447: doctor, list, check and the class writer share one probe, and
+    "Marianne is ready" rests on a runnable AGENT instrument."""
+
+    def test_zero_runnable_agent_instruments_is_an_error_not_ready(self) -> None:
+        """A fresh install with nothing on PATH and the local server not serving
+        the profile's model used to print "Marianne is ready"."""
+        from marianne.instruments.availability import ProfileProbe
+
+        with (
+            patch(
+                "marianne.cli.commands.doctor._check_conductor_status",
+                return_value=("not running", None),
+            ),
+            patch(
+                "marianne.cli.commands.doctor.probe_profile",
+                side_effect=lambda profile: ProfileProbe("ready", binary_path="/bin/sh")
+                if profile.raw_prompt
+                else ProfileProbe("unavailable", "nothing here"),
+            ),
+        ):
+            result = runner.invoke(app, ["doctor", "--json"])
+        data = json.loads(result.stdout)
+        assert data["errors_count"] == 1
+        statuses = {row["name"]: row["probe"] for row in data["instruments"]}
+        assert statuses["cli"] == "ready"
+        assert all(state == "unavailable" for name, state in statuses.items() if name != "cli")
+
+    def test_remote_http_profile_is_unchecked_not_ok(self) -> None:
+        from marianne.core.config.instruments import HttpProfile, InstrumentProfile
+
+        remote = InstrumentProfile(
+            name="remote-llm", display_name="Remote", description="x", kind="http",
+            capabilities={"tool_use"}, default_model="m", default_timeout_seconds=30.0,
+            http=HttpProfile(
+                base_url="https://api.example.com", endpoint="/v1/chat/completions",
+                schema_family="openai",
+            ),
+        )
+        with (
+            patch(
+                "marianne.cli.commands.doctor._check_conductor_status",
+                return_value=("not running", None),
+            ),
+            patch(
+                "marianne.cli.commands.doctor._get_all_profiles",
+                return_value={"remote-llm": remote},
+            ),
+        ):
+            result = runner.invoke(app, ["doctor", "--json"])
+        row = json.loads(result.stdout)["instruments"][0]
+        assert row["status"] == "unchecked" and row["probe"] == "unchecked"
+
+
 class TestDoctorSafetyChecks:
     """Verify safety warning reporting."""
 
@@ -211,8 +267,8 @@ class TestDoctorJsonOutput:
                 return_value={"antigravity": profile},
             ),
             patch(
-                "marianne.cli.commands.doctor._check_instrument_binary",
-                return_value=(True, "/usr/bin/agy"),
+                "marianne.cli.commands.doctor.probe_profile",
+                return_value=ProfileProbe("ready", binary_path="/usr/bin/agy"),
             ),
         ):
             result = runner.invoke(app, ["doctor", "--json"])
@@ -259,8 +315,8 @@ class TestDoctorJsonOutput:
                 return_value={"gemini-cli": profile},
             ),
             patch(
-                "marianne.cli.commands.doctor._check_instrument_binary",
-                return_value=(True, "/usr/bin/gemini"),
+                "marianne.cli.commands.doctor.probe_profile",
+                return_value=ProfileProbe("ready", binary_path="/usr/bin/gemini"),
             ),
         ):
             result = runner.invoke(app, ["doctor", "--json"])
@@ -318,8 +374,8 @@ class TestDoctorJsonOutput:
                 return_value={"custom-gemini-wrapper": profile},
             ),
             patch(
-                "marianne.cli.commands.doctor._check_instrument_binary",
-                return_value=(True, "/usr/bin/gemini"),
+                "marianne.cli.commands.doctor.probe_profile",
+                return_value=ProfileProbe("ready", binary_path="/usr/bin/gemini"),
             ),
         ):
             result = runner.invoke(app, ["doctor", "--json"])

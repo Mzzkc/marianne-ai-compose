@@ -127,7 +127,16 @@ def format_instrument_with_fallback(sheet: SheetState) -> str:
     last = sheet.instrument_fallback_history[-1]
     original = last.get("from", "")
     reason = last.get("reason", "fallback")
-    return f"{name} [dim](was {original}: {reason})[/dim]"
+    # GH #434: say how long the previous instrument held the sheet. A
+    # 1,800 s zero-output stall followed by a 69 s success must not read as
+    # "69 s success" — the time went to the instrument that fell.
+    spent = sum(
+        float(a.get("duration_seconds") or 0.0)
+        for a in sheet.attempt_history
+        if a.get("instrument") == original
+    )
+    spent_str = f" after {format_duration(spent)}" if spent >= 1 else ""
+    return f"{name} [dim](was {original}: {reason}{spent_str})[/dim]"
 
 
 def format_dispatch_wait(sheet: SheetState) -> str | None:

@@ -375,7 +375,12 @@ class TestInstrumentsCheck:
         assert data["binary_path"] == "/usr/bin/claude"
 
     def test_check_http_instrument_skips_binary(self) -> None:
-        """HTTP instruments don't have a binary check — just show info."""
+        """HTTP instruments don't have a binary check — just show info.
+
+        GH #447: a LOCAL server is probed for its served models by the one
+        availability probe, so the test pins that call (nothing listens on
+        port 9000) instead of depending on the machine.
+        """
         from marianne.core.config.instruments import HttpProfile
 
         http_profile = InstrumentProfile(
@@ -390,9 +395,15 @@ class TestInstrumentsCheck:
             ),
         )
         profiles = {"local-http": http_profile}
-        with patch(
-            "marianne.cli.commands.instruments._load_all_profiles",
-            return_value=profiles,
+        with (
+            patch(
+                "marianne.cli.commands.instruments._load_all_profiles",
+                return_value=profiles,
+            ),
+            patch(
+                "marianne.instruments.availability.served_local_models",
+                return_value=["any-model"],
+            ),
         ):
             result = runner.invoke(app, ["instruments", "check", "local-http"])
 
@@ -400,3 +411,35 @@ class TestInstrumentsCheck:
         assert "local-http" in result.stdout.lower()
         # HTTP instruments should show endpoint info
         assert "localhost:9000/v1/chat/completions" in result.stdout
+        assert "Binary:" not in result.stdout
+
+    def test_check_local_http_server_not_answering_is_not_ready(self) -> None:
+        """GH #447: the same probe doctor uses — a loopback server that does
+        not answer is `unreachable`, and `check` says so instead of 'ready'."""
+        from marianne.core.config.instruments import HttpProfile
+
+        http_profile = InstrumentProfile(
+            name="local-http",
+            display_name="Local HTTP",
+            description="OpenAI-compatible API access",
+            kind="http",
+            http=HttpProfile(
+                base_url="http://localhost:9000/v1",
+                endpoint="/chat/completions",
+                schema_family="openai",
+            ),
+        )
+        with (
+            patch(
+                "marianne.cli.commands.instruments._load_all_profiles",
+                return_value={"local-http": http_profile},
+            ),
+            patch(
+                "marianne.instruments.availability.served_local_models",
+                return_value=None,
+            ),
+        ):
+            result = runner.invoke(app, ["instruments", "check", "local-http"])
+
+        assert result.exit_code == 1
+        assert "no server answered" in result.output

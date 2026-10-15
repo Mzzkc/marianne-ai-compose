@@ -12,7 +12,6 @@ plays a test note.
 
 from __future__ import annotations
 
-import shutil
 from typing import Any
 
 import typer
@@ -22,7 +21,7 @@ from marianne.cli.output import console, output_error, output_json
 from marianne.core.config.instruments import InstrumentProfile
 from marianne.instruments.availability import (
     check_instrument_available,
-    check_profile_available,
+    probe_profile,
 )
 from marianne.instruments.classes import (
     CLASS_VOCABULARY,
@@ -148,17 +147,6 @@ def _load_all_profiles() -> dict[str, InstrumentProfile]:
     return load_all_profiles()
 
 
-def _check_binary(profile: InstrumentProfile) -> tuple[bool, str | None]:
-    """Check if a CLI instrument's binary is on PATH.
-
-    Returns:
-        (found, path) — True and the resolved path if found, False and None otherwise.
-    """
-    available, _ = check_profile_available(profile)
-    executable = profile.cli.command.executable if profile.cli is not None else None
-    return available, shutil.which(executable) if executable else None
-
-
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
@@ -218,18 +206,19 @@ def _list_table(profiles: dict[str, InstrumentProfile]) -> None:
 
     for name in sorted(profiles.keys()):
         profile = profiles[name]
-        found, binary_path = _check_binary(profile)
+        # The same probe doctor / check / classes use (GH #447).
+        probe = probe_profile(profile)
 
-        if profile.kind == "cli":
-            if found:
-                status_str = "[green]✓ ready[/green]"
-                ready_count += 1
-            else:
-                status_str = "[red]✗ not found[/red]"
-        else:
-            # HTTP instruments — connectivity not checked at list time
+        if probe.state == "ready":
+            status_str = "[green]✓ ready[/green]"
+            ready_count += 1
+        elif probe.state == "unchecked":
             status_str = "[dim]? unchecked[/dim]"
             unchecked_count += 1
+        elif probe.state == "unreachable":
+            status_str = "[yellow]✗ not answering[/yellow]"
+        else:
+            status_str = "[red]✗ not found[/red]"
 
         model_str = profile.default_model or "(instrument default)"
 
@@ -254,13 +243,14 @@ def _list_json(profiles: dict[str, InstrumentProfile]) -> None:
     result = []
     for name in sorted(profiles.keys()):
         profile = profiles[name]
-        found, binary_path = _check_binary(profile)
-
-        # HTTP instruments are "unchecked" (no connectivity test at list time)
-        if profile.kind == "cli":
-            status = "ready" if found else "not_found"
-        else:
-            status = "unchecked"
+        probe = probe_profile(profile)
+        binary_path = probe.binary_path
+        status = {
+            "ready": "ready",
+            "unavailable": "not_found",
+            "unreachable": "not_answering",
+            "unchecked": "unchecked",
+        }[probe.state]
 
         result.append(
             {
@@ -268,7 +258,7 @@ def _list_json(profiles: dict[str, InstrumentProfile]) -> None:
                 "display_name": profile.display_name,
                 "kind": profile.kind,
                 "status": status,
-                "ready": found if profile.kind == "cli" else None,
+                "ready": probe.state == "ready" if probe.state != "unchecked" else None,
                 "binary_path": binary_path,
                 "default_model": profile.default_model,
                 "capabilities": sorted(profile.capabilities),
@@ -320,20 +310,25 @@ def _check_rich(profile: InstrumentProfile) -> None:
         console.print(f"  Description:   {profile.description}")
     console.print(f"  Kind:          {profile.kind}")
 
-    all_ok = True
+    probe = probe_profile(profile)
+    all_ok = probe.state == "ready"
 
     if profile.kind == "cli" and profile.cli is not None:
         executable = profile.cli.command.executable
-        binary_path = shutil.which(executable)
-        if binary_path:
-            console.print(f"  Binary:        {binary_path} [green]✓[/green]")
+        if probe.binary_path:
+            console.print(f"  Binary:        {probe.binary_path} [green]✓[/green]")
         else:
             console.print(f"  Binary:        {executable} [red]✗ not found[/red]")
-            all_ok = False
     elif profile.kind == "http" and profile.http is not None:
         console.print(f"  Endpoint:      {profile.http.base_url}{profile.http.endpoint}")
         if profile.http.auth_env_var:
             console.print(f"  Auth env var:  {profile.http.auth_env_var}")
+        if probe.state == "ready":
+            console.print("  Server:        answering, serves the default model [green]✓[/green]")
+        elif probe.state == "unchecked":
+            console.print(f"  Server:        [dim]? unchecked — {probe.reason}[/dim]")
+        else:
+            console.print(f"  Server:        [red]✗ {probe.reason}[/red]")
 
     # Capabilities
     caps = sorted(profile.capabilities) if profile.capabilities else ["(none)"]
@@ -355,11 +350,16 @@ def _check_rich(profile: InstrumentProfile) -> None:
     console.print()
     if all_ok:
         console.print(f"[green]{profile.name} is ready.[/green]")
+    elif probe.state == "unchecked":
+        # Not a failure: a remote endpoint is never probed locally.
+        console.print(f"[dim]{profile.name} is unchecked — {probe.reason}.[/dim]")
     else:
         output_error(
-            f"{profile.name} is not ready.",
+            f"{profile.name} is not ready: {probe.reason}",
             hints=[
-                f"Check that '{profile.name}' is installed and in your PATH.",
+                f"Check that '{profile.name}' is installed and in your PATH."
+                if profile.kind == "cli"
+                else "Start the local server, or pull the model the profile names.",
                 "Run 'mzt doctor' for a full environment check.",
             ],
         )
@@ -368,7 +368,8 @@ def _check_rich(profile: InstrumentProfile) -> None:
 
 def _check_json(profile: InstrumentProfile) -> None:
     """Render the instrument check as JSON."""
-    found, binary_path = _check_binary(profile)
+    probe = probe_profile(profile)
+    found, binary_path = probe.state == "ready", probe.binary_path
 
     result: dict[str, object] = {
         "name": profile.name,
@@ -397,5 +398,8 @@ def _check_json(profile: InstrumentProfile) -> None:
         result["auth_env_var"] = profile.http.auth_env_var
 
     result["ready"] = found
+    result["probe"] = probe.state
+    if probe.reason:
+        result["reason"] = probe.reason
 
     output_json(result)

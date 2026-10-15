@@ -113,6 +113,11 @@ models:
     max_output_tokens: 100000
 
 cli:
+  # GH #434: the stream's first event arrives within seconds of a healthy
+  # start; 90 s of silence on both pipes is a dead session, struck early as
+  # a stale timeout so the baton retries/falls back instead of burning the
+  # sheet timeout. Does not bound silence after the first byte.
+  first_output_timeout_seconds: 90
   command:
     executable: codex
     subcommand: "exec"

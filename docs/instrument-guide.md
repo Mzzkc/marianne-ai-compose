@@ -262,6 +262,13 @@ and used by the conductor for instrument selection in future versions.
 | `stdin_sentinel` | No | | What to put after `prompt_flag` when the prompt goes to stdin: `-` for Claude Code's `-p -`; `""` keeps the flag with an empty value (Antigravity's `-p ''`). Unset = omit the flag entirely |
 | `stdin_json_template` | No | | For a CLI whose only stdin path is a structured stream: this object is written as ONE JSON line with every `"{prompt}"` string replaced by the prompt (nested keys are walked). Antigravity: `{event: user, message: {role: user, content: "{prompt}"}}` with `--input-format stream-json` |
 
+#### `cli` — Lifecycle bounds
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `post_exit_drain_grace_seconds` | `3.0` | Maximum time to drain inherited pipes after the CLI parent exits |
+| `first_output_timeout_seconds` | unset | Seconds the CLI may run with **zero bytes** on stdout and stderr before the attempt is ended as a stall (GH #434). A streaming agent emits its init event within seconds of a healthy start, so silence is a dead session, not thinking: the attempt ends with a `Stale execution` marker, the baton retries after 120 s and then falls back, and the sheet timeout is not burned. The shipped `jsonl` profiles (codex-cli, opencode, antigravity) set `90`; `json` and `text` profiles leave it unset because they emit nothing until the end (claude-code's `--output-format json` is one: its stalls are bounded only by the sheet timeout until that profile moves to stream-json). A long silence AFTER the first byte is never struck by this bound. |
+
 #### `cli.output` — How to Parse the Result
 
 | Field | Required | Default | Description |

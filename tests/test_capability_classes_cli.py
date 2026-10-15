@@ -74,9 +74,15 @@ def test_classes_check_treats_unsupported_profile_as_unavailable(
 def test_writer_provenance_backup_and_hand_edit_guard(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from marianne.instruments import class_policy
+    from marianne.instruments import availability, class_policy
 
-    monkeypatch.setattr(class_policy, "_ollama_responds", lambda profile: False)
+    # The writer uses the ONE probe (GH #447); keep the local server out of it.
+    original = class_policy.probe_profile
+    monkeypatch.setattr(
+        class_policy, "probe_profile",
+        lambda profile: availability.ProfileProbe("unreachable", "no server")
+        if profile.kind == "http" else original(profile),
+    )
     destination = tmp_path / "classes.yaml"
     path, content, changed = write_user_classes(path=destination)
     assert path == destination and changed and destination.read_text() == content
@@ -121,3 +127,22 @@ def test_generated_policy_rows_are_ordered_and_capped() -> None:
     probe["openrouter_api_key"] = False
     selected = select_class_chains(probe)
     assert "crush" not in selected["fast"]  # moved behind the four-entry cap
+
+
+def test_writer_and_checker_agree_on_a_local_server_that_lacks_the_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GH #447: the writer probed /api/tags (200 → available) and wrote
+    `local: [ollama]`; `classes check` then refused the same home because the
+    server does not serve `llama3.1:8b`. Both now use probe_profile."""
+    from marianne.instruments import availability
+
+    monkeypatch.setattr(
+        availability, "served_local_models", lambda base_url: ["gemma4:26b"]
+    )
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    destination = tmp_path / "classes.yaml"
+    _path, content, _changed = write_user_classes(path=destination)
+    data = yaml.safe_load(content)
+    assert "ollama" not in {name for chain in data["classes"].values() for name in chain}
+

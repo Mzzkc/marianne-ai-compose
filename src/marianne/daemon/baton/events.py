@@ -95,6 +95,10 @@ class SheetAttemptResult:
     # backward compatible — None for the synthetic STALE/CANCELLED/E505/
     # PROCESS_CRASH writers and the exception path that bypass _classify_error.
     error_code: str | None = None
+    # Why the instrument process ended (completed/timeout/killed/error).
+    # Persisted per attempt on the sheet (GH #434) so a fallen instrument's
+    # stall is visible beside the winner's duration.
+    exit_reason: str | None = None
 
     # Rate limit signal — NOT a failure
     rate_limited: bool = False

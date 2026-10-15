@@ -45,12 +45,18 @@ def _configured_workspace(
 
 
 def _doctor_available_instruments() -> set[str]:
-    """Return instrument names doctor would report as usable."""
+    """Return instrument names doctor would report as usable.
+
+    The same probe doctor uses (GH #447): a remote HTTP endpoint is
+    ``unchecked`` and still admitted (it cannot be probed without
+    credentials); a local server that does not serve the profile's model, or
+    does not answer, is not.
+    """
     from marianne.cli.commands.doctor import (
         _active_rate_limited_instruments,
-        _check_instrument_binary,
         _profile_execution_ready,
     )
+    from marianne.instruments.availability import probe_profile
     from marianne.instruments.loader import load_all_profiles
 
     rate_limited = set(_active_rate_limited_instruments())
@@ -60,11 +66,7 @@ def _doctor_available_instruments() -> set[str]:
             continue
         if profile.name in rate_limited:
             continue
-        if profile.kind == "http":
-            available.add(profile.name)
-            continue
-        ok, _path = _check_instrument_binary(profile)
-        if ok:
+        if probe_profile(profile).state in ("ready", "unchecked"):
             available.add(profile.name)
     return available
 

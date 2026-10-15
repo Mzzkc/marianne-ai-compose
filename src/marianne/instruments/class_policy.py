@@ -4,14 +4,10 @@ from __future__ import annotations
 
 import json
 import os
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
-from urllib.parse import urlparse
 
 from marianne.core.config.instruments import InstrumentProfile
-from marianne.instruments.availability import check_instrument_available
-from marianne.instruments.registry import InstrumentRegistry
+from marianne.instruments.availability import probe_profile
 
 
 @dataclass(frozen=True)
@@ -48,34 +44,18 @@ CLASS_POLICIES: dict[str, ClassPolicy] = {
 }
 
 
-def _ollama_responds(profile: InstrumentProfile) -> bool:
-    if profile.http is None:
-        return False
-    parsed = urlparse(profile.http.base_url)
-    if parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
-        return False
-    try:
-        with urllib.request.urlopen(
-            f"{parsed.scheme}://{parsed.netloc}/api/tags", timeout=2
-        ) as response:
-            return int(response.status) == 200
-    except (OSError, urllib.error.URLError, ValueError):
-        return False
-
-
 def probe_builtin_profiles(profiles: dict[str, InstrumentProfile]) -> dict[str, object]:
     """Probe only shipped profiles; this is called by explicit setup, not show."""
-    registry = InstrumentRegistry()
-    for profile in profiles.values():
-        registry.register(profile)
     record: dict[str, object] = {}
     for name, profile in sorted(profiles.items()):
-        available, _ = check_instrument_available(name, registry)
-        if profile.kind == "http":
-            available = _ollama_responds(profile)
+        # The same probe `classes check` applies later (GH #447): a chain the
+        # writer emits is one the checker accepts on the same machine. A local
+        # server that answers but does not serve the profile's model is NOT
+        # available — the old /api/tags-200 probe wrote `local: [ollama]`
+        # that `classes check` then refused.
         record[name] = {
             "kind": profile.kind,
-            "available": available,
+            "available": probe_profile(profile).runnable,
             "execution_status": profile.execution_status,
             "capabilities": sorted(profile.capabilities),
             "zero_cost": bool(profile.models)
