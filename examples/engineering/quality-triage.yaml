@@ -134,7 +134,7 @@ sheet:
     newcomer: [6]
 
   # Chain to the issue solver when the final stage (10 → sheet 15) genuinely
-  # succeeds. Score path is relative to this score file — pinned repo bytes,
+  # succeeds. Score path is relative to this score file — stable source location,
   # fresh workspace per solver iteration, depth-guarded at admission.
   triggers:
     10:
@@ -1651,10 +1651,10 @@ validations:
 # so solver consumes without adaptation. The final stage's on_success concert
 # trigger (declared under sheet.triggers below) submits the solver through the
 # conductor's admission path: the score path resolves relative to THIS score
-# file (portable, pinned repo bytes — no per-host absolute path to edit), each
+# file (portable source path — keep its checkout unchanged through a chain), each
 # iteration gets a fresh workspace, and chain depth is guarded at admission.
 concert:
   enabled: true
   max_chain_depth: 2        # this score (1) → issue-solver (1 hop; solver self-chains internally)
-  cooldown_between_jobs_seconds: 60
+  cooldown_between_jobs_seconds: 60  # Legacy hook pacing; flow triggers submit immediately.
   inherit_workspace: false

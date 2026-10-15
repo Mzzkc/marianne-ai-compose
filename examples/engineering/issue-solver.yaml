@@ -9,7 +9,7 @@
 # ║    • numeric gates      — pass/fail counts parsed from verify output;        ║
 # ║                           no percentage regexes anywhere                     ║
 # ║    • concert trigger    — final-sheet on_success chains the next             ║
-# ║                           iteration; pinned score bytes, fresh workspace,   ║
+# ║                           iteration; stable score path, fresh workspace,   ║
 # ║                           depth-guarded at admission                         ║
 # ║                                                                              ║
 # ║  Companion to issue-triage.yaml. Run triage once per (repo, label);          ║
@@ -204,7 +204,7 @@ sheet:
 
   # Self-chain: fires only when the FINAL sheet genuinely succeeds (a skipped
   # sheet produces no success outcome, so the terminal iteration never chains).
-  # The child score path is relative to THIS score file — pinned repo bytes,
+  # The child score path is relative to THIS score file — a stable source path,
   # not a workspace copy. fresh: true gives each iteration a clean workspace;
   # chain depth is guarded at admission (concert.max_chain_depth).
   triggers:
@@ -1360,9 +1360,10 @@ validations:
     stage: 2
 
 # Chaining is the final sheet's concert trigger (above). Job-level hooks are
-# unused: one mechanism, admission-depth-guarded, pinned to repo score bytes.
+# unused: one mechanism, admission-depth-guarded, rooted in the score directory.
+# Keep that checkout unchanged through the chain; relative paths do not freeze bytes.
 concert:
   enabled: true
   max_chain_depth: 30
-  cooldown_between_jobs_seconds: 300
+  cooldown_between_jobs_seconds: 300  # Legacy hook pacing; flow triggers submit immediately.
   inherit_workspace: false
