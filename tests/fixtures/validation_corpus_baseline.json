@@ -1108,7 +1108,7 @@
     "venue:examples/rosetta/cathedral-construction.yaml": {
       "issues": {
         "V202": 1,
-        "V327": 3
+        "V327": 2
       },
       "parse": "ok"
     },
@@ -1120,13 +1120,13 @@
     },
     "venue:examples/rosetta/firing-the-pass.yaml": {
       "issues": {
-        "V327": 2
+        "V327": 1
       },
       "parse": "ok"
     },
     "venue:examples/rosetta/join-semilattice-merge.yaml": {
       "issues": {
-        "V327": 5
+        "V327": 2
       },
       "parse": "ok"
     },
@@ -1136,7 +1136,7 @@
     },
     "venue:examples/rosetta/negative-treatment-watch.yaml": {
       "issues": {
-        "V327": 4,
+        "V327": 2,
         "V328": 1
       },
       "parse": "ok",
@@ -1165,15 +1165,11 @@
       "parse": "ok"
     },
     "venue:scores/generic-fleet-technique-research.yaml": {
-      "issues": {
-        "V327": 1
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:scores/instrument-catalog-build-fold.yaml": {
-      "issues": {
-        "V002": 1
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:scores/instrument-catalog-build.yaml": {
@@ -1184,9 +1180,7 @@
       "parse": "ok"
     },
     "venue:scores/instrument-catalog-refresh-fold.yaml": {
-      "issues": {
-        "V002": 1
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:scores/instrument-catalog-refresh.yaml": {
