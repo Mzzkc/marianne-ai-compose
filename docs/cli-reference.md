@@ -602,7 +602,11 @@ A `sheet.triggers` `run:` action executes its command in a bounded shell.
 On Linux a per-action subreaper keeps detached children owned until cleanup
 finishes, including children that close stdout and stderr. Other hosts use
 process-group, ancestry, and log-holder cleanup; V326 identifies the narrower
-orphan guarantee before execution.
+orphan guarantee before execution. The subreaper is that guarantee only while
+it lives: if it dies by a signal the conductor did not send (an OOM kill, an
+operator's `kill -9`) after the shell has reported, its adopted children are
+lost to init and the action fails with `run supervisor died by signal N` rather
+than reporting the shell's clean exit (GH #444).
 
 V210/V211 search profiles, score aliases, configured classes, and the shipped
 class vocabulary; their suggestions use edit distance ≤ 2 over that whole

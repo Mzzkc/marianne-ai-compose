@@ -16,6 +16,7 @@ from pathlib import Path
 import jinja2
 
 from marianne.core.config import JobConfig
+from marianne.core.config.flow import span_range
 from marianne.core.config.job import InjectionCategory, InjectionItem
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.prompts.templating import PromptBuilder, SheetContext
@@ -295,6 +296,29 @@ def generate_preview(
         context.instance = fan_meta.instance
         context.fan_count = fan_meta.fan_count
         context.total_stages = config.sheet.total_stages
+        context.score_dir = (
+            str(config.source_path.parent) if config.source_path is not None else ""
+        )
+        # Mirror the baton (GH #448): a loop index covering this sheet is
+        # emitted bare and under ``loops.<index>``; statically, iteration 1.
+        flow_vars = {
+            loop.index: 1
+            for span, loop in (config.sheet.loops or {}).items()
+            if sheet_num in span_range(span)
+        }
+        sheet_builder = builder
+        if flow_vars:
+            sheet_builder = PromptBuilder(
+                config.prompt.model_copy(
+                    update={
+                        "variables": {
+                            **config.prompt.variables,
+                            **flow_vars,
+                            "loops": flow_vars,
+                        }
+                    }
+                )
+            )
 
         # 2. Resolve prelude/cadenza files
         injection_items: list[InjectionItem] = list(config.sheet.prelude)
@@ -312,7 +336,7 @@ def generate_preview(
         rendered_prompt: str | None = None
         render_error: str | None = None
         try:
-            rendered_prompt = builder.build_sheet_prompt(context)
+            rendered_prompt = sheet_builder.build_sheet_prompt(context)
         except jinja2.TemplateError as exc:
             render_error = str(exc)
             render_errors.append(

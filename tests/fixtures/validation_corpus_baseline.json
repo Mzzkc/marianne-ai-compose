@@ -1107,7 +1107,6 @@
     },
     "venue:examples/rosetta/cathedral-construction.yaml": {
       "issues": {
-        "V101": 1,
         "V202": 1,
         "V327": 3
       },
@@ -1115,7 +1114,6 @@
     },
     "venue:examples/rosetta/condorcet-s-premise.yaml": {
       "issues": {
-        "V101": 1,
         "V210": 5
       },
       "parse": "ok"
@@ -1145,9 +1143,7 @@
       "reason": "Root max_wall_seconds is the one-release tick-window alias; V328 names schedule.max_wall_seconds."
     },
     "venue:examples/rosetta/rashomon-gate.yaml": {
-      "issues": {
-        "V101": 1
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:examples/rosetta/the-attested-merge-gate.yaml": {

@@ -212,6 +212,79 @@ class TestJinjaUndefinedVariableCheck:
         assert issues[0].suggestion is not None
         assert "sheet_num" in issues[0].suggestion
 
+    def test_runtime_emitted_builtins_are_not_flagged(self, tmp_path: Path) -> None:
+        """GH #448: every name the baton emits into a template is defined.
+
+        score_dir, loops, skipped_upstream and injected_* reach the template
+        at render (core/sheet.py, prompts/templating.py, baton/musician.py);
+        a third hand-kept copy of the built-in set here lacked them, so
+        documented features warned and the hint told authors to shadow them.
+        """
+        yaml_content = dedent("""
+            name: test-job
+            sheet:
+              size: 1
+              total_items: 2
+              loops:
+                "1-2":
+                  index: pass_no
+                  count: 2
+            prompt:
+              template: >-
+                {{ score_dir }} {{ pass_no }} {{ loops.pass_no }}
+                {{ skipped_upstream }} {{ injected_context | length }}
+                {{ injected_skills }} {{ injected_tools }}
+        """).strip()
+
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text(yaml_content)
+        config = JobConfig.from_yaml(config_path)
+
+        issues = JinjaUndefinedVariableCheck().check(config, config_path, yaml_content)
+
+        assert issues == []
+
+    def test_builtin_set_is_the_runtime_list(self) -> None:
+        """The validator's built-ins ARE the runtime's reserved names.
+
+        One source (core/constants.py FLOW_RESERVED_NAMES) feeds the baton's
+        emitters, the structural checks, and V101; it must cover every key
+        SheetContext.to_dict() renders, or V101 drifts again (GH #448).
+        """
+        from marianne.core.constants import FLOW_RESERVED_NAMES
+        from marianne.prompts.templating import SheetContext
+
+        assert JinjaUndefinedVariableCheck.BUILTIN_VARIABLES is FLOW_RESERVED_NAMES
+        emitted = set(
+            SheetContext(
+                sheet_num=1, total_sheets=1, start_item=1, end_item=1, workspace=Path(".")
+            ).to_dict()
+        )
+        assert emitted <= FLOW_RESERVED_NAMES, sorted(emitted - FLOW_RESERVED_NAMES)
+        assert "score_dir" in FLOW_RESERVED_NAMES
+        assert "loops" in FLOW_RESERVED_NAMES
+
+    def test_typo_of_a_builtin_still_flagged_with_hint(self, tmp_path: Path) -> None:
+        """Widening the built-in set must not blunt the typo catch (GH #448)."""
+        yaml_content = dedent("""
+            name: test-job
+            sheet:
+              size: 10
+              total_items: 100
+            prompt:
+              template: "{{ scoer_dir }} {{ totally_undefined }}"
+        """).strip()
+
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text(yaml_content)
+        config = JobConfig.from_yaml(config_path)
+
+        issues = JinjaUndefinedVariableCheck().check(config, config_path, yaml_content)
+
+        flagged = {i.message.split("'")[1]: i for i in issues}
+        assert set(flagged) == {"scoer_dir", "totally_undefined"}
+        assert "score_dir" in (flagged["scoer_dir"].suggestion or "")
+
     def test_accepts_custom_variables(self, tmp_path: Path) -> None:
         """Custom variables in prompt.variables are recognized."""
         yaml_content = dedent("""

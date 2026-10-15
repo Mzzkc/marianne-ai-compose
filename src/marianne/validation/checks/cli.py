@@ -10,6 +10,7 @@ from pathlib import Path
 import jinja2
 
 from marianne.core.config import JobConfig, PromptConfig
+from marianne.core.config.flow import span_range
 from marianne.core.config.instruments import InstrumentProfile
 from marianne.core.sheet import Sheet, build_sheets
 from marianne.prompts.templating import PromptBuilder, SheetContext
@@ -218,6 +219,9 @@ class CliRawPromptBashCheck:
             start_item=start_item,
             end_item=end_item,
             workspace=config.workspace,
+            score_dir=(
+                str(sheet.score_path.parent) if sheet.score_path is not None else ""
+            ),
             instrument_name=sheet.instrument_name,
             stage=sheet.movement,
             instance=sheet.voice or 1,
@@ -226,6 +230,23 @@ class CliRawPromptBashCheck:
             previous_outputs=dict.fromkeys(range(1, sheet.num), ""),
             previous_files={},
         )
+        # Mirror the baton (GH #448): a loop index covering this sheet is
+        # emitted bare and under ``loops.<index>``; statically, iteration 1.
+        flow_vars = {
+            loop.index: 1
+            for span, loop in (config.sheet.loops or {}).items()
+            if sheet.num in span_range(span)
+        }
+        if flow_vars:
+            prompt_config = prompt_config.model_copy(
+                update={
+                    "variables": {
+                        **prompt_config.variables,
+                        **flow_vars,
+                        "loops": flow_vars,
+                    }
+                }
+            )
 
         try:
             return (

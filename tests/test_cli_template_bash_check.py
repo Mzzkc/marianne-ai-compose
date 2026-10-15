@@ -7,6 +7,7 @@ from textwrap import dedent
 from unittest.mock import patch
 
 from marianne.core.config import JobConfig
+from marianne.core.sheet import build_sheets
 from marianne.instruments.loader import InstrumentProfileLoader
 from marianne.validation.base import ValidationSeverity
 from marianne.validation.checks.cli import (
@@ -59,6 +60,42 @@ class TestCliRawPromptBashCheck:
         with patch("marianne.instruments.loader.load_all_profiles", return_value=_profiles()):
             issues = CliRawPromptBashCheck().check(config, path, raw)
         assert issues == []
+
+    def test_loop_index_and_score_dir_render_like_the_baton(self, tmp_path: Path) -> None:
+        """GH #448: the static render seeds what the baton seeds.
+
+        A raw cli sheet inside a loop span sees its index bare and under
+        ``loops.<index>`` (iteration 1 statically) and ``score_dir``; before,
+        V307 refused the score with "'pass_no' is undefined" while the same
+        template ran fine under the conductor.
+        """
+        config, path, raw = _config(
+            tmp_path,
+            """
+            name: loop-cli
+            instrument: cli
+            sheet:
+              size: 1
+              total_items: 2
+              loops:
+                "1-2":
+                  index: pass_no
+                  count: 2
+            prompt:
+              template: |
+                set -euo pipefail
+                printf '%s\\n' "pass={{ pass_no }}/{{ loops.pass_no }} dir={{ score_dir }}"
+            """,
+        )
+        with patch("marianne.instruments.loader.load_all_profiles", return_value=_profiles()):
+            issues = CliRawPromptBashCheck().check(config, path, raw)
+        assert issues == []
+        check = CliRawPromptBashCheck()
+        sheet = next(s for s in build_sheets(config) if s.num == 1)
+        rendered, err = check._render_raw_prompt(config, path, raw, sheet)
+        assert err is None and rendered is not None
+        assert "pass=1/1" in rendered
+        assert f"dir={path.parent}" in rendered
 
     def test_valid_heredoc_with_markdown_passes(self, tmp_path: Path) -> None:
         config, path, raw = _config(

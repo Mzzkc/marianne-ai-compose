@@ -485,7 +485,15 @@ Common issues:
 INFO [V101] Template uses undefined variable 'x'
 ```
 
-**Cause:** Your template references `{{ x }}` but `x` is not in `prompt.variables` or core variables.
+**Cause:** Your template references `{{ x }}` but `x` is not in `prompt.variables`, not a
+declared loop index, and not a built-in. The built-ins are the names the conductor renders
+into every sheet: `workspace`, `score_dir`, `sheet_num`, `total_sheets`, `start_item`,
+`end_item`, `instrument_name`, `movement`/`voice`/`voice_count`/`total_movements` (and their
+`stage`/`instance`/`fan_count`/`total_stages` aliases), `previous_outputs`, `previous_files`,
+`skipped_upstream`, `injected_context`/`injected_skills`/`injected_tools`, `loops`, `stakes`,
+`thinking_method`, `native_execution`. V101 never fires on those; if the suggestion names
+one of them with a near spelling, fix the spelling rather than adding it to `prompt.variables`
+(V313 rejects shadowing a built-in).
 
 **Fix:** Add it to `prompt.variables`:
 
