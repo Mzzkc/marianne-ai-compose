@@ -354,7 +354,8 @@ class ConcertConfig(BaseModel):
 
     enabled: bool = Field(
         default=False,
-        description="Enable concert mode (job chaining via on_success hooks)",
+        description="Enable concert mode (job chaining via on_success hooks). "
+        "V329 warns this release if settings are set without this switch.",
     )
     max_chain_depth: int = Field(
         default=5,

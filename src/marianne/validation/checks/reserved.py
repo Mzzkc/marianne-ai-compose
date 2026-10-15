@@ -25,6 +25,21 @@ from marianne.validation.checks._helpers import find_line_in_yaml
 _MARKERS = ("Reserved:", "Loader-owned:")
 _DEPRECATED_ROOT = "Deprecated:"
 
+# Each section below has a runtime reader of its score settings. The five
+# unread sections (ai_review, bridge, checkpoints, feedback, grounding) are
+# intentionally absent: V327 describes their actual contract instead.
+SWITCH_WARNING_PATHS = frozenset({
+    "learning.exploration_budget",
+    "learning.entropy_response",
+    "learning.auto_apply",
+    "isolation",
+    "code_execution",
+    "parallel",
+    "stale_detection",
+    "judgment",
+    "concert",
+})
+
 
 def _alias_names(field_info: Any) -> tuple[str, ...]:
     names: list[str] = []
@@ -276,6 +291,59 @@ class DeprecatedSpellingCheck:
                             metadata={"field": f"{section}[].on_failure"},
                         )
                     )
+        return issues
+
+
+class EnabledSettingsWarningCheck:
+    """V329: release-N warning for readable default-off sections."""
+
+    @property
+    def check_id(self) -> str:
+        return "V329"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return "Warns before settings imply enabled in the next release"
+
+    def check(
+        self, config: JobConfig, config_path: Path, raw_yaml: str
+    ) -> list[ValidationIssue]:
+        import yaml as _yaml
+
+        try:
+            data = _yaml.safe_load(raw_yaml)
+        except _yaml.YAMLError:
+            return []
+        if not isinstance(data, dict):
+            return []
+        reserved, _deprecated = _scored_paths()
+        issues: list[ValidationIssue] = []
+        for path in sorted(SWITCH_WARNING_PATHS):
+            for section, _consumed in _navigate(data, path):
+                if not isinstance(section, dict) or "enabled" in section:
+                    continue
+                active_keys = [
+                    key for key in section
+                    if key != "enabled" and f"{path}.{key}" not in reserved
+                ]
+                if not active_keys:
+                    continue
+                issues.append(ValidationIssue(
+                    check_id=self.check_id,
+                    severity=self.severity,
+                    message=(
+                        f"`{path}` has settings but `enabled` is not true; "
+                        "from the next release this enables it — write "
+                        "`enabled: false` to keep it off"
+                    ),
+                    line=_line_of(raw_yaml, path.rsplit(".", 1)[-1]),
+                    suggestion=f"Set `{path}.enabled: true` now, or `enabled: false` to opt out",
+                    metadata={"field": path, "settings": ",".join(sorted(map(str, active_keys)))},
+                ))
         return issues
 
 

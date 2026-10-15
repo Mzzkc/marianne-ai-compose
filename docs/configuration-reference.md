@@ -701,6 +701,18 @@ cost_limits:
 
 ---
 
+### Default-off sections and V329
+
+This release, a section with `enabled: false` stays off when you set a sibling
+value but omit `enabled`. `mzt validate` emits V329 for readable sections such
+as `parallel`, `stale_detection`, `isolation`, `code_execution`, `judgment`,
+`concert`, and the readable `learning.*` switches. From the next release,
+those settings will enable their section automatically. Write `enabled: true`
+for current behavior, or explicit `enabled: false` to keep it off later.
+The unread `ai_review`, `bridge`, `checkpoints`, `feedback`, and `grounding`
+sections remain reserved and emit V327 instead; V329 does not promise that
+they will run.
+
 ## stale_detection
 
 *Source: `src/marianne/core/config/execution.py` — `StaleDetectionConfig`*

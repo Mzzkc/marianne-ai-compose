@@ -32,6 +32,7 @@ class ExplorationBudgetConfig(BaseModel):
         description=(
             "Enable dynamic exploration budget."
             " When disabled, uses static exploration_rate."
+            " V329 warns this release if readable settings are set without this switch."
         ),
     )
     floor: float = Field(
@@ -102,7 +103,8 @@ class EntropyResponseConfig(BaseModel):
 
     enabled: bool = Field(
         default=False,
-        description="Enable automatic entropy response. When disabled, entropy is only monitored.",
+        description="Enable automatic entropy response. When disabled, entropy is only monitored. "
+        "V329 warns this release if settings are set without this switch.",
     )
     entropy_threshold: float = Field(
         default=0.3,
@@ -161,7 +163,8 @@ class AutoApplyConfig(BaseModel):
         default=False,
         description="Enable autonomous pattern application. "
         "When true, high-trust patterns are applied without escalation. "
-        "Opt-in only - patterns are never auto-applied by default.",
+        "Opt-in only - patterns are never auto-applied by default. "
+        "V329 warns this release if readable settings are set without this switch.",
     )
 
     trust_threshold: float = Field(

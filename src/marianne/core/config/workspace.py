@@ -80,7 +80,8 @@ class IsolationConfig(BaseModel):
     enabled: bool = Field(
         default=False,
         description="Enable execution isolation for parallel-safe jobs. "
-        "When true, creates isolated worktree before execution.",
+        "When true, creates isolated worktree before execution. "
+        "V329 warns this release if settings are set without this switch.",
     )
 
     mode: IsolationMode = Field(

@@ -319,7 +319,8 @@ class StaleDetectionConfig(BaseModel):
     enabled: bool = Field(
         default=False,
         description="Enable stale execution detection. "
-        "When true, sheets with no output activity beyond idle_timeout_seconds are failed.",
+        "When true, sheets with no output activity beyond idle_timeout_seconds are failed. "
+        "V329 warns this release if settings are set without this switch.",
     )
     idle_timeout_seconds: float = Field(
         default=300.0,
@@ -438,7 +439,8 @@ class ParallelConfig(BaseModel):
     enabled: bool = Field(
         default=False,
         description="Enable parallel sheet execution. "
-        "When true, sheets with satisfied dependencies run concurrently.",
+        "When true, sheets with satisfied dependencies run concurrently. "
+        "V329 warns this release if settings are set without this switch.",
     )
     max_concurrent: int = Field(
         default=3,
@@ -502,7 +504,8 @@ class CodeExecutionConfig(BaseModel):
         default=False,
         description="Execute agent-generated code blocks in a sandbox. "
         "Default off — opt in per score. Runs shell/python/node, so "
-        "review the security posture before enabling.",
+        "review the security posture before enabling. V329 warns this "
+        "release if settings are set without this switch.",
     )
     require_sandbox: bool = Field(
         default=False,

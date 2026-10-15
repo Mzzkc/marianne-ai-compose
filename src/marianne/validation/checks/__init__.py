@@ -59,6 +59,7 @@ from marianne.validation.checks.paths import (
 )
 from marianne.validation.checks.reserved import (
     DeprecatedSpellingCheck,
+    EnabledSettingsWarningCheck,
     ReservedKeyUseCheck,
 )
 from marianne.validation.checks.techniques import (
@@ -68,6 +69,7 @@ from marianne.validation.checks.techniques import (
 
 __all__ = [
     "DeprecatedSpellingCheck",
+    "EnabledSettingsWarningCheck",
     "ReservedKeyUseCheck",
     "CadenzaOrderingCheck",
     "CodeExecutionSandboxCheck",

@@ -593,6 +593,16 @@ def _stems(text: str) -> set[str]:
 def run_checks(
     repo: Path, root: type[BaseModel]
 ) -> tuple[list[KeyInfo], list[Finding], dict[str, Any]]:
+    from marianne.validation.checks.reserved import SWITCH_WARNING_PATHS
+
+    # Synthetic control schemas have no V329 registration: they must still
+    # demonstrate that L09 detects a silent switch. Only the shipped score
+    # model may claim the validator's audited warning paths.
+    warned_switches = (
+        SWITCH_WARNING_PATHS
+        if root.__module__ == "marianne.core.config.job"
+        else frozenset()
+    )
     keys = schema_inventory(root, repo)
     findings: list[Finding] = []
     by_path = {k.path: k for k in keys}
@@ -764,6 +774,12 @@ def run_checks(
         if key.key != "enabled":
             continue
         parent = key.path.rsplit(".", 1)[0]
+        parent_key = by_path.get(parent)
+        if parent in warned_switches or (
+            parent_key is not None
+            and parent_key.description.startswith("Reserved:")
+        ):
+            continue  # V329 or V327 already gives the author a precise warning
         model = _model_by_name(root, key.model)
         if model is None:
             continue
