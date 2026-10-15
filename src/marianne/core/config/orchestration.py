@@ -49,8 +49,8 @@ class ScheduleConfig(BaseModel):
     misfire: MisfirePolicy = Field(default=MisfirePolicy.SKIP, description="Downtime policy")
     overlap: OverlapPolicy = Field(
         default=OverlapPolicy.SKIP,
-        description="Reserved: no runtime reader yet (V327 warns when set). "
-        "Active-run policy",
+        description="Reserved: no runtime reader yet; an overlapping tick is "
+        "always skipped (overlap_skipped) and V327 warns when set",
     )
     jitter_seconds: int = Field(default=0, ge=0, description="Bounded dispatch jitter")
     pin_source_digest: bool = Field(

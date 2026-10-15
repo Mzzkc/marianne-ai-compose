@@ -1319,7 +1319,7 @@ overlaps are handled. One-shot scores omit this section entirely.
 | `interval` | `str \| None` | `None` | Positive s/m/h/d interval; exactly one of cron/interval |
 | `timezone` | `str \| None` | `None` | Optional IANA timezone for tick times |
 | `misfire` | `"skip" \| "latest"` | `"skip"` | Policy for ticks missed while the conductor was down |
-| `overlap` | `"skip"` | `"skip"` | Policy for a tick arriving while a previous run is active |
+| `overlap` | `"skip"` | `"skip"` | Reserved: always skip — a tick due while a run is active is dropped (`overlap_skipped`); no runtime reader yet, V327 warns when set |
 | `jitter_seconds` | `int` | `0` | Bounded dispatch jitter |
 | `pin_source_digest` | `bool` | `false` | Opt in to daemon-side source pinning |
 
@@ -1620,7 +1620,6 @@ schedule:
   # cron: "30 8 * * 1-5"
   timezone: Europe/Berlin      # optional IANA zone for cron; omitted cron uses UTC
   misfire: latest              # skip (default) or latest, never a replay storm
-  overlap: skip                # safe default; active lineage drops the due child
   jitter_seconds: 0
   pin_source_digest: false     # opt in to refusing source changes until re-registration
   max_wall_seconds: 14400      # optional absolute deadline for each due tick
@@ -1629,6 +1628,10 @@ schedule:
 Intervals advance from their scheduled anchor rather than completion time.
 Cron uses the declared IANA timezone (including DST), or UTC when omitted; it
 never uses the host locale.
+A tick due while a previous run of the same score is still active is always
+skipped (`overlap_skipped`): the recurrence layer drops it without reading
+`schedule.overlap`, so the field is reserved for a future second policy and
+V327 warns when a score sets it.
 Before each due action Marianne re-reads the YAML; deletion disables/removes
 the schedule, and a changed unpinned source declaration replaces its projection.
 With `pin_source_digest: true`, registration stores the source digest in the
