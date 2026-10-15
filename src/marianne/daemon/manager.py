@@ -4163,7 +4163,12 @@ class JobManager:
 
     async def register_schedule(self, config_path: Path) -> dict[str, Any]:
         """Register a recurring source and expose its daemon-accepted bytes."""
-        identity = await self._schedule_registry.identity()
+        try:
+            identity = await self._schedule_registry.identity()
+        except ScheduleRegistryBusyError:
+            return self._schedule_venue_result("", "", "inconclusive", "registry_busy")
+        except ScheduleRegistryDataError:
+            return self._schedule_venue_result("", "", "inconclusive", "damaged_state")
         controller = self._recurrence_controller
         if controller is None:
             return self._schedule_venue_result(identity, "", "inconclusive", "registry_busy")
@@ -4209,7 +4214,16 @@ class JobManager:
         self, schedule_id: str, registry_identity: str, source_digest: str,
     ) -> dict[str, Any]:
         """Read one exact schedule from one durable venue; uncertainty stays typed."""
-        actual = await self._schedule_registry.identity()
+        try:
+            actual = await self._schedule_registry.identity()
+        except ScheduleRegistryBusyError:
+            return self._schedule_venue_result(
+                registry_identity, schedule_id, "inconclusive", "registry_busy"
+            )
+        except ScheduleRegistryDataError:
+            return self._schedule_venue_result(
+                registry_identity, schedule_id, "inconclusive", "damaged_state"
+            )
         if actual != registry_identity:
             return self._schedule_venue_result(
                 actual, schedule_id, "inconclusive", "identity_mismatch"
@@ -4253,9 +4267,14 @@ class JobManager:
                 schedule_id, source="schedule.cancel",
                 expected_source_digest=source_digest, require_schedule=True,
             )
-        except (JobSubmissionError, ScheduleRegistryBusyError, ScheduleRegistryDataError):
-            actual = await self._schedule_registry.identity()
-            return self._schedule_venue_result(actual, schedule_id, "inconclusive", "race")
+        except ScheduleRegistryDataError:
+            return self._schedule_venue_result(
+                registry_identity, schedule_id, "inconclusive", "damaged_state"
+            )
+        except (JobSubmissionError, ScheduleRegistryBusyError):
+            return self._schedule_venue_result(
+                registry_identity, schedule_id, "inconclusive", "race"
+            )
         after = await self.current_schedule(schedule_id, registry_identity, source_digest)
         after["cancelled"] = after["state"] == "not_registered"
         return after

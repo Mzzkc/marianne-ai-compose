@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import math
+import os
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -86,6 +87,14 @@ class ScheduleRegistry:
         self._db_path = db_path
         self._busy_timeout_seconds = busy_timeout_seconds
         self._conn: aiosqlite.Connection | None = None
+        self._custody_lock = asyncio.Lock()
+        resolved = db_path.resolve()
+        # Keep the witness outside the DB's directory so restoring a state
+        # directory cannot silently restore its old authority with it.
+        custody_name = hashlib.sha256(str(resolved).encode("utf-8")).hexdigest()
+        self._custody_path = (
+            resolved.parent.parent / ".marianne-venue-custody" / custody_name
+        )
 
     async def open(self) -> None:
         """Open the state database and add the schedules table if necessary."""
@@ -93,6 +102,7 @@ class ScheduleRegistry:
             return
 
         await asyncio.to_thread(self._db_path.parent.mkdir, parents=True, exist_ok=True)
+        new_database = not self._db_path.exists()
         conn = await aiosqlite.connect(
             str(self._db_path), timeout=self._busy_timeout_seconds
         )
@@ -102,7 +112,11 @@ class ScheduleRegistry:
             await conn.execute(
                 f"PRAGMA busy_timeout={int(self._busy_timeout_seconds * 1000)}"
             )
-            await self._create_tables(conn)
+            new_identity = await self._create_tables(conn)
+            if new_identity is not None and (
+                new_database or not self._custody_path.exists()
+            ):
+                await asyncio.to_thread(self._write_custody, new_identity, 0)
         except sqlite3.Error as exc:
             await conn.close()
             self._raise_database_error("open", exc)
@@ -119,7 +133,7 @@ class ScheduleRegistry:
         return self._conn
 
     @staticmethod
-    async def _create_tables(conn: aiosqlite.Connection) -> None:
+    async def _create_tables(conn: aiosqlite.Connection) -> str | None:
         """Create additive schedule storage alongside existing conductor tables."""
         await conn.execute(
             """
@@ -150,23 +164,39 @@ class ScheduleRegistry:
         await conn.execute(
             "CREATE TABLE IF NOT EXISTS registry_identity ("
             "singleton INTEGER PRIMARY KEY CHECK (singleton = 1), "
-            "identity TEXT NOT NULL)"
+            "identity TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0)"
         )
-        await conn.execute(
+        columns = {row["name"] for row in await (await conn.execute(
+            "PRAGMA table_info(registry_identity)"
+        )).fetchall()}
+        if "revision" not in columns:
+            await conn.execute(
+                "ALTER TABLE registry_identity ADD COLUMN revision INTEGER NOT NULL DEFAULT 0"
+            )
+        identity = str(uuid4())
+        cursor = await conn.execute(
             "INSERT OR IGNORE INTO registry_identity (singleton, identity) VALUES (1, ?)",
-            (str(uuid4()),),
+            (identity,),
         )
         await conn.commit()
+        return identity if cursor.rowcount == 1 else None
 
     async def identity(self) -> str:
         """Return the identity of this durable state database, across restarts."""
+        async with self._custody_lock:
+            identity, _ = await self._checked_identity()
+            return identity
+
+    async def _checked_identity(self) -> tuple[str, int]:
         try:
             cursor = await self._db.execute(
-                "SELECT identity FROM registry_identity WHERE singleton = 1"
+                "SELECT identity, revision FROM registry_identity WHERE singleton = 1"
             )
             row = await cursor.fetchone()
         except sqlite3.Error as exc:
-            self._raise_database_error("read registry identity", exc)
+            if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+                raise ScheduleRegistryBusyError("Schedule registry identity is busy") from exc
+            raise ScheduleRegistryDataError("Schedule registry identity is unreadable") from exc
         if row is None:
             raise ScheduleRegistryDataError("Schedule registry identity is absent")
         try:
@@ -175,7 +205,48 @@ class ScheduleRegistry:
             raise ScheduleRegistryDataError("Schedule registry identity is malformed") from exc
         if identity != row["identity"]:
             raise ScheduleRegistryDataError("Schedule registry identity is noncanonical")
-        return identity
+        revision = row["revision"]
+        if type(revision) is not int or revision < 0:
+            raise ScheduleRegistryDataError("Schedule registry revision is malformed")
+        expected = self._custody_value(identity, revision)
+        try:
+            actual = await asyncio.to_thread(self._custody_path.read_text, encoding="ascii")
+        except (OSError, UnicodeError) as exc:
+            raise ScheduleRegistryDataError("Schedule registry custody is unavailable") from exc
+        if actual != expected:
+            raise ScheduleRegistryDataError("Schedule registry custody does not match state")
+        return identity, revision
+
+    def _custody_value(self, identity: str, revision: int) -> str:
+        try:
+            stat = self._db_path.stat()
+        except OSError as exc:
+            raise ScheduleRegistryDataError("Schedule registry state file is unavailable") from exc
+        return f"{identity} {stat.st_dev} {stat.st_ino} {revision}\n"
+
+    def _write_custody(self, identity: str, revision: int) -> None:
+        """Durably advance the separate witness before committing a DB change."""
+        value = self._custody_value(identity, revision).encode("ascii")
+        temporary = Path(f"{self._custody_path}.{uuid4().hex}.tmp")
+        try:
+            self._custody_path.parent.mkdir(parents=True, exist_ok=True)
+            descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(value)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, self._custody_path)
+            directory = os.open(self._custody_path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        except OSError as exc:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise ScheduleRegistryDataError("Schedule registry custody write failed") from exc
 
     async def upsert(
         self,
@@ -232,6 +303,7 @@ class ScheduleRegistry:
 
     async def get(self, schedule_id: str) -> ScheduleRecord | None:
         """Return one durable schedule record, or ``None`` when it is absent."""
+        await self.identity()
         try:
             cursor = await self._db.execute(
                 "SELECT * FROM schedules WHERE schedule_id = ?", (schedule_id,)
@@ -251,6 +323,7 @@ class ScheduleRegistry:
         caller that explicitly requests that row; the bulk view returns one
         safe disabled diagnostic without deserializing the damaged payload.
         """
+        await self.identity()
         try:
             cursor = await self._db.execute("SELECT * FROM schedules ORDER BY schedule_id")
             rows = await cursor.fetchall()
@@ -454,15 +527,24 @@ class ScheduleRegistry:
         immediate: bool = False,
     ) -> aiosqlite.Cursor:
         """Execute one mutation, rolling it back before translating every failure."""
-        try:
-            if immediate:
+        async with self._custody_lock:
+            try:
                 await self._db.execute("BEGIN IMMEDIATE")
-            cursor = await self._db.execute(statement, parameters)
-            await self._db.commit()
-        except sqlite3.Error as exc:
-            await self._rollback_after_failed_mutation()
-            self._raise_database_error(operation, exc, schedule_id=schedule_id)
-        return cursor
+                identity, revision = await self._checked_identity()
+                await asyncio.to_thread(self._write_custody, identity, revision + 1)
+                await self._db.execute(
+                    "UPDATE registry_identity SET revision = ? WHERE singleton = 1",
+                    (revision + 1,),
+                )
+                cursor = await self._db.execute(statement, parameters)
+                await self._db.commit()
+            except sqlite3.Error as exc:
+                await self._rollback_after_failed_mutation()
+                self._raise_database_error(operation, exc, schedule_id=schedule_id)
+            except BaseException:
+                await self._rollback_after_failed_mutation()
+                raise
+            return cursor
 
     async def _rollback_after_failed_mutation(self) -> None:
         """End a partial transaction before reporting its original database error."""

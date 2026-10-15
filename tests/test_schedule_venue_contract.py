@@ -227,3 +227,192 @@ async def test_disposable_socket_restart_and_replacement(tmp_path: Path) -> None
         assert wrong.reason == "identity_mismatch"
     finally:
         await stop(manager, server, client)
+
+@pytest.mark.asyncio
+async def test_copied_state_and_socket_cannot_report_false_absence(tmp_path: Path) -> None:
+    """Copy a pre-registration bundle, then serve it through a replacement socket."""
+    import shutil
+
+    from marianne.daemon.config import DaemonConfig
+    from marianne.daemon.ipc.client import DaemonClient
+    from marianne.daemon.ipc.handler import RequestHandler
+    from marianne.daemon.ipc.server import DaemonServer
+    from marianne.daemon.manager import JobManager
+    from marianne.daemon.process import DaemonProcess
+    from marianne.daemon.recurrence import RecurrenceController
+
+    score = tmp_path / "daily.yaml"
+    score.write_text(
+        "name: Daily Report\n"
+        f"workspace: {tmp_path / 'workspace'}\n"
+        "sheet:\n  size: 1\n  total_items: 1\n"
+        "prompt:\n  template: test\n"
+        "schedule:\n  interval: 5m\n",
+        encoding="utf-8",
+    )
+    original = tmp_path / "original" / "state.db"
+    copied = tmp_path / "copied" / "state.db"
+    original.parent.mkdir()
+    copied.parent.mkdir()
+    async with ScheduleRegistry(original):
+        pass
+    shutil.copy2(original, copied)
+    original_witness = ScheduleRegistry(original)._custody_path
+    copied_witness = ScheduleRegistry(copied)._custody_path
+    shutil.copy2(original_witness, copied_witness)
+    manager = JobManager(DaemonConfig(state_db_path=original))
+    await manager._schedule_registry.open()
+    manager._recurrence_controller = RecurrenceController(
+        manager._schedule_registry, manager.submit_job,
+        lambda *_: object(), lambda *_: None, manager._is_schedule_active,
+    )
+    receipt = await manager.register_schedule(score)
+    await manager._schedule_registry.close()
+
+    replacement = JobManager(DaemonConfig(state_db_path=copied))
+    await replacement._schedule_registry.open()
+    handler = RequestHandler()
+    DaemonProcess(DaemonConfig())._register_methods(handler, replacement, health=None)
+    socket = tmp_path / "venue.sock"
+    server = DaemonServer(socket, handler)
+    await server.start()
+    client = DaemonClient(socket)
+    try:
+        result = await client.current_schedule(
+            receipt["schedule_id"], receipt["registry_identity"],
+            receipt["source_digest"],
+        )
+        assert result.state == "inconclusive"
+        assert result.reason == "damaged_state"
+    finally:
+        await client.close()
+        await server.stop()
+        await replacement._schedule_registry.close()
+
+    # An in-place restore keeps the DB inode; the advanced external witness
+    # must still reject the old database revision at the original path.
+    shutil.copy2(copied, original)
+    rolled_back = JobManager(DaemonConfig(state_db_path=original))
+    await rolled_back._schedule_registry.open()
+    handler = RequestHandler()
+    DaemonProcess(DaemonConfig())._register_methods(handler, rolled_back, health=None)
+    server = DaemonServer(socket, handler)
+    await server.start()
+    client = DaemonClient(socket)
+    try:
+        result = await client.current_schedule(
+            receipt["schedule_id"], receipt["registry_identity"],
+            receipt["source_digest"],
+        )
+        assert result.state == "inconclusive"
+        assert result.reason == "damaged_state"
+    finally:
+        await client.close()
+        await server.stop()
+        await rolled_back._schedule_registry.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("damage_sql", [
+    "DELETE FROM registry_identity",
+    "UPDATE registry_identity SET identity = 'damaged'",
+    "DROP TABLE registry_identity",
+])
+async def test_damaged_identity_is_typed_for_all_schedule_methods(
+    tmp_path: Path, damage_sql: str,
+) -> None:
+    from marianne.daemon.config import DaemonConfig
+    from marianne.daemon.ipc.client import DaemonClient
+    from marianne.daemon.ipc.handler import RequestHandler
+    from marianne.daemon.ipc.server import DaemonServer
+    from marianne.daemon.manager import JobManager
+    from marianne.daemon.process import DaemonProcess
+    from marianne.daemon.recurrence import RecurrenceController
+
+    score = tmp_path / "daily.yaml"
+    score.write_text(
+        "name: Daily Report\n"
+        f"workspace: {tmp_path / 'workspace'}\n"
+        "sheet:\n  size: 1\n  total_items: 1\n"
+        "prompt:\n  template: test\n"
+        "schedule:\n  interval: 5m\n",
+        encoding="utf-8",
+    )
+    manager = JobManager(DaemonConfig(state_db_path=tmp_path / "state.db"))
+    await manager._schedule_registry.open()
+    manager._recurrence_controller = RecurrenceController(
+        manager._schedule_registry, manager.submit_job,
+        lambda *_: object(), lambda *_: None, manager._is_schedule_active,
+    )
+    receipt = await manager.register_schedule(score)
+    await manager._schedule_registry._db.execute(damage_sql)
+    await manager._schedule_registry._db.commit()
+    handler = RequestHandler()
+    DaemonProcess(DaemonConfig())._register_methods(handler, manager, health=None)
+    server = DaemonServer(tmp_path / "damaged.sock", handler)
+    await server.start()
+    client = DaemonClient(tmp_path / "damaged.sock")
+    try:
+        calls = (
+            client.register_schedule(score),
+            client.current_schedule(
+                receipt["schedule_id"], receipt["registry_identity"], receipt["source_digest"],
+            ),
+            client.cancel_schedule(
+                receipt["schedule_id"], receipt["registry_identity"], receipt["source_digest"],
+            ),
+        )
+        for call in calls:
+            result = await call
+            assert result.state == "inconclusive"
+            assert result.reason == "damaged_state"
+    finally:
+        await client.close()
+        await server.stop()
+        await manager._schedule_registry.close()
+
+@pytest.mark.asyncio
+async def test_cancel_and_due_claim_leave_no_registration(tmp_path: Path) -> None:
+    """Either claim order is safe once bound cancellation completes."""
+    import asyncio
+
+    from marianne.daemon.config import DaemonConfig
+    from marianne.daemon.manager import JobManager
+    from marianne.daemon.recurrence import RecurrenceController
+
+    score = tmp_path / "daily.yaml"
+    score.write_text(
+        "name: Daily Report\n"
+        f"workspace: {tmp_path / 'workspace'}\n"
+        "sheet:\n  size: 1\n  total_items: 1\n"
+        "prompt:\n  template: test\n"
+        "schedule:\n  interval: 5m\n",
+        encoding="utf-8",
+    )
+    manager = JobManager(DaemonConfig(state_db_path=tmp_path / "state.db"))
+    await manager._schedule_registry.open()
+    manager._recurrence_controller = RecurrenceController(
+        manager._schedule_registry, manager.submit_job,
+        lambda *_: object(), lambda *_: None, manager._is_schedule_active,
+    )
+    try:
+        receipt = await manager.register_schedule(score)
+        record = await manager._schedule_registry.get(receipt["schedule_id"])
+        assert record is not None
+        cancelled, claim = await asyncio.gather(
+            manager.cancel_schedule(
+                receipt["schedule_id"], receipt["registry_identity"],
+                receipt["source_digest"],
+            ),
+            manager._schedule_registry.claim_due(
+                record.schedule_id, record.next_due_at, now=record.next_due_at,
+            ),
+        )
+        assert cancelled["state"] == "not_registered"
+        assert claim is None or claim.schedule_id == record.schedule_id
+        assert await manager._schedule_registry.get(record.schedule_id) is None
+        assert await manager._schedule_registry.claim_due(
+            record.schedule_id, record.next_due_at, now=record.next_due_at,
+        ) is None
+    finally:
+        await manager._schedule_registry.close()

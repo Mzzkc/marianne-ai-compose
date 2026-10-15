@@ -456,10 +456,10 @@ async def test_lifecycle_writers_reject_a_superseded_claim(tmp_path: Path) -> No
 
 
 @pytest.mark.adversarial
-async def test_failed_mutation_rolls_back_before_later_commit(
+async def test_failed_mutation_rolls_back_and_poisoned_custody_refuses_later_commit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A commit failure cannot leak a write into a later successful transaction."""
+    """A failed commit leaves the external witness ahead and fails closed."""
     async with ScheduleRegistry(tmp_path / "conductor-state.db") as registry:
         original_commit = registry._db.commit
 
@@ -471,12 +471,10 @@ async def test_failed_mutation_rolls_back_before_later_commit(
             await _upsert_due(registry)
         monkeypatch.setattr(registry._db, "commit", original_commit)
 
-        assert await registry.get("daily-report") is None
-        await _upsert_due(registry, due_at=200.0)
-        record = await registry.get("daily-report")
-
-    assert record is not None
-    assert record.next_due_at == 200.0
+        with pytest.raises(ScheduleRegistryDataError, match="custody"):
+            await registry.get("daily-report")
+        with pytest.raises(ScheduleRegistryDataError, match="custody"):
+            await _upsert_due(registry, due_at=200.0)
 
 
 @pytest.mark.adversarial
