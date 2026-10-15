@@ -862,6 +862,14 @@ prompt:
     ```bash
     cd {{ project_root }}
     CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    case "$CURRENT_BRANCH" in
+      main|master|trunk)
+        if [ "${ALLOW_PUSH_TO_MAIN:-0}" != "1" ]; then
+          echo "FATAL: refusing to push to protected branch $CURRENT_BRANCH (set ALLOW_PUSH_TO_MAIN=1 to override)"
+          exit 1
+        fi
+        ;;
+    esac
     git status --short | head -30
     git diff --stat
     ```
@@ -879,11 +887,11 @@ prompt:
     ```
 
     **Step 3: Write the commit message**
-    Reference the issue number (e.g. `fix: ... (closes #N)`). To avoid shell
-    interpolating anything into the message, write it to a file and pass via
-    `git commit -F`:
+    Reference the issue number (e.g. `fix: ... (closes #N)`). The heredoc
+    delimiter is QUOTED so shell expansion (`$(...)`, backticks) cannot fire
+    while writing — the body may quote untrusted issue text verbatim:
     ```bash
-    cat > {{ workspace }}/.commit-msg <<COMMITEOF
+    cat > {{ workspace }}/.commit-msg <<'COMMITEOF'
     <type>: <summary> (closes #<issue number>)
 
     <body: what changed and why, grounded in the investigation>
