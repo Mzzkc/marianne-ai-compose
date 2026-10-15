@@ -587,8 +587,9 @@ These occur during score execution, after validation passes.
 ```yaml
 instrument_config:
   timeout_seconds: 3600        # 1 hour
-  timeout_overrides:
-    7: 7200                    # Sheet 7 gets 2 hours
+sheet:
+  per_sheet_instrument_config:
+    7: {timeout_seconds: 7200} # Sheet 7 gets 2 hours
 ```
 
 **Investigation:**

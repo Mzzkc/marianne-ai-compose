@@ -49,6 +49,7 @@ from marianne.core.config.flow import (
     span_bounds,
     span_range,
 )
+from marianne.core.config.instrument_settings import InstrumentSettings
 from marianne.core.config.judgment import JudgmentConfig
 from marianne.core.config.learning import (
     CheckpointConfig,
@@ -169,10 +170,11 @@ class InstrumentDef(BaseModel):
         min_length=1,
         description="Name of the registered instrument profile, e.g. 'gemini-cli'",
     )
-    config: dict[str, Any] = Field(
-        default_factory=dict,
+    config: InstrumentSettings = Field(
+        default_factory=InstrumentSettings,
         description="Configuration overrides for this instrument definition. "
-        "Flat key-value pairs merged with the profile's defaults.",
+        "Typed instrument settings merged with the profile's defaults; "
+        "unknown keys warn as V010/V011.",
     )
 
 
@@ -210,9 +212,10 @@ class MovementDef(BaseModel):
         "Overrides the score-level instrument: but is overridden "
         "by per-sheet assignments.",
     )
-    instrument_config: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Instrument configuration overrides for this movement",
+    instrument_config: InstrumentSettings = Field(
+        default_factory=InstrumentSettings,
+        description="Typed instrument settings for this movement; unknown "
+        "keys warn as V010/V011 and override score settings.",
     )
     voices: int | None = Field(
         default=None,
@@ -363,10 +366,10 @@ class SheetConfig(BaseModel):
         ),
     )
 
-    per_sheet_instrument_config: dict[int, dict[str, Any]] = Field(
+    per_sheet_instrument_config: dict[int, InstrumentSettings] = Field(
         default_factory=dict,
         description=(
-            "Per-sheet instrument configuration overrides. "
+            "Per-sheet typed instrument settings; unknown keys warn as V010/V011. "
             "Map of sheet_num -> config dict. "
             "Merged with the resolved instrument's defaults for that sheet. "
             "Example: {3: {model: 'gemini-2.5-flash', timeout_seconds: 300}}"
@@ -944,10 +947,11 @@ class JobConfig(BaseModel):
         "Resolved to an InstrumentProfile at job submission. "
         "When omitted, the default instrument (claude-code) executes.",
     )
-    instrument_config: dict[str, Any] = Field(
-        default_factory=dict,
+    instrument_config: InstrumentSettings = Field(
+        default_factory=InstrumentSettings,
         description="Score-level overrides for the resolved instrument's defaults. "
-        "Flat key-value pairs: {model: gemini-2.5-flash, timeout_seconds: 600}. "
+        "Typed settings: {model: gemini-2.5-flash, timeout_seconds: 600}; "
+        "unknown keys warn as V010/V011. "
         "Only meaningful when instrument: is set.",
     )
     instrument_fallbacks: list[str] = Field(

@@ -37,6 +37,7 @@ from marianne.core.config.fleet import (
     FleetGroupConfig,
     FleetScoreEntry,
 )
+from marianne.core.config.instrument_settings import InstrumentSettings
 
 # Instrument plugin system configuration
 from marianne.core.config.instruments import (
@@ -126,6 +127,7 @@ __all__ = [
     "CodeModeInterface",
     "HttpProfile",
     "InstrumentProfile",
+    "InstrumentSettings",
     "ModelCapacity",
     # Execution
     "CircuitBreakerConfig",

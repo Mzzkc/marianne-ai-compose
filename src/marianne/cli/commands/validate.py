@@ -35,6 +35,7 @@ from marianne.validation import (
     create_default_checks,
 )
 from marianne.validation.base import ValidationIssue, ValidationSeverity
+from marianne.validation.checks.schema import _KNOWN_TYPOS
 from marianne.validation.output_contract import apply_suppression, class_summary, structural_summary
 
 from ..helpers import configure_global_logging
@@ -548,31 +549,6 @@ def _schema_error_hints(error_msg: str) -> list[str]:
     ]
 
 
-# Known field names at the top level that users might confuse
-# F-523: Common onboarding mistakes from plural/singular confusion
-_KNOWN_TYPOS: dict[str, str] = {
-    "retries": "retry",
-    "paralel": "parallel",
-    "parralel": "parallel",
-    "parrallel": "parallel",
-    "backend_type": "instrument (or backend.type)",
-    "max_retries": "retry.max_retries",
-    "timeout": "stale_detection.idle_timeout_seconds",
-    "preamble": "prompt.template (preamble is set automatically by Marianne)",
-    "task": "prompt.template",
-    "stager_delay_ms": "parallel.stagger_delay_ms",
-    "stagger_delay": "parallel.stagger_delay_ms",
-    "insturment": "instrument",
-    "instrumnet": "instrument",
-    "insturment_config": "instrument_config",
-    "instrumnet_config": "instrument_config",
-    "validation": "validations",
-    "notification": "notifications",
-    "sheets": "sheet (singular — use: sheet: {size: N, total_items: M})",
-    "prompts": "prompt (singular — use: prompt: {template: '...'})",
-}
-
-
 def _unknown_field_hints(error_msg: str) -> list[str]:
     """Extract unknown field names from extra_forbidden errors and provide
     targeted guidance.
@@ -607,6 +583,7 @@ def _unknown_field_hints(error_msg: str) -> list[str]:
         # F-523: Provide YAML examples for common structural mistakes
         if field == "sheets":
             hints.append("  Use 'sheet' (singular) with this structure:")
+            hints.append("  sheet: {size: 10, total_items: 100}")
             hints.append("  sheet:")
             hints.append("    size: 10")
             hints.append("    total_items: 100")

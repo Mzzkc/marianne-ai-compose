@@ -66,7 +66,7 @@ and constraints are extracted directly from the Pydantic v2 config models in
 | `description` | `str \| None` | `None` | Human-readable description |
 | `workspace` | `Path` | `./workspace` | Output directory. Resolved to absolute path at construction time. |
 | `instrument` | `str \| None` | `None` | Profile, score alias, or capability class (e.g., `strong`). Run `mzt instruments classes show` to see class chains. If unset, defaults to `claude-code`. |
-| `instrument_config` | `dict` | `{}` | Per-score overrides for the named instrument's defaults. Keys include `model`, `timeout_seconds`, HTTP `max_tokens` and `temperature`, `response_format`, `interactive`, `interactive_max_nudges`, and `interactive_nudge_message`. Support depends on the executor; see below. |
+| `instrument_config` | `InstrumentSettings` | `{}` | Typed per-score overrides. Keys: `timeout_seconds` (sheet execution timeout), `model`, `provider`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`, `max_tokens`, `temperature`, `response_format`. Unknown keys warn as V010/V011; executor support still varies. |
 | `instruments` | `dict[str, InstrumentDef]` | `{}` | Named instrument definitions local to this score. Declares reusable aliases referencing registered instrument profiles with optional overrides. Referenced by name in per-sheet or per-movement `instrument:` fields. See [instruments](#instruments). |
 | `movements` | `dict[int, MovementDef]` | `{}` | Movement declarations. Map of movement number to MovementDef. Each movement can specify a name, instrument, instrument config, and voice count. See [movements](#movements). |
 | `instrument_fallbacks` | `list[str]` | `[]` | Score-level fallback chain. Each profile, alias, or class is expanded in place; a primary class's tail runs before declared fallbacks. See [Instrument Fallbacks](#instrument-fallbacks). |
@@ -88,6 +88,7 @@ Per-sheet configuration is resolved for each attempt, including fallback
 configuration. HTTP instruments share a pooled executor, but the model,
 generation limits, HTTP timeout, schema, preamble and prompt extensions travel
 with the request; they do not mutate another in-flight sheet's settings.
+The same typed key set is checked at score `instrument_config`, `movements.<N>.instrument_config`, `sheet.per_sheet_instrument_config.<N>`, and `instruments.<alias>.config`. These scopes merge in that order, with an alias applied before a per-sheet override. An unknown key warns and is ignored; it does not change the sheet timeout.
 
 `response_format` is opt-in. For OpenAI-compatible HTTP profiles, an omitted
 key inherits `http.response_format`, an explicit `null` disables it for that
@@ -239,7 +240,7 @@ movements:
 |-------|------|---------|-------------|-------------|
 | `name` | `str \| None` | `None` | | Human-readable name for this movement. Shown in `mzt status` output. |
 | `instrument` | `str \| None` | `None` | min_length=1 | Instrument for all sheets in this movement. Overrides the score-level `instrument:` but is overridden by per-sheet assignments. Can reference a score-local `instruments:` alias or a registered profile name. |
-| `instrument_config` | `dict` | `{}` | | Instrument configuration overrides for this movement. Merged with the resolved instrument's defaults. |
+| `instrument_config` | `InstrumentSettings` | `{}` | | Typed instrument overrides for this movement; unknown keys warn as V010/V011. |
 | `voices` | `int \| None` | `None` | `>= 1` | Number of parallel voices in this movement. Shorthand for `fan_out: {N: voices}`. |
 | `instrument_fallbacks` | `list[str]` | `[]` | | Default fallback chain for sheets in this movement. Overrides score-level `instrument_fallbacks`. |
 
@@ -346,7 +347,7 @@ Defines how the work is divided into sheets (execution units).
 | `spec_tags` | `dict[int, list[str]]` | `{}` | | Per-sheet spec fragment tag filters. Map of `sheet_num -> list of tags`. Only fragments matching at least one tag are injected for that sheet. Sheets without entries receive all fragments. |
 | `descriptions` | `dict[int, str]` | `{}` | | Human-readable labels for sheets (`sheet.descriptions`), map of `sheet_num -> description`; shown in `mzt status`. |
 | `per_sheet_instruments` | `dict[int, str]` | `{}` | Positive int keys | Per-sheet instrument overrides. Map of `sheet_num -> instrument_name`. Highest precedence in the instrument resolution chain. Example: `{3: 'gemini-cli', 5: 'codex-cli'}`. |
-| `per_sheet_instrument_config` | `dict[int, dict]` | `{}` | | Per-sheet instrument configuration overrides. Map of `sheet_num -> config dict`. Merged with the resolved instrument's defaults for that sheet. Example: `{3: {model: 'gemini-2.5-flash'}}`. |
+| `per_sheet_instrument_config` | `dict[int, InstrumentSettings]` | `{}` | | Per-sheet typed instrument overrides; unknown keys warn as V010/V011. Example: `{3: {model: 'gemini-2.5-flash'}}`. |
 | `instrument_map` | `dict[str, list[int]]` | `{}` | No duplicate sheets | Batch instrument assignment. Map of `instrument_name -> list of sheet numbers`. Overrides score-level instrument for listed sheets. Overridden by `per_sheet_instruments`. A sheet cannot appear in multiple instrument lists. |
 | `per_sheet_fallbacks` | `dict[int, list[str]]` | `{}` | Positive int keys | Per-sheet instrument fallback overrides. Map of `sheet_num -> list of fallback instrument names`. Replaces (does not merge with) inherited fallback chains. See [Instrument Fallbacks](#instrument-fallbacks). |
 
