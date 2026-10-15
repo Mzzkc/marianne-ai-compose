@@ -937,7 +937,16 @@ Validates that your environment is ready to run Marianne scores. Checks Python v
 | Safety | Whether cost limits are configured |
 | Storage | Cleanable stale state or backup artifacts |
 
-For instruments, CLI instruments are checked by looking for the executable on PATH and whether the profile can execute prompts. HTTP instruments are reported from configuration and execution-state metadata; `doctor` does not prove provider account availability unless a live execution check has run. Runtime rate-limit state is shown when the conductor is running.
+Every command that answers "can this instrument run here" — `doctor`, `instruments list`, `instruments check`, `instruments classes check` and `classes write` — uses one probe with four states (GH #447):
+
+| Probe state | Meaning | Shown as |
+|-------------|---------|----------|
+| `ready` | Can run now: CLI binary on PATH, or a local (loopback) server that answers and serves the profile's `default_model`, or a native instrument | `✓` (doctor `ok`; list `✓ ready`) |
+| `unavailable` | Cannot run: binary missing, profile declared unsupported, no command, or the local server answers but does not serve the model (the served models are named) | `·` (doctor `optional`; list `✗ not found`) |
+| `unreachable` | A local server that does not answer | `·` (doctor `optional`; list `✗ not answering`) |
+| `unchecked` | A remote HTTP endpoint; never probed because it needs credentials | `?` (doctor and list `unchecked`) |
+
+"Marianne is ready" means at least one agent instrument is `ready` (the raw shell `cli` profile does not count). With none, `doctor` reports an error naming what to install or pull. Runtime rate-limit state is shown when the conductor is running.
 
 #### Examples
 
@@ -963,13 +972,13 @@ Marianne Doctor
 
   Instruments:
   ✓ claude-code                   /usr/local/bin/claude
-  · gemini-cli                    not found (gemini)
-  · codex-cli                     not found (codex)
+  · gemini-cli                    not found (Binary 'gemini' not found on PATH for instrument 'gemini-cli')
+  · ollama                        not found (model 'llama3.1:8b' is not served at http://localhost:11434/v1 …)
 
   Safety:
   ⚠ No cost limits configured     Recommend: cost_limits.max_cost_per_job
 
-1 warning. Marianne is ready.
+1 warning. Marianne is ready (1 runnable instrument(s)).
 ```
 
 ---
@@ -1379,15 +1388,16 @@ mzt instruments list --json
   claude-code       cli     ✓ ready         (instrument default)
   codex-cli         cli     ✓ ready         (instrument default)
   gemini-cli        cli     ✓ ready         gemini-2.5-pro
-  ollama            http    http            llama3.1:8b
+  ollama            http    ✗ not found     llama3.1:8b
 
-11 instruments configured (installation readiness varies)
+11 instruments configured (3 ready)
 ```
 
-**Status values:**
-- `✓ ready` — CLI binary found on PATH
-- `✗ not found` — CLI binary not on PATH (install the tool to use it)
-- `http` — HTTP instrument (connectivity not probed; assumed reachable if configured)
+**Status values** (the same probe as `mzt doctor`; see its four states there):
+- `✓ ready` — can run now: CLI binary on PATH, or a local server serving the profile's model
+- `✗ not found` — binary not on PATH, or the local server does not serve the model (install the tool, or pull the model)
+- `✗ not answering` — a local server that does not answer
+- `? unchecked` — a remote HTTP endpoint; never probed (needs credentials)
 
 ---
 
@@ -1399,7 +1409,7 @@ Check readiness and configuration of a specific instrument.
 Usage: mzt instruments check [OPTIONS] NAME
 ```
 
-Provides detailed information about a single instrument: binary location, capabilities, available models with pricing, and overall readiness.
+Provides detailed information about a single instrument: binary location, capabilities, available models with pricing, and overall readiness. Readiness is the same probe `mzt doctor` uses: a local HTTP instrument is ready only when its server answers and serves the profile's `default_model`; a remote endpoint is reported `unchecked`, which is not a failure (exit 0).
 
 #### Arguments
 

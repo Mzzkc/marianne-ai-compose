@@ -18,6 +18,21 @@ unavailable, with the served models in the reason. A loopback server that
 does not answer at all stays "available" here — reachability is V215's
 domain, and a test that registers a fake loopback profile must not pay for a
 network round trip.
+
+``probe_profile`` is the ONE probe behind every command that answers "can
+this instrument run here" (GH #447: ``doctor``, ``instruments list``,
+``instruments check``, ``instruments classes check|write`` used to answer
+it five ways). Its four states have one definition each:
+
+- ``ready``: can run now — CLI binary on PATH, or a loopback server that
+  serves the profile's model, or a native instrument.
+- ``unavailable``: cannot run — binary missing, declared unsupported, no
+  command, or the loopback server answers but does not serve the model.
+- ``unreachable``: a loopback server that does not answer.
+- ``unchecked``: a remote HTTP endpoint; never probed (needs credentials).
+
+``check_profile_available`` keeps its ``(bool, reason)`` contract on top of
+it: only ``unavailable`` is False, so validate and dispatch are unchanged.
 """
 
 from __future__ import annotations
@@ -27,6 +42,8 @@ import json
 import shutil
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
+from typing import Literal
 from urllib.parse import urlparse
 
 from marianne.core.config.instruments import InstrumentProfile
@@ -58,31 +75,82 @@ def check_instrument_available(
 
 def check_profile_available(profile: InstrumentProfile) -> tuple[bool, str]:
     """Apply the same local availability probe when the profile is already loaded."""
+    probe = probe_profile(profile)
+    if probe.state == "unavailable":
+        return False, probe.reason
+    return True, ""
+
+
+ProbeState = Literal["ready", "unavailable", "unreachable", "unchecked"]
+
+
+@dataclass(frozen=True)
+class ProfileProbe:
+    """What one instrument profile can do on this machine, right now."""
+
+    state: ProbeState
+    reason: str = ""
+    binary_path: str | None = None
+
+    @property
+    def runnable(self) -> bool:
+        return self.state == "ready"
+
+
+def probe_profile(profile: InstrumentProfile) -> ProfileProbe:
+    """The one availability probe every command consumes (GH #447)."""
     name = profile.name
 
     if profile.execution_status == "unsupported":
         # Declared unsupported is never a runnable entry, whatever its kind
         # (Forge Inspect P2, unsupported-class-entry-reported-ready).
         detail = profile.execution_status_detail or "execution_status: unsupported"
-        return False, f"Instrument '{name}' is unsupported: {detail}"
+        return ProfileProbe("unavailable", f"Instrument '{name}' is unsupported: {detail}")
 
     if profile.kind == "http":
-        # A served-model check for local servers only (GH #437). Remote
-        # endpoints need credentials and are never probed here.
-        return _local_http_model_available(profile)
+        return _probe_http(profile)
 
     if profile.kind != "cli":
         # Native instruments have no binary to check
-        return True, ""
+        return ProfileProbe("ready")
 
     if profile.cli is None or profile.cli.command is None:
-        return False, f"Instrument '{name}' is CLI kind but has no command configured"
+        return ProfileProbe(
+            "unavailable", f"Instrument '{name}' is CLI kind but has no command configured"
+        )
 
     executable = profile.cli.command.executable
-    if shutil.which(executable) is None:
-        return False, f"Binary '{executable}' not found on PATH for instrument '{name}'"
+    binary_path = shutil.which(executable)
+    if binary_path is None:
+        return ProfileProbe(
+            "unavailable", f"Binary '{executable}' not found on PATH for instrument '{name}'"
+        )
 
-    return True, ""
+    return ProfileProbe("ready", binary_path=binary_path)
+
+
+def _probe_http(profile: InstrumentProfile) -> ProfileProbe:
+    """A served-model check for local servers only (GH #437). Remote endpoints
+    need credentials and are never probed here."""
+    if profile.http is None:
+        return ProfileProbe("unchecked", "no HTTP configuration")
+    parsed = urlparse(profile.http.base_url)
+    if not _is_loopback(parsed.hostname):
+        return ProfileProbe("unchecked", f"remote endpoint {profile.http.base_url} is not probed")
+    served = served_local_models(profile.http.base_url)
+    if served is None:
+        return ProfileProbe(
+            "unreachable", f"no server answered at {profile.http.base_url}"
+        )
+    if not profile.default_model or profile.default_model in served:
+        return ProfileProbe("ready")
+    shown = ", ".join(served[:6]) + (", …" if len(served) > 6 else "")
+    return ProfileProbe(
+        "unavailable",
+        f"model '{profile.default_model}' is not served at {profile.http.base_url} "
+        f"for instrument '{profile.name}' (served: {shown or 'none'}); pull it or set "
+        "instrument_config.model / the profile's default_model to one that is",
+    )
 
 
 def _is_loopback(hostname: str | None) -> bool:
@@ -116,19 +184,3 @@ def served_local_models(base_url: str) -> list[str] | None:
     if not isinstance(data, list):
         return None
     return [str(item.get("id")) for item in data if isinstance(item, dict) and item.get("id")]
-
-
-def _local_http_model_available(profile: InstrumentProfile) -> tuple[bool, str]:
-    if profile.http is None or not profile.default_model:
-        return True, ""
-    served = served_local_models(profile.http.base_url)
-    if served is None:
-        return True, ""  # not loopback, or not answering: V215's domain
-    if profile.default_model in served:
-        return True, ""
-    shown = ", ".join(served[:6]) + (", …" if len(served) > 6 else "")
-    return False, (
-        f"model '{profile.default_model}' is not served at {profile.http.base_url} "
-        f"for instrument '{profile.name}' (served: {shown or 'none'}); pull it or set "
-        f"instrument_config.model / the profile's default_model to one that is"
-    )

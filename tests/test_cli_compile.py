@@ -17,6 +17,7 @@ import yaml
 from typer.testing import CliRunner
 
 from marianne.cli import app
+from marianne.instruments.availability import ProfileProbe
 
 # The compile command delegates to the optional, separately-packaged
 # ``marianne_compiler`` (bundled as a git submodule). Every test here invokes
@@ -300,8 +301,8 @@ class TestCompileDelegation:
                 },
             ),
             patch(
-                "marianne.cli.commands.doctor._check_instrument_binary",
-                return_value=(True, "/usr/bin/fake"),
+                "marianne.instruments.availability.probe_profile",
+                return_value=ProfileProbe("ready", binary_path="/usr/bin/fake"),
             ),
         ):
             available = _doctor_available_instruments()
@@ -355,8 +356,8 @@ class TestCompileDelegation:
                 },
             ),
             patch(
-                "marianne.cli.commands.doctor._check_instrument_binary",
-                return_value=(True, "/usr/bin/fake"),
+                "marianne.instruments.availability.probe_profile",
+                return_value=ProfileProbe("ready", binary_path="/usr/bin/fake"),
             ),
         ):
             available = _doctor_available_instruments()
