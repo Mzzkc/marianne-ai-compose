@@ -165,6 +165,12 @@ async def test_recurring_cli_score_restarts_without_overlap_or_duplicate_due_chi
         assert peak_active_lineage == 1
         assert peak_active_lineage <= 1
 
+        # Stop the next natural one-second timer while checking delivery of the
+        # *same* due identity. Under a loaded host it may otherwise advance the
+        # row between snapshots for a legitimate overlap-skipped later due.
+        controller = manager._recurrence_controller
+        assert controller is not None
+        controller._cancel_timer("recurring-runtime-e2e")
         before_duplicate = await manager._schedule_registry.get("recurring-runtime-e2e")
         await _redeliver_due(manager, first_due_at)
         after_duplicate = await manager._schedule_registry.get("recurring-runtime-e2e")

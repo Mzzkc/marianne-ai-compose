@@ -136,6 +136,9 @@ Registered RPC methods:
 | `schedule.register` | Register a recurring source and return the daemon-accepted source digest with durable registry identity; does not submit an immediate job |
 | `schedule.current` | Read one schedule against its registry identity, ID, and accepted digest |
 | `schedule.cancel` | Cancel one bound registration and related active work, then report current state |
+| `schedule.register_v2` | Register a recurring source and return a version-2 receipt with a new registration ID |
+| `schedule.current_v2` | Read the exact registration ID and require a matching durable terminal before reporting its absence |
+| `schedule.cancel_v2` | Cancel the exact registration and related work, then persist its terminal before reporting completion |
 | `job.list` | List all known jobs |
 | `job.diagnose` | Get diagnostic report for a job |
 | `job.errors` | Get error details for a job |
@@ -160,6 +163,18 @@ again after submission. Missing methods on an older conductor, transport loss,
 wrong registry identity, changed digest, or unfinished work require a safe
 inconclusive decision. The registry identity survives service restarts with the
 same state database and changes when a new database is served at the socket.
+
+For an irreversible decision such as candidate-data erasure, use the v2 methods
+and retain the returned `receipt_version: 2` and `registration_id` outside the
+daemon state. Bind later `current_schedule_v2`/`cancel_schedule_v2` calls to
+that exact receipt, registry identity, schedule ID and accepted source digest.
+The v2 `not_registered` result is supported only by a matching terminal record;
+a missing row or replaced database without that terminal is inconclusive.
+Another registration receives a new ID and cannot inherit an old terminal.
+The v1 methods remain available for compatible callers, but their negative
+snapshot is not erasure authority. A candidate caller still needs its own
+ordered lifecycle record and cross-process exclusion; the daemon receipt alone
+does not authorize deleting a candidate root.
 
 ### Backpressure
 

@@ -533,9 +533,26 @@ class TestWorkspacePathTraversal:
         # Should not raise — the path is replaced with None internally
         assert isinstance(issues, list)
 
-    def test_rejects_sensitive_system_paths(self):
+    def test_rejects_sensitive_system_paths(self, monkeypatch):
         """workspace_path pointing to /etc, /proc, /sys, /dev is rejected."""
+        import marianne.dashboard.routes.scores as scores
+
         from marianne.dashboard.routes.scores import run_extended_validation
+
+        observed_paths = []
+
+        class CapturingRunner:
+            def __init__(self, _checks):
+                pass
+
+            def validate(self, _config, config_path, _content):
+                observed_paths.append(config_path)
+                return []
+
+        # This node tests the dashboard path boundary, not the unrelated full
+        # instrument catalogue. Capture the exact path passed to validation.
+        monkeypatch.setattr(scores, "ValidationRunner", CapturingRunner)
+        monkeypatch.setattr(scores, "create_default_checks", lambda: [])
 
         config = self._make_config()
         content = 'name: "test"\nsheet:\n  total_items: 1\nprompt:\n  template: "hello"'
@@ -544,6 +561,7 @@ class TestWorkspacePathTraversal:
         for path in sensitive_paths:
             issues = run_extended_validation(config, content, "test.yaml", workspace_path=path)
             assert isinstance(issues, list), f"Should handle {path} without error"
+        assert observed_paths == [Path.cwd() / "test.yaml"] * len(sensitive_paths)
 
     def test_accepts_valid_workspace_path(self, tmp_path):
         """Valid workspace paths are accepted."""

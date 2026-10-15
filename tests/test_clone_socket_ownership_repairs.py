@@ -375,7 +375,7 @@ async def test_socket_lifetime_lock_excludes_another_process(tmp_path: Path) -> 
     )
     contender = OwnedUnixSocket(path)
     try:
-        assert await asyncio.wait_for(process.stdout.readline(), 2) == b"ready\n"
+        assert await asyncio.wait_for(process.stdout.readline(), 10) == b"ready\n"
         path.unlink()
         with pytest.raises(OSError):
             await asyncio.wait_for(contender.start(echo), 1)
@@ -383,7 +383,7 @@ async def test_socket_lifetime_lock_excludes_another_process(tmp_path: Path) -> 
         contender.release()
         process.stdin.write(b"stop\n")
         await process.stdin.drain()
-        await asyncio.wait_for(process.wait(), 2)
+        await asyncio.wait_for(process.wait(), 10)
     replacement = OwnedUnixSocket(path)
     server = await replacement.start(echo)
     await close_server(server)

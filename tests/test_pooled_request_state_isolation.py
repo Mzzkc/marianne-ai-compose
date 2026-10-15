@@ -207,7 +207,10 @@ async def _drain(adapter: BatonAdapter, keys: tuple[tuple[str, int], ...]) -> No
     for key in keys:
         task = adapter._active_tasks.get(key)
         if task is not None:
-            await asyncio.wait_for(asyncio.shield(task), timeout=10)
+            # Each sheet's own execution budget is 30 seconds. A ten-way
+            # dispatch can spend more than ten wall seconds in host scheduling
+            # without leaking one request's payload into another.
+            await asyncio.wait_for(asyncio.shield(task), timeout=30)
 
 
 async def test_http_model_overrides_are_request_local_across_reuse_and_overlap() -> None:
