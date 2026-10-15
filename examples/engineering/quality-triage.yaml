@@ -43,7 +43,9 @@
 #        linear → export LINEAR_API_KEY (fetch only; stage 6 emits CSV)
 #        none   → no auth needed; stage 6 runs in side-report mode
 #   3. Edit `prompt.variables` below: `issue_tracker`, `repo`, `issue_label`, `project_root`
-#   4. Edit `on_success[0].job_path` to the absolute path of issue-solver.yaml
+#   4. Configure sibling issue-solver.yaml with the same repo/project_root and
+#      triage_workspace set to this score's resolved, stable workspace path.
+#      The concert trigger resolves the sibling score; it does not pass variables.
 #   5. `mzt run examples/engineering/quality-triage.yaml`
 #
 # REQUIREMENTS:
