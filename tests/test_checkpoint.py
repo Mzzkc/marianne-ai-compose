@@ -1002,3 +1002,58 @@ class TestAdvanceFallback:
         assert len(sheet.instrument_fallback_history) == MAX_INSTRUMENT_FALLBACK_HISTORY
         tos = [e["to"] for e in sheet.instrument_fallback_history]
         assert tos == [f"i{j}" for j in range(n - MAX_INSTRUMENT_FALLBACK_HISTORY, n)]
+
+
+class TestAttemptHistory434:
+    """GH #434: the time a fallen instrument spent is recorded per attempt and
+    survives the checkpoint round-trip, so status/diagnose can show that a
+    1,800 s stall preceded the fallback's 69 s success."""
+
+    @staticmethod
+    def _result(instrument: str, duration: float, *, success: bool, exit_reason: str):
+        from marianne.daemon.baton.events import SheetAttemptResult
+
+        return SheetAttemptResult(
+            job_id="j", sheet_num=1, instrument_name=instrument, attempt=1,
+            execution_success=success, duration_seconds=duration,
+            exit_reason=exit_reason,
+            error_classification=None if success else "TIMEOUT",
+        )
+
+    def test_record_attempt_appends_history_and_round_trips(self) -> None:
+        sheet = SheetState(sheet_num=1, instrument_name="claude-code",
+                           fallback_chain=["codex-cli"])
+        sheet.record_attempt(self._result("claude-code", 1800.9, success=False,
+                                          exit_reason="timeout"))
+        sheet.advance_fallback("execution_timeout")
+        sheet.record_attempt(self._result("codex-cli", 69.0, success=True,
+                                          exit_reason="completed"))
+        # The overwritten scalar reads as the winner's 69 s …
+        assert sheet.execution_duration_seconds == 69.0
+        # … but the history keeps the stall.
+        assert [(a["instrument"], a["duration_seconds"], a["exit_reason"])
+                for a in sheet.attempt_history] == [
+            ("claude-code", 1800.9, "timeout"), ("codex-cli", 69.0, "completed"),
+        ]
+        again = SheetState.model_validate(sheet.model_dump(mode="json"))
+        assert again.attempt_history == sheet.attempt_history
+
+    def test_status_fallback_note_names_time_spent_by_the_fallen_instrument(self) -> None:
+        from marianne.cli.commands.status import format_instrument_with_fallback
+
+        sheet = SheetState(sheet_num=1, instrument_name="claude-code",
+                           fallback_chain=["codex-cli"])
+        sheet.record_attempt(self._result("claude-code", 1800.9, success=False,
+                                          exit_reason="timeout"))
+        sheet.advance_fallback("execution_timeout")
+        note = format_instrument_with_fallback(sheet)
+        assert "was claude-code: execution_timeout after 30m" in note
+
+    def test_history_is_capped(self) -> None:
+        from marianne.core.checkpoint import MAX_ATTEMPT_HISTORY
+
+        sheet = SheetState(sheet_num=1, instrument_name="a")
+        for _ in range(MAX_ATTEMPT_HISTORY + 7):
+            sheet.record_attempt(self._result("a", 1.0, success=False, exit_reason="error"))
+        assert len(sheet.attempt_history) == MAX_ATTEMPT_HISTORY
+

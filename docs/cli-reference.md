@@ -409,7 +409,7 @@ Standard per-score output includes:
 - Timing information
 - Error messages (if any)
 - Sheet details table (or compact summary for 50+ sheets)
-- **Instrument column** — when any sheet has an assigned instrument name, the table includes an Instrument column showing which instrument each sheet uses. For large scores (50+ sheets), the summary view shows an instrument breakdown with counts.
+- **Instrument column** — when any sheet has an assigned instrument name, the table includes an Instrument column showing which instrument each sheet uses. For large scores (50+ sheets), the summary view shows an instrument breakdown with counts. A sheet that fell to a fallback shows `codex-cli (was claude-code: execution_timeout after 30m)`: the instrument that played, the one that fell, why, and how long the fallen one held the sheet (GH #434). The duration beside the status is the winning attempt's; the time the fallen instrument spent is in that note and in `mzt diagnose`.
 - **Cost summary** — always shown, including total cost, token counts, and cost limit status. When an instrument returns structured token data (JSON output), costs are precise. When tokens are estimated from output character count, the display shows `~$X.XX (est.)` with a warning that actual costs may be 10-100x higher. Use JSON output format on your instrument for accurate cost tracking.
 - Suggestion to run `mzt diagnose` on failure
 
@@ -868,7 +868,7 @@ The diagnostic report includes:
 - Score-run overview and current status
 - Preflight warnings from all sheets
 - Prompt metrics (token counts, line counts)
-- Execution timeline with timing information
+- Execution timeline with timing information, and under it one line per attempt for any sheet that needed more than one or ended abnormally: `1. claude-code (claude-opus-5-5): 30m → TIMEOUT`, `2. codex-cli: 1m 9s → ok` (GH #434)
 - All errors with full context and output tails
 - Log file locations, sizes, and modification times
 - (with `--include-logs`) Inline log content from each log file

@@ -33,6 +33,7 @@ MAX_OUTPUT_CAPTURE_BYTES: int = 51200  # 50KB - last N bytes of stdout/stderr to
 # Constants for error history (Task 10: Error History Model)
 MAX_ERROR_HISTORY: int = 50  # Maximum number of error records to keep per sheet
 MAX_INSTRUMENT_FALLBACK_HISTORY: int = 50  # Maximum fallback records per sheet
+MAX_ATTEMPT_HISTORY: int = 50  # Maximum per-attempt records per sheet (GH #434)
 MAX_CIRCUIT_BREAKER_HISTORY: int = 50  # Maximum CB transition records per job
 
 # Type alias for error types
@@ -467,6 +468,18 @@ class SheetState(BaseModel):
         description="History of errors encountered during sheet execution (max 10)",
     )
 
+    # Per-attempt history (GH #434): which instrument played each attempt,
+    # for how long, and how it ended. ``execution_duration_seconds`` and
+    # ``instrument_name`` are overwritten per attempt, so a 1,800 s stall on
+    # the first instrument followed by a 69 s success on the fallback read as
+    # a 69 s success everywhere; this list is the record that survives.
+    attempt_history: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="One record per attempt: {attempt, instrument, model, "
+        "duration_seconds, success, exit_reason, error_classification, "
+        "error_code, timestamp}. Persisted (max 50) for status and diagnose.",
+    )
+
     # Instrument fallback history (M5: per-sheet instrument fallbacks)
     instrument_fallback_history: list[dict[str, str]] = Field(
         default_factory=list,
@@ -821,6 +834,21 @@ class SheetState(BaseModel):
                 self.preflight_warnings.append(warning)
         self.total_duration_seconds += result.duration_seconds
         self.execution_duration_seconds = result.duration_seconds
+        import datetime as _dt
+
+        self.attempt_history.append({
+            "attempt": len(self.attempt_results),
+            "instrument": getattr(result, "instrument_name", None) or self.instrument_name,
+            "model": self.instrument_model,
+            "duration_seconds": round(float(result.duration_seconds), 3),
+            "success": bool(getattr(result, "execution_success", False)),
+            "exit_reason": getattr(result, "exit_reason", None),
+            "error_classification": getattr(result, "error_classification", None),
+            "error_code": getattr(result, "error_code", None),
+            "timestamp": _dt.datetime.now(tz=_dt.UTC).isoformat(),
+        })
+        if len(self.attempt_history) > MAX_ATTEMPT_HISTORY:
+            self.attempt_history = self.attempt_history[-MAX_ATTEMPT_HISTORY:]
         # Each attempt replaces evidence, including unverified legacy/failure
         # results. An earlier successful echo must not survive a later attempt.
         self.model_echo_status = getattr(result, "model_echo_status", None)

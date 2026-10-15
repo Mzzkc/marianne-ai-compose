@@ -21,7 +21,9 @@ from marianne.execution.base import SheetRequestState
 from marianne.execution.instruments.cli_backend import PluginCliBackend
 
 
-def _profile(*, grace: float = 0.2) -> InstrumentProfile:
+def _profile(
+    *, grace: float = 0.2, first_output: float | None = None
+) -> InstrumentProfile:
     return InstrumentProfile(
         name="drain-406",
         display_name="Drain 406",
@@ -34,6 +36,7 @@ def _profile(*, grace: float = 0.2) -> InstrumentProfile:
                                prompt_via_stdin=False, start_new_session=True),
             output=CliOutputConfig(format="text"),
             post_exit_drain_grace_seconds=grace,
+            first_output_timeout_seconds=first_output,
         ),
     )
 
@@ -229,3 +232,43 @@ async def test_log_events_bind_request_bytes_and_timeout_phase(monkeypatch) -> N
         assert fields["job_id"] == "job-406"
         assert fields["sheet_num"] == 3
         assert fields["stderr_bytes"] == 0
+
+
+@pytest.mark.asyncio
+async def test_zero_output_session_is_struck_at_first_output_bound() -> None:
+    """GH #434: a CLI that produces no bytes for first_output_timeout_seconds
+    is ended as a stale timeout long before the sheet timeout, and the result
+    carries the stale marker the classifier keys EXECUTION_STALE on."""
+    backend = PluginCliBackend(_profile(first_output=0.4))
+    start = time.monotonic()
+    # Sheet timeout 120 s; the strike must end it at the 0.4 s bound.
+    result = await backend.execute("import time; time.sleep(200)", timeout_seconds=120)
+    elapsed = time.monotonic() - start
+    assert result.exit_reason == "timeout"
+    assert result.success is False
+    assert "Stale execution" in result.stderr
+    assert elapsed < 30, elapsed  # well before the 120 s sheet timeout
+
+
+@pytest.mark.asyncio
+async def test_first_output_bound_is_inert_once_output_starts() -> None:
+    """A session that speaks within the bound is governed only by the sheet
+    timeout afterwards — a long silence AFTER the first byte is thinking."""
+    backend = PluginCliBackend(_profile(first_output=0.3))
+    result = await backend.execute(
+        "import time; print('hello', flush=True); time.sleep(1.2); print('done')",
+        timeout_seconds=10,
+    )
+    assert result.exit_reason == "completed"
+    assert result.exit_code == 0
+    assert "Stale execution" not in result.stderr
+    assert "done" in result.stdout
+
+
+@pytest.mark.asyncio
+async def test_first_output_bound_unset_keeps_the_sheet_timeout_contract() -> None:
+    backend = PluginCliBackend(_profile())
+    result = await backend.execute("import time; time.sleep(30)", timeout_seconds=0.4)
+    assert result.exit_reason == "timeout"
+    assert "Stale execution" not in result.stderr
+

@@ -111,6 +111,10 @@ async def _drain_stream(
             on_chunk(chunk)
 
 
+class _FirstOutputStall(Exception):
+    """The CLI produced no bytes within ``first_output_timeout_seconds``."""
+
+
 async def _wait_for_parent_exit(
     proc: asyncio.subprocess.Process,
     descendants: dict[int, DescendantIdentity],
@@ -863,6 +867,50 @@ class PluginCliBackend(Backend):
             f"'{'/'.join(str(p) for p in first.schema_path)}'{expected}"
         )
 
+    async def _wait_bounded_by_first_output(
+        self,
+        proc: asyncio.subprocess.Process,
+        descendants: dict[int, DescendantIdentity],
+        parent_create_time: float | None,
+        parent_start_ticks: int | None,
+        effective_timeout: float,
+        stdout_chunks: list[bytes],
+        stderr_chunks: list[bytes],
+    ) -> int:
+        """Wait for the parent to exit, within the sheet timeout, and (GH #434)
+        raise ``_FirstOutputStall`` if the profile bounds first output and the
+        bound passes with zero bytes on both pipes."""
+        bound = self._cli.first_output_timeout_seconds
+        waiter = asyncio.ensure_future(
+            _wait_for_parent_exit(
+                proc, descendants, parent_create_time,
+                parent_start_ticks=parent_start_ticks,
+            )
+        )
+        try:
+            if bound is None or bound >= effective_timeout:
+                return await asyncio.wait_for(waiter, timeout=effective_timeout)
+            deadline = time.monotonic() + effective_timeout
+            first_output_deadline = time.monotonic() + bound
+            while True:
+                if stdout_chunks or stderr_chunks:
+                    # Output has started; the ordinary sheet timeout governs.
+                    remaining = max(0.0, deadline - time.monotonic())
+                    return await asyncio.wait_for(waiter, timeout=remaining)
+                now = time.monotonic()
+                if now >= first_output_deadline:
+                    raise _FirstOutputStall
+                step = min(0.25, first_output_deadline - now, deadline - now)
+                done, _ = await asyncio.wait({waiter}, timeout=max(step, 0.0))
+                if done:
+                    return waiter.result()
+                if time.monotonic() >= deadline:
+                    raise TimeoutError
+        finally:
+            if not waiter.done():
+                waiter.cancel()
+                await asyncio.gather(waiter, return_exceptions=True)
+
     def _parse_output(
         self,
         stdout: str,
@@ -1564,13 +1612,12 @@ class PluginCliBackend(Backend):
                     proc.stderr, stderr_chunks, on_chunk=_safe_emit("stderr"),
                 )),
             ]
+            first_output_stall = False
             try:
                 try:
-                    exit_code = await asyncio.wait_for(
-                        _wait_for_parent_exit(proc, descendants,
-                                              parent_create_time,
-                                             parent_start_ticks=parent_start_ticks),
-                        timeout=effective_timeout,
+                    exit_code = await self._wait_bounded_by_first_output(
+                        proc, descendants, parent_create_time, parent_start_ticks,
+                        effective_timeout, stdout_chunks, stderr_chunks,
                     )
                     if parent_create_time is not None:
                         descendants.update((child.pid, child) for child in
@@ -1586,6 +1633,25 @@ class PluginCliBackend(Backend):
                     except TimeoutError:
                         post_exit_grace_fired = True
                         returncode_at_timeout = exit_code
+                except _FirstOutputStall:
+                    # GH #434: zero bytes for first_output_timeout_seconds is a
+                    # dead session at start, not thinking. End it NOW as a
+                    # timeout carrying the stale marker so the classifier
+                    # files it as EXECUTION_STALE (120 s retry, then fallback)
+                    # instead of the whole sheet timeout reading as success
+                    # for whoever played next.
+                    first_output_stall = True
+                    returncode_at_timeout = proc.returncode
+                    _logger.warning(
+                        "plugin_cli_first_output_stall",
+                        instrument=self._profile.name,
+                        first_output_timeout=self._cli.first_output_timeout_seconds,
+                        timeout=effective_timeout,
+                        job_id=job_id,
+                        sheet_num=sheet_num,
+                        returncode_at_timeout=returncode_at_timeout,
+                    )
+                    exit_reason = "timeout"
                 except TimeoutError:
                     returncode_at_timeout = proc.returncode
                     _logger.warning(
@@ -1635,6 +1701,15 @@ class PluginCliBackend(Backend):
                 stderr_data = b"".join(stderr_chunks).decode(
                     "utf-8", errors="replace"
                 )
+                if first_output_stall:
+                    # The classifier keys EXECUTION_STALE on this marker
+                    # (core/errors/classifier.py, F-097); it is the only
+                    # text a zero-byte session has.
+                    stderr_data += (
+                        f"\nStale execution: no output within "
+                        f"{self._cli.first_output_timeout_seconds:g}s of start "
+                        "(first_output_timeout_seconds, GH #434)\n"
+                    )
 
         except FileNotFoundError:
             # After ensuring cwd exists above, this is genuinely about

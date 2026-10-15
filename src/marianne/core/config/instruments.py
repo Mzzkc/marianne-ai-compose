@@ -669,6 +669,18 @@ class CliProfile(BaseModel):
         gt=0,
         description="Maximum time to drain inherited pipes after the CLI parent exits",
     )
+    first_output_timeout_seconds: float | None = Field(
+        default=None,
+        gt=0,
+        description="Seconds the CLI may run with ZERO bytes on stdout and stderr "
+        "before the attempt is ended as a stall (GH #434). A streaming agent "
+        "emits its init event within seconds of a healthy start, so silence "
+        "is a dead session, not thinking; the attempt ends early with "
+        "exit_reason 'timeout' and a 'Stale execution' marker so the baton "
+        "retries/falls back instead of burning the whole sheet timeout. "
+        "None = no first-output bound; set it on profiles whose output streams "
+        "(jsonl), never on json/text profiles that emit only at the end.",
+    )
 
     command: CliCommand = Field(
         description="How to build the CLI command",
