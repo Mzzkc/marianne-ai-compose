@@ -174,7 +174,21 @@ async def test_recurring_cli_score_restarts_without_overlap_or_duplicate_due_chi
         before_duplicate = await manager._schedule_registry.get("recurring-runtime-e2e")
         await _redeliver_due(manager, first_due_at)
         after_duplicate = await manager._schedule_registry.get("recurring-runtime-e2e")
-        assert after_duplicate == before_duplicate
+        assert before_duplicate is not None and after_duplicate is not None
+        # An already-dispatched *later* natural one-second tick may finish
+        # while the duplicate is redelivered, legitimately advancing due and
+        # outcome fields. The same due must not replace registration authority
+        # or submit another child; the latter is checked immediately below.
+        for field in (
+            "schedule_id", "score_name", "score_path", "schedule_json",
+            "source_digest", "enabled", "created_at", "last_run_id",
+            "pinned_source_digest", "registration_id",
+        ):
+            assert getattr(after_duplicate, field) == getattr(before_duplicate, field)
+        assert after_duplicate.next_due_at >= before_duplicate.next_due_at
+        assert after_duplicate.last_due_at is not None
+        assert before_duplicate.last_due_at is not None
+        assert after_duplicate.last_due_at >= before_duplicate.last_due_at
         assert [job_id for job_id in manager._job_meta if "--scheduled--" in job_id] == [
             first_child_id
         ]
