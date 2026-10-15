@@ -95,7 +95,7 @@ async def test_exited_parent_reaps_detached_pipe_owner(
 
     if missed_ancestry:
         monkeypatch.setattr(cli_backend, "snapshot_descendant_trees",
-                            lambda pid, born: ())
+                            lambda pid, born, **_: ())
 
     events: list[tuple[str, dict]] = []
 

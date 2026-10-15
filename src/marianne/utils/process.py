@@ -81,6 +81,22 @@ class DescendantIdentity:
 _CLOCK_STEP_TOLERANCE_SECONDS = 60.0
 
 
+def spawn_identity(pid: int) -> tuple[float | None, int | None]:
+    """The two identities a caller records at spawn for a process it owns.
+
+    The kernel start tick (``/proc/<pid>/stat`` field 22, boot-relative) is
+    the stable Linux identity; psutil's ``create_time()`` float drifts with
+    every wall-clock correction and is the non-Linux fallback only (GH #446:
+    Circuit measured it accumulating ~6 s/min under Hyper-V time sync, so no
+    tolerance makes it safe for a sheet that runs an hour).
+    """
+    try:
+        created = psutil.Process(pid).create_time()
+    except (psutil.NoSuchProcess, psutil.AccessDenied, ValueError, TypeError):
+        return None, None
+    return created, _proc_start_ticks(pid)
+
+
 def _proc_start_ticks(pid: int) -> int | None:
     """Read the kernel's stable process start tick, independent of wall time."""
     try:
@@ -390,16 +406,16 @@ async def run_bounded_command(
         asyncio.create_task(_drain_pipe(proc.stderr, err)),
     ]
     descendants: dict[int, DescendantIdentity] = {}
-    try:
-        observed_parent_create_time: float | None = psutil.Process(proc.pid).create_time()
-    except (psutil.NoSuchProcess, psutil.AccessDenied, ValueError, TypeError):
-        observed_parent_create_time = None
+    observed_parent_create_time, observed_parent_ticks = spawn_identity(proc.pid)
 
     def _capture() -> None:
         if proc.pid is not None and observed_parent_create_time is not None:
             descendants.update(
                 (d.pid, d)
-                for d in snapshot_descendant_trees(proc.pid, observed_parent_create_time)
+                for d in snapshot_descendant_trees(
+                    proc.pid, observed_parent_create_time,
+                    parent_start_ticks=observed_parent_ticks,
+                )
             )
 
     async def _parent_exit() -> int | None:

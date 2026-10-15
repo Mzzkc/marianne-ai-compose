@@ -28,7 +28,6 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-import psutil
 from jsonschema.exceptions import SchemaError
 from jsonschema.validators import validator_for
 
@@ -50,6 +49,7 @@ from marianne.utils.process import (
     reap_descendant_trees,
     snapshot_descendant_trees,
     snapshot_pipe_holders,
+    spawn_identity,
 )
 from marianne.utils.process import (
     safe_killpg as _safe_killpg,
@@ -115,6 +115,7 @@ async def _wait_for_parent_exit(
     proc: asyncio.subprocess.Process,
     descendants: dict[int, DescendantIdentity],
     parent_create_time: float | None,
+    parent_start_ticks: int | None = None,
 ) -> int:
     """Observe the direct child without waiting for inherited pipes to close.
 
@@ -126,7 +127,8 @@ async def _wait_for_parent_exit(
         if proc.pid is not None and parent_create_time is not None:
             descendants.update((child.pid, child)
                                for child in snapshot_descendant_trees(
-                                   proc.pid, parent_create_time))
+                                   proc.pid, parent_create_time,
+                                   parent_start_ticks=parent_start_ticks))
         # Poll rapidly during the short spawn/exit window, then avoid a
         # constant psutil scan throughout hours-long CLI executions.
         interval = 0.001 if time.monotonic() - started < 0.2 else 0.05
@@ -134,7 +136,8 @@ async def _wait_for_parent_exit(
     if proc.pid is not None and parent_create_time is not None:
         descendants.update((child.pid, child)
                            for child in snapshot_descendant_trees(
-                               proc.pid, parent_create_time))
+                               proc.pid, parent_create_time,
+                               parent_start_ticks=parent_start_ticks))
     return proc.returncode
 
 
@@ -1445,10 +1448,9 @@ class PluginCliBackend(Backend):
                 env=env,
                 start_new_session=_force_new_session,
             )
-            try:
-                parent_create_time = psutil.Process(proc.pid).create_time()
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                parent_create_time = None
+            # GH #446: the kernel start tick is the identity; the float is
+            # the non-Linux fallback (it drifts with every clock correction).
+            parent_create_time, parent_start_ticks = spawn_identity(proc.pid)
             pipe_inodes: set[int] = set()
             for stream in (proc.stdout, proc.stderr):
                 if not isinstance(stream, asyncio.StreamReader):
@@ -1531,7 +1533,8 @@ class PluginCliBackend(Backend):
                 if proc.pid is not None and parent_create_time is not None:
                     descendants.update((child.pid, child)
                                        for child in snapshot_descendant_trees(
-                                           proc.pid, parent_create_time))
+                                           proc.pid, parent_create_time,
+                                           parent_start_ticks=parent_start_ticks))
 
             def _safe_emit(stream_name: str) -> Callable[[bytes], None]:
                 callback = self._on_output
@@ -1565,7 +1568,8 @@ class PluginCliBackend(Backend):
                 try:
                     exit_code = await asyncio.wait_for(
                         _wait_for_parent_exit(proc, descendants,
-                                              parent_create_time),
+                                              parent_create_time,
+                                             parent_start_ticks=parent_start_ticks),
                         timeout=effective_timeout,
                     )
                     if parent_create_time is not None:

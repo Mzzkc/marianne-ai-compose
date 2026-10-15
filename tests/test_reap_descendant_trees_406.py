@@ -101,40 +101,58 @@ def test_linux_start_ticks_refuse_recycled_pid_despite_matching_float(monkeypatc
     assert signals == []
 
 
-def test_float_only_caller_survives_a_wall_clock_step(monkeypatch) -> None:
-    """GH #446 (Circuit): CLI-instrument musicians and piped skip_when /
-    command_succeeds pass only the spawn-time float. psutil's create_time moves
-    with every wall-clock step (btime is re-read per call), so an exact compare
-    went blind for the parent's life after the first step: a child forked after
-    the step was never captured. A step-sized delta must still capture; a
-    recycled-PID-sized delta must still refuse."""
+def test_float_only_caller_survives_a_wall_clock_step() -> None:
+    """GH #446 (Circuit): a caller that recorded only the spawn-time float must
+    still capture after the clock moved (Circuit measured ~6 s/min of drift
+    under Hyper-V time sync) and must still refuse a recycled PID. The probe
+    offsets the RECORDED float; it never patches psutil, because psutil's own
+    children() reuse guard compares the parent's live create_time with each
+    child's and drops the child when the parent reads newer (Circuit P2: the
+    first version of this test failed 4/4 in any process under 3 s old)."""
     import subprocess
 
     current = psutil.Process()
-    spawn_float = current.create_time()
+    live_float = current.create_time()
     child = subprocess.Popen(["sleep", "30"])
     try:
-        stepped = spawn_float + 3.0  # Circuit measured +3.00 s steps on WSL
-        real_create_time = psutil.Process.create_time
-        monkeypatch.setattr(
-            psutil.Process, "create_time",
-            lambda self: stepped if self.pid == current.pid else real_create_time(self),
-        )
-        # same process, stepped clock: the child is still captured
-        captured = process.snapshot_descendant_trees(current.pid, spawn_float)
+        # recorded 3 s behind the live reading (one clock correction): captured
+        captured = process.snapshot_descendant_trees(current.pid, live_float - 3.0)
         assert child.pid in {c.pid for c in captured}
-        # a recycled PID: the dead process's float is hours away, refused
-        assert process.snapshot_descendant_trees(current.pid, spawn_float - 7200.0) == ()
+        # recorded hours behind (a dead process's float on a recycled PID): refused
+        assert process.snapshot_descendant_trees(current.pid, live_float - 7200.0) == ()
         # the tick-bound caller ignores the float entirely
         ticks = process._proc_start_ticks(current.pid)
         assert ticks is not None
         tick_bound = process.snapshot_descendant_trees(
-            current.pid, spawn_float - 7200.0, parent_start_ticks=ticks
+            current.pid, live_float - 7200.0, parent_start_ticks=ticks
         )
         assert child.pid in {c.pid for c in tick_bound}
         assert process.snapshot_descendant_trees(
-            current.pid, spawn_float, parent_start_ticks=ticks + 1
+            current.pid, live_float, parent_start_ticks=ticks + 1
         ) == ()
     finally:
         child.kill()
         child.wait()
+
+
+def test_spawn_identity_records_ticks_so_every_caller_is_drift_proof() -> None:
+    """GH #446 complete fix: the three non-supervisor callers (CLI musicians,
+    piped skip_when/command_succeeds) now record the kernel start tick at
+    spawn through ``spawn_identity`` and pass it, so a float that has drifted
+    past any tolerance never blinds them."""
+    import subprocess
+
+    created, ticks = process.spawn_identity(os.getpid())
+    assert created is not None and ticks is not None
+    assert ticks == process._proc_start_ticks(os.getpid())
+    child = subprocess.Popen(["sleep", "30"])
+    try:
+        # a float drifted far beyond any step tolerance, with the tick: still captured
+        captured = process.snapshot_descendant_trees(
+            os.getpid(), created - 600.0, parent_start_ticks=ticks
+        )
+        assert child.pid in {c.pid for c in captured}
+    finally:
+        child.kill()
+        child.wait()
+    assert process.spawn_identity(2**22 - 1) == (None, None)
