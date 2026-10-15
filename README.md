@@ -22,7 +22,7 @@ Marianne doesn't care what domain you're working in. It orchestrates anything th
 
 ### Deep Systems Work
 
-Rewrite a C codebase in Rust with architecture upgrades. Run a 14-stage documentation overhaul with gap analysis and automated verification. Chain a 17-stage issue solver with fan-out code reviewers that self-chain into the next cycle. These are scores people run today.
+Rewrite a C codebase in Rust with architecture upgrades. Run a 14-stage documentation overhaul with gap analysis and automated verification. Chain a 13-sheet DAG-driven issue solver — bounded implementation loop, fan-out reviewers, concert-trigger self-chaining — through issue after issue. These are scores people run today.
 
 ### Product Generation
 
@@ -187,7 +187,7 @@ See the [Score Writing Guide](docs/score-writing-guide.md) for complete document
 | Score | What It Does |
 |-------|-------------|
 | [design-review.yaml](examples/patterns/design-review.yaml) | Multi-perspective design review with parallel expert agents |
-| [issue-solver.yaml](examples/engineering/issue-solver.yaml) | 17-stage roadmap-driven issue solver with fan-out reviewers |
+| [issue-solver.yaml](examples/engineering/issue-solver.yaml) | DAG-driven issue solver: 13 sheets, bounded implementation loop, skip-gated terminal path, concert-trigger self-chaining |
 | [worktree-isolation.yaml](examples/getting-started/worktree-isolation.yaml) | Parallel-safe git worktree isolation |
 | [score-composer.yaml](examples/engineering/score-composer.yaml) | AI-assisted score authoring |
 

@@ -133,6 +133,16 @@ sheet:
   instrument_map:
     newcomer: [6]
 
+  # Chain to the issue solver when the final stage (10 → sheet 15) genuinely
+  # succeeds. Score path is relative to this score file — pinned repo bytes,
+  # fresh workspace per solver iteration, depth-guarded at admission.
+  triggers:
+    10:
+      on_success:
+        - concert:
+            score: "issue-solver.yaml"
+            fresh: true
+
 prompt:
   variables:
     # ─────────────────────────────────────────────────────────────────────
@@ -1637,15 +1647,11 @@ validations:
     stage: 2
 
 # Chain to issue-solver.yaml — artifacts are contract-identical with issue-triage,
-# so solver consumes without adaptation. EDIT job_path to the absolute path of
-# issue-solver.yaml on your system before first run (relative paths resolve from
-# the conductor's CWD, not this score's directory).
-on_success:
-  - type: run_job
-    job_path: "[CHANGE THIS: ABSOLUTE path to examples/engineering/issue-solver.yaml]"
-    description: "Chain to issue-solver. Quality-triage emits issue-triage-dag-v1 schema, so issue-solver consumes directly."
-    fresh: true
-
+# so solver consumes without adaptation. The final stage's on_success concert
+# trigger (declared under sheet.triggers below) submits the solver through the
+# conductor's admission path: the score path resolves relative to THIS score
+# file (portable, pinned repo bytes — no per-host absolute path to edit), each
+# iteration gets a fresh workspace, and chain depth is guarded at admission.
 concert:
   enabled: true
   max_chain_depth: 2        # this score (1) → issue-solver (1 hop; solver self-chains internally)
