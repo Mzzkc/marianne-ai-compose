@@ -43,6 +43,11 @@ L11 orphan-check     a V-code check class defined in ``src/marianne/
                       validation`` that the runner never registers and no
                       doc row marks retired (GH #439)
 
+L12 glossary-unresolved  a glossary row whose code name is not a schema key
+                      path, ``mzt`` command, or status value, and not a
+                      ``(concept)`` row with an existing doc anchor; a broken
+                      link target is the same defect (PL-10)
+
 Exit 0 when no finding is outside the baseline, 1 on regression, 2 on usage or
 environment error. ``--json`` prints machine-readable output.
 """
@@ -77,8 +82,9 @@ CHECKS = {
     "L09": "silent-switch",
     "L10": "dead-end-hint",
     "L11": "orphan-check",
+    "L12": "glossary-unresolved",
 }
-GATING = {"L01", "L02", "L03", "L04", "L05", "L06", "L07", "L10", "L11"}
+GATING = {"L01", "L02", "L03", "L04", "L05", "L06", "L07", "L10", "L11", "L12"}
 
 # Author surfaces, relative to the repository root. The plugin tree is the
 # ``plugins`` submodule.
@@ -94,6 +100,7 @@ SKILL_REFS = (
 )
 CONFIG_REFERENCE = "docs/configuration-reference.md"
 CLI_REFERENCE = "docs/cli-reference.md"
+GLOSSARY = "docs/glossary.md"
 
 # Words that carry no meaning for L02: a description that only says "the" or
 # "configuration" shares nothing with its name.
@@ -581,6 +588,189 @@ def unread_fields(repo: Path, keys: list[KeyInfo]) -> dict[str, int]:
 
 
 # --------------------------------------------------------------------------
+# glossary (L12, PL-10)
+# --------------------------------------------------------------------------
+
+# Each definition is a bullet or table row beginning with **term** (`code`)
+# or **term** (concept). Malformed rows remain visible to the gate.
+_GLOSSARY_ROW = re.compile(
+    r"^\*\*(?P<term>.+?)\*\*\s+\((?:`(?P<code>[^`]+)`|(?P<concept>concept))\)"
+    r"(?:\s*:)?(?:\s|$)"
+)
+_LINK = re.compile(r"\[[^]]*\]\((?P<target>[^)\s]+)\)")
+
+
+def mzt_commands() -> set[str]:
+    """Every command the Typer app registers, including subcommand paths."""
+    import click
+    import typer
+
+    from marianne.cli import app
+
+    names: set[str] = set()
+
+    def walk(group: click.Group, prefix: str) -> None:
+        for name, sub in group.commands.items():
+            path = f"{prefix} {name}"
+            names.add(path)
+            if isinstance(sub, click.Group):
+                walk(sub, path)
+
+    command = typer.main.get_command(app)
+    if isinstance(command, click.Group):
+        walk(command, "mzt")
+    return names
+
+
+def status_values() -> set[str]:
+    """Every run- and sheet-status value the runtime can report."""
+    from marianne.core.checkpoint import JobStatus, SheetStatus
+
+    return {status.value for status in (*JobStatus, *SheetStatus)}
+
+
+def _doc_anchors(repo: Path) -> dict[str, set[str]]:
+    """Markdown heading ids, including duplicate suffixes and explicit anchors."""
+    anchors: dict[str, set[str]] = {}
+    for path in sorted((repo / "docs").rglob("*.md")):
+        ids: set[str] = set()
+        counts: Counter[str] = Counter()
+        fence: str | None = None
+        for line in path.read_text(encoding="utf-8").splitlines():
+            marker = re.match(r"^\s*(`{3,}|~{3,})", line)
+            if marker:
+                if fence is None:
+                    fence = marker[1][0]
+                elif marker[1][0] == fence:
+                    fence = None
+                continue
+            if fence is not None:
+                continue
+            ids.update(re.findall(r'<a\s+(?:id|name)=["\']([^"\']+)["\']', line))
+            heading = re.match(r"^#{1,6}\s+(.+?)(?:\s+#+)?$", line)
+            if heading:
+                slug = re.sub(r"[^\w\s-]", "", heading[1].lower())
+                slug = re.sub(r"\s", "-", slug.strip())
+                count = counts[slug]
+                counts[slug] += 1
+                ids.add(f"{slug}-{count}" if count else slug)
+        anchors[path.relative_to(repo).as_posix()] = ids
+    return anchors
+
+
+def glossary_rows(text: str) -> list[tuple[int, str, str, bool, list[str]]]:
+    """Parse every definition, retaining malformed rows so they cannot pass silently."""
+    rows: list[tuple[int, str, str, bool, list[str]]] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        line = line.strip()
+        if line.startswith("|"):
+            cells = line.strip("|").split("|")
+            first = cells[0].strip()
+            if first in {"Term", "Timer", "Term (code name)"} or all(
+                re.fullmatch(r"\s*:?-+:?\s*", cell) for cell in cells
+            ):
+                continue
+        elif line.startswith("- "):
+            first = line[2:]
+        else:
+            continue
+        match = _GLOSSARY_ROW.match(first)
+        targets = [m["target"] for m in _LINK.finditer(line)]
+        if match:
+            rows.append(
+                (number, match["term"], match["code"] or "", match["concept"] is not None, targets)
+            )
+        else:
+            rows.append((number, first, "", False, targets))
+    return rows
+
+
+def _glossary_schema_paths(keys: list[KeyInfo], root: type[BaseModel]) -> set[str]:
+    """Inventory paths plus repeated model locations and field-scoped aliases.
+
+    The reporting inventory expands each model once. A glossary must also
+    resolve that model under other parents (failure hooks, trigger actions,
+    per-sheet instrument settings), preserving its container path and aliases.
+    """
+    paths = {key.path for key in keys}
+
+    def walk(model: type[BaseModel], prefix: str, ancestors: set[type[BaseModel]]) -> None:
+        if model in ancestors:
+            return
+        for name, info in model.model_fields.items():
+            spellings = {info.alias if isinstance(info.alias, str) else name}
+            choices = getattr(info.validation_alias, "choices", ())
+            spellings.update(choice for choice in choices if isinstance(choice, str))
+            for spelling in spellings:
+                path = f"{prefix}.{spelling}" if prefix else spelling
+                paths.add(path)
+                for child in _models_in(info.annotation):
+                    walk(child, path + _container_suffix(info.annotation), ancestors | {model})
+
+    walk(root, "", set())
+    return paths
+
+
+def glossary_findings(repo: Path, keys: list[KeyInfo], root: type[BaseModel]) -> list[Finding]:
+    """L12: each row resolves to a key, registered command, status or linked concept.
+
+    Definitions require a configuration/CLI reference anchor. Concept rows may
+    use any existing docs anchor. Links may be repo-relative (docs/...) or
+    document-relative (../docs/... or configuration-reference.md).
+    """
+    page = repo / GLOSSARY
+    rows = glossary_rows(page.read_text(encoding="utf-8")) if page.exists() else []
+    if not rows:
+        return [
+            Finding(
+                "L12",
+                "glossary",
+                "glossary is missing or contains no definitions",
+                where=[GLOSSARY],
+            )
+        ]
+    known_paths = _glossary_schema_paths(keys, root)
+    commands = mzt_commands()
+    statuses = status_values()
+    anchors = _doc_anchors(repo)
+    findings: list[Finding] = []
+    for number, term, code, is_concept, targets in rows:
+        reasons: list[str] = []
+        if not is_concept and code not in known_paths | commands | statuses:
+            reasons.append(f"`{code or term}` names no schema key, mzt command, or status value")
+        if not targets:
+            reasons.append("row has no documentation anchor")
+        for target in targets:
+            file_part, separator, anchor = target.partition("#")
+            if file_part.startswith("docs/"):
+                path = repo / file_part
+            else:
+                path = repo / "docs" / file_part
+            try:
+                relative = path.resolve().relative_to(repo.resolve()).as_posix()
+            except ValueError:
+                relative = ""
+            allowed = is_concept or relative in {CONFIG_REFERENCE, CLI_REFERENCE}
+            if (
+                not separator
+                or not anchor
+                or not allowed
+                or anchor not in anchors.get(relative, set())
+            ):
+                reasons.append(f"unresolved documentation anchor {target}")
+        if reasons:
+            findings.append(
+                Finding(
+                    "L12",
+                    code or term,
+                    f"glossary.md:{number} ({term}): " + "; ".join(reasons),
+                    where=[f"{GLOSSARY}:{number}"],
+                )
+            )
+    return findings
+
+
+# --------------------------------------------------------------------------
 # checks
 # --------------------------------------------------------------------------
 
@@ -746,12 +936,12 @@ def run_checks(
     # replaces this explicit list.
     counts = unread_fields(repo, keys)
     for section in sorted(_UNREAD_ROOT_SECTIONS):
-        key = by_path.get(section)
-        if key is not None and not key.description.startswith(reserved_mark):
+        root_key = by_path.get(section)
+        if root_key is not None and not root_key.description.startswith(reserved_mark):
             findings.append(Finding(
                 "L08", section,
                 "unread score section is not marked Reserved or Deprecated",
-                where=[key.source],
+                where=[root_key.source],
             ))
     for key in keys:
         if counts.get(key.field, 1) == 0:
@@ -815,6 +1005,9 @@ def run_checks(
                 where=[origin],
             )
         )
+
+    # L12 ships without baseline debt: missing/malformed rows fail as well.
+    findings.extend(glossary_findings(repo, keys, root))
 
     # dedupe by id, keep first
     seen: set[str] = set()

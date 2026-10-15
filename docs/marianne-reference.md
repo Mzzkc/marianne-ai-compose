@@ -609,7 +609,10 @@ Shannon entropy over pattern application distribution. Low entropy triggers auto
 
 ## Score Anatomy
 
-Every score needs 3 required top-level fields plus optional configuration:
+Every score needs 3 required top-level fields plus optional configuration.
+Term-by-term: every orchestral word in this anatomy — and its exact code name —
+is resolved in the [glossary](glossary.md) (checked by the language gate), with
+the three timers that authors most often confuse side by side at the top.
 
 ```yaml
 name: "job-name"              # REQUIRED: unique identifier

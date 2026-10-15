@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
 
@@ -315,3 +315,152 @@ def test_main_refuses_a_marianne_imported_from_outside_the_repo(
     assert cl.main(["--repo", str(repo), "--json"]) == 2
     assert "not under" in capsys.readouterr().err
     assert cl.main(["--repo", str(repo), "--json", "--allow-foreign-import"]) != 2
+
+
+GLOSSARY_GOOD = """\
+# Glossary
+
+## Terms
+
+- **score name** (`name`): the orchestration's identity \
+([docs](configuration-reference.md#top-level-fields)).
+- **idle timeout** (`stale_detection.idle_timeout_seconds`): seconds with no \
+output before a sheet is stale ([docs](configuration-reference.md#stale_detection)).
+- **musician** (concept): the per-sheet execution agent \
+([how a sheet runs](teaching.md#a-title)).
+"""
+
+GLOSSARY_BAD = """\
+# Glossary
+
+- **bogus timer** (`stale_detection.idle_timeout_secs`): a typo of the idle \
+timer ([docs](configuration-reference.md#stale_detection)).
+- **phantom key** (`instrument_config.timeout_secs`): a typo of the sheet \
+timeout ([docs](configuration-reference.md#top-level-fields)).
+- **dead link** (`name`): resolves, but its target does not \
+([docs](configuration-reference.md#no-such-anchor)).
+"""
+
+
+def test_l12_fires_on_unresolved_glossary_rows(repo: Path) -> None:
+    # Planted defects: a typo'd key, a nonexistent key, and a broken anchor.
+    _write(repo, "docs/glossary.md", GLOSSARY_BAD)
+    ids = _ids(repo)
+    assert "L12:stale_detection.idle_timeout_secs" in ids
+    assert "L12:instrument_config.timeout_secs" in ids
+    assert "L12:name" in ids  # the dead-link row; the anchor is part of resolution
+
+
+def test_l12_silent_on_a_resolving_glossary(repo: Path) -> None:
+    # Valid rows: real key paths, a command, a status, and a (concept) row
+    # whose link target is a real heading in a real doc. The anchors must
+    # exist as headings in the synthetic repo's docs.
+    _write(
+        repo,
+        "docs/configuration-reference.md",
+        "# Top Level Fields\n\n## stale_detection\n",
+    )
+    _write(repo, "docs/teaching.md", DOCS_TEACHING + "\n## A Title\n")
+    _write(repo, "docs/glossary.md", GLOSSARY_GOOD)
+    ids = _ids(repo)
+    assert not [i for i in ids if i.startswith("L12:")]
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| **sheet timeout** (`instrument_config.timeout_secs`) | A misspelling "
+        "[docs](docs/configuration-reference.md#top-level-fields). |",
+        "- **run**: No code name [docs](docs/cli-reference.md#mzt-run).",
+        "- **musician** (concept): No link.",
+        "- **musician** (concept): [external](https://example.com).",
+        "- **name** (`name`): No link.",
+        "- **name** (`name`): [page without anchor](docs/configuration-reference.md).",
+        "- **name** (`name`): [wrong surface](docs/teaching.md#a-title).",
+        "- **command** (`mzt imaginary-command`): [docs](docs/cli-reference.md#mzt-run).",
+        "- **status** (`imaginary_status`): [docs](docs/cli-reference.md#mzt-status).",
+        "- **name** (`name`): [missing anchor](docs/configuration-reference.md#missing).",
+        "- **name** (`name`): [external](https://example.com).",
+        "- **name** (`name`): [bad link](docs/configuration-reference.md#top-level-fields) "
+        "[bad extra](docs/missing.md#missing).",
+    ],
+)
+def test_l12_refuses_unresolved_or_unlinked_rows(repo: Path, row: str) -> None:
+    _write(repo, cl.GLOSSARY, "# Glossary\n\n" + row + "\n")
+    _write(repo, cl.CONFIG_REFERENCE, "# Top Level Fields\n")
+    _write(repo, cl.CLI_REFERENCE, "# mzt run\n# mzt status\n")
+    findings = cl.glossary_findings(repo, cl.schema_inventory(Root, repo), Root)
+    assert findings, row
+    assert all(f.check == "L12" and f.gating for f in findings)
+
+
+def test_l12_resolves_every_timer_and_command_status_and_concept(repo: Path) -> None:
+    _write(repo, cl.CONFIG_REFERENCE, "# Top Level Fields\n## stale_detection\n")
+    _write(repo, cl.CLI_REFERENCE, "# mzt run\n# mzt status\n")
+    _write(repo, "docs/teaching.md", "# A Title\n")
+    _write(
+        repo,
+        cl.GLOSSARY,
+        """# Glossary
+
+| Term | Meaning |
+|------|---------|
+| **idle** (`stale_detection.idle_timeout_seconds`) | [docs](cli-reference.md#mzt-run). |
+- **name** (`name`): [docs](docs/configuration-reference.md#top-level-fields).
+- **run** (`mzt run`): [docs](docs/cli-reference.md#mzt-run).
+- **status** (`fermata`): [docs](docs/cli-reference.md#mzt-status).
+- **musician** (concept): [docs](docs/teaching.md#a-title).
+""",
+    )
+    assert cl.glossary_findings(repo, cl.schema_inventory(Root, repo), Root) == []
+    assert len(cl.glossary_rows((repo / cl.GLOSSARY).read_text())) == 5
+
+
+def test_l12_missing_or_empty_glossary_is_not_silent(repo: Path) -> None:
+    for content in (None, "# Glossary\n"):
+        if content is not None:
+            _write(repo, cl.GLOSSARY, content)
+        findings = cl.glossary_findings(repo, cl.schema_inventory(Root, repo), Root)
+        assert findings
+
+
+def test_l12_aliases_belong_only_to_their_schema_location(repo: Path) -> None:
+    class Hook(BaseModel):
+        on_failure: str = Field(
+            default="continue", validation_alias=AliasChoices("if_hook_fails", "on_failure")
+        )
+
+    class Trigger(BaseModel):
+        on_failure: str = "continue"
+
+    class AliasedRoot(BaseModel):
+        on_success: list[Hook] = []
+        on_failure: list[Hook] = []
+        trigger: Trigger = Field(default_factory=Trigger)
+
+    _write(repo, cl.CONFIG_REFERENCE, "# Hooks\n")
+    _write(
+        repo,
+        cl.GLOSSARY,
+        """# Glossary
+- **success hook** (`on_success[].if_hook_fails`): [docs](../docs/configuration-reference.md#hooks).
+- **failure hook** (`on_failure[].if_hook_fails`): [docs](../docs/configuration-reference.md#hooks).
+- **trigger** (`trigger.if_hook_fails`): [docs](../docs/configuration-reference.md#hooks).
+""",
+    )
+    findings = cl.glossary_findings(repo, cl.schema_inventory(AliasedRoot, repo), AliasedRoot)
+    assert [f.id for f in findings] == ["L12:trigger.if_hook_fails"]
+
+
+def test_l12_anchor_inventory_ignores_code_and_handles_repeated_headings(repo: Path) -> None:
+    _write(repo, cl.CONFIG_REFERENCE, "# Real\n```md\n# Fake\n```\n# Real\n")
+    _write(
+        repo,
+        cl.GLOSSARY,
+        """# Glossary
+- **real** (`name`): [docs](../docs/configuration-reference.md#real-1).
+- **fake** (`workspace`): [docs](../docs/configuration-reference.md#fake).
+""",
+    )
+    findings = cl.glossary_findings(repo, cl.schema_inventory(Root, repo), Root)
+    assert [f.id for f in findings] == ["L12:workspace"]
