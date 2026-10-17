@@ -1701,7 +1701,9 @@ sheet:
 A loop runs its range at least once and evaluates `until` after every complete
 iteration. `count` requests an exact number of passes; `count` with `until`
 acts as a cap. `max_iterations` defaults to 50. `cost_limit_usd` caps spend
-inside the span. Any error while evaluating `until` (an undefined variable, an
+inside the span, measured from the tokens each route reports at its profile's
+price; a route whose profile cannot report a cost (raw shell, no token paths,
+$0 pricing) leaves `max_iterations` as the only bound, and V228 names it. Any error while evaluating `until` (an undefined variable, an
 incompatible comparison, division by zero, an arithmetic result out of range)
 ends the loop with `condition_error` and fails the span's last sheet with E999
 and a message naming the expression; it never leaves the loop mid-decision.

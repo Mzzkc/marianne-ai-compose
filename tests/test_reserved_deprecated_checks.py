@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from marianne.core.config import JobConfig
 from marianne.core.config.schema_walk import strip_unknown_score_fields
 from marianne.validation.checks.reserved import DeprecatedSpellingCheck, ReservedKeyUseCheck
@@ -153,6 +155,8 @@ def test_unknown_key_inside_trigger_action_warns_naming_sheet_timeout(tmp_path: 
     issue = unknown_field_issue(unknown[0], raw)
     assert issue.check_id == "V010"
     assert issue.severity.value == "warning"
+    # A pause action has no timeout of its own, so the hint names the sheet
+    # timeout at the root (the only surface that could have been meant).
     assert "instrument_config.timeout_seconds" in (issue.suggestion or "")
 
 
@@ -175,4 +179,43 @@ def test_unknown_key_inside_run_action_is_tolerated_and_warns(tmp_path: Path) ->
     issue = unknown_field_issue(unknown[0], raw)
     assert issue.check_id == "V010"
     assert issue.severity.value == "warning"
-    assert "instrument_config.timeout_seconds" in (issue.suggestion or "")
+    # The run action owns a timeout_seconds; the hint names THAT, not the root
+    # sheet timeout, which would silently widen one action's bound to the
+    # whole score (GH #451).
+    assert "sheet.triggers.1.on_fail[0].run.timeout_seconds" in (issue.suggestion or "")
+    assert "instrument_config.timeout_seconds" not in (issue.suggestion or "")
+
+
+@pytest.mark.parametrize(
+    ("block", "path"),
+    [
+        ("instrument_config:\n  timeout: 7\n", "instrument_config"),
+        (
+            "instruments:\n  a:\n    profile: cli\n    config:\n      timeout: 9\n",
+            "instruments.a.config",
+        ),
+        (
+            "movements:\n  1:\n    name: m\n    instrument_config:\n      timeout: 11\n",
+            "movements.1.instrument_config",
+        ),
+        ("", "sheet.per_sheet_instrument_config.1"),
+    ],
+)
+def test_bare_timeout_hint_names_the_surface_it_sits_in(
+    tmp_path: Path, block: str, path: str
+) -> None:
+    import yaml
+
+    raw = BASE.format(ws=tmp_path.as_posix()) + block
+    if path.startswith("sheet."):
+        raw = raw.replace(
+            "  total_items: 1\n",
+            "  total_items: 1\n  per_sheet_instrument_config:\n    1:\n      timeout: 13\n",
+            1,
+        )
+    _clean, unknown = strip_unknown_score_fields(yaml.safe_load(raw), JobConfig)
+    hit = next(f for f in unknown if f.key == "timeout")
+    assert hit.path == path
+    issue = unknown_field_issue(hit, raw)
+    assert issue.check_id == "V010"
+    assert (issue.suggestion or "") == f"Use `{path}.timeout_seconds` instead"

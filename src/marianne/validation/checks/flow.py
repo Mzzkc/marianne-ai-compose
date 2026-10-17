@@ -7,7 +7,9 @@ from pathlib import Path
 
 from marianne.core.config import JobConfig
 from marianne.core.config.flow import ConcertTrigger, span_range
+from marianne.core.config.instruments import InstrumentProfile
 from marianne.core.expressions import parse_expression
+from marianne.core.sheet import build_sheets
 from marianne.utils.run_supervisor import subreaper_available
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks.structure import _IDENTITY_VARIABLES
@@ -155,10 +157,39 @@ class JinjaLoopCollisionCheck:
         ]
 
 
+def _zero_cost_reason(
+    profile: InstrumentProfile | None, name: str, model_name: str | None = None
+) -> str | None:
+    """Why this route can never report a cost, or ``None`` when it can.
+
+    ``model_name`` is the sheet's pinned model when it has one; the musician
+    prices the model that actually runs, so the check reads that model's
+    price and falls back to the profile default only when nothing is pinned.
+    """
+    if profile is None or profile.kind != "cli":
+        return None  # unknown or HTTP: not a zero-cost claim this check can make
+    if profile.raw_prompt:
+        return f"`{name}` is a raw shell profile"
+    output = profile.cli.output if profile.cli is not None else None
+    if output is None or not (output.input_tokens_path or output.output_tokens_path):
+        return f"`{name}` declares no token paths in its output config"
+    if not profile.models:
+        return f"`{name}` declares no models (no pricing)"
+    wanted = model_name or profile.default_model
+    model = next((m for m in profile.models if m.name == wanted), None)
+    if model is None:
+        if model_name is not None:
+            return f"`{name}` has no price for pinned model `{model_name}`"
+        model = profile.models[0]
+    if model.cost_per_1k_input <= 0 and model.cost_per_1k_output <= 0:
+        return f"`{name}` prices `{model.name}` at $0"
+    return None
+
+
 class ZeroCostLoopLimitCheck:
     check_id = "V228"
     severity = ValidationSeverity.WARNING
-    description = "A loop cost limit cannot stop zero-cost CLI routes"
+    description = "A loop cost limit cannot stop a route that reports no cost"
 
     def check(self, config: JobConfig, config_path: Path, raw_yaml: str) -> list[ValidationIssue]:
         loops = config.sheet.loops or {}
@@ -170,22 +201,34 @@ class ZeroCostLoopLimitCheck:
             profiles = load_all_profiles()
         except Exception:
             return []
+        sheets = build_sheets(config)
         issues = []
         for span, loop in loops.items():
             if loop.cost_limit_usd is None:
                 continue
-            names = [
-                config.sheet.per_sheet_instruments.get(n, config.effective_instrument_name)
-                for n in span_range(span)
+            span_sheets = set(span_range(span))
+            routes: dict[str, str | None] = {}
+            for sheet in sheets:
+                if sheet.num in span_sheets:
+                    model = sheet.instrument_config.get("model")
+                    routes.setdefault(sheet.instrument_name, str(model) if model else None)
+            # A CLI route reports cost when its profile declares token paths
+            # and a priced model: the musician prices those tokens and the
+            # baton enforces the span cap on them (GH #453). Only a route that
+            # cannot produce a cost makes the cap inert; the warning names
+            # that route and why.
+            reasons = [
+                reason
+                for name, model in routes.items()
+                if (reason := _zero_cost_reason(profiles.get(name), name, model)) is not None
             ]
-            if names and all(
-                profiles.get(name) is not None and profiles[name].kind == "cli" for name in names
-            ):
+            if routes and len(reasons) == len(routes):
                 issues.append(
                     _issue(
                         self.check_id,
                         self.severity,
-                        f"loop {span}: cost_limit_usd cannot stop zero-cost CLI routes",
+                        f"loop {span}: cost_limit_usd cannot stop a route that reports no "
+                        f"cost: {'; '.join(reasons)}",
                     )
                 )
         return issues

@@ -192,6 +192,8 @@ an alias over an existing profile; archive what nothing names.
 - **Root `max_wall_seconds` no longer caps a one-shot score** — It is now the scheduled-tick window `schedule.max_wall_seconds` (the root spelling warns V328 for one release); the research generator no longer emits it for one-shot scores, whose sheet timeouts remain in force
 
 ### Fixed
+- **V010 curated hint names the surface it sits in (GH #451)** — A bare `timeout:` inside an alias `config`, a movement's or sheet's `instrument_config`, or a `run:` trigger action now suggests that surface's `timeout_seconds` instead of the root key, so a hint never widens one seat's or one action's bound to the whole score
+- **V228 fires only for routes that cannot report cost (GH #453)** — A priced CLI route (token paths + model price) makes `cost_limit_usd` bind; the warning now names the route and why it is unpriced (raw shell, no token paths, no models, $0 price, or a pinned model the profile does not price)
 - **Concert trigger self-chain (GH #454)** — A `concert` trigger that names its own score is admitted under a lineage id (`<name>--chain<depth>--<stamp>`) instead of being refused as an active duplicate of its still-running parent; `concert.max_chain_depth` is the only bound
 - **recover_job keeps a fallen-back terminal sheet's instrument name (GH #452)** — Recovery no longer rewrites a COMPLETED/SKIPPED/CANCELLED sheet's `instrument_name` to the primary while keeping the fallback's model; status and diagnose name the instrument that actually ran
 - **SIGABRT crash** — Unified streaming with parallel CancelledError guard

@@ -91,6 +91,28 @@ def _known_leaf_locations() -> dict[str, tuple[str, ...]]:
     return {name: tuple(sorted(paths)) for name, paths in locations.items()}
 
 
+def _relative_hint(field: Any, target: str) -> str:
+    """Render a curated hint relative to the surface the unknown key sits in.
+
+    A bare ``timeout`` inside ``instruments.<alias>.config`` means that alias's
+    ``timeout_seconds``; inside a ``run`` trigger action it means the action's
+    own ``timeout_seconds``. Naming the ROOT key there silently widens the
+    author's intent from one seat or one action to the whole score (GH #451).
+    The root form is only right at the root.
+    """
+    if not field.path:
+        return target
+    if target == "instrument_config.timeout_seconds":
+        if "timeout_seconds" in field.candidates:
+            return f"{field.path}.timeout_seconds"
+        if field.path == "instrument_config" or field.path.endswith(
+            (".instrument_config", ".config")
+        ) or field.path.startswith("sheet.per_sheet_instrument_config."):
+            return f"{field.path}.timeout_seconds"
+        return target
+    return target
+
+
 def unknown_field_issue(field: UnknownScoreField, raw_yaml: str) -> ValidationIssue:
     """Classify one unknown key without rejecting the rest of the score."""
     nearest = min(
@@ -102,6 +124,8 @@ def unknown_field_issue(field: UnknownScoreField, raw_yaml: str) -> ValidationIs
     # walk only emits keys that are unknown AT that location, so a curated
     # name can never collide with a legitimately known nested key.
     override = _KNOWN_TYPOS.get(field.key)
+    if override is not None:
+        override = _relative_hint(field, override)
     suggested = override or (nearest if near else None)
     # A curated onboarding hint is high-confidence even when the edit distance is high.
     severity = ValidationSeverity.WARNING if suggested else ValidationSeverity.INFO
