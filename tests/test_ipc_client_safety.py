@@ -46,11 +46,13 @@ async def wire_server(path, reply, *, close_after_response=False):
         yield
     finally:
         server.close()
-        await server.wait_closed()
+        # 3.12+: Server.wait_closed() also waits for accepted connections, so
+        # parked handlers must be ended before it (GH #442).
         for writer in writers:
             writer.close()
         for task in list(tasks):
             task.cancel()
+        await server.wait_closed()
         await asyncio.gather(*list(tasks), return_exceptions=True)
 
 
@@ -364,10 +366,10 @@ async def test_write_backpressure_is_part_of_request_deadline(tmp_path, operatio
         assert connected == 1
     finally:
         server.close()
-        await server.wait_closed()
         for task in list(tasks):
             task.cancel()
         await asyncio.gather(*list(tasks), return_exceptions=True)
+        await server.wait_closed()  # 3.12+: waits for connections too (GH #442)
 
 
 async def test_health_cleanup_cannot_outlive_its_probe_deadline(tmp_path):

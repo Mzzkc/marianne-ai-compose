@@ -184,10 +184,17 @@ class DaemonServer:
         try:
             if server is not None:
                 server.close()
-                await server.wait_closed()
+            # Cancel handlers BEFORE waiting for the listener to close. Since
+            # Python 3.12, Server.wait_closed() also waits for every accepted
+            # connection to end; a handler parked on a client that never
+            # speaks again (an idle monitor, a peer that stopped reading) kept
+            # stop() waiting forever, and every IPC lifecycle test hit the
+            # 30 s pytest-timeout on 3.12 while 3.11 passed (GH #442).
             tasks = list(self._connections)
             for task in tasks:
                 task.cancel()
+            if server is not None:
+                await server.wait_closed()
             if tasks:
                 results = await asyncio.gather(*tasks, return_exceptions=True)
                 for result in results:

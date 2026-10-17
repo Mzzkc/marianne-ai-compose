@@ -192,6 +192,7 @@ an alias over an existing profile; archive what nothing names.
 - **Root `max_wall_seconds` no longer caps a one-shot score** — It is now the scheduled-tick window `schedule.max_wall_seconds` (the root spelling warns V328 for one release); the research generator no longer emits it for one-shot scores, whose sheet timeouts remain in force
 
 ### Fixed
+- **IPC server stop no longer hangs on Python 3.12 (GH #442)** — `Server.wait_closed()` waits for accepted connections since 3.12, so `DaemonServer.stop()` now cancels parked handlers before awaiting the listener; every IPC lifecycle test that hit the 30 s timeout on 3.12 passes
 - **Class vocabulary lives in the packaged map (GH #433)** — `instruments/classes/default.yaml` now declares the vocabulary; `image`, `video` and `high-context` ship with chains; adding a packaged class is a YAML edit. User and venue layers were always open to any name and remain so
 - **Completion snapshots follow the state database (GH #432)** — New `snapshot_dir` on the conductor config, defaulting to `snapshots/` beside `state_db_path`; a conductor clone gets `clone-<name>-state-snapshots/`. Every test or clone that isolates its state DB now isolates its snapshots instead of writing into `~/.marianne/snapshots` (5,010 job dirs on one machine)
 - **run action settle no longer ends a reader of its log (GH #449)** — The file-holder capture source admits only processes holding the action log open for writing (the detached escapee's inherited stdout/stderr); an operator's `tail -f` is a bystander and is left alone
