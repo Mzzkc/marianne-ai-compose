@@ -1739,7 +1739,11 @@ naming the cap. `concert` submits a child score and does not wait for that child
 conductor crash, so make their effects idempotent using `MARIANNE_FLOW_ATTEMPT`.
 `concert` submits a child score and does not wait for that child: the action's
 `score` names the child score file (`sheet.triggers.<span>.on_success[].concert.score`),
-with `detached: true` releasing the conductor from waiting on it.
+with `detached: true` releasing the conductor from waiting on it. A score that
+names itself self-chains: the trigger fires while the parent still runs, so the
+child is admitted under a lineage id (`<name>--chain<depth>--<UTC stamp>`)
+rather than the parent's own id, and `concert.max_chain_depth` (root
+`concert:` block, `enabled: true`) is the only bound on the chain (GH #454).
 Loop and trigger state is saved in the same checkpoint as sheet state.
 
 See [convergence-loop](../examples/patterns/convergence-loop.yaml) for a

@@ -192,6 +192,7 @@ an alias over an existing profile; archive what nothing names.
 - **Root `max_wall_seconds` no longer caps a one-shot score** — It is now the scheduled-tick window `schedule.max_wall_seconds` (the root spelling warns V328 for one release); the research generator no longer emits it for one-shot scores, whose sheet timeouts remain in force
 
 ### Fixed
+- **Concert trigger self-chain (GH #454)** — A `concert` trigger that names its own score is admitted under a lineage id (`<name>--chain<depth>--<stamp>`) instead of being refused as an active duplicate of its still-running parent; `concert.max_chain_depth` is the only bound
 - **SIGABRT crash** — Unified streaming with parallel CancelledError guard
 - **Infinite loop in parallel execution** — Fixed production bug with parallel sheet execution
 - **MCP proxy test infinite loop** — Fixed test expectations for MCP proxy

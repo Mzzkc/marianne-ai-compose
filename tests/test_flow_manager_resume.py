@@ -334,6 +334,51 @@ async def test_concert_submission_is_fire_and_forget_and_refuses_active_duplicat
         await manager.shutdown(graceful=False)
 
 
+async def test_self_chain_concert_gets_a_lineage_id_instead_of_colliding(
+    tmp_path: Path,
+) -> None:
+    """A trigger fires while its parent still runs, so a child derived from the
+    same score stem is refused as an active duplicate and a self-chaining score
+    stops after one iteration (GH #454). The child gets a lineage id; the depth
+    guard stays the only bound."""
+    score = tmp_path / "solver.yaml"
+    score.write_text(
+        "name: solver\n"
+        f"workspace: {tmp_path / 'ws'}\n"
+        "instrument: cli\n"
+        "sheet:\n  size: 1\n  total_items: 1\n"
+        "prompt:\n  template: sleep 30\n",
+        encoding="utf-8",
+    )
+    manager = JobManager(
+        DaemonConfig(pid_file=tmp_path / "conductor.pid", state_db_path=tmp_path / "jobs.db")
+    )
+    await manager.start()
+    try:
+        manager._job_meta["solver"] = JobMeta(
+            job_id="solver",
+            config_path=score,
+            workspace=tmp_path,
+            status=DaemonJobStatus.RUNNING,
+            concert_config={"enabled": True, "max_chain_depth": 2},
+        )
+        accepted, child_id, message = await manager._submit_flow_concert("solver", "solver.yaml")
+        assert accepted, message
+        assert child_id is not None and child_id.startswith("solver--chain1--")
+        assert manager._job_meta[child_id].chain_depth == 1
+
+        manager._job_meta[child_id].status = DaemonJobStatus.RUNNING
+        manager._job_meta[child_id].concert_config = {"enabled": True, "max_chain_depth": 2}
+        again, grandchild, _ = await manager._submit_flow_concert(child_id, "solver.yaml")
+        assert again and grandchild is not None and grandchild.startswith("solver--chain2--")
+        manager._job_meta[grandchild].status = DaemonJobStatus.RUNNING
+        manager._job_meta[grandchild].concert_config = {"enabled": True, "max_chain_depth": 2}
+        stopped, _, reason = await manager._submit_flow_concert(grandchild, "solver.yaml")
+        assert not stopped and reason is not None and "depth limit" in reason
+    finally:
+        await manager.shutdown(graceful=False)
+
+
 @pytest.mark.asyncio
 async def test_resume_no_reload_runs_the_admitted_score_not_the_edited_disk(
     tmp_path: Path,
