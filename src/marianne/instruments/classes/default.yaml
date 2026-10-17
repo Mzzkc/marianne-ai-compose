@@ -1,4 +1,8 @@
 version: 1
+# The class vocabulary IS this file (GH #433): every name below resolves as a
+# class with the targeted "no instruments configured" refusal when a layer
+# tombstones or omits it. A user or venue layer may add any further class
+# name; it needs no entry here. Chains are ordered primary -> fallback.
 classes:
   strong: [claude-code, codex-cli, antigravity, opencode]
   workhorse: [codex-cli, claude-code, opencode, antigravity, crush]
@@ -8,3 +12,8 @@ classes:
   review: [codex-cli, antigravity, claude-code, opencode]
   vision: [claude-code, codex-cli]
   local: [ollama]
+  # Ordered by declared context window of the profile's largest model.
+  high-context: [codex-cli, antigravity, gemini-cli, claude-code, opencode]
+  # Image/video input: profiles whose builtin declares the vision capability.
+  image: [gemini-cli, claude-code, codex-cli]
+  video: [gemini-cli, claude-code]

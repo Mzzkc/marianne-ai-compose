@@ -141,8 +141,9 @@ def _run(check, config: JobConfig, raw: str | None = None):
 
 class TestV310ClassNameResolution:
     def test_vocabulary_only_class_is_error_with_fix_command(self, monkeypatch, tmp_path) -> None:
-        _Layers(monkeypatch, tmp_path)  # no user/venue layers: defaults only
-        # 'image' is in the shipped vocabulary but not in default.yaml.
+        # Every packaged vocabulary name ships a chain (GH #433); a user layer
+        # that tombstones one leaves a vocabulary name with no instruments.
+        _Layers(monkeypatch, tmp_path, user={"version": 1, "classes": {"image": None}})
         issues = _run(ClassNameResolutionCheck(), _config(instrument="image"))
         assert [i.check_id for i in issues] == ["V310"]
         assert issues[0].severity == ValidationSeverity.ERROR
@@ -517,7 +518,7 @@ class TestSuppressionContract:
         assert suppressed == [{"check_id": "V311", "count": 1}]
 
     def test_suppressing_error_yields_v012(self, monkeypatch, tmp_path) -> None:
-        _Layers(monkeypatch, tmp_path)
+        _Layers(monkeypatch, tmp_path, user={"version": 1, "classes": {"image": None}})
         raw = _score_yaml(instrument="image", validate={"suppress": ["V310"]})
         config = JobConfig.model_validate(yaml.safe_load(raw))
         issues = _run(ClassNameResolutionCheck(), config, raw)
@@ -535,7 +536,7 @@ class TestSuppressionContract:
 
 class TestCliContract:
     def test_v310_exits_one(self, monkeypatch, tmp_path) -> None:
-        _Layers(monkeypatch, tmp_path)
+        _Layers(monkeypatch, tmp_path, user={"version": 1, "classes": {"image": None}})
         score = tmp_path / "score.yaml"
         score.write_text(_score_yaml(instrument="image"))
         result = CliRunner().invoke(app, ["validate", str(score), "--json"])

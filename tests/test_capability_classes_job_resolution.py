@@ -43,7 +43,11 @@ def test_snapshot_keeps_existing_class_after_map_edit(tmp_path: Path) -> None:
 
 
 def test_unconfigured_vocabulary_class_refuses(tmp_path: Path) -> None:
-    loaded = load_class_map(user_path=tmp_path / "missing", venue_path=tmp_path / "absent")
+    # The packaged map ships a chain for every vocabulary name (GH #433), so
+    # the "vocabulary name, no chain" state comes from a user-layer tombstone.
+    user = tmp_path / "classes.yaml"
+    user.write_text("version: 1\nclasses:\n  image: null\n")
+    loaded = load_class_map(user_path=user, venue_path=tmp_path / "absent")
     with pytest.raises(ValueError, match="no instruments configured"):
         resolve_job_classes(_job(instrument="image"), {"claude-code"}, loaded)
 

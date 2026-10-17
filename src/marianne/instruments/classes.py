@@ -23,10 +23,33 @@ from marianne.core.config.classes import (
 )
 from marianne.core.config.job import JobConfig
 
-CLASS_VOCABULARY = frozenset({
+_FALLBACK_VOCABULARY = frozenset({
     "strong", "workhorse", "fast", "cheap", "writing", "review", "vision",
-    "local", "image", "video",
+    "local", "image", "video", "high-context",
 })
+
+
+def _packaged_vocabulary() -> frozenset[str]:
+    """The class names the packaged default map declares (GH #433).
+
+    The vocabulary lives in ``classes/default.yaml`` so adding a named class
+    is a YAML edit, not a source edit; the frozen set is only the fallback if
+    the packaged file cannot be read. A user or venue layer may define ANY
+    further class name; the vocabulary only decides which bare names get the
+    targeted "no instruments configured" refusal instead of V210.
+    """
+    path = Path(__file__).parent / "classes" / "default.yaml"
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return _FALLBACK_VOCABULARY
+    classes = data.get("classes") if isinstance(data, dict) else None
+    if not isinstance(classes, dict) or not classes:
+        return _FALLBACK_VOCABULARY
+    return frozenset(str(name) for name in classes)
+
+
+CLASS_VOCABULARY = _packaged_vocabulary()
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
