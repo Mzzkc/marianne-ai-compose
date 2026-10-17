@@ -383,6 +383,13 @@ def test_l12_silent_on_a_resolving_glossary(repo: Path) -> None:
         "- **name** (`name`): [external](https://example.com).",
         "- **name** (`name`): [bad link](docs/configuration-reference.md#top-level-fields) "
         "[bad extra](docs/missing.md#missing).",
+        # Every ordinary list marker is a definition the reader sees (Inspect P1).
+        "* **timer** (`instrument_config.timeout_secs`): "
+        "[docs](docs/configuration-reference.md#top-level-fields).",
+        "+ **timer** (`instrument_config.timeout_secs`): "
+        "[docs](docs/configuration-reference.md#top-level-fields).",
+        "1. **timer** (`instrument_config.timeout_secs`): "
+        "[docs](docs/configuration-reference.md#top-level-fields).",
     ],
 )
 def test_l12_refuses_unresolved_or_unlinked_rows(repo: Path, row: str) -> None:

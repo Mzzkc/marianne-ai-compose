@@ -658,6 +658,9 @@ def _doc_anchors(repo: Path) -> dict[str, set[str]]:
     return anchors
 
 
+_LIST_MARKER = re.compile(r"(?:[-*+]|\d+[.)])\s+")
+
+
 def glossary_rows(text: str) -> list[tuple[int, str, str, bool, list[str]]]:
     """Parse every definition, retaining malformed rows so they cannot pass silently."""
     rows: list[tuple[int, str, str, bool, list[str]]] = []
@@ -670,10 +673,14 @@ def glossary_rows(text: str) -> list[tuple[int, str, str, bool, list[str]]]:
                 re.fullmatch(r"\s*:?-+:?\s*", cell) for cell in cells
             ):
                 continue
-        elif line.startswith("- "):
-            first = line[2:]
         else:
-            continue
+            # Any ordinary Markdown list marker introduces a definition a
+            # reader can see; the gate must see it too (Guide Inspect P1:
+            # a `* ` row with a bad code name produced no L12 finding).
+            marker = _LIST_MARKER.match(line)
+            if marker is None:
+                continue
+            first = line[marker.end():]
         match = _GLOSSARY_ROW.match(first)
         targets = [m["target"] for m in _LINK.finditer(line)]
         if match:
