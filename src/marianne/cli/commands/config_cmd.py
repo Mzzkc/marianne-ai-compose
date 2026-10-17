@@ -336,7 +336,10 @@ def path(
     resolved = _resolve_config_path(config_file)
     exists = resolved.exists()
     status = "[green]exists[/green]" if exists else "[yellow]not created[/yellow]"
-    console.print(f"{resolved}  ({status})")
+    # soft_wrap: a long path must not be broken mid-word at the console width
+    # (an 80-column non-terminal, e.g. CliRunner, wrapped it and the status
+    # word landed on the next line).
+    console.print(f"{resolved}  ({status})", soft_wrap=True)
 
 
 @config_app.command()
