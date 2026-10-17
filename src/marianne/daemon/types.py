@@ -248,11 +248,17 @@ class JobDeadlineStatus(BaseModel):
     """Public, secret-free projection of one job's timeout authority."""
 
     daemon_limit_seconds: float = Field(
-        description="Configured daemon per-execution timeout",
+        description=(
+            "Conductor job_timeout_seconds: a RUNNING-time budget; pauses and "
+            "downtime do not spend it"
+        ),
     )
     score_limit_seconds: float | None = Field(
         default=None,
-        description="Configured score wall-clock limit when valid",
+        description=(
+            "Tick window (schedule.max_wall_seconds) of a scheduled tick; None for "
+            "a one-shot job, which has no absolute deadline"
+        ),
     )
     effective_remaining_seconds: float = Field(
         ge=0,
@@ -264,7 +270,10 @@ class JobDeadlineStatus(BaseModel):
     )
     wall_deadline_at: float | None = Field(
         default=None,
-        description="Persisted absolute score deadline as a Unix epoch",
+        description=(
+            "Tick deadline as a Unix epoch (admission time + tick window); set only "
+            "for a scheduled tick"
+        ),
     )
     terminal_reason: str | None = Field(
         default=None,
