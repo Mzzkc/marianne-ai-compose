@@ -528,3 +528,65 @@ async def test_pythonpath_cannot_reopen_the_supervisor_shadow(
     assert not psutil.pid_exists(shell_pid) or (
         psutil.Process(shell_pid).status() == psutil.STATUS_ZOMBIE
     )
+
+
+async def test_settle_leaves_a_reader_of_the_action_log_alone(tmp_path: Path) -> None:
+    """GH #449: a same-UID process that only READS the action log (an
+    operator's ``tail -f``) was captured as a file holder and SIGTERMed at
+    settle. Only a writer is the escapee that source exists to catch."""
+    import asyncio
+    import subprocess
+
+    async def start_reader_when_log_appears() -> subprocess.Popen[bytes]:
+        flow_dir = tmp_path / ".marianne-flow"
+        for _ in range(200):
+            logs = sorted(flow_dir.rglob("*.log")) if flow_dir.exists() else []
+            if logs:
+                return subprocess.Popen(
+                    ["tail", "-f", str(logs[0])],
+                    start_new_session=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            await asyncio.sleep(0.01)
+        raise AssertionError("action log never appeared")
+
+    reader_task = asyncio.create_task(start_reader_when_log_appears())
+    outcome = await execute_run_action(
+        RunTrigger(
+            command="for i in 1 2 3 4 5 6; do echo tick $i; sleep 0.2; done",
+            timeout_seconds=10,
+        ),
+        workspace=tmp_path, job_id="bystander", sheet_num=1, fired_epoch=0,
+        chain_id=1, cursor=0, attempt=1, variables={},
+    )
+    reader = await reader_task
+    try:
+        assert outcome.error is None, outcome.error
+        assert outcome.exit_code == 0
+        await asyncio.sleep(0.3)
+        assert reader.poll() is None, f"reader was ended: returncode={reader.returncode}"
+    finally:
+        reader.kill()
+        reader.wait()
+
+
+def test_fd_open_for_writing_reads_proc_fdinfo_access_mode(tmp_path: Path) -> None:
+    import os
+
+    from marianne.utils.process import _fd_open_for_writing
+
+    target = tmp_path / "log"
+    target.write_text("")
+    reader = os.open(target, os.O_RDONLY)
+    writer = os.open(target, os.O_WRONLY | os.O_APPEND)
+    both = os.open(target, os.O_RDWR)
+    try:
+        assert _fd_open_for_writing(os.getpid(), str(reader)) is False
+        assert _fd_open_for_writing(os.getpid(), str(writer)) is True
+        assert _fd_open_for_writing(os.getpid(), str(both)) is True
+    finally:
+        for fd in (reader, writer, both):
+            os.close(fd)
+    # An unreadable fdinfo errs toward capture (the pre-#449 behaviour).
+    assert _fd_open_for_writing(os.getpid(), "999999") is True

@@ -203,6 +203,25 @@ def snapshot_pipe_holders(
     return tuple(captured)
 
 
+def _fd_open_for_writing(pid: int, fd: str) -> bool:
+    """Whether ``/proc/<pid>/fd/<fd>`` was opened with write access.
+
+    Reads the ``flags:`` line of ``/proc/<pid>/fdinfo/<fd>`` (octal). When the
+    line cannot be read the holder is treated as a writer, so a transient
+    ``/proc`` hiccup errs toward the pre-#449 behaviour (capture) rather than
+    toward letting a real escapee go.
+    """
+    try:
+        with open(f"/proc/{pid}/fdinfo/{fd}", encoding="ascii") as handle:
+            for line in handle:
+                if line.startswith("flags:"):
+                    flags = int(line.split(":", 1)[1].strip(), 8)
+                    return (flags & os.O_ACCMODE) in (os.O_WRONLY, os.O_RDWR)
+    except (OSError, ValueError):
+        return True
+    return True
+
+
 def snapshot_file_holders(
     path: str, parent_create_time: float,
 ) -> tuple[DescendantIdentity, ...]:
@@ -231,12 +250,19 @@ def snapshot_file_holders(
                     held = os.stat(f"{fd_dir}/{fd}")
                 except OSError:
                     continue
-                if (held.st_dev, held.st_ino) == (target.st_dev, target.st_ino):
-                    captured.append(DescendantIdentity(
-                        proc.pid, born, uids.real, os.getpgid(proc.pid),
-                        _proc_start_ticks(proc.pid),
-                    ))
-                    break
+                if (held.st_dev, held.st_ino) != (target.st_dev, target.st_ino):
+                    continue
+                # Only a WRITER is the escapee this source exists to catch: the
+                # detached child inherited the log as stdout/stderr. A process
+                # that merely reads the log (an operator's `tail -f`) holds it
+                # O_RDONLY and is a bystander the action does not own (GH #449).
+                if not _fd_open_for_writing(proc.pid, fd):
+                    continue
+                captured.append(DescendantIdentity(
+                    proc.pid, born, uids.real, os.getpgid(proc.pid),
+                    _proc_start_ticks(proc.pid),
+                ))
+                break
         except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
             continue
     return tuple(captured)
