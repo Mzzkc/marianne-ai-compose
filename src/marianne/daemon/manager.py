@@ -39,6 +39,7 @@ from marianne.core.config.classes import InstrumentResolution
 from marianne.core.config.flow import ConcertTrigger
 from marianne.core.config.job import JobConfig as ConcreteJobConfig
 from marianne.core.config.spec import SpecCorpusConfig
+from marianne.core.config.workspace import sanitize_workspace_name
 from marianne.core.constants import STATE_DB_FILENAME
 from marianne.core.logging import get_logger
 from marianne.daemon.backpressure import BackpressureController
@@ -1624,8 +1625,24 @@ class JobManager:
             score_path = (parent.config_path.parent / score_path).resolve()
         if not score_path.is_file():
             return False, None, f"child score not found: {score_path}"
+        # A trigger fires while its parent is still RUNNING (the parent only
+        # completes once the chain settles, and the chain settles on this
+        # submission's answer). A child whose derived id equals the parent's
+        # is therefore refused as an active duplicate every time, which makes
+        # a self-chaining score stop after its first iteration (GH #454).
+        # The legacy run_job hook never hit this because hooks run after the
+        # parent is terminal. Give the self-chained child a lineage id of the
+        # recurring-tick shape so admission sees a new job and the depth guard
+        # above remains the only bound.
+        child_job_id: str | None = None
+        if score_path == parent.config_path.resolve():
+            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+            child_job_id = (
+                f"{sanitize_workspace_name(score_path.stem)}--chain{current_depth + 1}--{stamp}"
+            )
         request = JobRequest(
             config_path=score_path,
+            job_id=child_job_id,
             workspace=parent.workspace if spec.inherit_workspace else None,
             fresh=spec.fresh,
             chain_depth=current_depth + 1,

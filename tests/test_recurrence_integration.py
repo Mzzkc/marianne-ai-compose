@@ -14,6 +14,7 @@ import pytest
 from marianne.core.config import JobConfig
 from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.daemon.baton.events import CronTick
+from marianne.daemon.baton.timer import TimerHandle
 from marianne.daemon.config import DaemonConfig
 from marianne.daemon.exceptions import JobSubmissionError
 from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
@@ -42,6 +43,24 @@ async def _wait_for_outcome(
             record = await registry.get(schedule_id)
             if record is not None and record.last_outcome == outcome:
                 return record
+            await asyncio.sleep(0)
+
+
+async def _wait_for_timer(
+    controller: RecurrenceController, schedule_id: str, due_at: float
+) -> TimerHandle:
+    """The handle armed for ``due_at``.
+
+    A tick handler pops the fired timer, awaits the registry write, then
+    re-arms. The registry outcome is visible before the new timer exists, so
+    a test that polls the outcome and then reads ``_timers`` races the
+    re-arm (CI 4e6fb0d1: KeyError under load). Wait for the timer itself.
+    """
+    async with asyncio.timeout(1.0):
+        while True:
+            armed = controller._timers.get(schedule_id)
+            if armed is not None and armed[0] == due_at:
+                return armed[1]
             await asyncio.sleep(0)
 
 
@@ -819,7 +838,7 @@ async def test_manager_submits_due_child_and_restart_restores_one_timer(
         )
 
         second_due = overlapped.next_due_at
-        second_handle = controller._timers["Daily Report"][1]
+        second_handle = await _wait_for_timer(controller, "Daily Report", second_due)
         assert adapter.cancel_cron_tick(second_handle) is True
         controller._now = lambda: datetime.fromtimestamp(second_due, tz=UTC)
         adapter.schedule_cron_tick(

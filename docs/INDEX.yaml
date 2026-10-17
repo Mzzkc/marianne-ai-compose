@@ -36,6 +36,8 @@ top_level_docs:
   purpose: Examples documentation mirror
 - name: getting-started.md
   purpose: Composer first-run guide
+- name: glossary.md
+  purpose: Orchestral terminology resolved to schema keys, commands, and status values
 - name: index.md
   purpose: Documentation landing page
 - name: instrument-authoring-tutorial.md
@@ -215,6 +217,13 @@ semantic_index:
   - specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md
   validate:
   - specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md
+  glossary:
+  - glossary.md
+  terminology:
+  - glossary.md
+  timers:
+  - glossary.md
+  - configuration-reference.md
   concierge:
   - specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md
   decision-authority:
