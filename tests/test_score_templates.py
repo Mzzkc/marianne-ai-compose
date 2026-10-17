@@ -1,6 +1,9 @@
 """Tests for issue-solver score template rendering.
 
-Verifies that the issue-solver.yaml score loads correctly, has the expected
+Verifies that the rebuilt issue-solver.yaml (T5, 2026-10-17: 11 stages, 13
+concrete sheets, bounded loop on stage 4, 3-way review fan-out on stage 5,
+first-line NO_ISSUES_REMAINING skip gate, concert-trigger self-chain on the
+final sheet) loads correctly, has the expected
 structure after fan-out expansion, and that all Jinja templates render without
 errors for every concrete sheet.
 
@@ -53,28 +56,28 @@ class TestScoreLoads:
 
 
 class TestTotalStages:
-    """Score has 17 logical stages."""
+    """Score has 11 logical stages."""
 
     def test_total_stages(self, config: JobConfig) -> None:
-        assert config.sheet.total_stages == 17
+        assert config.sheet.total_stages == 11
 
 
 # ─── Test 3: Total sheets with fan-out ──────────────────────────────────
 
 
 class TestTotalSheetsWithFanout:
-    """After fan-out, score has 19 concrete sheets."""
+    """After fan-out, score has 13 concrete sheets (stage 5 x3)."""
 
     def test_total_sheets_with_fanout(self, config: JobConfig) -> None:
-        assert config.sheet.total_sheets == 19
-        assert config.sheet.total_items == 19
+        assert config.sheet.total_sheets == 13
+        assert config.sheet.total_items == 13
 
 
 # ─── Test 4: Fan-out stage 12 ──────────────────────────────────────────
 
 
-class TestFanOutStage12:
-    """Stage 12 has fan_out: {12: 3} configured.
+class TestFanOutStage5:
+    """Stage 5 (quality review) has fan_out: {5: 3} configured.
 
     After expansion fan_out is cleared, but fan_out_stage_map preserves
     the metadata. We also verify the raw YAML to confirm the source config.
@@ -82,20 +85,20 @@ class TestFanOutStage12:
 
     def test_raw_yaml_has_fan_out(self, raw_yaml: dict) -> None:
         fan_out = raw_yaml["sheet"]["fan_out"]
-        assert fan_out == {12: 3}
+        assert fan_out == {5: 3}
 
     def test_fan_out_stage_map_has_three_instances(self, config: JobConfig) -> None:
-        """Sheets 12, 13, 14 all map to stage 12 with fan_count=3."""
+        """Sheets 5, 6, 7 all map to stage 5 with fan_count=3."""
         stage_map = config.sheet.fan_out_stage_map
         assert stage_map is not None
 
-        for sheet_num in (12, 13, 14):
+        for sheet_num in (5, 6, 7):
             meta = stage_map[sheet_num]
-            assert meta["stage"] == 12
+            assert meta["stage"] == 5
             assert meta["fan_count"] == 3
 
         # Instances are 1, 2, 3
-        instances = [stage_map[s]["instance"] for s in (12, 13, 14)]
+        instances = [stage_map[s]["instance"] for s in (5, 6, 7)]
         assert sorted(instances) == [1, 2, 3]
 
     def test_fan_out_cleared_after_expansion(self, config: JobConfig) -> None:
@@ -107,20 +110,20 @@ class TestFanOutStage12:
 
 
 class TestSkipWhenCommandTargetsValidSheets:
-    """All skip_when keys are within the valid stage range."""
+    """The NO_ISSUES_REMAINING gate covers every solver sheet after selection."""
 
-    def test_skip_when_targets_valid_sheets(self, raw_yaml: dict) -> None:
-        total_stages = raw_yaml["sheet"]["total_items"]  # 17 (pre-expansion)
-        skip_keys = raw_yaml["sheet"]["skip_when"]
-        for stage_num in skip_keys:
-            assert 1 <= stage_num <= total_stages, (
-                f"skip_when key {stage_num} is outside valid stage range 1-{total_stages}"
+    def test_skip_when_targets_valid_sheets(self, config: JobConfig) -> None:
+        for sheet_num in config.sheet.skip_when:
+            assert 1 <= sheet_num <= config.sheet.total_sheets, (
+                f"skip_when key {sheet_num} is outside 1-{config.sheet.total_sheets}"
             )
 
-    def test_skip_when_has_expected_stages(self, raw_yaml: dict) -> None:
-        """Stages 6-11 (phases 2-4 fix+completion) should have skip conditions."""
-        skip_keys = set(raw_yaml["sheet"]["skip_when"].keys())
-        assert skip_keys == {6, 7, 8, 9, 10, 11}
+    def test_skip_when_has_expected_sheets(self, config: JobConfig) -> None:
+        """Every sheet but selection (1) is gated; the gate reads only the first
+        non-empty line so a body that mentions the token cannot end the run."""
+        assert set(config.sheet.skip_when) == set(range(2, config.sheet.total_sheets + 1))
+        for rule in config.sheet.skip_when.values():
+            assert "grep -m1" in rule.command and "grep -qx" in rule.command
 
 
 # ─── Test 6: Dependencies are valid ────────────────────────────────────
@@ -160,9 +163,9 @@ class TestDependenciesAreValid:
             assert sheet_num not in dep_list, f"Sheet {sheet_num} has a self-dependency"
 
     def test_dependency_chain_is_complete(self, raw_yaml: dict) -> None:
-        """Every stage 2-17 has at least one dependency (linear chain)."""
+        """Every stage 2-11 has at least one dependency (linear chain)."""
         deps = raw_yaml["sheet"]["dependencies"]
-        for stage in range(2, 18):
+        for stage in range(2, 12):
             assert stage in deps, f"Stage {stage} has no dependencies declared"
             assert len(deps[stage]) > 0, f"Stage {stage} has empty dependency list"
 
@@ -171,36 +174,29 @@ class TestDependenciesAreValid:
 
 
 class TestSelfChainConfigured:
-    """on_success hook present with self-chaining config."""
+    """The self-chain is a concert TRIGGER on the final sheet (GH #454), not a
+    job-level run_job hook over a workspace copy: the child is the same score
+    file (pinned repo bytes), in a fresh workspace, admitted under a lineage id,
+    bounded only by concert.max_chain_depth."""
 
-    def test_on_success_hook_present(self, config: JobConfig) -> None:
-        assert len(config.on_success) >= 1
+    def test_no_legacy_on_success_hook(self, config: JobConfig) -> None:
+        assert config.on_success == []
 
-    def test_on_success_is_run_job(self, config: JobConfig) -> None:
-        hook = config.on_success[0]
-        assert hook.type == "run_job"
+    def test_final_sheet_has_concert_trigger(self, config: JobConfig) -> None:
+        trigger = config.sheet.triggers[str(config.sheet.total_sheets)]
+        actions = trigger.on_success
+        assert len(actions) == 1 and actions[0].concert is not None
 
-    def test_on_success_points_to_staged_self_chain(self, config: JobConfig) -> None:
-        """The self-chain targets the workspace-staged copy, not an absolute path.
+    def test_concert_targets_self_fresh_and_detached_from_workspace(
+        self, config: JobConfig
+    ) -> None:
+        from marianne.core.config.flow import ConcertTrigger
 
-        Stage 1.5 of the template copies this score (via ``score_relpath``)
-        into ``{workspace}/self-chain.yaml``; on_success chains to that copy
-        so the example carries no machine-specific paths.
-        """
-        hook = config.on_success[0]
-        assert hook.job_path is not None
-        assert str(hook.job_path) == "{workspace}/self-chain.yaml"
-
-    def test_on_success_not_detached(self, config: JobConfig) -> None:
-        # Hook-level `detached` is reserved (V327): no runtime reader. The
-        # example must not teach it; the trigger-level concert action owns
-        # detach semantics.
-        hook = config.on_success[0]
-        assert hook.detached is False
-
-    def test_on_success_is_fresh(self, config: JobConfig) -> None:
-        hook = config.on_success[0]
-        assert hook.fresh is True
+        action = config.sheet.triggers[str(config.sheet.total_sheets)].on_success[0]
+        assert isinstance(action.concert, ConcertTrigger)
+        assert action.concert.score == "issue-solver.yaml"
+        assert action.concert.fresh is True
+        assert action.concert.inherit_workspace is False
 
 
 # ─── Test 8: Concert configured ────────────────────────────────────────
@@ -299,6 +295,7 @@ class TestTemplateRendersForAllSheets:
                 "instance": meta.instance,
                 "fan_count": meta.fan_count,
                 "total_stages": config.sheet.total_stages,
+                "loops": {"pass_no": 1},
                 "start_item": sheet_num,
                 "end_item": sheet_num,
                 "previous_outputs": {},
@@ -326,7 +323,7 @@ class TestTemplateRendersForAllSheets:
             )
 
     def test_template_renders_each_stage_branch(self, config: JobConfig) -> None:
-        """Each stage 1-17 produces unique content (hits a different if-branch)."""
+        """Each stage 1-11 produces unique content (hits a different if-branch)."""
         env = jinja2.Environment(
             undefined=jinja2.Undefined,
             autoescape=False,
@@ -346,14 +343,15 @@ class TestTemplateRendersForAllSheets:
         }
 
         seen_stages: set[int] = set()
-        for stage in range(1, 18):
+        for stage in range(1, 12):
             ctx = {
                 **base_vars,
                 "sheet_num": stage,
                 "stage": stage,
                 "instance": 1,
                 "fan_count": 1,
-                "total_stages": 17,
+                "total_stages": 11,
+                "loops": {"pass_no": 1},
                 "start_item": stage,
                 "end_item": stage,
             }
@@ -363,10 +361,10 @@ class TestTemplateRendersForAllSheets:
             )
             seen_stages.add(stage)
 
-        assert seen_stages == set(range(1, 18))
+        assert seen_stages == set(range(1, 12))
 
     def test_fan_out_instances_render_differently(self, config: JobConfig) -> None:
-        """Stage 12 instances 1, 2, 3 each produce different reviewer content."""
+        """Stage 5 instances 1, 2, 3 each produce different reviewer content."""
         env = jinja2.Environment(
             undefined=jinja2.Undefined,
             autoescape=False,
@@ -389,13 +387,14 @@ class TestTemplateRendersForAllSheets:
         for instance in range(1, 4):
             ctx = {
                 **base_vars,
-                "sheet_num": 11 + instance,  # sheets 12, 13, 14
-                "stage": 12,
+                "sheet_num": 4 + instance,  # sheets 5, 6, 7
+                "stage": 5,
                 "instance": instance,
                 "fan_count": 3,
-                "total_stages": 17,
-                "start_item": 11 + instance,
-                "end_item": 11 + instance,
+                "total_stages": 11,
+                "loops": {"pass_no": 1},
+                "start_item": 4 + instance,
+                "end_item": 4 + instance,
             }
             renders[instance] = template.render(**ctx)
 

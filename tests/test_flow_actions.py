@@ -539,7 +539,8 @@ async def test_settle_leaves_a_reader_of_the_action_log_alone(tmp_path: Path) ->
 
     async def start_reader_when_log_appears() -> subprocess.Popen[bytes]:
         flow_dir = tmp_path / ".marianne-flow"
-        for _ in range(200):
+        deadline = asyncio.get_running_loop().time() + 5.0
+        while asyncio.get_running_loop().time() < deadline:
             logs = sorted(flow_dir.rglob("*.log")) if flow_dir.exists() else []
             if logs:
                 return subprocess.Popen(
@@ -564,7 +565,11 @@ async def test_settle_leaves_a_reader_of_the_action_log_alone(tmp_path: Path) ->
     try:
         assert outcome.error is None, outcome.error
         assert outcome.exit_code == 0
-        await asyncio.sleep(0.3)
+        # Settle has already run by the time execute_run_action returns; give a
+        # SIGTERM that was sent a bounded window to show up as an exit, polling.
+        deadline = asyncio.get_running_loop().time() + 0.5
+        while reader.poll() is None and asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(0.02)
         assert reader.poll() is None, f"reader was ended: returncode={reader.returncode}"
     finally:
         reader.kill()
