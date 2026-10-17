@@ -1429,6 +1429,7 @@ Available but rarely need changing:
 | `resource_limits` | `ResourceLimitConfig` | *(see sub-config)* | | Resource constraints |
 | `state_backend_type` | `"sqlite"` | `"sqlite"` | **Reserved — frozen to sqlite.** Changing has no effect. |
 | `state_db_path` | `Path` | `~/.marianne/daemon-state.db` | | Persistent job and recurring-schedule state database path |
+| `snapshot_dir` | `Path \| None` | `None` (= `snapshots/` beside `state_db_path`) | | Completion-snapshot directory; follows the state database by default (GH #432) |
 | `logging.root` | `Path` | `~/.marianne/logs` | | Conductor-owned logging root |
 | `logging.event_log_name` | `str` | `conductor.log` | | Primary conductor event log file |
 | `logging.max_file_size_mb` | `int` | `50` | `1–1000` | Maximum event log size before rotation |
@@ -1532,6 +1533,7 @@ value is kept):
 | `socket.*` | Restart-only |
 | `pid_file` | Restart-only |
 | `state_db_path` | Restart-only |
+| `snapshot_dir` | Restart-only |
 | `state_backend_type` | Restart-only (frozen to `sqlite`) |
 | `config_file` | Restart-only (reload anchor identity) |
 | `logging` / `log_file` (destination) | Restart-only — file handles held at boot |

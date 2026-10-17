@@ -257,6 +257,7 @@ See the [Configuration Reference](configuration-reference.md) for the full field
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `state_db_path` | `Path` | `~/.marianne/daemon-state.db` | Job registry database path. Overridden by `--conductor-clone` for clone isolation. |
+| `snapshot_dir` | `Path \| None` | `<state_db_path dir>/snapshots` | Completion snapshots (one directory per job, TTL `observer.snapshot_ttl_hours`). Defaults beside the state database, so a clone or test that isolates `state_db_path` isolates its snapshots (GH #432). |
 | `max_concurrent_sheets` | `int` | `25` | Max concurrent sheets across all jobs (enforced by the baton) |
 | `preflight.token_warning_threshold` | `int` | `50000` | Token count above which to warn during preflight checks. Set higher for large-context instruments. `0` to disable. |
 | `preflight.token_error_threshold` | `int` | `150000` | Token count above which to error during preflight checks. Set higher for large-context instruments (e.g., `800000` for 1M-context models). `0` to disable. |

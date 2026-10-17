@@ -477,3 +477,47 @@ class TestObserverSummaryCapture:
         assert summary_path.exists()
         summary = json.loads(summary_path.read_text())
         assert summary["total_events"] == 2
+
+
+class TestSnapshotDirFollowsStateDb:
+    """GH #432: every JobManager-backed test and every clone used to write
+    completion snapshots into the real ~/.marianne/snapshots (5,010 job dirs,
+    1.2 GB on one machine). The snapshot directory now defaults beside the
+    state database, which tests and clones already isolate."""
+
+    def test_default_is_beside_the_state_db(self, tmp_path: Path) -> None:
+        from marianne.daemon.config import DaemonConfig
+
+        config = DaemonConfig(state_db_path=tmp_path / "state" / "jobs.db")
+        assert config.resolved_snapshot_dir == tmp_path / "state" / "snapshots"
+
+    def test_explicit_dir_wins_and_expands_tilde(self, tmp_path: Path) -> None:
+        from marianne.daemon.config import DaemonConfig
+
+        config = DaemonConfig(
+            state_db_path=tmp_path / "jobs.db", snapshot_dir=Path("~/elsewhere/snaps")
+        )
+        assert config.resolved_snapshot_dir == Path.home() / "elsewhere" / "snaps"
+
+    def test_shipped_default_is_the_historical_location(self) -> None:
+        from marianne.daemon.config import DaemonConfig
+
+        assert DaemonConfig().resolved_snapshot_dir == Path.home() / ".marianne" / "snapshots"
+
+    async def test_manager_captures_beside_its_state_db(self, tmp_path: Path) -> None:
+        from marianne.daemon.config import DaemonConfig
+        from marianne.daemon.manager import JobManager
+
+        manager = JobManager(
+            DaemonConfig(pid_file=tmp_path / "c.pid", state_db_path=tmp_path / "iso" / "jobs.db")
+        )
+        assert manager._snapshot_manager.base_dir == tmp_path / "iso" / "snapshots"
+
+    def test_clone_gets_its_own_snapshot_dir(self) -> None:
+        from marianne.daemon.clone import build_clone_config
+
+        config = build_clone_config("probe432")
+        assert config.resolved_snapshot_dir == config.state_db_path.with_name(
+            "clone-probe432-state-snapshots"
+        )
+        assert config.resolved_snapshot_dir != Path.home() / ".marianne" / "snapshots"

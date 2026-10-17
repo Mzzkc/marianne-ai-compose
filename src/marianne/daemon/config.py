@@ -463,6 +463,20 @@ class DaemonConfig(BaseModel):
         description="SQLite path for durable daemon state, including job registry, "
         "recurring schedules, and checkpoints. Tilde is expanded at runtime.",
     )
+    snapshot_dir: Path | None = Field(
+        default=None,
+        description="Directory for completion snapshots (one sub-directory per job). "
+        "Defaults to a `snapshots/` directory beside `state_db_path`, so a test "
+        "or clone that isolates its state database isolates its snapshots too "
+        "(GH #432). Tilde is expanded at runtime.",
+    )
+
+    @property
+    def resolved_snapshot_dir(self) -> Path:
+        """Where completion snapshots live: `snapshot_dir` or beside the state DB."""
+        if self.snapshot_dir is not None:
+            return Path(self.snapshot_dir).expanduser()
+        return Path(self.state_db_path).expanduser().parent / "snapshots"
     log_level: Literal["debug", "info", "warning", "error"] = Field(
         default="info",
         description="Minimum log level for daemon structlog output.",

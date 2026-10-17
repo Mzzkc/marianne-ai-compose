@@ -189,6 +189,9 @@ def build_clone_config(
     config_dict["socket"]["path"] = paths.socket
     config_dict["pid_file"] = paths.pid_file
     config_dict["state_db_path"] = paths.state_db
+    # A clone's state DB sits in the shared ~/.marianne, so "beside the DB"
+    # would still be the shared snapshots dir; give the clone its own (GH #432).
+    config_dict["snapshot_dir"] = paths.state_db.with_name(paths.state_db.stem + "-snapshots")
     config_dict["logging"] = {
         **config_dict["logging"],
         "root": paths.log_root,

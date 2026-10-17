@@ -622,7 +622,7 @@ class JobManager:
 
         # Phase 4: Completion snapshots — captures workspace artifacts
         # at job completion with TTL-based cleanup.
-        self._snapshot_manager = SnapshotManager()
+        self._snapshot_manager = SnapshotManager(base_dir=config.resolved_snapshot_dir)
 
         # Observer event recorder — persists per-job observer events to JSONL.
         # Initialized eagerly, started in start() after event bus.
