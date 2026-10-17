@@ -192,6 +192,22 @@ _CHECKPOINT_TO_BATON: dict[str, BatonSheetStatus] = {
     s.value: s for s in BatonSheetStatus
 }
 
+# #452: statuses whose persisted fallback identity survives recovery and
+# registration. A COMPLETED/SKIPPED/CANCELLED sheet that fell back to a
+# fallback instrument finished there — its checkpoint carries the true
+# identity (advance_fallback + F-490 sync), and the Sheet entity only knows
+# the primary. Rewriting the name while the model writes stay guarded
+# fabricates a never-executed instrument/model pair. FAILED is deliberately
+# absent: a recovered failed sheet retries from the primary (#187/#190),
+# and its name/model/history all reset together.
+_KEEP_IDENTITY: frozenset[BatonSheetStatus] = frozenset(
+    {
+        BatonSheetStatus.COMPLETED,
+        BatonSheetStatus.SKIPPED,
+        BatonSheetStatus.CANCELLED,
+    }
+)
+
 
 def baton_to_checkpoint_status(status: BatonSheetStatus) -> str:
     """Identity mapping — Phase 2 unified the enums.
@@ -896,15 +912,23 @@ class BatonAdapter:
         # This makes the baton write directly to the same SheetState objects
         # the manager serves via get_job_status — no sync layer needed.
         if live_sheets is not None:
-            # Enrich existing SheetState objects with baton scheduling fields
+            # Enrich existing SheetState objects with baton scheduling fields.
+            # Identity writes (#452) apply only to non-terminal sheets. The
+            # production caller (manager.py) always passes fresh PENDING
+            # states, where the writes are idempotent over primary values —
+            # but the baton's states ARE the manager's live states (mutation
+            # is persistence), so a future re-register over an executed
+            # COMPLETED-on-fallback sheet must not rewrite its identity.
+            # Scheduling enrichment still applies to every live sheet.
             for sheet in sheets:
                 s = live_sheets.get(sheet.num)
-                if s is not None:
+                if s is not None and s.status not in _KEEP_IDENTITY:
                     s.instrument_name = sheet.instrument_name
                     raw_m = sheet.instrument_config.get("model")
                     s.model = str(raw_m) if raw_m is not None else None
                     s.instrument_model = s.model
                     s.remember_primary_identity()
+                if s is not None:
                     s.max_retries = max_retries
                     s.max_completion = max_completion
                     s.fallback_chain = list(sheet.instrument_fallbacks)
@@ -1697,22 +1721,26 @@ class BatonAdapter:
                     model=str(raw_model) if raw_model is not None else None,
                 )
 
-            # Always populate instrument identity from the Sheet entity.
-            # The checkpoint may have instrument_name=None for sheets that
-            # were never dispatched (e.g., dependency-cascaded failures).
-            state.instrument_name = sheet.instrument_name
-            state.instrument_resolution = (
-                sheet.instrument_resolution
-                if isinstance(sheet.instrument_resolution, InstrumentResolution)
-                else None
-            )
+            # Populate instrument identity from the Sheet entity — except for
+            # terminal fallen-back sheets (#452). The checkpoint may have
+            # instrument_name=None for sheets that were never dispatched
+            # (e.g., dependency-cascaded failures), which is what the
+            # Sheet-entity write covers. But a COMPLETED/SKIPPED/CANCELLED
+            # sheet that fell back finished ON the fallback: the checkpoint
+            # holds its true identity (advance_fallback + F-490 sync), and
+            # rewriting only the name (the model writes below are guarded)
+            # fabricates a never-executed instrument/model pair that then
+            # persists durably — the live SheetState IS the checkpoint's.
+            if baton_status not in _KEEP_IDENTITY:
+                state.instrument_name = sheet.instrument_name
+                state.instrument_resolution = (
+                    sheet.instrument_resolution
+                    if isinstance(sheet.instrument_resolution, InstrumentResolution)
+                    else None
+                )
             raw_model = sheet.instrument_config.get("model")
             primary_model = str(raw_model) if raw_model is not None else None
-            if baton_status not in {
-                BatonSheetStatus.COMPLETED,
-                BatonSheetStatus.SKIPPED,
-                BatonSheetStatus.CANCELLED,
-            }:
+            if baton_status not in _KEEP_IDENTITY:
                 state.model = primary_model
                 state.instrument_model = primary_model
             state.primary_identity = InstrumentIdentity(

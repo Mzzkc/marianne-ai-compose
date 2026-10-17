@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from marianne.cli.commands.status import format_instrument_with_fallback
 from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.adapter import (
@@ -42,6 +43,7 @@ def _make_sheet(
     timeout: float = 60.0,
     movement: int = 1,
     voice: int | None = None,
+    fallbacks: list[str] | None = None,
 ) -> Sheet:
     """Create a minimal Sheet for testing."""
     return Sheet(
@@ -53,6 +55,7 @@ def _make_sheet(
         instrument_name=instrument,
         prompt_template=prompt,
         timeout_seconds=timeout,
+        instrument_fallbacks=fallbacks or [],
     )
 
 
@@ -62,6 +65,7 @@ def _make_checkpoint(
     sheet_statuses: dict[int, str] | None = None,
     sheet_attempts: dict[int, int] | None = None,
     sheet_completion_attempts: dict[int, int] | None = None,
+    sheet_fallbacks: dict[int, dict[str, object]] | None = None,
 ) -> CheckpointState:
     """Create a CheckpointState with specified sheet statuses.
 
@@ -71,6 +75,10 @@ def _make_checkpoint(
         sheet_statuses: Map of sheet_num → status string. Defaults to all pending.
         sheet_attempts: Map of sheet_num → attempt_count.
         sheet_completion_attempts: Map of sheet_num → completion_attempts.
+        sheet_fallbacks: Map of sheet_num → SheetState field overrides describing
+            a fallback position, as ``advance_fallback`` leaves them (name, model,
+            index, chain, history). Applied after construction, mirroring how the
+            F-490 sync persists the live fallback identity into the checkpoint.
     """
     if sheet_statuses is None:
         sheet_statuses = dict.fromkeys(range(1, total_sheets + 1), "pending")
@@ -81,12 +89,15 @@ def _make_checkpoint(
 
     sheets: dict[int, SheetState] = {}
     for num, status in sheet_statuses.items():
-        sheets[num] = SheetState(
+        state = SheetState(
             sheet_num=num,
             status=SheetStatus(status),
             attempt_count=sheet_attempts.get(num, 0),
             completion_attempts=sheet_completion_attempts.get(num, 0),
         )
+        for field, value in (sheet_fallbacks or {}).get(num, {}).items():
+            setattr(state, field, value)
+        sheets[num] = state
 
     return CheckpointState(
         job_id=job_id,
@@ -554,6 +565,145 @@ class TestRecoveryStatusMapping:
         state = adapter.baton.get_sheet_state("test-job", 1)
         assert state is not None
         assert state.instrument_name == "gemini-cli"
+
+    def test_recovery_completed_fallback_keeps_identity(self) -> None:
+        """#452: a COMPLETED sheet that fell back keeps its fallback identity.
+
+        The sheet fell back claude-code → codex-cli and completed there. The
+        checkpoint (via the F-490 sync) persisted name=codex-cli, index=1,
+        instrument_model=gpt-6-sol. recover_job must NOT rewrite the name to
+        the Sheet entity's primary while leaving the fallback's model — that
+        pair (claude-code + gpt-6-sol) never executed, yet it rendered in
+        ``mzt status`` next to the '(was claude-code: execution_failed)' note
+        and was then persisted durably by the next checkpoint write (the
+        live sheet IS the checkpoint's SheetState, manager.py:6678).
+        """
+        adapter = BatonAdapter()
+        sheets = [
+            _make_sheet(
+                num=1,
+                instrument="claude-code",
+                fallbacks=["codex-cli"],
+            ),
+        ]
+        deps = {1: []}
+        checkpoint = _make_checkpoint(
+            total_sheets=1,
+            sheet_statuses={1: "completed"},
+            sheet_fallbacks={
+                1: {
+                    "instrument_name": "codex-cli",
+                    "instrument_model": "gpt-6-sol",
+                    "current_instrument_index": 1,
+                    "fallback_chain": ["codex-cli"],
+                    "instrument_fallback_history": [
+                        {
+                            "from": "claude-code",
+                            "to": "codex-cli",
+                            "reason": "execution_failed",
+                            "timestamp": "T",
+                        }
+                    ],
+                },
+            },
+        )
+
+        # Mirror manager.py:6678 — the baton writes into the checkpoint's
+        # own SheetState objects, so corruption here is durable.
+        adapter.recover_job("test-job", sheets, deps, checkpoint, live_sheets=checkpoint.sheets)
+
+        assert checkpoint.sheets[1].instrument_name == "codex-cli"
+        assert checkpoint.sheets[1].instrument_model == "gpt-6-sol"
+        rendered = format_instrument_with_fallback(checkpoint.sheets[1])
+        assert "codex-cli (gpt-6-sol)" in rendered
+        assert "claude-code (gpt-6-sol)" not in rendered
+
+    @pytest.mark.parametrize("status", ["skipped", "cancelled"])
+    def test_recovery_skipped_cancelled_fallback_keep_identity(self, status: str) -> None:
+        """#452 pins the full terminal set, not just the reported COMPLETED case.
+
+        SKIPPED and CANCELLED fallen-back sheets are as un-executable as
+        COMPLETED ones — rewriting their identity to the primary fabricates
+        the same never-ran instrument/model pair. (FAILED deliberately
+        resets: see test_failed_sheet_index_reset_to_primary, #187/#190.)
+        """
+        adapter = BatonAdapter()
+        sheets = [
+            _make_sheet(
+                num=1,
+                instrument="claude-code",
+                fallbacks=["codex-cli"],
+            ),
+        ]
+        deps = {1: []}
+        checkpoint = _make_checkpoint(
+            total_sheets=1,
+            sheet_statuses={1: status},
+            sheet_fallbacks={
+                1: {
+                    "instrument_name": "codex-cli",
+                    "instrument_model": "gpt-6-sol",
+                    "current_instrument_index": 1,
+                    "fallback_chain": ["codex-cli"],
+                    "instrument_fallback_history": [
+                        {
+                            "from": "claude-code",
+                            "to": "codex-cli",
+                            "reason": "execution_failed",
+                            "timestamp": "T",
+                        }
+                    ],
+                },
+            },
+        )
+
+        adapter.recover_job("test-job", sheets, deps, checkpoint, live_sheets=checkpoint.sheets)
+
+        assert checkpoint.sheets[1].instrument_name == "codex-cli"
+        assert checkpoint.sheets[1].instrument_model == "gpt-6-sol"
+
+    def test_register_live_sheets_terminal_fallback_keeps_identity(self) -> None:
+        """#452 second site: register_job's live-sheets enrichment must not
+        rewrite the identity of an already-terminal live sheet.
+
+        Today the only production caller passing live_sheets hands over fresh
+        PENDING states (manager.py:6317), so the writes are idempotent. But
+        silence on an undocumented caller precondition is exactly how the
+        recover_job copy of this bug happened — a future re-register over
+        executed states would corrupt identity durably (the baton's states
+        ARE the manager's live states).
+        """
+        adapter = BatonAdapter()
+        sheets = [
+            _make_sheet(
+                num=1,
+                instrument="claude-code",
+                fallbacks=["codex-cli"],
+            ),
+        ]
+        deps = {1: []}
+        # A live sheet that already COMPLETED on the fallback instrument.
+        live = SheetState(
+            sheet_num=1,
+            status=SheetStatus.COMPLETED,
+            instrument_name="codex-cli",
+            instrument_model="gpt-6-sol",
+            current_instrument_index=1,
+            fallback_chain=["codex-cli"],
+            instrument_fallback_history=[
+                {
+                    "from": "claude-code",
+                    "to": "codex-cli",
+                    "reason": "execution_failed",
+                    "timestamp": "T",
+                }
+            ],
+        )
+
+        adapter.register_job("test-job", sheets, deps, live_sheets={1: live})
+
+        assert live.instrument_name == "codex-cli"
+        assert live.instrument_model == "gpt-6-sol"
 
     def test_recovery_with_max_retries(self) -> None:
         """Max retries parameter is passed through on recovery."""

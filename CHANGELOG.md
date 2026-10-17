@@ -193,6 +193,7 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 - **Concert trigger self-chain (GH #454)** — A `concert` trigger that names its own score is admitted under a lineage id (`<name>--chain<depth>--<stamp>`) instead of being refused as an active duplicate of its still-running parent; `concert.max_chain_depth` is the only bound
+- **recover_job keeps a fallen-back terminal sheet's instrument name (GH #452)** — Recovery no longer rewrites a COMPLETED/SKIPPED/CANCELLED sheet's `instrument_name` to the primary while keeping the fallback's model; status and diagnose name the instrument that actually ran
 - **SIGABRT crash** — Unified streaming with parallel CancelledError guard
 - **Infinite loop in parallel execution** — Fixed production bug with parallel sheet execution
 - **MCP proxy test infinite loop** — Fixed test expectations for MCP proxy
