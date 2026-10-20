@@ -256,11 +256,11 @@ async def test_child_forked_during_post_exit_grace_dies_too() -> None:
     printed and exited, during the post-exit drain grace, re-parents to the
     supervisor and is ended with the attempt."""
     marker = Path("/tmp") / f"mzt-406-residual-{os.getpid()}.pid"
+    shell = f"sleep 0.3; setsid sleep 40 >/dev/null 2>&1 </dev/null & echo $! > {marker}"
     script = (
         "import subprocess, sys\n"
         "print('agent done', flush=True)\n"
-        f"subprocess.Popen(['bash', '-c', 'sleep 0.3; setsid sleep 40 >/dev/null 2>&1 </dev/null & echo $! > {marker}'],\n"
-        "                 start_new_session=True)\n"
+        f"subprocess.Popen(['bash', '-c', {shell!r}], start_new_session=True)\n"
         "sys.exit(0)\n"
     )
     backend = PluginCliBackend(_profile(supervise=True))
@@ -272,7 +272,9 @@ async def test_child_forked_during_post_exit_grace_dies_too() -> None:
             await asyncio.sleep(0.05)
         if marker.exists():
             late_pid = int(marker.read_text().split()[0])
-            assert await _wait_gone(late_pid, 3.0), "late-forked detached child outlived the attempt"
+            assert await _wait_gone(late_pid, 3.0), (
+                "late-forked detached child outlived the attempt"
+            )
     finally:
         marker.unlink(missing_ok=True)
 

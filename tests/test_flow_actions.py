@@ -609,4 +609,5 @@ async def test_file_facts_expand_workspace_in_the_validation_form(tmp_path: Path
     assert not facts["{{ workspace }}/outer-done.txt"].exists, "Jinja braces stay verbatim"
     assert not facts["{outer}.txt"].exists
     (tmp_path / "2.txt").write_text("y", encoding="utf-8")
-    assert (await prefetch_file_facts(tmp_path, frozenset({"{outer}.txt"}), {"outer": 2}, None))["{outer}.txt"].exists
+    facts = await prefetch_file_facts(tmp_path, frozenset({"{outer}.txt"}), {"outer": 2}, None)
+    assert facts["{outer}.txt"].exists
