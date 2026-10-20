@@ -50,6 +50,7 @@ from marianne.utils.process import (
     snapshot_descendant_trees,
     snapshot_pipe_holders,
     spawn_identity,
+    supervised_argv,
 )
 from marianne.utils.process import (
     safe_killpg as _safe_killpg,
@@ -1467,6 +1468,11 @@ class PluginCliBackend(Backend):
             _resolved = _shutil.which(cmd[0])
             if _resolved:
                 cmd = [_resolved] + cmd[1:]
+            # Every descendant of the instrument dies with the attempt: the
+            # supervisor is a subreaper in the instrument's own group, so a
+            # grandchild whose parent exits re-parents to it, not to init.
+            if self._cli.command.supervise:
+                cmd = supervised_argv(cmd, io_priority=self._cli.command.io_priority)
 
             # Ensure working directory exists before spawning —
             # asyncio.create_subprocess_exec raises FileNotFoundError

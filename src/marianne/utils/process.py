@@ -11,6 +11,7 @@ import asyncio
 import json
 import os
 import signal
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,8 +19,28 @@ from pathlib import Path
 import psutil
 
 from marianne.core.logging import get_logger
+from marianne.utils.run_supervisor import subreaper_available
 
 _logger = get_logger("utils.process")
+
+
+def supervised_argv(
+    command: list[str], *, io_priority: str = "low", report_path: Path | None = None,
+) -> list[str]:
+    """Wrap an instrument argv in the Linux instrument supervisor.
+
+    Returns ``command`` unchanged where the supervisor cannot run (not Linux,
+    or the subreaper prctl is unavailable). The supervisor runs by its absolute
+    file under ``-I`` so nothing in the workspace can shadow it (GH #445).
+    """
+    if not subreaper_available():
+        return list(command)
+    from marianne.utils import instrument_supervisor
+
+    argv = [sys.executable, "-I", str(instrument_supervisor.__file__), "--io", io_priority]
+    if report_path is not None:
+        argv += ["--report", str(report_path)]
+    return [*argv, "--", *command]
 
 
 def safe_killpg(pgid: int, sig: int, *, context: str = "") -> bool:

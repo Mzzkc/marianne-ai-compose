@@ -44,6 +44,7 @@ from marianne.execution.instruments.interactive.tmux import (
     TmuxError,
     sanitize_session_name,
 )
+from marianne.utils.process import supervised_argv
 
 _logger = get_logger("execution.interactive.backend")
 _ERROR_CLASSIFIER = ErrorClassifier()
@@ -359,6 +360,10 @@ class InteractiveCliBackend(Backend):
             req_extensions = None
 
         command = self._build_command()
+        if self._cli.command.supervise:
+            # The pane process stays its own group leader (the supervisor is
+            # the leader; the agent shares the group), so pid == pgid holds.
+            command = supervised_argv(command, io_priority=self._cli.command.io_priority)
         full_prompt = self._build_prompt(
             prompt, marker, req_preamble, req_extensions
         )

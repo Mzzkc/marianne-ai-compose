@@ -258,11 +258,24 @@ and used by the conductor for instrument selection in future versions.
 | `working_dir_flag` | No | | Flag for working directory. `null` = subprocess cwd |
 | `extra_flags` | No | `[]` | Fixed flags always appended |
 | `env` | No | `{}` | Environment variables. `${VAR}` references expand from `os.environ` |
+| `supervise` | No | `true` | Launch the instrument under Marianne's Linux **instrument supervisor**: a child subreaper in the instrument's own process group. A grandchild whose parent exits (an agent's filesystem-search helper, a disowned shell) re-parents to the supervisor instead of init, and is ended and reaped when the instrument exits or the attempt is torn down. Set `false` only for an instrument the supervisor cannot wrap. Where the subreaper is unavailable (not Linux) the instrument is spawned directly and the backend's own descendant reaper (GH #406) is the only guard. |
+| `io_priority` | No | `low` | I/O scheduling class the supervisor gives the instrument and everything it spawns: `low` (best-effort, lowest priority) keeps an agent's whole-disk search from stalling the conductor's own state reads; `idle` yields to every other process; `inherit` keeps the conductor's class. Ignored when `supervise` is `false`. |
 | `prompt_via_stdin` | No | `true` | Write the assembled prompt to the child's stdin instead of argv. Prompts routinely exceed 100 KB with prelude/cadenza injection, and Linux caps a single argv entry at 128 KiB (`E2BIG`, "Argument list too long" before the process starts). Set `false` only for a CLI that cannot read stdin |
 | `stdin_sentinel` | No | | What to put after `prompt_flag` when the prompt goes to stdin: `-` for Claude Code's `-p -`; `""` keeps the flag with an empty value (Antigravity's `-p ''`). Unset = omit the flag entirely |
 | `stdin_json_template` | No | | For a CLI whose only stdin path is a structured stream: this object is written as ONE JSON line with every `"{prompt}"` string replaced by the prompt (nested keys are walked). Antigravity: `{event: user, message: {role: user, content: "{prompt}"}}` with `--input-format stream-json` |
 
 #### `cli` — Lifecycle bounds
+
+Every CLI attempt is one process tree. The backend starts the instrument in
+its own session and process group; with `command.supervise` (the default on
+Linux) the direct child is the instrument supervisor, which shares that
+group and adopts every descendant whose parent exits. Teardown signals the
+group, the supervisor ends and reaps what it adopted, and the backend's
+descendant reaper settles anything the supervisor could not see. On Pallas
+(20 Oct 2026) eight `bfs`/`ugrep` searches from `/` outlived their sheets at
+ppid 1 for hours and saturated the disk; the supervisor is the fix, and the
+`low` I/O class bounds the damage a live search can do.
+
 
 | Field | Default | Description |
 |-------|---------|-------------|

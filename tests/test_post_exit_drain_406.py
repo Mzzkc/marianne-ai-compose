@@ -32,8 +32,14 @@ def _profile(
                               cost_per_1k_input=0, cost_per_1k_output=0)],
         default_model="test",
         cli=CliProfile(
+            # supervise=False: these tests pin the backend's OWN descendant
+            # reaper and post-exit grace, the path a host without the Linux
+            # instrument supervisor (or a profile with supervise: false)
+            # still relies on. The supervised path has its own suite in
+            # tests/test_instrument_supervisor.py.
             command=CliCommand(executable="python3", prompt_flag="-c",
-                               prompt_via_stdin=False, start_new_session=True),
+                               prompt_via_stdin=False, start_new_session=True,
+                               supervise=False),
             output=CliOutputConfig(format="text"),
             post_exit_drain_grace_seconds=grace,
             first_output_timeout_seconds=first_output,

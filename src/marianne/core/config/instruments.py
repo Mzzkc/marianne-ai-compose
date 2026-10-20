@@ -316,6 +316,26 @@ class CliCommand(BaseModel):
     )
 
     # Process isolation
+    supervise: bool = Field(
+        default=True,
+        description="When True (default), launch the instrument under Marianne's "
+        "Linux instrument supervisor: a child subreaper in the instrument's own "
+        "process group that adopts any grandchild whose parent exits (an agent's "
+        "search helper, a disowned shell) and ends and reaps every adopted "
+        "process when the instrument exits or the attempt is torn down. Without "
+        "it such grandchildren re-parent to init and outlive the sheet (Pallas, "
+        "20 Oct 2026). Set False only for an instrument the supervisor cannot "
+        "wrap (not Linux, or a binary that must be the direct child of the "
+        "conductor).",
+    )
+    io_priority: Literal["low", "idle", "inherit"] = Field(
+        default="low",
+        description="I/O scheduling class the supervisor gives the instrument and "
+        "everything it spawns: 'low' (best-effort, lowest priority; default) keeps "
+        "an agent's whole-disk search from stalling the conductor's own state "
+        "reads; 'idle' yields to every other process; 'inherit' leaves the "
+        "conductor's class in place. Ignored when supervise is False.",
+    )
     start_new_session: bool = Field(
         default=False,
         description="When True, start the subprocess in a new process group "
