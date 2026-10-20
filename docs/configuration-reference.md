@@ -1751,7 +1751,7 @@ passes the cap while running is ended like a timeout, with the outcome's error
 naming the cap. `concert` submits a child score and does not wait for that child. Commands may repeat after a
 conductor crash, so make their effects idempotent using `MARIANNE_FLOW_ATTEMPT`.
 `concert` submits a child score and does not wait for that child: the action's
-`score` names the child score file (`sheet.triggers.<span>.on_success[].concert.score`),
+A trigger child is submitted with the parent's per-invocation variables (`mzt run --var k=v`), so one `--var project_root=/abs` on the root iteration binds the whole chain, exactly as it survives resume. `score` names the child score file (`sheet.triggers.<span>.on_success[].concert.score`),
 with `detached: true` releasing the conductor from waiting on it. A score that
 names itself self-chains: the trigger fires while the parent still runs, so the
 child is admitted under a lineage id (`<name>--chain<depth>--<UTC stamp>`)

@@ -37,9 +37,10 @@
 #        mzt wait issue-triage
 #
 #   2. `triage_workspace` must be a STABLE path outside this score's
-#      fresh-per-iteration workspace (default: ~/workspaces/issue-triage-workspace,
-#      the workspace-root convention). Relative paths break across chained
-#      iterations.
+#      fresh-per-iteration workspace. The default, ~/workspaces/issue-triage, is
+#      exactly where issue-triage.yaml writes (conductor-managed, #58), so the
+#      two scores agree without editing either. Relative paths break across
+#      chained iterations.
 #
 #   3. Run the solver:
 #        mzt run examples/engineering/issue-solver.yaml
@@ -56,9 +57,11 @@
 # How to Adapt:
 #   1. Set `repo` to the owner/repo format of your project
 #   2. Set `triage_workspace` to a stable absolute path you control
-#   3. Set `project_root` to "." when running from the project root
+#   3. Set `project_root` to the ABSOLUTE path of the checkout the solver commits
+#      in. Musicians and validations run with the WORKSPACE as cwd, so "." is the
+#      workspace. Per-run: --var project_root=/abs (chained iterations inherit it).
 #
-# Output (in ../workspaces/issue-solver-workspace/, fresh per iteration):
+# Output (in ~/workspaces/issue-solver/, fresh per iteration):
 #   01-selected-issue.md     — Selection from DAG (or terminal NO_ISSUES_REMAINING)
 #   02-investigation.md      — Deep investigation
 #   03-plan.md               — Phased plan (phases are plan structure, not sheets)
@@ -78,7 +81,8 @@
 
 name: "issue-solver"
 description: "Self-chaining DAG-driven issue solver — bounded implementation loop, skip-gated terminal path, concert-trigger chaining"
-workspace: "../../workspaces/issue-solver-workspace"
+# No `workspace:` on purpose: conductor-managed at ~/workspaces/issue-solver (#58);
+# fresh: true + archive_on_fresh give every chained iteration a clean copy there.
 
 workspace_lifecycle:
   archive_on_fresh: true
@@ -229,8 +233,8 @@ retry:
 prompt:
   variables:
     repo: "Mzzkc/marianne-ai-compose"
-    triage_workspace: "~/workspaces/issue-triage-workspace"
-    project_root: "."
+    triage_workspace: "~/workspaces/issue-triage"
+    project_root: "[CHANGE THIS: ABSOLUTE path to the project checkout, e.g. /home/me/src/project]"
     preamble: |
       ╔══════════════════════════════════════════════════════════════════════════╗
       ║              ISSUE SOLVER ({{ repo }})                                   ║
@@ -280,7 +284,7 @@ prompt:
     # Cross-score sanity: DAG must be for the repo we're configured to solve.
     python3 - <<PY
     import yaml, sys, pathlib
-    dag = yaml.safe_load(pathlib.Path("{{ triage_workspace }}/issue-dag.yaml").read_text())
+    dag = yaml.safe_load(pathlib.Path("{{ triage_workspace }}/issue-dag.yaml").expanduser().read_text())
     expected = "{{ repo }}".strip()
     actual = (dag.get("dag_metadata") or {}).get("repo", "").strip()
     if actual and expected and actual != expected:
@@ -297,7 +301,7 @@ prompt:
     ```bash
     python3 - <<'PY' > {{ workspace }}/.selected
     import yaml, sys, pathlib
-    dag = yaml.safe_load(pathlib.Path("{{ triage_workspace }}/issue-dag.yaml").read_text())
+    dag = yaml.safe_load(pathlib.Path("{{ triage_workspace }}/issue-dag.yaml").expanduser().read_text())
     resolved = set(dag.get("resolved") or [])
     candidates = []
     for issue in dag["issues"]:
@@ -350,7 +354,7 @@ prompt:
     ISSUE_NUM=$(grep -oE 'SELECTED_ISSUE: #[0-9]+' {{ workspace }}/.selected | grep -oE '[0-9]+')
     python3 - <<PY > {{ workspace }}/.issue-body
     import yaml, pathlib
-    corpus = yaml.safe_load(pathlib.Path("{{ triage_workspace }}/issues/sanitized-corpus.yaml").read_text())
+    corpus = yaml.safe_load(pathlib.Path("{{ triage_workspace }}/issues/sanitized-corpus.yaml").expanduser().read_text())
     for issue in corpus.get("issues") or []:
         if issue["number"] == $ISSUE_NUM:
             print(issue.get("body") or "(empty body)")
@@ -979,7 +983,7 @@ prompt:
     ISSUE_NUM=$(grep -oE 'SELECTED_ISSUE: #[0-9]+' {{ workspace }}/01-selected-issue.md | grep -oE '[0-9]+' | head -1)
     python3 - <<PY
     import yaml, pathlib, os, tempfile, sys
-    dag_path = pathlib.Path("{{ triage_workspace }}/issue-dag.yaml")
+    dag_path = pathlib.Path("{{ triage_workspace }}/issue-dag.yaml").expanduser()
     dag = yaml.safe_load(dag_path.read_text())
     resolved = dag.setdefault("resolved", [])
     num = $ISSUE_NUM
@@ -1009,7 +1013,7 @@ prompt:
 
     **Step 2: Verify the DAG still parses after mutation**
     ```bash
-    python3 -c "import yaml; yaml.safe_load(open('{{ triage_workspace }}/issue-dag.yaml'))" \
+    python3 -c "import yaml, pathlib; yaml.safe_load(pathlib.Path('{{ triage_workspace }}/issue-dag.yaml').expanduser().open())" \
       && echo "DAG integrity verified" \
       || { echo "FATAL: DAG corrupted after mutation — halt before closing issue"; exit 1; }
     ```
@@ -1346,7 +1350,7 @@ validations:
 
   # DAG integrity after mutation — parse check. Fails if mutation corrupted YAML.
   - type: command_succeeds
-    command: 'python3 -c "import yaml; yaml.safe_load(open(\"{triage_workspace}/issue-dag.yaml\"))"'
+    command: 'python3 -c "import yaml, pathlib; yaml.safe_load(pathlib.Path(\"{triage_workspace}/issue-dag.yaml\").expanduser().open())"'
     description: "Triage DAG still parses after Stage 10 mutation"
     condition: "sheet_num == 12"
     stage: 2
@@ -1360,7 +1364,8 @@ validations:
       sel = open('{workspace}/01-selected-issue.md').read()
       m = re.search(r'SELECTED_ISSUE: #(\d+)', sel)
       assert m, 'no selected issue'
-      dag = yaml.safe_load(open('{triage_workspace}/issue-dag.yaml'))
+      import pathlib
+      dag = yaml.safe_load(pathlib.Path('{triage_workspace}/issue-dag.yaml').expanduser().open())
       assert int(m.group(1)) in (dag.get('resolved') or []), 'issue not in resolved list'
       "
     description: "Selected issue is in the DAG resolved list after close"

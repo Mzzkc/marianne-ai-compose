@@ -449,3 +449,49 @@ async def test_resume_no_reload_runs_the_admitted_score_not_the_edited_disk(
             }
         finally:
             await manager.shutdown(graceful=False)
+
+
+@pytest.mark.asyncio
+async def test_concert_child_inherits_the_parent_runtime_variables(tmp_path: Path) -> None:
+    """`mzt run --var k=v` on the root iteration binds the whole chain: a
+    self-chained child is the same engagement, so it is submitted with the
+    parent's runtime variables and they persist on its checkpoint (#359 shape)."""
+    score = tmp_path / "solver.yaml"
+    score.write_text(
+        "name: solver\n"
+        f"workspace: {tmp_path / 'ws'}\n"
+        "instrument: cli\n"
+        "sheet:\n  size: 1\n  total_items: 1\n"
+        "prompt:\n  variables:\n    project_root: default\n  template: sleep 30\n",
+        encoding="utf-8",
+    )
+    manager = JobManager(
+        DaemonConfig(pid_file=tmp_path / "conductor.pid", state_db_path=tmp_path / "jobs.db")
+    )
+    await manager.start()
+    try:
+        manager._job_meta["solver"] = JobMeta(
+            job_id="solver",
+            config_path=score,
+            workspace=tmp_path,
+            status=DaemonJobStatus.RUNNING,
+            concert_config={"enabled": True, "max_chain_depth": 3},
+        )
+        manager._live_states["solver"] = CheckpointState(
+            job_id="solver",
+            job_name="solver",
+            total_sheets=1,
+            sheets={1: SheetState(sheet_num=1)},
+            runtime_variables={"project_root": "/srv/checkout", "repo": "o/r"},
+        )
+        accepted, child_id, message = await manager._submit_flow_concert("solver", "solver.yaml")
+        assert accepted, message
+        assert child_id is not None
+        # The live checkpoint is built when the run task starts, not at accept.
+        deadline = time.monotonic() + 10.0
+        while child_id not in manager._live_states and time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
+        child = manager._live_states[child_id]
+        assert child.runtime_variables == {"project_root": "/srv/checkout", "repo": "o/r"}
+    finally:
+        await manager.shutdown(graceful=False)

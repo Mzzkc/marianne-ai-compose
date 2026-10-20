@@ -1654,12 +1654,20 @@ class JobManager:
             child_job_id = (
                 f"{sanitize_workspace_name(score_path.stem)}--chain{current_depth + 1}--{stamp}"
             )
+        # The child is the same engagement continued: every `mzt run --var`
+        # the operator gave the root iteration (project_root, repo, ...)
+        # travels with the chain, exactly as it already survives resume
+        # (#359). Without this a self-chaining score re-reads its YAML
+        # defaults on iteration two and silently solves the wrong project.
+        parent_live = self._live_states.get(parent_job_id)
+        inherited_vars = dict(parent_live.runtime_variables) if parent_live else {}
         request = JobRequest(
             config_path=score_path,
             job_id=child_job_id,
             workspace=parent.workspace if spec.inherit_workspace else None,
             fresh=spec.fresh,
             chain_depth=current_depth + 1,
+            runtime_variables=inherited_vars,
         )
         response = await self.submit_job(request)
         return response.status == "accepted", response.job_id, response.message

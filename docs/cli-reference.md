@@ -83,7 +83,7 @@ Usage: mzt run [OPTIONS] CONFIG_FILE
 | `--self-healing` | `-H` | false | Enable automatic diagnosis and remediation when retries are exhausted |
 | `--yes` | `-y` | false | Auto-confirm suggested fixes when using `--self-healing` |
 | `--fresh` | | false | Re-run a score from scratch: re-register all sheets and, when the score sets `workspace_lifecycle.archive_on_fresh`, archive non-preserved workspace files first. Auto-triggered for completed scores when the YAML changed. |
-| `--var` | | _(none)_ | Per-invocation template variable as `key=value` (repeatable). Merges into the score's `prompt.variables`, CLI overriding YAML on collision — point one generic score at different inputs without editing it. Values are strings (typed vars belong in YAML). Persisted across resume. |
+| `--var` | | _(none)_ | Per-invocation template variable as `key=value` (repeatable). Merges into the score's `prompt.variables`, CLI overriding YAML on collision — point one generic score at different inputs without editing it. Values are strings (typed vars belong in YAML). Persisted across resume and inherited by every job a concert trigger chains from this one. |
 
 #### Auto-Fresh Detection
 

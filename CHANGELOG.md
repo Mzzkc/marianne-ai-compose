@@ -195,6 +195,18 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **Concert trigger children inherit `--var` runtime variables.** A self-chaining
+  score's second iteration re-read its YAML defaults and could solve the wrong
+  project; the child is now submitted with the parent's runtime variables, the
+  same way resume re-applies them.
+- **issue-triage / issue-solver agree on one stable triage path.** Both scores
+  drop their score-relative `workspace:` for the conductor-managed
+  `~/workspaces/<name>` (#58); the solver's `triage_workspace` default is that
+  path; every Python read of it expands `~` (a `Path("~/…").read_text()` never
+  did); `project_root` must be absolute because musicians and validations run
+  with the workspace as cwd; the generated harness scripts `cd` into the
+  literal project root instead of `git rev-parse` from wherever they are run.
+
 - **`mzt list` never pages out a live score.** `--limit` caps terminal history
   only; queued, running and paused runs are always all shown, and the footer
   names how many older terminal runs were hidden. A 20-row page over 25 running

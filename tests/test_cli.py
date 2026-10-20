@@ -308,20 +308,27 @@ class TestListCommand:
         assert "No running scores found" in result.stdout
 
     def test_list_with_limit(self) -> None:
-        """--limit option caps results."""
+        """--limit caps terminal history; live runs are never paged out."""
         jobs = [
             {
                 "job_id": f"job-{i}",
-                "status": "running",
+                "status": "completed",
                 "workspace": f"/w{i}",
                 "submitted_at": 1707900000.0 + i,
             }
             for i in range(5)
         ]
         with self._mock_route(jobs):
-            result = runner.invoke(app, ["list", "--limit", "2"])
+            result = runner.invoke(app, ["list", "--all", "--limit", "2"])
         assert result.exit_code == 0
         assert "2 score(s)" in result.stdout
+        assert "3 older terminal run(s) not shown" in result.stdout
+
+        live = [{**job, "status": "running"} for job in jobs]
+        with self._mock_route(live):
+            result = runner.invoke(app, ["list", "--limit", "2"])
+        assert result.exit_code == 0
+        assert "5 score(s)" in result.stdout
 
     def test_list_daemon_not_running(self) -> None:
         """List without daemon shows error."""

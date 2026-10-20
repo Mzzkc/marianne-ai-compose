@@ -40,9 +40,11 @@
 # How to Adapt:
 #   1. Set `repo` to the owner/repo format of your project
 #   2. Set `issue_label` to the GitHub label used for target issues
-#   3. Leave `project_root` as "." when running from the project root
+#   3. Set `project_root` to the ABSOLUTE path of the checkout. Musicians and
+#      validations run with the WORKSPACE as cwd, never where you typed mzt run,
+#      so "." is the workspace, not the project. Per-run: --var project_root=/abs
 #
-# Output (in ../workspaces/issue-triage-workspace/):
+# Output (in ~/workspaces/issue-triage/, the stable path the solver reads):
 #   01-discovery.md              — Project toolchain discovery
 #   project-harness/             — Generated wrapper scripts (test/lint/typecheck/smoke)
 #   project-profile.yaml         — Structured project metadata
@@ -59,7 +61,10 @@
 
 name: "issue-triage"
 description: "Discover project, safely triage GitHub issues, produce dependency DAG"
-workspace: "../../workspaces/issue-triage-workspace"
+# No `workspace:` on purpose: the conductor manages it at ~/workspaces/issue-triage
+# (the workspace-root convention, #58), the one STABLE path issue-solver.yaml reads
+# across its fresh-per-iteration chain. A score-relative path would resolve to a
+# different directory for every checkout and the solver could never find it.
 
 # Do NOT archive_on_fresh — the solver reads this workspace across its entire
 # self-chain. Overwriting mid-run would corrupt the DAG. Re-run this score
@@ -124,7 +129,7 @@ prompt:
   variables:
     repo: "[CHANGE THIS: GitHub repo, e.g. Mzzkc/marianne-ai-compose]"
     issue_label: "[CHANGE THIS: GitHub label, e.g. bug]"
-    project_root: "."
+    project_root: "[CHANGE THIS: ABSOLUTE path to the project checkout, e.g. /home/me/src/project]"
     investigator:
       1:
         name: "issues"
@@ -224,11 +229,13 @@ prompt:
     **`typecheck.sh`** — runs the type checker (or `exit 0` with a printed note if none).
     **`smoke.sh`** — minimal functionality check (package import, build, or similar).
 
-    Each script template:
+    Each script template (the project root is written in literally; the
+    harness runs from the solver's workspace later, where `git rev-parse`
+    would find the wrong repository or none):
     ```bash
     #!/bin/bash
     set -euo pipefail
-    cd "$(git rev-parse --show-toplevel)"
+    cd "{{ project_root }}"
     # [discovered command from 01-discovery.md]
     ```
 

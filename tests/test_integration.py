@@ -481,13 +481,15 @@ class TestListMultipleJobs:
         assert "1 score(s)" in result.stdout
 
     def test_list_with_limit(self) -> None:
-        """List respects --limit option."""
+        """--limit caps terminal rows only; the running and paused rows always show."""
         jobs = _multi_job_daemon_data()
         with self._mock_route(jobs):
-            result = runner.invoke(app, ["list", "--all", "--limit", "2"])
+            result = runner.invoke(app, ["list", "--all", "--limit", "1"])
 
         assert result.exit_code == 0
-        assert "2 score(s)" in result.stdout
+        assert "RUNNING" in result.stdout and "PAUSED" in result.stdout
+        assert "3 score(s)" in result.stdout
+        assert "1 older terminal run(s) not shown" in result.stdout
 
     def test_list_shows_progress_info(self) -> None:
         """List shows progress column and relative time (beautified, replaces workspace)."""
