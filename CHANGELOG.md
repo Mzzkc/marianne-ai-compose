@@ -196,6 +196,16 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **issue-solver: FLAGGED issues rank last in selection, and the close
+  comment carries scope.** With a zero-edge DAG the selector took the lowest
+  issue number regardless of the scanner verdict, so the first chained
+  iteration started on a security-design issue whose body had been redacted
+  to its title. Selection order is now tier, CLEAN before FLAGGED,
+  dependencies, number. The automated close comment summarizes the branch
+  against its merge base (an empty receipt commit's `HEAD~1` diff printed
+  nothing), names the verify.sh result, and copies the synthesis report's
+  Deferred section so a reader sees what the iteration did not do.
+
 - **`mzt doctor` finishes in seconds on a long-lived host.** The instrument
   hygiene scan parses every score the conductor was ever given; the pure
   Python YAML loader took 41 s over 1,374 files and timed out every test that
