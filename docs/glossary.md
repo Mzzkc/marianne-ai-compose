@@ -36,7 +36,7 @@ do not consume that conductor budget.
 ## Supply context and continue work
 
 - **Prelude** (`sheet.prelude`): files or directories injected as context, skills or tools into every sheet ([reference](../docs/configuration-reference.md#sheet)).
-- **Cadenza** (`sheet.cadenzas`): context injected into specific sheets in addition to the prelude ([reference](../docs/configuration-reference.md#sheet)).
+- **Cadenza** (`sheet.cadenzas`): context injected into specific sheets in addition to the prelude ([reference](../docs/configuration-reference.md#sheet)). An agent's `cadenzas/personal/active/` directory is only a folder until a score names it in a `prelude` or `cadenzas` entry.
 - **Fermata** (`fermata`): a sheet status that holds execution for a composer decision, handled with the resolve command ([reference](../docs/cli-reference.md#mzt-resolve)).
 - **Completion mode** (`retry.completion_threshold_percent`): a partial validation pass strictly above this threshold enters targeted completion of the remaining work, while lower results spend normal retries ([reference](../docs/configuration-reference.md#retry)).
 - **Paused at chain** (`paused_at_chain`): the run status when a successful score's next concert link is held until the composer resumes it ([reference](../docs/configuration-reference.md#on_success-post-success-hooks)).
