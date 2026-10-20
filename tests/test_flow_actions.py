@@ -52,7 +52,7 @@ async def test_background_child_does_not_hold_run_open(tmp_path: Path) -> None:
         assert outcome.exit_code == 0
         assert other.exit_code == 0
         assert not outcome.timed_out
-        assert time.monotonic() - started < 1
+        assert time.monotonic() - started < 10  # the child sleeps 30; under load 1 s is noise
         assert outcome.log_path is not None
         assert "done" in Path(outcome.log_path).read_text(encoding="utf-8")
         child_pid = int((tmp_path / "child.pid").read_text().strip())
@@ -151,7 +151,7 @@ async def test_detached_log_holder_is_reaped_without_signalling_unrelated_proces
         )
         assert outcome.exit_code == 0
         assert not outcome.timed_out
-        assert time.monotonic() - started < 1
+        assert time.monotonic() - started < 10  # the child sleeps 30; under load 1 s is noise
         assert outcome.log_path is not None
         log = Path(outcome.log_path).read_text(encoding="utf-8")
         match = re.search(r"child_pid=(\d+)", log)
@@ -201,7 +201,7 @@ async def test_closed_stdio_group_child_is_reaped_but_bystander_survives(
         child_pid = int((tmp_path / "child.pid").read_text().strip())
         assert outcome.exit_code == 0
         assert not outcome.timed_out
-        assert time.monotonic() - started < 1
+        assert time.monotonic() - started < 10  # the child sleeps 30; under load 1 s is noise
         assert (
             not psutil.pid_exists(child_pid)
             or psutil.Process(child_pid).status() == psutil.STATUS_ZOMBIE

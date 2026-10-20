@@ -195,6 +195,22 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **`mzt doctor` finishes in seconds on a long-lived host.** The instrument
+  hygiene scan parses every score the conductor was ever given; the pure
+  Python YAML loader took 41 s over 1,374 files and timed out every test that
+  invokes doctor. It now uses the C loader (3 s) and reads the registry of the
+  conductor the CLI addresses (clone-aware). Tests never read the developer's
+  registry through doctor (conftest).
+- **A nested instrument no longer inherits the outer job's `MARIANNE_SCRATCH`.**
+  A CLI backend with no working directory now strips the variable instead of
+  passing the environment through, so Marianne's own test suite run as an
+  instrument of a Marianne job sees the documented "nothing exported".
+- **issue-solver: one full-suite run per pass, and a loop cap a pass cannot
+  exhaust.** The implementation pass ran the harness twice (Step 3 and again
+  inside verify.sh); on a 14-minute suite that timed the pass out at 3600 s
+  and one pass cost $16.80 against a $12 cap, so the six-pass loop was a
+  single shot. Step 3 runs only the touched tests; `cost_limit_usd` is 40.
+
 - **Concert trigger children inherit `--var` runtime variables.** A self-chaining
   score's second iteration re-read its YAML defaults and could solve the wrong
   project; the child is now submitted with the parent's runtime variables, the

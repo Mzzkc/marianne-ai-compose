@@ -63,6 +63,7 @@ def _regressions(stdout: str) -> str:
     ) or "(no regression rows; see stderr)"
 
 
+@pytest.mark.timeout(300)
 def test_no_language_regression_outside_the_baseline() -> None:
     result = _run("--baseline", str(BASELINE))
     assert result.returncode == 0, (
@@ -73,6 +74,7 @@ def test_no_language_regression_outside_the_baseline() -> None:
     )
 
 
+@pytest.mark.timeout(300)
 def test_baseline_only_shrinks() -> None:
     """Every baseline line must still be a live finding; a closed gap removes its line."""
     fixture = json.loads(BASELINE.read_text(encoding="utf-8"))

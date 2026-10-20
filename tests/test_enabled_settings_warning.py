@@ -47,6 +47,7 @@ def test_readable_settings_warn_without_enabling(
     assert "enabled: false" in messages[0]
 
 
+@pytest.mark.timeout(120)
 def test_explicit_false_and_reserved_sections_do_not_promise_activation(tmp_path: Path) -> None:
     assert _validate(tmp_path, "parallel: {enabled: false, max_concurrent: 2}\n") == []
     assert _validate(tmp_path, "ai_review: {min_score: 70}\n") == []

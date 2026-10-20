@@ -842,7 +842,15 @@ class PluginCliBackend(Backend):
         there is no job and nothing is exported.
         """
         if self._working_directory is None:
-            return env
+            # No job: nothing exported, and nothing INHERITED either. An
+            # instrument that itself runs Marianne (this test suite under the
+            # issue solver) would otherwise hand the outer job's scratch root
+            # to a child that has none.
+            if env is None and SCRATCH_ENV_VAR not in os.environ:
+                return None
+            stripped = dict(os.environ) if env is None else dict(env)
+            stripped.pop(SCRATCH_ENV_VAR, None)
+            return stripped
         root = scratch_root(self._working_directory)
         try:
             root.mkdir(parents=True, exist_ok=True)

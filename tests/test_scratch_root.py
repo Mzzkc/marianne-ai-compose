@@ -62,7 +62,9 @@ async def test_plugin_cli_exports_scratch_root_and_creates_it(
 
 
 @pytest.mark.asyncio
-async def test_no_working_directory_exports_nothing() -> None:
+async def test_no_working_directory_exports_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Nested Marianne: this process is itself an instrument of an outer job.
+    monkeypatch.setenv(SCRATCH_ENV_VAR, "/outer/job/.marianne-scratch")
     backend = PluginCliBackend(_profile())
     result = await backend.execute(
         "import os; print('MARIANNE_SCRATCH' in os.environ)", timeout_seconds=10,

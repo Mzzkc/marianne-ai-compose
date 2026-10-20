@@ -161,7 +161,10 @@ sheet:
       index: pass_no
       until: 'file("verify-latest.txt").exists'
       max_iterations: 6
-      cost_limit_usd: 12.0
+      # One pass on a repository whose suite takes 14 minutes cost $16.80 in
+      # output tokens (Marianne's own, 20 Oct 2026): a cap that one pass
+      # exhausts turns the loop into a single shot. Allow two or three.
+      cost_limit_usd: 40.0
 
   # Sentinel gate: when Stage 1 wrote NO_ISSUES_REMAINING as the FIRST line of
   # the selection record (no eligible issue), every solver sheet skips at
@@ -574,10 +577,12 @@ prompt:
     **Step 2: Add/update tests**
     Write tests that verify **actual behavior change**, not just "no crash."
 
-    **Step 3: Run the test harness**
-    ```bash
-    bash {{ triage_workspace }}/project-harness/test.sh
-    ```
+    **Step 3: Run the tests you touched**
+    Run only the test files you added or changed, using the test command
+    from `{{ triage_workspace }}/project-profile.yaml` narrowed to those
+    files. The FULL harness runs once, inside verify.sh in Step 4; running
+    it here as well doubled a pass's wall time and token cost on a large
+    suite and timed the pass out.
 
     **Step 4: Run verify.sh and record the outcome**
 

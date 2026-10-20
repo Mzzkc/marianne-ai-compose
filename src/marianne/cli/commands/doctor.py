@@ -23,6 +23,7 @@ import typer
 from marianne import __version__
 from marianne.cli.output import console as default_console
 from marianne.core.config.instruments import InstrumentProfile
+from marianne.daemon.clone import active_registry_db_path
 from marianne.instruments.availability import probe_profile
 from marianne.instruments.loader import load_all_profiles, profile_source_dirs
 
@@ -401,12 +402,18 @@ def _referenced_instrument_names(db_path: Path) -> set[str] | None:
     except sqlite3.Error:
         return None
     names: set[str] = set()
+    # A long-lived conductor has been given every score its operator ever
+    # ran (1,374 files on one host): the pure-Python loader took 41 s here
+    # and timed out every test that invokes doctor. The C loader is 3 s.
+    loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
     for (config_path,) in rows:
         path = Path(str(config_path)).expanduser()
         if not path.is_file():
             continue  # score deleted since; it can no longer reference anything
         try:
-            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+            document = yaml.load(  # noqa: S506 - SafeLoader variant
+                path.read_text(encoding="utf-8"), Loader=loader,
+            )
         except (OSError, UnicodeError, yaml.YAMLError):
             continue
         _names_in_document(document, names)
@@ -431,13 +438,14 @@ def _scan_unreferenced_user_profiles(
     overrides a built-in name is always referenced, because every score
     that names nothing resolves to a built-in.
     """
-    from marianne.core.constants import DAEMON_STATE_DB_PATH, DEFAULT_INSTRUMENT_NAME
+    from marianne.core.constants import DEFAULT_INSTRUMENT_NAME
     from marianne.instruments.loader import InstrumentProfileLoader
 
     builtins_dir, org_dir, venue = profile_source_dirs(
         organization_dir=organization_dir, venue_dir=venue_dir,
     )
-    registry = db_path if db_path is not None else DAEMON_STATE_DB_PATH.expanduser()
+    # Clone-aware (GH #401): the registry of the conductor the CLI addresses.
+    registry = db_path if db_path is not None else active_registry_db_path()
     referenced = _referenced_instrument_names(registry)
     if referenced is None:
         return []

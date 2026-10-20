@@ -48,6 +48,22 @@ def pytest_sessionfinish(
 
 
 @pytest.fixture(autouse=True)
+def _no_host_registry_in_doctor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`mzt doctor`'s instrument-hygiene scan parses every score the host's
+    conductor was ever given (GH #443). A test that invokes doctor must never
+    read the developer's registry: its verdict would depend on the host and
+    its walk timed out under load. Hygiene tests pass ``db_path`` themselves.
+    """
+    import importlib
+
+    doctor_module = importlib.import_module("marianne.cli.commands.doctor")
+    monkeypatch.setattr(
+        doctor_module, "active_registry_db_path",
+        lambda: Path("/nonexistent/mzt-test-registry.db"),
+    )
+
+
+@pytest.fixture(autouse=True)
 def _no_host_conductor_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
     """The developer's live conductor (its PID file and socket) must not turn a
     test's simulated "not running" into "busy" (GH #455). Tests of the busy

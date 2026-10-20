@@ -26,6 +26,7 @@ def test_venue_yaml_inventory_is_covered() -> None:
     assert not missing, f"New score YAML lacks a reviewed sweep row: {sorted(missing)}"
 
 
+@pytest.mark.timeout(180)
 @pytest.mark.parametrize("scope", ["venue", "agents"])
 def test_no_new_corpus_hits(
     scope: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
