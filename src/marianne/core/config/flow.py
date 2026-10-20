@@ -130,8 +130,9 @@ class TriggerAction(BaseModel):
     continue_: bool | None = Field(
         default=None,
         alias="continue",
-        description="Reserved: no runtime reader yet (V327 warns when set). "
-        "Explicit no-op.",
+        description="Explicit no-op that records the author's choice: the "
+        "trigger chain advances past it and nothing else happens. Use it to "
+        "make an empty on_success/on_fail list deliberate.",
     )
 
     @model_validator(mode="after")
