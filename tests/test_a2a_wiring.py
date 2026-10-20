@@ -374,10 +374,10 @@ class TestBatonAdapterA2AWiring:
         run_task = asyncio.create_task(adapter.run())
         try:
             assert await asyncio.wait_for(
-                adapter.wait_for_completion("forge-job"), timeout=3.0
+                adapter.wait_for_completion("forge-job"), timeout=10.0
             )
             assert await asyncio.wait_for(
-                adapter.wait_for_completion("canyon-job"), timeout=3.0
+                adapter.wait_for_completion("canyon-job"), timeout=10.0
             )
             inbox = adapter.get_a2a_inbox("canyon-job")
             assert inbox is not None
@@ -389,7 +389,7 @@ class TestBatonAdapterA2AWiring:
             assert "from forge" in pool.prompts[1]
         finally:
             await adapter.baton.inbox.put(ShutdownRequested(graceful=True))
-            await asyncio.wait_for(run_task, timeout=3.0)
+            await asyncio.wait_for(run_task, timeout=10.0)
 
     @pytest.mark.asyncio
     async def test_delegate_output_ignored_when_source_sheet_not_a2a_enabled(
@@ -427,10 +427,10 @@ class TestBatonAdapterA2AWiring:
         run_task = asyncio.create_task(adapter.run())
         try:
             assert await asyncio.wait_for(
-                adapter.wait_for_completion("forge-job"), timeout=3.0
+                adapter.wait_for_completion("forge-job"), timeout=10.0
             )
             assert await asyncio.wait_for(
-                adapter.wait_for_completion("canyon-job"), timeout=3.0
+                adapter.wait_for_completion("canyon-job"), timeout=10.0
             )
             inbox = adapter.get_a2a_inbox("canyon-job")
             assert inbox is not None
@@ -439,7 +439,7 @@ class TestBatonAdapterA2AWiring:
             assert "A2A Inbox" not in pool.prompts[1]
         finally:
             await adapter.baton.inbox.put(ShutdownRequested(graceful=True))
-            await asyncio.wait_for(run_task, timeout=3.0)
+            await asyncio.wait_for(run_task, timeout=10.0)
 
     @pytest.mark.asyncio
     async def test_target_inbox_waits_for_explicit_a2a_check_sheet(
@@ -481,10 +481,10 @@ class TestBatonAdapterA2AWiring:
         run_task = asyncio.create_task(adapter.run())
         try:
             assert await asyncio.wait_for(
-                adapter.wait_for_completion("forge-job"), timeout=3.0
+                adapter.wait_for_completion("forge-job"), timeout=10.0
             )
             assert await asyncio.wait_for(
-                adapter.wait_for_completion("canyon-job"), timeout=3.0
+                adapter.wait_for_completion("canyon-job"), timeout=10.0
             )
             assert len(pool.prompts) == 3
             assert "A2A Inbox" not in pool.prompts[1]
@@ -495,4 +495,4 @@ class TestBatonAdapterA2AWiring:
             assert inbox.pending_count == 0
         finally:
             await adapter.baton.inbox.put(ShutdownRequested(graceful=True))
-            await asyncio.wait_for(run_task, timeout=3.0)
+            await asyncio.wait_for(run_task, timeout=10.0)

@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import fcntl
 import json
+import math
 import os
 import signal
 import sys
@@ -24,7 +25,12 @@ import typer
 
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
-from marianne.daemon.config import LEGACY_PID_PATH, DaemonConfig, DaemonLoggingConfig
+from marianne.daemon.config import (
+    LEGACY_PID_PATH,
+    LEGACY_SOCKET_PATH,
+    DaemonConfig,
+    DaemonLoggingConfig,
+)
 from marianne.daemon.pgroup import ProcessGroupManager
 from marianne.daemon.task_utils import log_task_exception
 
@@ -121,6 +127,9 @@ def _cancel_source_from_peer(metadata: dict[str, Any]) -> str:
 
 # ─── Core Functions (used by cli/commands/conductor.py) ───────────────
 CONDUCTOR_PROBE_TIMEOUT = 2.0
+# Bounded budget for a superseding `mzt start` to out-wait a draining
+# conductor before starting (matches `mzt restart`'s established wait).
+CONDUCTOR_SUPERSEDE_TIMEOUT = 30.0
 
 
 def start_conductor(
@@ -133,6 +142,13 @@ def start_conductor(
     """Start the Marianne conductor process.
 
     Called by ``mzt start`` via ``cli/commands/conductor.py``.
+
+    A live conductor that is *serving* is reported as already running
+    (exit 0, GH #459). A live conductor that is *draining* (graceful
+    shutdown) is superseded (GH #115): this waits up to
+    ``CONDUCTOR_SUPERSEDE_TIMEOUT`` for the old process to exit, then
+    starts a fresh conductor; it never spawns a second daemon beside a
+    draining one, which holds the PID-file flock and socket lock.
 
     When *clone_name* is provided, the conductor runs with isolated
     paths (socket, PID file, state DB, log) so it can coexist with the
@@ -166,14 +182,51 @@ def start_conductor(
                 if pid_probe_file != config.pid_file
                 else ""
             )
-            # Exit 0, not 1: a conductor being up is the state `mzt start`
-            # exists to reach. A supervisor with Restart=on-failure (the
-            # shipped systemd user unit) read exit 1 as a crash and
-            # restarted every 30 s for three days against a hand-started
-            # conductor (Pallas, GH #459). Exit 0 ends that loop; the
-            # message still names the PID so a human sees what happened.
-            typer.echo(f"{label} is already running (PID {pid}){legacy_note}")
-            raise typer.Exit(0)
+            # A live PID may be a conductor that is *serving* or one that is
+            # *draining* (graceful shutdown can take up to
+            # shutdown_timeout_seconds, default 300s). Only a serving one is
+            # "already running" — a draining one must be superseded (GH #115).
+            # Probe before deciding; on a silent probe be conservative and
+            # treat it as running (GH #455: slow is not dead).
+            # The #227 legacy PID fallback must probe that daemon's socket,
+            # rather than an explicit modern path that bypasses IPC fallback.
+            socket_probe_path = (
+                LEGACY_SOCKET_PATH
+                if pid_probe_file != config.pid_file
+                else config.socket.path
+            )
+            shutting_down = _probe_shutting_down(socket_probe_path)
+            if shutting_down is not True:
+                # Serving (False) or silent (None): treat as running.
+                #
+                # Exit 0, not 1: a conductor being up is the state `mzt start`
+                # exists to reach. A supervisor with Restart=on-failure (the
+                # shipped systemd user unit) read exit 1 as a crash and
+                # restarted every 30 s for three days against a hand-started
+                # conductor (Pallas, GH #459). Exit 0 ends that loop; the
+                # message still names the PID so a human sees what happened.
+                typer.echo(f"{label} is already running (PID {pid}){legacy_note}")
+                raise typer.Exit(0)
+            # Draining conductor: wait (bounded) for it to exit, then start.
+            # Never spawn a second daemon beside it — the dying one holds the
+            # PID-file flock and socket lock for its whole life.
+            typer.echo(
+                f"{label} is shutting down (PID {pid}); "
+                f"superseding it (waiting up to {CONDUCTOR_SUPERSEDE_TIMEOUT:.0f}s)"
+            )
+            if not wait_for_conductor_exit(
+                pid_probe_file, timeout=CONDUCTOR_SUPERSEDE_TIMEOUT
+            ):
+                typer.echo(
+                    f"Cannot start: {label} (PID {pid}) did not exit within "
+                    f"{CONDUCTOR_SUPERSEDE_TIMEOUT:.0f}s. It may still be draining "
+                    "active work. Check active scores: mzt status; retry later; "
+                    "or use mzt stop --force only when you accept orphaning "
+                    "active work."
+                )
+                raise typer.Exit(1)
+            typer.echo("Drained conductor exited; starting a new one")
+            # Fall through to a normal start below.
         else:
             # Stale PID file — process is dead, clean up before starting
             typer.echo(f"Cleaned up stale PID file (PID {pid} is no longer running)")
@@ -207,6 +260,42 @@ def start_conductor(
 
     daemon = DaemonProcess(config, start_profile=profile)
     asyncio.run(daemon.run())
+
+
+def _probe_shutting_down(socket_path: Path | None = None) -> bool | None:
+    """Ask a live conductor whether it is draining (``daemon.ready``).
+
+    Returns ``True`` when the daemon reports ``shutting_down``, ``False``
+    when it is serving, and ``None`` when the probe fails (no socket,
+    timeout, malformed answer). Callers must treat ``None`` conservatively
+    — a healthy conductor under I/O pressure may not answer within the
+    probe budget (GH #455: slow is not dead).
+    """
+    from marianne.daemon.detect import _resolve_socket_path
+    from marianne.daemon.ipc.client import DaemonClient
+
+    resolved = _resolve_socket_path(socket_path)
+
+    async def _probe() -> bool | None:
+        client = None
+        try:
+            client = DaemonClient(resolved, timeout=CONDUCTOR_PROBE_TIMEOUT)
+            async with asyncio.timeout(CONDUCTOR_PROBE_TIMEOUT):
+                ready = await client.readiness()
+            shutting_down = ready.get("shutting_down")
+            if not isinstance(shutting_down, bool):
+                return None
+            return shutting_down
+        except Exception:
+            return None
+        finally:
+            if client is not None:
+                await client.close()
+
+    try:
+        return asyncio.run(_probe())
+    except Exception:
+        return None
 
 
 def _check_running_jobs(
@@ -251,15 +340,24 @@ def stop_conductor(
     pid_file: Path | None = None,
     force: bool = False,
     socket_path: Path | None = None,
+    wait: float | None = None,
 ) -> None:
     """Stop the running Marianne conductor (daemon) process.
 
     Called by ``mzt stop`` via ``cli/commands/conductor.py``.
 
+    Non-blocking by default: sends the signal and returns without
+    waiting for the process to exit. Pass *wait* (seconds) to block
+    until the conductor exits; ``wait=0`` keeps the default
+    signal-and-return behavior.
+
     When jobs are actively running and ``--force`` is not set, warns
     the user and asks for confirmation before proceeding (#94).
     Force mode (``--force``) skips the safety check entirely.
     """
+    if wait is not None and (not math.isfinite(wait) or wait < 0):
+        raise ValueError("wait must be finite and >= 0")
+
     # Explicit pid_file always wins; only the default probes legacy (#227).
     resolved_pid_file = (
         pid_file
@@ -297,6 +395,18 @@ def stop_conductor(
     typer.echo(
         f"Sent {'SIGKILL' if force else 'SIGTERM'} to Marianne conductor (PID {pid})",
     )
+
+    if wait is not None and wait > 0:
+        if wait_for_conductor_exit(resolved_pid_file, timeout=wait):
+            typer.echo("Marianne conductor stopped")
+        else:
+            typer.echo(
+                f"Marianne conductor (PID {pid}) did not exit within "
+                f"{wait:.0f}s. It may still be draining active work. "
+                "Check active scores: mzt status; retry later; or use "
+                "mzt stop --force only when you accept orphaning active work."
+            )
+            raise typer.Exit(1)
 
 
 def get_conductor_status(

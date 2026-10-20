@@ -65,7 +65,9 @@ tests/temp/
 
 # Coverage artifacts
 .coverage
+.coverage.*
 coverage*.json
+coverage.xml
 dashboard_coverage.json
 healing_coverage.json
 htmlcov/

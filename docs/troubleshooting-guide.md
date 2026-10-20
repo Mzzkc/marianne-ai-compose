@@ -401,14 +401,14 @@ kill <PID>
 mzt conductor-status
 
 # Restart conductor cleanly
-mzt stop   # Waits for jobs to finish
+mzt stop --wait=   # Signals; waits up to 30s for the conductor to exit
 mzt start
 ```
 
 **Prevention:** Always stop the conductor gracefully:
 
 ```bash
-mzt stop          # Waits for jobs, then stops
+mzt stop --wait=    # Graceful stop, waits up to 30s for shutdown to finish
 # NOT: kill -9 <pid>
 ```
 

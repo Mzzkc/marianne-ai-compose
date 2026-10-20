@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 import typer
 from typer.testing import CliRunner
 
@@ -47,6 +48,117 @@ class TestStartCommand:
 
         assert result.exit_code == 0
         assert "already running" in result.output
+
+    def test_start_supersedes_shutting_down_conductor(self, tmp_path: Path):
+        """mzt start against a draining conductor waits, then starts (GH #115)."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text(str(os.getpid()))
+
+        with (
+            patch("marianne.daemon.process._load_config") as mock_config,
+            patch(
+                "marianne.daemon.process._probe_shutting_down", return_value=True
+            ),
+            patch(
+                "marianne.daemon.process.wait_for_conductor_exit", return_value=True
+            ) as mock_wait,
+            patch("marianne.daemon.process._daemonize"),
+            patch("marianne.core.logging.configure_logging"),
+            patch("marianne.daemon.process.DaemonProcess"),
+            patch("marianne.daemon.process.asyncio.run"),
+        ):
+            cfg = MagicMock()
+            cfg.pid_file = pid_file
+            cfg.log_level = "info"
+            cfg.log_file = None
+            mock_config.return_value = cfg
+
+            result = runner.invoke(app, ["start", "--foreground"])
+
+        assert result.exit_code == 0
+        assert "superseding" in result.output
+        mock_wait.assert_called_once()
+
+    def test_start_already_running_serving_exits_0(self, tmp_path: Path):
+        """mzt start against a serving conductor still exits 0 "already
+        running" (GH #459 preserved under the GH #115 fix)."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text(str(os.getpid()))
+
+        with (
+            patch("marianne.daemon.process._load_config") as mock_config,
+            patch(
+                "marianne.daemon.process._probe_shutting_down", return_value=False
+            ),
+            patch(
+                "marianne.daemon.process.wait_for_conductor_exit"
+            ) as mock_wait,
+        ):
+            cfg = MagicMock()
+            cfg.pid_file = pid_file
+            cfg.log_level = "info"
+            mock_config.return_value = cfg
+
+            result = runner.invoke(app, ["start", "--foreground"])
+
+        assert result.exit_code == 0
+        assert "already running" in result.output
+        mock_wait.assert_not_called()
+
+    def test_start_silent_socket_still_already_running(self, tmp_path: Path):
+        """mzt start with a silent probe (conductor busy, GH #455) keeps the
+        conservative exit-0 "already running"."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text(str(os.getpid()))
+
+        with (
+            patch("marianne.daemon.process._load_config") as mock_config,
+            patch(
+                "marianne.daemon.process._probe_shutting_down", return_value=None
+            ),
+            patch(
+                "marianne.daemon.process.wait_for_conductor_exit"
+            ) as mock_wait,
+        ):
+            cfg = MagicMock()
+            cfg.pid_file = pid_file
+            cfg.log_level = "info"
+            mock_config.return_value = cfg
+
+            result = runner.invoke(app, ["start", "--foreground"])
+
+        assert result.exit_code == 0
+        assert "already running" in result.output
+        mock_wait.assert_not_called()
+
+    def test_start_abort_when_drain_never_finishes(self, tmp_path: Path):
+        """mzt start exits 1 when the draining conductor never exits within
+        budget — and never spawns a second daemon (GH #115)."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text(str(os.getpid()))
+
+        with (
+            patch("marianne.daemon.process._load_config") as mock_config,
+            patch(
+                "marianne.daemon.process._probe_shutting_down", return_value=True
+            ),
+            patch(
+                "marianne.daemon.process.wait_for_conductor_exit", return_value=False
+            ),
+            patch("marianne.daemon.process._daemonize") as mock_daemonize,
+            patch("marianne.daemon.process.DaemonProcess") as mock_daemon,
+        ):
+            cfg = MagicMock()
+            cfg.pid_file = pid_file
+            cfg.log_level = "info"
+            mock_config.return_value = cfg
+
+            result = runner.invoke(app, ["start", "--foreground"])
+
+        assert result.exit_code == 1
+        assert "did not exit" in result.output
+        mock_daemonize.assert_not_called()
+        mock_daemon.assert_not_called()
 
     def test_start_foreground_skips_daemonize(self, tmp_path: Path):
         """In foreground mode, _daemonize() is NOT called."""
@@ -137,6 +249,128 @@ class TestStopCommand:
         mock_kill.assert_called_once_with(12345, signal.SIGTERM)
         assert "SIGTERM" in result.output
 
+    def test_stop_help_shows_wait_option(self):
+        """``mzt stop --help`` documents --wait."""
+        result = runner.invoke(app, ["stop", "--help"])
+        assert result.exit_code == 0
+        assert "--wait" in result.output
+
+    def test_stop_default_does_not_wait(self, tmp_path: Path):
+        """Default stop is non-blocking: wait_for_conductor_exit is never
+        called (pins the contract, GH #115)."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text("12345")
+
+        with (
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.os.kill"),
+            patch(
+                "marianne.daemon.process._check_running_jobs",
+                return_value={"running_jobs": 0, "job_ids": []},
+            ),
+            patch(
+                "marianne.daemon.process.wait_for_conductor_exit"
+            ) as mock_wait,
+        ):
+            result = runner.invoke(app, ["stop", "--pid-file", str(pid_file)])
+
+        assert result.exit_code == 0
+        mock_wait.assert_not_called()
+
+    def test_stop_wait_flag_blocks_until_exit(self, tmp_path: Path):
+        """``mzt stop --wait=`` reaches wait_for_conductor_exit with the 30s
+        default budget."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text("12345")
+
+        with (
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.os.kill"),
+            patch(
+                "marianne.daemon.process._check_running_jobs",
+                return_value={"running_jobs": 0, "job_ids": []},
+            ),
+            patch(
+                "marianne.daemon.process.wait_for_conductor_exit", return_value=True
+            ) as mock_wait,
+        ):
+            result = runner.invoke(app, ["stop", "--pid-file", str(pid_file), "--wait="])
+
+        assert result.exit_code == 0
+        assert "stopped" in result.output
+        mock_wait.assert_called_once()
+        assert mock_wait.call_args.kwargs.get("timeout") == 30.0
+
+    def test_stop_wait_custom_budget(self, tmp_path: Path):
+        """``mzt stop --wait=5`` passes the custom budget through."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text("12345")
+
+        with (
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.os.kill"),
+            patch(
+                "marianne.daemon.process._check_running_jobs",
+                return_value={"running_jobs": 0, "job_ids": []},
+            ),
+            patch(
+                "marianne.daemon.process.wait_for_conductor_exit", return_value=True
+            ) as mock_wait,
+        ):
+            result = runner.invoke(app, ["stop", "--pid-file", str(pid_file), "--wait=5"])
+
+        assert result.exit_code == 0
+        assert mock_wait.call_args.kwargs.get("timeout") == 5.0
+
+    def test_stop_wait_timeout_exits_1(self, tmp_path: Path):
+        """``mzt stop --wait`` exits 1 with a truthful message when the
+        conductor doesn't exit within budget."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text("12345")
+
+        with (
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.os.kill"),
+            patch(
+                "marianne.daemon.process._check_running_jobs",
+                return_value={"running_jobs": 0, "job_ids": []},
+            ),
+            patch(
+                "marianne.daemon.process.wait_for_conductor_exit", return_value=False
+            ),
+        ):
+            result = runner.invoke(app, ["stop", "--pid-file", str(pid_file), "--wait="])
+
+        assert result.exit_code == 1
+        assert "did not exit" in result.output
+
+    def test_stop_wait_invalid_value_exits_2(self, tmp_path: Path):
+        """``mzt stop --wait=abc`` is rejected with a clear error."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text("12345")
+
+        with (
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch(
+                "marianne.daemon.process._check_running_jobs",
+                return_value={"running_jobs": 0, "job_ids": []},
+            ),
+            patch("marianne.daemon.process.os.kill") as mock_kill,
+        ):
+            result = runner.invoke(app, ["stop", "--pid-file", str(pid_file), "--wait=abc"])
+
+        assert result.exit_code == 2
+        mock_kill.assert_not_called()
+
+    @pytest.mark.parametrize("budget", ["nan", "inf", "-inf", "-1"])
+    def test_stop_rejects_unbounded_wait_before_stopping(self, budget: str):
+        with patch("marianne.daemon.process.stop_conductor") as mock_stop:
+            result = runner.invoke(app, ["stop", f"--wait={budget}"])
+
+        assert result.exit_code == 2
+        assert "Invalid --wait value" in result.output
+        mock_stop.assert_not_called()
+
     def test_stop_force_sends_sigkill(self, tmp_path: Path):
         """stop --force sends SIGKILL."""
         pid_file = tmp_path / "marianne.pid"
@@ -169,16 +403,16 @@ class TestRestartCommand:
         assert "active-score safety check" in result.output
 
     def test_restart_calls_stop_then_start(self, tmp_path: Path):
-        """restart calls stop_conductor, waits, then start_conductor."""
+        """restart stops with a 30s wait (shared path), then starts."""
         with (
             patch("marianne.daemon.process.stop_conductor") as mock_stop,
-            patch("marianne.daemon.process.wait_for_conductor_exit", return_value=True),
             patch("marianne.daemon.process.start_conductor") as mock_start,
         ):
             result = runner.invoke(app, ["restart", "--foreground"])
 
         assert result.exit_code == 0
         mock_stop.assert_called_once()
+        assert mock_stop.call_args.kwargs.get("wait") == 30.0
         mock_start.assert_called_once()
 
     def test_restart_continues_when_stop_reports_not_running(self, tmp_path: Path):
@@ -189,7 +423,6 @@ class TestRestartCommand:
                 side_effect=typer.Exit(1),
             ),
             patch("marianne.daemon.process._pid_alive", return_value=False),
-            patch("marianne.daemon.process.wait_for_conductor_exit", return_value=True),
             patch("marianne.daemon.process.start_conductor") as mock_start,
         ):
             result = runner.invoke(app, ["restart", "--foreground"])
@@ -224,16 +457,32 @@ class TestRestartCommand:
         mock_start.assert_not_called()
 
     def test_restart_aborts_if_old_conductor_wont_exit(self, tmp_path: Path):
-        """restart exits 1 if old conductor doesn't exit within timeout."""
+        """restart exits 1 if the old conductor doesn't exit within the
+        shared stop-wait budget (wait now lives inside stop_conductor)."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text("12345")
+
         with (
-            patch("marianne.daemon.process.stop_conductor"),
-            patch("marianne.daemon.process.wait_for_conductor_exit", return_value=False),
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch(
+                "marianne.daemon.process._check_running_jobs",
+                return_value={"running_jobs": 0, "job_ids": []},
+            ),
+            patch(
+                "marianne.daemon.process.wait_for_conductor_exit",
+                return_value=False,
+            ) as mock_wait,
+            patch("marianne.daemon.process.os.kill"),
             patch("marianne.daemon.process.start_conductor") as mock_start,
         ):
-            result = runner.invoke(app, ["restart", "--foreground"])
+            result = runner.invoke(
+                app,
+                ["restart", "--pid-file", str(pid_file), "--foreground"],
+            )
 
         assert result.exit_code == 1
         assert "did not exit" in result.output
+        mock_wait.assert_called_once()
         mock_start.assert_not_called()
 
 

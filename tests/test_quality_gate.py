@@ -385,6 +385,10 @@ def _find_given_tested_models() -> set[str]:
     return tested
 
 
+# AST-scans every config module and every test file; ~14s standalone, over
+# the 30s global budget under xdist contention (this test has flaked as a
+# worker crash in full-suite runs on a busy host).
+@pytest.mark.timeout(120)
 def test_property_based_tests_exist_for_pydantic_models() -> None:
     """Each Pydantic BaseModel should have a @given property-based test."""
     all_models = _find_pydantic_models()

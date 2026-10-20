@@ -569,6 +569,10 @@ the conductor crashed and left the file behind; `mzt stop` cleans it up and
 `mzt start` starts a new one. If the PID **is** alive and only the socket is
 silent, the conductor is busy (previous entry): do not stop or start it.
 
+A conductor that is *shutting down* (draining active work) no longer reports
+"already running": `mzt start` supersedes it — see
+[Non-blocking Stop and Bounded Wait](#non-blocking-stop-and-bounded-wait) below.
+
 ### Stale PID File
 
 If `mzt stop` reports "conductor is not running" but a PID file exists, the file is automatically cleaned up. If it persists:
@@ -630,3 +634,17 @@ mzt stop --force    # Sends SIGKILL instead of SIGTERM
 ```
 
 This kills the process immediately without waiting for running jobs to complete. Use as a last resort — running jobs will not checkpoint cleanly.
+
+### Non-blocking Stop and Bounded Wait
+
+After the active-job safety check and any confirmation, `mzt stop` sends the signal and returns without waiting for the conductor to exit. Scripts that need to know shutdown completed can opt into a bounded wait:
+
+```bash
+mzt stop --wait=      # Wait up to 30s for the conductor to exit
+mzt stop --wait=5     # Custom budget in seconds
+mzt stop              # Signal and return immediately (default)
+```
+
+Budgets must be finite and non-negative; `--wait=0` keeps the default signal-and-return behavior. If the conductor does not exit within a positive budget, the command exits 1 with a message naming the still-draining PID. A graceful drain can take up to `shutdown_timeout_seconds` (default 300s) while running jobs checkpoint.
+
+After a `mzt stop`, a fresh `mzt start` supersedes a still-draining conductor: it detects the shutdown state, waits (up to 30s) for the old process to exit, then starts the new one. If the drain exceeds that budget, start exits 1 rather than spawning a second conductor into held locks.
