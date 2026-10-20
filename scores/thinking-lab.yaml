@@ -28,7 +28,7 @@ description: "4 parallel independent reviews from Claude (gateway), Gemini Flash
 workspace_lifecycle:
   archive_on_fresh: true
 
-instrument: claude-code
+instrument: strong
 instrument_config:
   # Repo-scale audit prompts (read code + git history) need more than the
   # old 600s — the 2026-06-12 goal-mode audit timed out two reviewers at

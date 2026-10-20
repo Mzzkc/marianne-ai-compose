@@ -36,7 +36,7 @@ description: >
 
 workspace: "../workspaces/instrument-catalog-build"
 
-instrument: claude-code
+instrument: strong
 instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 1200

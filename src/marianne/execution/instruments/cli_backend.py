@@ -170,6 +170,21 @@ async def kill_process_group_if_alive(
     if pgid is None:
         if proc.returncode is not None:
             return
+        # No group was captured (profile without start_new_session, off the
+        # baton path). The direct child may be the instrument supervisor:
+        # TERM first so it can forward the signal and end what it adopted;
+        # a KILL first would orphan the instrument and every helper it owns.
+        try:
+            proc.terminate()
+        except ProcessLookupError:
+            return
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=_KILL_GRACE_SECONDS)
+            return
+        except TimeoutError:
+            pass
+        except ProcessLookupError:
+            return
         try:
             proc.kill()
         except ProcessLookupError:

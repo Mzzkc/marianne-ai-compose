@@ -39,7 +39,7 @@ description: >
 
 workspace: "../workspaces/instrument-catalog-refresh"
 
-instrument: claude-code
+instrument: strong
 instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 1800

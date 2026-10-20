@@ -31,7 +31,7 @@ description: >
 # Workspace nests under the build run's workspace so the chain shares state.
 workspace: "../workspaces/instrument-catalog-build/fold"
 
-instrument: claude-code
+instrument: strong
 instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 1800
