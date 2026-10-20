@@ -166,8 +166,14 @@ def start_conductor(
                 if pid_probe_file != config.pid_file
                 else ""
             )
+            # Exit 0, not 1: a conductor being up is the state `mzt start`
+            # exists to reach. A supervisor with Restart=on-failure (the
+            # shipped systemd user unit) read exit 1 as a crash and
+            # restarted every 30 s for three days against a hand-started
+            # conductor (Pallas, GH #459). Exit 0 ends that loop; the
+            # message still names the PID so a human sees what happened.
             typer.echo(f"{label} is already running (PID {pid}){legacy_note}")
-            raise typer.Exit(1)
+            raise typer.Exit(0)
         else:
             # Stale PID file — process is dead, clean up before starting
             typer.echo(f"Cleaned up stale PID file (PID {pid} is no longer running)")

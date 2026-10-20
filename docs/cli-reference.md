@@ -1762,6 +1762,13 @@ mzt start --config /etc/marianne/daemon.yaml
 mzt start --log-level debug
 ```
 
+#### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Conductor started, or a conductor was already running (its PID is printed). A process supervisor must treat the second case as success: with `Restart=on-failure` an exit 1 here restarted `mzt start` every 30 s against a hand-started conductor (GH #459). |
+| 1 | Configuration error, or the conductor failed to start |
+
 ---
 
 ### `mzt stop`

@@ -115,8 +115,8 @@ class TestPidAlive:
 class TestStartConductor:
     """Tests for start_conductor() core function."""
 
-    def test_start_already_running_exits_1(self, tmp_path: Path):
-        """start_conductor exits with code 1 if conductor already running."""
+    def test_start_already_running_exits_0(self, tmp_path: Path):
+        """start_conductor exits 0 if a conductor is already running (GH #459)."""
         pid_file = tmp_path / "marianne.pid"
         pid_file.write_text(str(os.getpid()))
 
@@ -126,8 +126,9 @@ class TestStartConductor:
             cfg.log_level = "info"
             mock_config.return_value = cfg
 
-            with pytest.raises(typer.Exit):
+            with pytest.raises(typer.Exit) as exc_info:
                 start_conductor(foreground=True)
+            assert exc_info.value.exit_code == 0
 
     def test_start_foreground_skips_daemonize(self, tmp_path: Path):
         """In foreground mode, _daemonize() is NOT called."""

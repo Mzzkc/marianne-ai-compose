@@ -341,13 +341,19 @@ class TestExecuteStdin:
         # Pipes hang (a real asyncio.sleep — it must YIELD so wait_for's
         # timeout can fire; a non-yielding mock would loop or stall forever).
         _wire_pipes(mock_proc, hang=True)
+        mock_proc.terminate = MagicMock()
         mock_proc.kill = MagicMock()
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
             result = await backend.execute("test prompt", timeout_seconds=1)
 
         assert result.success is False
-        mock_proc.kill.assert_called_once()
+        # No process group was captured (profile without start_new_session):
+        # the direct child is terminated first so an instrument supervisor
+        # can sweep what it adopted. The mocked wait() returns at once (the
+        # child "exited" on TERM), so no escalation to kill() follows.
+        mock_proc.terminate.assert_called_once()
+        mock_proc.kill.assert_not_called()
 
 
 class TestStartNewSession:

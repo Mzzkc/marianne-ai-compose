@@ -31,8 +31,9 @@ class TestStartCommand:
         assert result.exit_code == 0
         assert "Start the Marianne conductor" in result.output
 
-    def test_start_already_running_exits_1(self, tmp_path: Path):
-        """start exits with code 1 if conductor already running."""
+    def test_start_already_running_exits_0(self, tmp_path: Path):
+        """start exits 0 when a conductor is already up: a supervisor's
+        Restart=on-failure must not loop against it (GH #459)."""
         pid_file = tmp_path / "marianne.pid"
         pid_file.write_text(str(os.getpid()))
 
@@ -44,7 +45,7 @@ class TestStartCommand:
 
             result = runner.invoke(app, ["start", "--foreground"])
 
-        assert result.exit_code == 1
+        assert result.exit_code == 0
         assert "already running" in result.output
 
     def test_start_foreground_skips_daemonize(self, tmp_path: Path):
