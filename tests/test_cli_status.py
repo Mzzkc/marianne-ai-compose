@@ -259,3 +259,36 @@ async def test_meta_fallback_omits_unrenderable_schedule_due_time(
     else:
         assert "[recurring]" not in rendered
     warning.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_list_never_pages_out_a_live_score(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GH #455 field note: 25 RUNNING jobs on a 20-row page read as '0 RUNNING'
+    for the five that fell off. Live rows are never truncated; --limit caps
+    terminal history only, and the footer names what it hid."""
+    live = [
+        {"job_id": f"run-{i:02d}", "status": "running", "workspace": f"/w/{i}",
+         "submitted_at": 1_999_999_000.0 + i}
+        for i in range(25)
+    ]
+    done = [
+        {"job_id": f"done-{i:02d}", "status": "completed", "workspace": f"/d/{i}",
+         "submitted_at": 1_999_990_000.0 + i}
+        for i in range(30)
+    ]
+    monkeypatch.setattr(
+        "marianne.daemon.detect.try_daemon_route",
+        AsyncMock(return_value=(True, live + done)),
+    )
+    with console.capture() as capture:
+        await _list_jobs(False, None, 20, None, False)
+    rendered = capture.get()
+    assert rendered.count("RUNNING") == 25
+    assert "25 score(s)" in rendered
+
+    with console.capture() as capture:
+        await _list_jobs(True, None, 20, None, False)
+    rendered = capture.get()
+    assert rendered.count("RUNNING") == 25
+    assert rendered.count("COMPLETED") == 20
+    assert "10 older terminal run(s) not shown" in rendered

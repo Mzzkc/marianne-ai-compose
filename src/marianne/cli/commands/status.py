@@ -251,7 +251,8 @@ def list_jobs(
         20,
         "--limit",
         "-l",
-        help="Maximum number of scores to display",
+        help="Maximum number of terminal (completed/failed/cancelled) scores to "
+        "display; live scores (queued, running, paused) are always all shown",
     ),
     json_output: bool = typer.Option(
         False,
@@ -727,8 +728,13 @@ async def _list_jobs(
             or _is_recurring_anchor(j)
         ]
 
-    # Limit
-    jobs = jobs[:limit]
+    # Limit caps the terminal history only. A live row is never hidden by
+    # paging: a conductor with 25 running jobs and a 20-row page told its
+    # operator "0 RUNNING" for the ones that fell off (Pallas, 20 Oct 2026).
+    live = [j for j in jobs if _is_live_row(j)]
+    rest = [j for j in jobs if not _is_live_row(j)]
+    hidden = max(0, len(rest) - limit)
+    jobs = live + rest[:limit]
 
     # JSON output mode (F-071): machine-parseable array
     if json_output:
@@ -816,7 +822,18 @@ async def _list_jobs(
         )
         console.print(styled, soft_wrap=True)
 
-    console.print(f"\n[dim]{len(rows)} score(s)[/dim]")
+    footer = f"{len(rows)} score(s)"
+    if hidden:
+        footer += f"; {hidden} older terminal run(s) not shown (raise --limit)"
+    console.print(f"\n[dim]{footer}[/dim]")
+
+
+def _is_live_row(job: dict[str, Any]) -> bool:
+    """Queued, running, paused, or a recurring anchor: never paged out of `mzt list`."""
+    return (
+        str(job.get("status", "")).lower() in _ACTIVE_STATUSES
+        or _is_recurring_anchor(job)
+    )
 
 
 def _is_test_artifact(job: dict[str, Any]) -> bool:

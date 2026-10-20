@@ -195,6 +195,11 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **`mzt list` never pages out a live score.** `--limit` caps terminal history
+  only; queued, running and paused runs are always all shown, and the footer
+  names how many older terminal runs were hidden. A 20-row page over 25 running
+  jobs had read as "0 RUNNING" for the five that fell off.
+
 - **Busy conductor named by PID; no restart advice for a live one (GH #455).**
   Every routed read (`status`, `status JOB`, `list`, `errors`, `diagnose`,
   `history`, `watch`, `run` submission) reports a conductor whose socket did

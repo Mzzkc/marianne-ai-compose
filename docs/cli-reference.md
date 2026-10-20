@@ -488,7 +488,7 @@ By default shows active score runs (queued, running, paused). Use `--all` to inc
 |--------|-------|---------|-------------|
 | `--all` | `-a` | false | Show all score runs including completed, failed, and cancelled |
 | `--status` | `-s` | | Filter by score-run status: `queued`, `running`, `completed`, `failed`, `paused` |
-| `--limit` | `-l` | 20 | Maximum number of score runs to display |
+| `--limit` | `-l` | 20 | Maximum number of terminal (completed/failed/cancelled) score runs to display. Live runs (queued, running, paused) are always all shown; the footer names how many older terminal runs were hidden |
 | `--json` | | false | Output as JSON array for machine parsing |
 
 #### Examples
