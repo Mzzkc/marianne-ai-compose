@@ -77,6 +77,40 @@ def _socket_exists(path: Path) -> bool:
         raise
 
 
+_ABSENT_ERRNOS = frozenset({errno.ECONNREFUSED, errno.ENOENT})
+
+
+def _classify_socket_error(exc: OSError, socket_path: Path, *, stage: str) -> DaemonError:
+    """Name what a failed connect or first write proves about the conductor.
+
+    A refused connection or a vanished socket proves absence. Anything else
+    on a socket that exists (EINVAL after a connect that landed in a full
+    listen backlog, EAGAIN, EPIPE on the first write, a timeout) proves only
+    that the conductor did not answer: it may be alive and blocked on disk
+    (Pallas 15 Oct 2026, GH #455). That state must never be reported as
+    "not running" with a `mzt start` hint.
+    """
+    if isinstance(exc, PermissionError) or exc.errno in (errno.EACCES, errno.EPERM):
+        return DaemonAccessDeniedError()
+    if isinstance(exc, TimeoutError):
+        return DaemonUnresponsiveError(
+            f"Timeout during {stage} to daemon at {socket_path}"
+        )
+    if (isinstance(exc, (ConnectionRefusedError, FileNotFoundError))
+            or exc.errno in _ABSENT_ERRNOS):
+        return DaemonNotRunningError(
+            f"Cannot connect to daemon at {socket_path}: {exc}"
+        )
+    if not _socket_exists(socket_path):
+        return DaemonNotRunningError(
+            f"Daemon socket vanished at {socket_path}: {exc}"
+        )
+    return DaemonUnresponsiveError(
+        f"Conductor socket {socket_path} exists but the {stage} failed "
+        f"({exc}); the conductor may be alive and busy"
+    )
+
+
 class ConnectionPool:
     """LIFO connection pool for Unix domain sockets.
 
@@ -247,12 +281,8 @@ class ConnectionPool:
             raise DaemonUnresponsiveError(
                 f"Timeout connecting to daemon at {self._socket_path}"
             ) from exc
-        except (ConnectionRefusedError, FileNotFoundError, OSError) as exc:
-            if isinstance(exc, PermissionError) or exc.errno in (errno.EACCES, errno.EPERM):
-                raise DaemonAccessDeniedError() from exc
-            raise DaemonNotRunningError(
-                f"Cannot connect to daemon at {self._socket_path}: {exc}"
-            ) from exc
+        except OSError as exc:
+            raise _classify_socket_error(exc, self._socket_path, stage="connect") from exc
 
         _logger.debug("pool_new_connection")
         return reader, writer
@@ -369,12 +399,8 @@ class DaemonClient:
             raise DaemonUnresponsiveError(
                 f"Timeout connecting to daemon at {self._socket_path}"
             ) from exc
-        except (ConnectionRefusedError, FileNotFoundError, OSError) as exc:
-            if isinstance(exc, PermissionError) or exc.errno in (errno.EACCES, errno.EPERM):
-                raise DaemonAccessDeniedError() from exc
-            raise DaemonNotRunningError(
-                f"Cannot connect to daemon at {self._socket_path}: {exc}"
-            ) from exc
+        except OSError as exc:
+            raise _classify_socket_error(exc, self._socket_path, stage="connect") from exc
 
         try:
             yield reader, writer
@@ -382,8 +408,11 @@ class DaemonClient:
             try:
                 ConnectionPool._close_writer(writer)
                 await asyncio.wait_for(writer.wait_closed(), timeout=_CLOSE_TIMEOUT_SECONDS)
-            except Exception:
-                _logger.debug("writer_close_failed", exc_info=True)
+            except Exception as exc:
+                # No exc_info: rendering a chained traceback here (rich walks
+                # source for every frame) took >30 s under load and stalled the
+                # very status read that was reporting a busy conductor (GH #455).
+                _logger.debug("writer_close_failed", error=repr(exc))
 
     # ------------------------------------------------------------------
     # RPC call (single request → single response, pooled)
@@ -402,10 +431,18 @@ class DaemonClient:
             credentials = read_peer_credentials(writer)
             if credentials is None or credentials.uid != os.getuid():
                 raise DaemonAccessDeniedError()
-        async with asyncio.timeout(self._timeout):
-            writer.write(request.model_dump_json().encode() + b"\n")
-            await writer.drain()
-            line = await reader.readline()
+        try:
+            async with asyncio.timeout(self._timeout):
+                writer.write(request.model_dump_json().encode() + b"\n")
+                await writer.drain()
+                line = await reader.readline()
+        except TimeoutError:
+            raise  # the request deadline keeps its own meaning (callers map it)
+        except OSError as exc:
+            # The connect "succeeded" into a full listen backlog and the
+            # first write failed (EINVAL/EPIPE/ECONNRESET): the conductor
+            # exists and is not accepting, which is busy, not absent.
+            raise _classify_socket_error(exc, self._socket_path, stage="request") from exc
         if not line:
             raise DaemonNotRunningError("Daemon closed connection")
 

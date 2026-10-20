@@ -488,3 +488,69 @@ async def test_health_is_independent_of_busy_client_pool(tmp_path):
         await asyncio.gather(query, return_exceptions=True)
         await client.close()
         await server.stop()
+
+
+# ---------------------------------------------------------------------------
+# GH #455: a live listener whose backlog is full is BUSY, not absent.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_full_listen_backlog_is_unresponsive_not_absence(tmp_path):
+    """A conductor blocked on disk stops accepting; its AF_UNIX backlog fills
+    and asyncio still reports each connect as successful while the first
+    write fails with EINVAL. That must never read as "not running"."""
+    import socket
+
+    from marianne.daemon.exceptions import DaemonUnresponsiveError
+
+    path = tmp_path / "busy.sock"
+    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    listener.bind(str(path))
+    listener.listen(1)  # tiny backlog; nothing ever calls accept()
+    fillers: list[socket.socket] = []
+    try:
+        # Fill the backlog: connects succeed (queued) until the kernel
+        # starts refusing or parking them.
+        for _ in range(8):
+            filler = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            filler.setblocking(False)
+            try:
+                filler.connect(str(path))
+            except (BlockingIOError, InterruptedError):
+                pass
+            except OSError:
+                filler.close()
+                break
+            fillers.append(filler)
+        client = DaemonClient(path, timeout=0.5)
+        try:
+            with pytest.raises(DaemonError) as excinfo:
+                await asyncio.wait_for(client.call("daemon.health"), 5)
+            assert not isinstance(excinfo.value, DaemonNotRunningError), (
+                f"a live listener with a full backlog was reported absent: {excinfo.value!r}"
+            )
+            assert isinstance(excinfo.value, DaemonUnresponsiveError), repr(excinfo.value)
+            with pytest.raises(DaemonUnresponsiveError):
+                await client.is_daemon_running()
+        finally:
+            await client.close()
+    finally:
+        for filler in fillers:
+            filler.close()
+        listener.close()
+
+
+@pytest.mark.asyncio
+async def test_refused_and_missing_socket_still_read_as_absent(tmp_path):
+    """The repair must not widen: no listener at all is still 'not running'."""
+    path = tmp_path / "gone.sock"
+    with pytest.raises(DaemonNotRunningError):
+        async with DaemonClient(path) as client:
+            await client.call("daemon.health")
+    bound = __import__("socket").socket(__import__("socket").AF_UNIX, __import__("socket").SOCK_STREAM)
+    bound.bind(str(path))
+    bound.close()  # a socket file with no listener behind it: ECONNREFUSED
+    with pytest.raises(DaemonNotRunningError):
+        async with DaemonClient(path) as client:
+            await client.call("daemon.health")

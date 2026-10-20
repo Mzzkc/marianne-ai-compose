@@ -53,9 +53,10 @@ When `mzt run` is invoked:
 2. This resolves the socket path (default: `~/.config/mzt/mzt.sock`)
 3. A `DaemonClient` attempts to open a Unix socket connection
 4. If the connection succeeds, the job is submitted via JSON-RPC
-5. If the connection fails (socket missing, refused, timeout), the CLI reports the conductor is not running
+5. If the socket is missing or the connection is refused, the CLI reports the conductor is not running (`running_state: absent`, hint `mzt start`)
+6. If the socket exists but the connect or the first write fails for any other reason, or the conductor accepts and does not answer, the CLI reports it as unresponsive (`running_state: unknown`) and never suggests `mzt start`. A conductor blocked on slow disk stops accepting while its listen queue fills; each queued connect looks successful and the first write fails with `EINVAL` (GH #455). That conductor is alive.
 
-The detection is **fail-safe**: any exception during detection returns `False`, ensuring conductor bugs never break the CLI. The CLI simply falls through to the "conductor not running" error message.
+The detection is **fail-safe** about absence only: a conductor is declared absent on proof (no socket, connection refused), never on silence.
 
 ## Architecture
 
@@ -515,7 +516,16 @@ This installs the `daemon` extras group, which includes `psutil` for the `Resour
 
 ### "Marianne conductor is not running"
 
-The conductor is not reachable at the default socket path (`~/.config/mzt/mzt.sock`).
+The socket at the default path (`~/.config/mzt/mzt.sock`) is missing or refuses
+connections, which proves no conductor holds it.
+
+### "Marianne conductor did not respond; running state is unknown"
+
+The socket exists but the conductor did not answer (connect parked in a full
+listen queue, first write failed, or no reply within the deadline). It is
+usually alive and blocked, most often on disk I/O (`cat /proc/pressure/io`).
+Do not start or restart it: check `mzt conductor-status` for the PID, wait
+for the pressure to clear, and retry a read-only command.
 
 ```bash
 # Start the conductor
