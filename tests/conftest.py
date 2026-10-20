@@ -47,6 +47,18 @@ def pytest_sessionfinish(
         shutil.rmtree(_OWNED_WORKSPACE_ROOT, ignore_errors=True)
 
 
+@pytest.fixture(autouse=True)
+def _no_host_conductor_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The developer's live conductor (its PID file and socket) must not turn a
+    test's simulated "not running" into "busy" (GH #455). Tests of the busy
+    verdict override these two names themselves.
+    """
+    import marianne.cli.helpers as helpers
+
+    monkeypatch.setattr(helpers, "live_conductor_pid", lambda: None)
+    monkeypatch.setattr(helpers, "conductor_socket_present", lambda: False)
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Skip playwright-marked tests when running under xdist.
 

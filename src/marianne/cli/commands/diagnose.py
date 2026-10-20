@@ -57,6 +57,7 @@ from marianne.daemon.clone import active_registry_db_path
 from ..helpers import (
     configure_global_logging,
     is_quiet,
+    report_daemon_route_error,
     require_conductor,
 )
 from ..output import (
@@ -629,12 +630,9 @@ async def _errors_job(
         )
         raise typer.Exit(1) from err
     except DaemonError as err:
-        output_error(
-            str(err),
-            hints=["Pause or finish active scores before restarting: mzt restart"],
-            json_output=json_output,
-        )
-        raise typer.Exit(1) from None
+        # GH #455: a restart hint belongs only where the conductor answered
+        # with an error a restart fixes; an unanswered probe is not that.
+        report_daemon_route_error(err, json_output=json_output)
 
     found_job: CheckpointState | None = None
     if routed and result:
@@ -920,12 +918,9 @@ async def _diagnose_job(
             )
             raise typer.Exit(1) from None
     except DaemonError as err:
-        output_error(
-            str(err),
-            hints=["Pause or finish active scores before restarting: mzt restart"],
-            json_output=json_output,
-        )
-        raise typer.Exit(1) from None
+        # GH #455: a restart hint belongs only where the conductor answered
+        # with an error a restart fixes; an unanswered probe is not that.
+        report_daemon_route_error(err, json_output=json_output)
 
     # found_job may have been set in the JobSubmissionError handler
     # (F-451 workspace fallback). Only proceed with conductor result
@@ -1919,12 +1914,9 @@ async def _history_job(
         )
         raise typer.Exit(1) from err
     except DaemonError as err:
-        output_error(
-            str(err),
-            hints=["Pause or finish active scores before restarting: mzt restart"],
-            json_output=json_output,
-        )
-        raise typer.Exit(1) from None
+        # GH #455: a restart hint belongs only where the conductor answered
+        # with an error a restart fixes; an unanswered probe is not that.
+        report_daemon_route_error(err, json_output=json_output)
 
     records: list[dict[str, Any]] = []
     has_history = True

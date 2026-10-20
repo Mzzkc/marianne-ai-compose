@@ -35,6 +35,7 @@ import logging
 import os
 import shutil
 import sys
+import threading
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -206,6 +207,7 @@ class CompressingRotatingFileHandler(RotatingFileHandler):
             compress_level: Gzip compression level 1-9 (default 9, best compression).
         """
         self.compress_level = compress_level
+        self._compress_thread: threading.Thread | None = None
         super().__init__(
             filename,
             mode=mode,
@@ -217,59 +219,57 @@ class CompressingRotatingFileHandler(RotatingFileHandler):
         )
 
     def doRollover(self) -> None:
-        """Perform log rotation with compression.
+        """Perform log rotation; compression runs on a helper thread.
 
         This method:
         1. Closes the current log stream
-        2. Rotates existing .gz files (e.g., .2.gz -> .3.gz)
-        3. Compresses the current log file to .1.gz
+        2. Rotates existing backups (.2.gz -> .3.gz, plain .2 -> .3)
+        3. Renames the current log file to .1 (cheap, synchronous)
         4. Opens a new log file for writing
+        5. Compresses .1 to .1.gz on a background thread
+
+        ``emit`` runs on whichever thread logs, which in the conductor is
+        the event-loop thread; gzipping a 50 MB file inline there stalled
+        every accept() for seconds (GH #455). Only renames happen inline.
         """
         if self.stream:
             self.stream.close()
             self.stream = None  # type: ignore[assignment]
 
-        # Rotate existing compressed backups (.2.gz -> .3.gz, etc.)
-        # Start from highest and work down to avoid overwrites
-        for i in range(self.backupCount - 1, 0, -1):
-            src = f"{self.baseFilename}.{i}.gz"
-            dst = f"{self.baseFilename}.{i + 1}.gz"
-            if os.path.exists(src):
-                # Remove destination if it exists (shouldn't normally happen)
-                if os.path.exists(dst):
-                    os.remove(dst)
-                os.rename(src, dst)
+        # A previous compression still running would race the renames below.
+        self._join_compression()
 
-        # Compress current log file to .1.gz
-        if os.path.exists(self.baseFilename):
-            compressed_path = f"{self.baseFilename}.1.gz"
-            try:
-                with (
-                    open(self.baseFilename, "rb") as f_in,
-                    gzip.open(
-                        compressed_path,
-                        "wb",
-                        compresslevel=self.compress_level,
-                    ) as f_out,
-                ):
-                    shutil.copyfileobj(f_in, f_out)
-                # Only remove original after successful compression
-                os.remove(self.baseFilename)
-            except OSError:
-                # If compression fails, fall back to just renaming
-                # (better to have uncompressed backup than lose data)
-                if os.path.exists(compressed_path):
-                    try:
-                        os.remove(compressed_path)
-                    except OSError:
-                        pass  # Ignore cleanup failures
-                try:
-                    dst = f"{self.baseFilename}.1"
+        # Rotate existing backups (.2.gz -> .3.gz, etc.), highest first so
+        # nothing is overwritten. A plain .N (compression failed or still
+        # pending at close) rotates the same way.
+        for i in range(self.backupCount - 1, 0, -1):
+            for suffix in (".gz", ""):
+                src = f"{self.baseFilename}.{i}{suffix}"
+                dst = f"{self.baseFilename}.{i + 1}{suffix}"
+                if os.path.exists(src):
                     if os.path.exists(dst):
                         os.remove(dst)
-                    os.rename(self.baseFilename, dst)
-                except OSError:
-                    pass  # Ignore if this also fails - just truncate
+                    os.rename(src, dst)
+
+        if os.path.exists(self.baseFilename):
+            plain = f"{self.baseFilename}.1"
+            compressed_path = f"{self.baseFilename}.1.gz"
+            for stale in (plain, compressed_path):
+                if os.path.exists(stale):
+                    try:
+                        os.remove(stale)
+                    except OSError:
+                        pass
+            try:
+                os.rename(self.baseFilename, plain)
+            except OSError:
+                pass  # Nothing to compress; the base file is reopened below
+            else:
+                self._compress_thread = threading.Thread(
+                    target=self._compress, args=(plain, compressed_path),
+                    name="marianne-log-compress", daemon=True,
+                )
+                self._compress_thread.start()
 
         # Remove old backups beyond backupCount
         for i in range(self.backupCount + 1, self.backupCount + 10):
@@ -290,6 +290,35 @@ class CompressingRotatingFileHandler(RotatingFileHandler):
         # Reopen the base file for writing
         if not self.delay:
             self.stream = self._open()
+
+    def _compress(self, plain: str, compressed_path: str) -> None:
+        """Gzip ``plain`` into ``compressed_path`` and remove the plain file."""
+        try:
+            with (
+                open(plain, "rb") as f_in,
+                gzip.open(compressed_path, "wb", compresslevel=self.compress_level) as f_out,
+            ):
+                shutil.copyfileobj(f_in, f_out)
+            os.remove(plain)
+        except OSError:
+            # Keep the plain backup rather than lose data; drop a partial .gz.
+            try:
+                if os.path.exists(compressed_path):
+                    os.remove(compressed_path)
+            except OSError:
+                pass
+
+    def _join_compression(self, timeout: float | None = None) -> None:
+        thread = getattr(self, "_compress_thread", None)
+        if thread is not None and thread.is_alive():
+            thread.join(timeout)
+        if thread is not None and not thread.is_alive():
+            self._compress_thread = None
+
+    def close(self) -> None:
+        """Close the stream and wait for a pending compression to finish."""
+        self._join_compression()
+        super().close()
 
     def get_log_files(self) -> list[Path]:
         """Get all log files managed by this handler.

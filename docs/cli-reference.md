@@ -1835,10 +1835,22 @@ Usage: mzt conductor-status [OPTIONS]
 |--------|-------|---------|-------------|
 | `--pid-file` | | `~/.config/mzt/mzt.pid` | Path to PID file |
 | `--socket` | | `~/.config/mzt/mzt.sock` | Path to Unix socket |
+| `--json` | | false | Emit the raw `daemon.status` payload as JSON |
 
 ```bash
 mzt conductor-status
 ```
+
+When the socket answers, the Resources block shows memory, processes,
+backpressure, **event loop lag** (how late the loop wakes from a one-second
+sleep, with the 60-second peak) and **host I/O pressure** (`/proc/pressure/io`
+`some`/`full` ten-second averages). When the socket does not answer but the
+PID file names a live process, the command says so (`PID n is alive but its
+socket did not answer: busy or unresponsive`), prints the host I/O pressure,
+tells you to wait rather than restart, and exits 1; with `--json` it emits
+`{"pid", "alive", "socket_answered": false, "running_state": "unknown",
+"io_pressure"}`. Clone mode (`--conductor-clone`) reads the clone's own PID
+file for this; it never touches the default one (GH #455).
 
 ---
 

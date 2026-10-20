@@ -1272,7 +1272,7 @@ table below describes retained score syntax, not active log routing.
 | `level` | `"DEBUG" \| "INFO" \| "WARNING" \| "ERROR"` | `"INFO"` | | Minimum log level |
 | `format` | `"json" \| "console" \| "both"` | `"console"` | `file_path` required when `"both"` | Output format |
 | `file_path` | `Path \| None` | `None` | | Log file output path |
-| `max_file_size_mb` | `int` | `50` | `1–1000` | Maximum log file size before rotation (MB) |
+| `max_file_size_mb` | `int` | `50` | `1–1000` | Maximum log file size before rotation (MB). Rotation renames inline; gzip runs on a helper thread so the event loop never waits on it |
 | `backup_count` | `int` | `5` | `0–100` | Rotated log files to keep |
 | `include_timestamps` | `bool` | `true` | | Include ISO8601 UTC timestamps |
 | `include_context` | `bool` | `true` | | Include bound context (job_id, sheet_num) |
@@ -1567,7 +1567,7 @@ same profile overlay.
 |-------|------|---------|-------------|-------------|
 | `path` | `Path` | `~/.config/mzt/mzt.sock` | | Unix domain socket path |
 | `permissions` | `int` | `0o660` | | Socket file permissions (owner+group read/write) |
-| `backlog` | `int` | `5` | `>= 1` | Maximum pending connections in listen queue |
+| `backlog` | `int` | `128` | `>= 1` | Maximum pending connections in the listen queue (kernel caps at `net.core.somaxconn`). The queue drains only on the event loop; a full queue makes every read report the conductor busy (GH #455) |
 | `max_connections` | `int` | `500` | `>= 1` | Admitted clients; surplus connections receive a bounded capacity error |
 | `max_concurrent_requests` | `int` | `50` | `>= 1` | Concurrent ordinary RPCs, separate from streams |
 | `max_streams` | `int` | `50` | `>= 1` | Concurrent output and monitor subscriptions; peer EOF cancels them |

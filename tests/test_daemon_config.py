@@ -84,7 +84,7 @@ class TestSocketConfig:
         config = SocketConfig()
         assert config.path == Path.home() / ".config" / "mzt" / "mzt.sock"
         assert config.permissions == 0o660
-        assert config.backlog == 5
+        assert config.backlog == 128
 
     def test_custom_path(self):
         """Test custom socket path."""

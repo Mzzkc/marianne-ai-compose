@@ -34,19 +34,87 @@ if TYPE_CHECKING:
 _logger = get_logger("cli")
 
 
+def live_conductor_pid() -> int | None:
+    """The PID the active conductor's PID file names, if that process is alive.
+
+    Clone-aware. This is the evidence that separates "busy" from "absent"
+    (GH #455): a socket that does not answer while this PID is alive is a
+    conductor blocked on disk, never one to start or restart. Reads only;
+    never asserts or unlinks a PID file.
+    """
+    from marianne.daemon.clone import get_clone_name, resolve_clone_paths
+    from marianne.daemon.config import DaemonConfig
+    from marianne.daemon.process import _pid_alive, _read_pid, _resolve_live_pid_file
+
+    clone_name = get_clone_name()
+    pid_file = (
+        resolve_clone_paths(clone_name).pid_file if clone_name is not None
+        else _resolve_live_pid_file(DaemonConfig().pid_file)
+    )
+    pid = _read_pid(pid_file)
+    if pid is None or not _pid_alive(pid):
+        return None
+    return pid
+
+
+def conductor_socket_present() -> bool:
+    """Whether the socket the CLI would route through exists (clone-aware)."""
+    from marianne.daemon.detect import _resolve_socket_path
+    from marianne.daemon.ipc.client import _socket_exists
+
+    try:
+        return _socket_exists(_resolve_socket_path(None))
+    except OSError:
+        return False
+
+
+BUSY_HINTS = [
+    "Do not start or restart it: wait for host I/O pressure to clear "
+    "(cat /proc/pressure/io) and retry a read-only command.",
+    "Inspect it with: mzt conductor-status",
+]
+
+
+def busy_conductor_message(pid: int, detail: str = "") -> str:
+    """The one sentence every CLI path uses for a live conductor that did not answer."""
+    tail = f": {detail}" if detail else ""
+    return (
+        f"Marianne conductor busy or unresponsive (PID {pid} alive); "
+        f"running state is unknown{tail}"
+    )
+
+
 def report_daemon_route_error(exc: Exception, *, json_output: bool) -> NoReturn:
-    """Report an IPC outcome once, without changing its running-state meaning."""
+    """Report an IPC outcome once, without changing its running-state meaning.
+
+    An absent verdict needs two proofs: the connect was refused or the socket
+    is missing, AND no live PID is held. With a live PID the same failure is
+    reported busy (GH #455), and no path here ever suggests ``mzt start``,
+    ``mzt restart`` or ``mzt stop --force`` for a conductor that may be alive.
+    """
     from marianne.cli.output import output_error
     from marianne.daemon.exceptions import (
         DaemonAccessDeniedError,
         DaemonNotRunningError,
         DaemonProtocolError,
         DaemonUnresponsiveError,
+        MethodNotFoundError,
     )
 
+    pid = None
+    if isinstance(exc, DaemonUnresponsiveError):
+        pid = live_conductor_pid()
+    elif isinstance(exc, DaemonNotRunningError) and conductor_socket_present():
+        # A missing socket proves absence on its own; a refused connect on a
+        # socket that still exists does so only without a live PID.
+        pid = live_conductor_pid()
     if isinstance(exc, DaemonAccessDeniedError):
         message = str(exc)
         hints = ["Check whether your current user is permitted to access the conductor socket."]
+        running_state = "unknown"
+    elif isinstance(exc, DaemonUnresponsiveError) and pid is not None:
+        message = busy_conductor_message(pid, str(exc))
+        hints = list(BUSY_HINTS)
         running_state = "unknown"
     elif isinstance(exc, DaemonUnresponsiveError):
         message = f"Marianne conductor did not respond; running state is unknown: {exc}"
@@ -56,20 +124,49 @@ def report_daemon_route_error(exc: Exception, *, json_output: bool) -> NoReturn:
         message = f"Marianne conductor returned an invalid response: {exc}"
         hints = ["Check the conductor logs and CLI protocol version."]
         running_state = "unknown"
+    elif isinstance(exc, DaemonNotRunningError) and pid is not None:
+        # Refused or vanished socket, but the PID file names a live process:
+        # that is a conductor between bind and listen, or one blocked before
+        # it could answer. Absence is not proven.
+        message = busy_conductor_message(pid, "the socket did not accept a connection")
+        hints = list(BUSY_HINTS)
+        running_state = "unknown"
     elif isinstance(exc, DaemonNotRunningError):
         message = "Marianne conductor is not running."
         hints = ["Start it with: mzt start"]
         running_state = "absent"
+    elif isinstance(exc, MethodNotFoundError):
+        # The conductor answered and does not know the method: the CLI is
+        # newer than the running conductor. This is the one conductor error
+        # a restart actually fixes.
+        message = str(exc)
+        hints = ["Pause or finish active scores before restarting: mzt restart"]
+        running_state = "unknown"
     else:
-        raise TypeError(f"Unsupported daemon route error: {type(exc).__name__}")
+        # A DaemonError raised after the conductor answered its health probe
+        # (connection lost mid-request, admission refused). Restarting fixes
+        # none of these; the outcome of a write is unknown.
+        message = str(exc)
+        hints = ["Check conductor status: mzt conductor-status"]
+        running_state = "unknown"
 
-    output_error(
-        message,
-        hints=hints,
-        json_output=json_output,
-        error_type=type(exc).__name__,
-        running_state=running_state,
-    )
+    if pid is not None and running_state == "unknown":
+        output_error(
+            message,
+            hints=hints,
+            json_output=json_output,
+            error_type=type(exc).__name__,
+            running_state=running_state,
+            conductor_pid=pid,
+        )
+    else:
+        output_error(
+            message,
+            hints=hints,
+            json_output=json_output,
+            error_type=type(exc).__name__,
+            running_state=running_state,
+        )
     raise typer.Exit(1) from None
 
 
@@ -347,8 +444,9 @@ def require_conductor(
     """Exit with a clear error when the conductor is not running.
 
     Used by CLI commands that route through the conductor IPC. If the
-    conductor was not reachable, this prints a helpful message directing
-    the user to ``mzt start``.
+    conductor was not reachable, this prints "not running" with the hint
+    "Start it with: mzt start" only when no live PID is held; a live PID
+    makes the same outcome "busy or unresponsive" (GH #455).
 
     Args:
         routed: Whether ``try_daemon_route`` succeeded.
@@ -360,14 +458,9 @@ def require_conductor(
     if routed:
         return
 
-    from .output import output_error
+    from marianne.daemon.exceptions import DaemonNotRunningError
 
-    output_error(
-        "Marianne conductor is not running.",
-        hints=["Start it with: mzt start"],
-        json_output=json_output,
-    )
-    raise typer.Exit(1)
+    report_daemon_route_error(DaemonNotRunningError(), json_output=json_output)
 
 
 async def await_early_failure(

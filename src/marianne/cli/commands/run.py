@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import typer
 import yaml
@@ -259,13 +259,38 @@ def run(
         return
 
     # Daemon not available or submission failed
+    _report_conductor_unreachable(json_output)
+
+
+def _report_conductor_unreachable(json_output: bool) -> NoReturn:
+    """Absent only when no live PID is held; busy otherwise (GH #455)."""
+    from marianne.cli.helpers import (
+        BUSY_HINTS,
+        busy_conductor_message,
+        conductor_socket_present,
+        live_conductor_pid,
+    )
+
+    pid = live_conductor_pid() if conductor_socket_present() else None
     if json_output:
         output_json(
             {
-                "error": "Marianne conductor is not running. Start with: mzt start",
-                "error_type": "DaemonNotRunningError",
-                "running_state": "absent",
+                "error": (
+                    busy_conductor_message(pid, "the socket did not accept a connection")
+                    if pid is not None
+                    else "Marianne conductor is not running. Start with: mzt start"
+                ),
+                "error_type": (
+                    "DaemonUnresponsiveError" if pid is not None else "DaemonNotRunningError"
+                ),
+                "running_state": "unknown" if pid is not None else "absent",
+                "conductor_pid": pid,
             }
+        )
+    elif pid is not None:
+        output_error(
+            busy_conductor_message(pid, "the socket did not accept a connection"),
+            hints=list(BUSY_HINTS),
         )
     else:
         output_error(
@@ -587,20 +612,7 @@ def _run_fleet(
     if routed:
         return
 
-    if json_output:
-        output_json(
-            {
-                "error": "Marianne conductor is not running. Start with: mzt start",
-                "error_type": "DaemonNotRunningError",
-                "running_state": "absent",
-            }
-        )
-    else:
-        output_error(
-            "Marianne conductor is not running.",
-            hints=["Start it with: mzt start"],
-        )
-    raise typer.Exit(1)
+    _report_conductor_unreachable(json_output)
 
 
 def _load_fleet_config(config_file: Path) -> FleetConfig:

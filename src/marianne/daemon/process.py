@@ -331,6 +331,15 @@ def get_conductor_status(
             typer.echo(message)
 
     pid: int | None = None
+    pid_alive: bool | None = None
+    if socket_only and pid_file is not None:
+        # A clone's own PID file was named explicitly (conductor.py resolves
+        # both clone paths). Reading it is not the #408 hazard, which was the
+        # DEFAULT file being read or unlinked while inspecting a clone. It is
+        # the evidence that tells busy from dead when the socket is silent
+        # (GH #455); it is never asserted or unlinked here.
+        pid = _read_pid(pid_file)
+        pid_alive = _pid_alive(pid) if pid is not None else None
     if not socket_only:
         # Explicit pid_file always wins; only the default probes legacy (#227).
         resolved_pid_file = (
@@ -350,6 +359,7 @@ def get_conductor_status(
             _note("Marianne conductor is not running")
             resolved_pid_file.unlink(missing_ok=True)
             raise typer.Exit(1)
+        pid_alive = True
 
         _note(f"Marianne conductor is running (PID {pid})")
 
@@ -382,22 +392,57 @@ def get_conductor_status(
         finally:
             await client.close()
 
+    def _silent_socket() -> None:
+        """The socket did not answer. Say what the PID file and the host prove
+        (GH #455): a live PID under I/O pressure is busy, not dead, and the
+        remedy is to wait, never `mzt start`/`mzt restart`.
+        """
+        from marianne.daemon.system_probe import read_io_pressure
+
+        pressure = read_io_pressure()
+        if pid is not None and pid_alive:
+            _note(
+                f"Marianne conductor PID {pid} is alive but its socket "
+                f"{resolved_socket} did not answer: busy or unresponsive"
+            )
+            if pressure is not None:
+                _note(
+                    f"  Host I/O pressure (avg10): some {pressure.get('some_avg10', 0.0)}% "
+                    f"full {pressure.get('full_avg10', 0.0)}%"
+                )
+            _note("  Do not start or restart it; wait for pressure to clear and retry")
+            if as_json:
+                import json as _json
+
+                typer.echo(_json.dumps({
+                    "pid": pid,
+                    "alive": True,
+                    "socket_answered": False,
+                    "running_state": "unknown",
+                    "io_pressure": pressure,
+                }, indent=2, sort_keys=True))
+        elif pid is not None:
+            _note(f"Marianne conductor PID {pid} from the PID file is not alive")
+            _note("  (Could not connect to conductor socket for details)")
+        else:
+            _note("  (Could not connect to conductor socket for details)")
+
     try:
         health, ready, daemon_info = asyncio.run(_get_health())
     except (OSError, DaemonError):
-        _note("  (Could not connect to conductor socket for details)")
+        _silent_socket()
         if as_json or socket_only:
-            # Machine consumers get an empty stdout plus exit 1, never a
-            # half-valid document; socket-only human mode has no pid-file
-            # fallback, so there is no honest status to print either.
+            # Machine consumers never get a half-valid full document (the
+            # live-PID case above emits its own small one); socket-only mode
+            # has no further authority to consult.
             raise typer.Exit(1) from None
         return
 
     if socket_only and daemon_info is None:
         # The daemon itself did not answer — with an explicit --socket it
-        # is the only authority, so fail honestly instead of printing a
-        # payload with a foreign or missing pid.
-        _note("Could not connect to conductor socket")
+        # is the only authority for the full payload, so fail honestly
+        # instead of printing one with a foreign or missing pid.
+        _silent_socket()
         raise typer.Exit(1)
 
     if as_json:
@@ -485,6 +530,23 @@ def get_conductor_status(
             lines.append(f"  Pressure: [yellow]{pressure}[/yellow]")
         else:
             lines.append("  Pressure: [green]NONE[/green]")
+
+        # GH #455: how late the loop wakes (accept() runs there) and whether
+        # the host is stalled on I/O. Slow is told apart from dead here.
+        lag = ready.get("event_loop_lag_ms")
+        peak = ready.get("event_loop_lag_peak_ms")
+        if isinstance(lag, (int, float)):
+            colour = "red" if lag >= 1000 else "yellow" if lag >= 100 else "green"
+            peak_text = f" (peak {peak} ms / 60 s)" if isinstance(peak, (int, float)) else ""
+            lines.append(f"  Event loop lag: [{colour}]{lag} ms[/{colour}]{peak_text}")
+        io_pressure = ready.get("io_pressure")
+        if isinstance(io_pressure, dict):
+            some = io_pressure.get("some_avg10", 0.0)
+            full = io_pressure.get("full_avg10", 0.0)
+            colour = "red" if full >= 20 else "yellow" if some >= 20 else "green"
+            lines.append(
+                f"  Host I/O pressure: [{colour}]some {some}% full {full}%[/{colour}] (avg10)"
+            )
 
     # Hot-reload observability (GH #408, #450): the last reload's outcome is
     # the only place an operator learns a profile on disk is not the one the

@@ -16,6 +16,7 @@ static — callers import the class and call methods directly.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from marianne.core.logging import get_logger
 
@@ -277,3 +278,34 @@ class SystemProbe:
 
 
 __all__ = ["SystemProbe"]
+
+
+_IO_PRESSURE_PATH = Path("/proc/pressure/io")
+
+
+def read_io_pressure(path: Path = _IO_PRESSURE_PATH) -> dict[str, float] | None:
+    """The host's I/O pressure stall information (PSI), 10-second averages.
+
+    Returns ``{"some_avg10": pct, "full_avg10": pct}`` from
+    ``/proc/pressure/io`` or None when the kernel does not expose it. A
+    conductor whose event loop is blocked on disk is told apart from a dead
+    one by this number (GH #455): ``full`` is the share of the last ten
+    seconds in which every runnable task waited on I/O.
+    """
+    try:
+        text = path.read_text()
+    except OSError:
+        return None
+    found: dict[str, float] = {}
+    for line in text.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        for field in parts[1:]:
+            key, _, value = field.partition("=")
+            if key == "avg10":
+                try:
+                    found[f"{parts[0]}_avg10"] = float(value)
+                except ValueError:
+                    return None
+    return found or None

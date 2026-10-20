@@ -20,7 +20,7 @@ import typer
 
 from marianne.daemon.exceptions import DaemonError, DaemonNotRunningError
 
-from ..helpers import configure_global_logging
+from ..helpers import configure_global_logging, report_daemon_route_error
 from ..output import console, output_error
 
 
@@ -66,15 +66,9 @@ async def _watch(*, job_id: str, sheet_num: int | None) -> None:
             line = notification.get("line")
             if line is not None:
                 console.print(line, markup=False, highlight=False)
-    except DaemonNotRunningError:
-        output_error(
-            "Marianne conductor is not running",
-            hints=[
-                "Start the conductor: mzt start",
-                "Check status: mzt conductor-status",
-            ],
-        )
-        raise typer.Exit(1) from None
+    except DaemonNotRunningError as exc:
+        # Absent only without a live PID; busy otherwise (GH #455).
+        report_daemon_route_error(exc, json_output=False)
     except (OSError, ConnectionError, DaemonError) as exc:
         output_error(
             str(exc),

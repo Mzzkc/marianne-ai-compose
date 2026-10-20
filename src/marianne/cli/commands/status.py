@@ -346,15 +346,8 @@ async def _status_job(
         # Conductor not available — require it unless workspace is given
         if workspace is None:
             if not routed:
-                output_error(
-                    "Marianne conductor is not running.",
-                    hints=[
-                        "Start it with: mzt start",
-                        "Then run 'mzt list' to see available scores.",
-                    ],
-                    json_output=json_output,
-                )
-                raise typer.Exit(1)
+                # Absent only without a live PID; busy otherwise (GH #455).
+                report_daemon_route_error(DaemonNotRunningError(), json_output=json_output)
             return  # unreachable
         # Fallback to direct filesystem access with workspace override
         found_job, _ = await require_job_state(

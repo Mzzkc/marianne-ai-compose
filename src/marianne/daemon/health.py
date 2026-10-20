@@ -22,6 +22,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from marianne.core.logging import get_logger
+from marianne.daemon.system_probe import read_io_pressure
 
 if TYPE_CHECKING:
     from marianne.daemon.manager import JobManager
@@ -116,6 +117,11 @@ class HealthChecker:
             "failure_rate_elevated": failure_elevated,
             "notifications_degraded": notif_degraded,
             "uptime_seconds": round(time.monotonic() - self._start_time, 1),
+            # GH #455: slow is not dead. The operator reading conductor-status
+            # sees how late this loop wakes and whether the host is stalled on I/O.
+            "event_loop_lag_ms": self._monitor.event_loop_lag_ms,
+            "event_loop_lag_peak_ms": self._monitor.event_loop_lag_peak_ms,
+            "io_pressure": read_io_pressure(),
         }
 
     def on_job_completed(self) -> None:

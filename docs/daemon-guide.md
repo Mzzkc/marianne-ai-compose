@@ -53,10 +53,10 @@ When `mzt run` is invoked:
 2. This resolves the socket path (default: `~/.config/mzt/mzt.sock`)
 3. A `DaemonClient` attempts to open a Unix socket connection
 4. If the connection succeeds, the job is submitted via JSON-RPC
-5. If the socket is missing or the connection is refused, the CLI reports the conductor is not running (`running_state: absent`, hint `mzt start`)
-6. If the socket exists but the connect or the first write fails for any other reason, or the conductor accepts and does not answer, the CLI reports it as unresponsive (`running_state: unknown`) and never suggests `mzt start`. A conductor blocked on slow disk stops accepting while its listen queue fills; each queued connect looks successful and the first write fails with `EINVAL` (GH #455). That conductor is alive.
+5. If the socket is missing, or the connection is refused and the PID file names no live process, the CLI reports the conductor is not running (`running_state: absent`, hint `mzt start`)
+6. Otherwise the CLI reports it busy: `Marianne conductor busy or unresponsive (PID n alive); running state is unknown` (`running_state: unknown`, `conductor_pid: n`), and never suggests `mzt start`, `mzt restart` or `mzt stop --force`. That covers a connect or first write that fails on a socket that exists, a conductor that accepts and does not answer, and a refused connect while the PID is alive. A conductor blocked on slow disk stops accepting while its listen queue fills; each queued connect looks successful and the first write fails with `EINVAL` (GH #455). That conductor is alive.
 
-The detection is **fail-safe** about absence only: a conductor is declared absent on proof (no socket, connection refused), never on silence.
+The detection is **fail-safe** about absence only: absence needs two proofs (no socket, or a refused connection with no live PID), never silence. Every routed read (`status`, `status JOB`, `list`, `errors`, `diagnose`, `history`, `watch`, and `run` submission) goes through the same verdict.
 
 ## Architecture
 
@@ -218,7 +218,7 @@ The conductor is configured via a YAML file passed to `mzt start --config <path>
 |-------|------|---------|-------------|
 | `socket.path` | `Path` | `~/.config/mzt/mzt.sock` | Unix domain socket path |
 | `socket.permissions` | `int` | `0o660` | Socket file permissions (octal) |
-| `socket.backlog` | `int` | `5` | Max pending connections |
+| `socket.backlog` | `int` | `128` | Max pending connections (kernel caps at `net.core.somaxconn`); drains only on the event loop, so keep it well above the number of concurrent readers |
 | `pid_file` | `Path` | `~/.config/mzt/mzt.pid` | PID file path |
 | `shutdown_timeout_seconds` | `float` | `300.0` | Max wait for graceful shutdown (5 min) |
 | `monitor_interval_seconds` | `float` | `15.0` | Resource check interval |
@@ -532,13 +532,21 @@ This installs the `daemon` extras group, which includes `psutil` for the `Resour
 The socket at the default path (`~/.config/mzt/mzt.sock`) is missing or refuses
 connections, which proves no conductor holds it.
 
-### "Marianne conductor did not respond; running state is unknown"
+### "Marianne conductor busy or unresponsive (PID n alive); running state is unknown"
 
-The socket exists but the conductor did not answer (connect parked in a full
-listen queue, first write failed, or no reply within the deadline). It is
-usually alive and blocked, most often on disk I/O (`cat /proc/pressure/io`).
-Do not start or restart it: check `mzt conductor-status` for the PID, wait
-for the pressure to clear, and retry a read-only command.
+The PID file names a live process but its socket did not answer (connect
+parked in a full listen queue, first write failed, no reply within the
+deadline, or a refused connect while the process is alive). It is alive and
+blocked, most often on disk I/O. Do not start or restart it. `mzt
+conductor-status` prints the PID, whether it is alive, the host's I/O
+pressure (`/proc/pressure/io`, `some`/`full` ten-second averages) even when
+the socket is silent, and, once it answers, the event-loop lag (how late the
+loop wakes from a one-second sleep; `accept()` runs on that loop). Wait for
+the pressure to clear and retry a read-only command.
+
+The same message without a PID ("did not respond; running state is unknown")
+means the socket exists but no PID file names a live process: the socket is
+the only evidence, and it still is not proof of absence.
 
 ```bash
 # Start the conductor
@@ -556,13 +564,10 @@ A conductor instance is already active. Check with:
 mzt conductor-status
 ```
 
-If the conductor is unresponsive but the PID file exists, it may have crashed:
-
-```bash
-# Stop cleans up stale PID files
-mzt stop
-mzt start
-```
+If the PID file exists but `mzt conductor-status` says the PID is not alive,
+the conductor crashed and left the file behind; `mzt stop` cleans it up and
+`mzt start` starts a new one. If the PID **is** alive and only the socket is
+silent, the conductor is busy (previous entry): do not stop or start it.
 
 ### Stale PID File
 

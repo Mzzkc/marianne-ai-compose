@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -60,6 +61,11 @@ class ResourceMonitor:
     WARN_THRESHOLD = 80.0
     HARD_THRESHOLD = 95.0
 
+    # Event-loop lag sampling (GH #455): one sleep per second, the overshoot
+    # is how long the loop was unable to run anything, accept() included.
+    LAG_SAMPLE_SECONDS = 1.0
+    LAG_WINDOW_SAMPLES = 60
+
     def __init__(
         self,
         config: ResourceLimitConfig,
@@ -76,6 +82,8 @@ class ResourceMonitor:
         self._prune_consecutive_failures = 0
         self._prune_disabled = False
         self._last_successful_check: float = 0.0
+        self._lag_task: asyncio.Task[None] | None = None
+        self._lag_samples: deque[float] = deque(maxlen=self.LAG_WINDOW_SAMPLES)
 
     async def start(self, interval_seconds: float = 15.0) -> None:
         """Start the periodic monitoring loop."""
@@ -84,19 +92,44 @@ class ResourceMonitor:
         self._running = True
         self._task = asyncio.create_task(self._loop(interval_seconds))
         self._task.add_done_callback(self._on_loop_done)
+        self._lag_task = asyncio.create_task(self._lag_loop())
         _logger.info("monitor.started", interval=interval_seconds)
 
     async def stop(self) -> None:
         """Stop the monitoring loop."""
         self._running = False
-        if self._task is not None:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-            self._task = None
+        for attr in ("_task", "_lag_task"):
+            task = getattr(self, attr)
+            if task is not None:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                setattr(self, attr, None)
         _logger.info("monitor.stopped")
+
+    async def _lag_loop(self) -> None:
+        """Sample how late the loop wakes from a one-second sleep."""
+        loop = asyncio.get_running_loop()
+        while self._running:
+            expected = loop.time() + self.LAG_SAMPLE_SECONDS
+            await asyncio.sleep(self.LAG_SAMPLE_SECONDS)
+            self._lag_samples.append(max(0.0, (loop.time() - expected) * 1000.0))
+
+    @property
+    def event_loop_lag_ms(self) -> float | None:
+        """Most recent event-loop wake-up lag in milliseconds (None before the first sample)."""
+        if not self._lag_samples:
+            return None
+        return round(self._lag_samples[-1], 1)
+
+    @property
+    def event_loop_lag_peak_ms(self) -> float | None:
+        """Worst event-loop lag over the last ``LAG_WINDOW_SAMPLES`` seconds."""
+        if not self._lag_samples:
+            return None
+        return round(max(self._lag_samples), 1)
 
     async def check_now(self) -> ResourceSnapshot:
         """Run an immediate resource check and return snapshot."""

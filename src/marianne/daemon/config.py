@@ -155,9 +155,13 @@ class SocketConfig(BaseModel):
         "0o660 = owner+group read/write, no world access.",
     )
     backlog: int = Field(
-        default=5,
+        default=128,
         ge=1,
-        description="Maximum pending connections in the socket listen queue",
+        description="Maximum pending connections in the socket listen queue; the kernel "
+        "caps it at net.core.somaxconn. The queue only drains on the conductor's event "
+        "loop, so while the loop is blocked on disk every CLI read parks a connection "
+        "here. A queue that fills makes each read report the conductor busy (GH #455); "
+        "keep it well above the number of concurrent readers.",
     )
     max_connections: int = Field(
         default=500, ge=1,
