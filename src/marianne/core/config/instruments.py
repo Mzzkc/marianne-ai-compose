@@ -336,6 +336,16 @@ class CliCommand(BaseModel):
         "reads; 'idle' yields to every other process; 'inherit' leaves the "
         "conductor's class in place. Ignored when supervise is False.",
     )
+    max_open_files: int | None = Field(
+        default=4096,
+        ge=64,
+        description="Soft RLIMIT_NOFILE the supervisor sets for the instrument and "
+        "everything it spawns (default 4096; the conductor's own limit on a "
+        "server is often 1,048,576). Bounds a runaway search or a leaking "
+        "helper to its share of the host's file table; never raised above the "
+        "hard limit. null leaves the conductor's limit in place. Ignored when "
+        "supervise is False.",
+    )
     start_new_session: bool = Field(
         default=False,
         description="When True, start the subprocess in a new process group "

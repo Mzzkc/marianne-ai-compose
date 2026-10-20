@@ -25,7 +25,11 @@ _logger = get_logger("utils.process")
 
 
 def supervised_argv(
-    command: list[str], *, io_priority: str = "low", report_path: Path | None = None,
+    command: list[str],
+    *,
+    io_priority: str = "low",
+    max_open_files: int | None = None,
+    report_path: Path | None = None,
 ) -> list[str]:
     """Wrap an instrument argv in the Linux instrument supervisor.
 
@@ -38,6 +42,8 @@ def supervised_argv(
     from marianne.utils import instrument_supervisor
 
     argv = [sys.executable, "-I", str(instrument_supervisor.__file__), "--io", io_priority]
+    if max_open_files is not None:
+        argv += ["--max-open-files", str(max_open_files)]
     if report_path is not None:
         argv += ["--report", str(report_path)]
     return [*argv, "--", *command]

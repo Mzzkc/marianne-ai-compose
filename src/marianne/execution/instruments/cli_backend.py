@@ -1511,7 +1511,10 @@ class PluginCliBackend(Backend):
             # executable_not_found route, GH #418), not as the supervisor's
             # own exit 127.
             if self._cli.command.supervise and _resolved:
-                cmd = supervised_argv(cmd, io_priority=self._cli.command.io_priority)
+                cmd = supervised_argv(
+                    cmd, io_priority=self._cli.command.io_priority,
+                    max_open_files=self._cli.command.max_open_files,
+                )
 
             # Ensure working directory exists before spawning —
             # asyncio.create_subprocess_exec raises FileNotFoundError

@@ -364,7 +364,10 @@ class InteractiveCliBackend(Backend):
         if self._cli.command.supervise:
             # The pane process stays its own group leader (the supervisor is
             # the leader; the agent shares the group), so pid == pgid holds.
-            command = supervised_argv(command, io_priority=self._cli.command.io_priority)
+            command = supervised_argv(
+                command, io_priority=self._cli.command.io_priority,
+                max_open_files=self._cli.command.max_open_files,
+            )
         full_prompt = self._build_prompt(
             prompt, marker, req_preamble, req_extensions
         )

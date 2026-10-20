@@ -171,11 +171,35 @@ def test_instrument_shares_the_supervisor_group_and_inherits_low_io() -> None:
 
 
 def test_supervised_argv_wraps_under_isolated_python() -> None:
-    argv = supervised_argv(["claude", "-p", "-"], io_priority="idle")
+    argv = supervised_argv(["claude", "-p", "-"], io_priority="idle", max_open_files=512)
     assert argv[:2] == [sys.executable, "-I"]
     assert argv[2] == SUPERVISOR
     assert argv[3:5] == ["--io", "idle"]
+    assert argv[5:7] == ["--max-open-files", "512"]
     assert argv[-4:] == ["--", "claude", "-p", "-"]
+    assert "--max-open-files" not in supervised_argv(["x"], max_open_files=None)
+
+
+def test_open_files_cap_is_inherited_by_the_instrument_tree(tmp_path: Path) -> None:
+    """GH #457: the soft RLIMIT_NOFILE the supervisor sets reaches a grandchild."""
+    report = tmp_path / "report.json"
+    probe = (
+        "import resource, subprocess, sys\n"
+        "print(resource.getrlimit(resource.RLIMIT_NOFILE)[0])\n"
+        "print(subprocess.run([sys.executable, '-c', "
+        "'import resource; print(resource.getrlimit(resource.RLIMIT_NOFILE)[0])'],"
+        " capture_output=True, text=True).stdout.strip())\n"
+    )
+    result = _run(
+        "--max-open-files", "300", "--report", str(report), "--", sys.executable, "-c", probe,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.split() == ["300", "300"]
+    assert json.loads(report.read_text())["max_open_files"] == 300
+    # The cap never raises the limit: a cap above the current soft limit is a no-op.
+    high = _run("--max-open-files", "99999999", "--", sys.executable, "-c",
+                "import resource; print(resource.getrlimit(resource.RLIMIT_NOFILE)[0])")
+    assert int(high.stdout.strip()) <= 99999999
 
 
 def _profile(*, supervise: bool) -> InstrumentProfile:
@@ -247,6 +271,10 @@ async def test_unsupervised_profile_keeps_the_direct_spawn() -> None:
 def test_profile_defaults_supervise_with_low_io() -> None:
     command = CliCommand(executable="x")
     assert command.supervise is True and command.io_priority == "low"
+    assert command.max_open_files == 4096
+    assert CliCommand(executable="x", max_open_files=None).max_open_files is None
+    with pytest.raises(ValueError):
+        CliCommand(executable="x", max_open_files=8)
     with pytest.raises(ValueError):
         CliCommand(executable="x", io_priority="high")  # type: ignore[arg-type]
 

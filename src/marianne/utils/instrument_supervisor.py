@@ -23,6 +23,7 @@ import ctypes
 import json
 import os
 import platform
+import resource
 import signal
 import subprocess
 import sys
@@ -57,6 +58,24 @@ def _apply_io_priority(mode: str) -> str:
     if libc.syscall(number, _IOPRIO_WHO_PROCESS, 0, value) != 0:
         return "unavailable"
     return mode
+
+
+def _apply_open_files_cap(cap: int | None) -> int | None:
+    """Lower this process's soft RLIMIT_NOFILE; the instrument's tree inherits it.
+
+    Never raised above the hard limit; ``None`` leaves the conductor's limit
+    in place. Returns the cap that applied (or None).
+    """
+    if cap is None:
+        return None
+    try:
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        value = min(cap, hard) if hard != resource.RLIM_INFINITY else cap
+        if value < soft:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (value, hard))
+        return value
+    except (ValueError, OSError):
+        return None
 
 
 def _children_of(pid: int) -> list[int]:
@@ -156,11 +175,19 @@ def _write_report(path: Path | None, payload: dict[str, object]) -> None:
 
 def main(argv: list[str]) -> int:
     io_mode = "low"
+    open_files_cap: int | None = None
     report: Path | None = None
     index = 0
     while index < len(argv) and argv[index] != "--":
         if argv[index] == "--io" and index + 1 < len(argv):
             io_mode = argv[index + 1]
+            index += 2
+        elif argv[index] == "--max-open-files" and index + 1 < len(argv):
+            try:
+                open_files_cap = int(argv[index + 1])
+            except ValueError:
+                print("instrument_supervisor: --max-open-files needs an integer", file=sys.stderr)
+                return 125
             index += 2
         elif argv[index] == "--report" and index + 1 < len(argv):
             report = Path(argv[index + 1])
@@ -178,6 +205,7 @@ def main(argv: list[str]) -> int:
         print("instrument_supervisor: PR_SET_CHILD_SUBREAPER refused", file=sys.stderr)
         return 125
     io_applied = _apply_io_priority(io_mode)
+    open_files_applied = _apply_open_files_cap(open_files_cap)
 
     forwarded: list[int] = []
 
@@ -191,7 +219,8 @@ def main(argv: list[str]) -> int:
         child = subprocess.Popen(command, close_fds=True)
     except OSError as exc:
         print(f"instrument_supervisor: cannot start {command[0]!r}: {exc}", file=sys.stderr)
-        _write_report(report, {"spawn_error": str(exc), "io_priority": io_applied})
+        _write_report(report, {"spawn_error": str(exc), "io_priority": io_applied,
+                               "max_open_files": open_files_applied})
         return 127
     child_pid = child.pid
     me = os.getpid()
@@ -233,6 +262,7 @@ def main(argv: list[str]) -> int:
         "swept_kill": counts["kill"],
         "unreaped": counts["unreaped"],
         "io_priority": io_applied,
+        "max_open_files": open_files_applied,
     })
     # Popen never saw the exit; stop its finalizer from calling waitpid again.
     child.returncode = status["exit_code"] if status["signal"] is None else -int(status["signal"])
