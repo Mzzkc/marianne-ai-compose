@@ -68,7 +68,12 @@ class LoopConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     until: str | None = Field(
-        default=None, description="S1 expression checked after each iteration."
+        default=None,
+        description=(
+            "S1 expression checked after each iteration. file(\"path\") facts read a "
+            "workspace-relative path; {workspace} and prompt variables expand in the "
+            "validation {name} form, never Jinja {{ }} (V233)."
+        ),
     )
     count: int | None = Field(
         default=None, ge=1, description="Maximum iteration count; exact count when until is absent."

@@ -595,3 +595,18 @@ def test_fd_open_for_writing_reads_proc_fdinfo_access_mode(tmp_path: Path) -> No
             os.close(fd)
     # An unreadable fdinfo errs toward capture (the pre-#449 behaviour).
     assert _fd_open_for_writing(os.getpid(), "999999") is True
+
+
+async def test_file_facts_expand_workspace_in_the_validation_form(tmp_path: Path) -> None:
+    (tmp_path / "outer-done.txt").write_text("x", encoding="utf-8")
+    facts = await prefetch_file_facts(
+        tmp_path,
+        frozenset({"{workspace}/outer-done.txt", "{{ workspace }}/outer-done.txt", "{outer}.txt"}),
+        {"outer": 2},
+        None,
+    )
+    assert facts["{workspace}/outer-done.txt"].exists
+    assert not facts["{{ workspace }}/outer-done.txt"].exists, "Jinja braces stay verbatim"
+    assert not facts["{outer}.txt"].exists
+    (tmp_path / "2.txt").write_text("y", encoding="utf-8")
+    assert (await prefetch_file_facts(tmp_path, frozenset({"{outer}.txt"}), {"outer": 2}, None))["{outer}.txt"].exists

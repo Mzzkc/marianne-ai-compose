@@ -14,6 +14,7 @@ from marianne.validation.checks.flow import (
     FlowConcertTargetCheck,
     ForwardGotoFanOutCheck,
     GotoCycleCheck,
+    JinjaFilePathCheck,
     JinjaLoopCollisionCheck,
     LegacyConditionCheck,
     MixedFanOutKeyingCheck,
@@ -207,3 +208,33 @@ def test_v228_reads_the_pinned_model_not_the_profile_default(
         "loop 1: cost_limit_usd cannot stop a route that reports no cost: "
         "`claude-code` has no price for pinned model `made-up-model`"
     ]
+
+
+@pytest.mark.parametrize(
+    ("until", "fires"),
+    [
+        ("""file("{{ workspace }}/done.txt").exists""", True),
+        ("""file("{% if x %}a{% endif %}").exists""", True),
+        ("""file("{workspace}/done.txt").exists""", False),
+        ("""file("done.txt").exists""", False),
+    ],
+)
+def test_v233_refuses_jinja_braces_inside_a_flow_file_path(
+    tmp_path: Path, until: str, fires: bool
+) -> None:
+    path = _file(
+        tmp_path,
+        f"""name: flow-file-path
+sheet:
+  size: 1
+  total_items: 1
+  loops:
+    1: {{index: i, until: '{until}', max_iterations: 3}}
+prompt: {{template: hello}}
+""",
+    )
+    config = JobConfig.from_yaml(path)
+    issues = JinjaFilePathCheck().check(config, path, path.read_text())
+    assert [i.check_id for i in issues] == (["V233"] if fires else [])
+    if fires:
+        assert "never exists" in issues[0].message and "{workspace}" in issues[0].message

@@ -564,7 +564,7 @@ code-registry and corpus-sweep tests.
 | ERROR | V105, V108 | Undefined validation variable; missing static prelude/cadenza input |
 | ERROR | V209, V214, V216, V217 | Dependency cycle; expanded-sheet incoherence; missing cadenza target; missing or invalid static concert target |
 | ERROR | V210, V211 | Instrument or fallback name cannot resolve to a known profile, score alias, or capability class |
-| ERROR | V221–V223, V227, V229, V312–V314, V316–V317, V320 | Flow load errors and invalid flow references, reported with a code and hint rather than a raw schema trace |
+| ERROR | V221–V223, V227, V229, V233, V312–V314, V316–V317, V320 | Flow load errors and invalid flow references, reported with a code and hint rather than a raw schema trace |
 | ERROR | V305 | Bash `'${#...}'` length syntax in a prompt the Jinja engine eats as a comment |
 | ERROR | V306 | A `path_in_scope` validation can traverse outside its declared scope |
 | ERROR | V310, V321, V323, V324 | Capability classes: a class-shaped name cannot resolve on this machine (V-CLS-02: vocabulary-only, tombstoned, or a chain with no registered entry — the same chains `mzt run` refuses); an instrument alias names a class as its profile; `instrument_config.model` applied to a class primary; an invalid classes layer file while the score uses a class |
@@ -587,6 +587,7 @@ code-registry and corpus-sweep tests.
 | WARNING | V212 | A `skip_when` key names a sheet outside the expanded range |
 | WARNING | V215 | No instrument in the score's chain appears installed on this machine |
 | WARNING | V230 | Flow configuration error rendered from the loader (loops/triggers/goto) with position and hint |
+| ERROR | V233 | A loop `until` names `file("{{ … }}")`: Jinja braces inside a flow file path are kept verbatim, so the file never exists — write the workspace-relative or `{workspace}` validation form |
 | WARNING | V301 | A skill technique's `path` does not exist — the agent would never receive that methodology |
 | WARNING | V302 | An MCP technique targets an instrument with no MCP access path (native config or generated bridge) |
 | WARNING | V303 | Folded YAML scalar on a command field (newlines collapse — usually not what the author meant) |

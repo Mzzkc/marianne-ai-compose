@@ -139,6 +139,33 @@ class ConstantUntilCheck:
         return issues
 
 
+class JinjaFilePathCheck:
+    check_id = "V233"
+    severity = ValidationSeverity.ERROR
+    description = "Jinja braces inside a flow file() path never expand"
+
+    _JINJA = re.compile(r"\{\{.*?\}\}|\{%.*?%\}")
+
+    def check(self, config: JobConfig, config_path: Path, raw_yaml: str) -> list[ValidationIssue]:
+        issues = []
+        for span, loop in (config.sheet.loops or {}).items():
+            if loop.until is None:
+                continue
+            for path in sorted(parse_expression(loop.until).references().files):
+                if self._JINJA.search(path):
+                    issues.append(
+                        _issue(
+                            self.check_id,
+                            self.severity,
+                            f"loop {span}: file({path!r}) keeps its Jinja braces verbatim and "
+                            "never exists; flow file paths are workspace-relative and use "
+                            "the validation form, e.g. file(\"outer-done.txt\") or "
+                            "file(\"{workspace}/outer-done.txt\")",
+                        )
+                    )
+        return issues
+
+
 class JinjaLoopCollisionCheck:
     check_id = "V227"
     severity = ValidationSeverity.ERROR

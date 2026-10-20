@@ -1719,8 +1719,11 @@ cannot use a loop index that is unavailable on another sheet.
 Expressions support booleans, comparisons, arithmetic, parentheses, `var.name`,
 `loop.name`, `sheet(N)`/`sheet.current`, and `file("path")` facts. File facts
 include `.exists`, `.modified`, `.contains("text")`, and `.matches("regex")`.
-File paths can use known template variables. File reads are bounded and happen
-off the baton loop. Invalid expression syntax fails score load; an undefined
+File paths are relative to the job workspace and expand `{workspace}`, the
+score's `prompt.variables` and loop indices in the validation-engine `{name}`
+form (`file("{workspace}/done.txt")`); a Jinja `{{ workspace }}` inside a
+`file()` path is kept verbatim, so the file never exists and V233 refuses the
+score. File reads are bounded and happen off the baton loop. Invalid expression syntax fails score load; an undefined
 runtime variable fails the loop condition at its boundary. The legacy
 `validation(...)` and `output(...)` expression forms are reserved.
 

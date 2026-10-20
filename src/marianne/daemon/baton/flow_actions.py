@@ -41,10 +41,18 @@ def _read_facts(
     variables: dict[str, Any],
     started_at: float | None,
 ) -> dict[str, FileFacts]:
+    """Read every ``file("...")`` path named by an ``until`` expression.
+
+    A path is relative to the job workspace. ``{workspace}`` and the score's
+    ``prompt.variables``/loop indices expand in the validation-engine ``{name}``
+    form; a Jinja ``{{ name }}`` is left verbatim and therefore never exists
+    (V233 names it at validation time).
+    """
     root = workspace.resolve()
     facts: dict[str, FileFacts] = {}
+    values = {"workspace": str(root), **variables}
     for template in templates:
-        path = (root / _expand_path(template, variables)).resolve()
+        path = (root / _expand_path(template, values)).resolve()
         if not path.is_relative_to(root) or not path.is_file():
             facts[template] = FileFacts(False, False, None)
             continue
