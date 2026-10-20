@@ -300,7 +300,7 @@ description: "Firing the Pass proof (revised) — a backward-planned October 202
 
 # workspace: intentionally omitted — auto-managed at <workspace-root>/night-dispatch (#58).
 
-instrument: claude-code
+instrument: strong
 instrument_config:
   timeout_seconds: 1800
 

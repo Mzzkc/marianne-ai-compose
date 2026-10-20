@@ -284,7 +284,7 @@ description: "The Join-Semilattice Merge proof — a county-grain, license-compl
 # base profiles and guessing family from substrings. Empty proposer fallbacks
 # make the configured profile the executed authority or fail the sheet.
 
-instrument: claude-code
+instrument: strong
 instrument_config:
   timeout_seconds: 1800
 

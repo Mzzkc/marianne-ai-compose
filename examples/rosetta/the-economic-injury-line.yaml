@@ -249,7 +249,7 @@ description: "The Economic Injury Line proof (revised) — Stern 1959's EIL = C/
 # movement 10 (redeployed with the county synthesis at movement 15), gated
 # gas-free on this run's own nonce-bound custody evidence.
 
-instrument: claude-code
+instrument: strong
 instrument_config:
   timeout_seconds: 1800
 

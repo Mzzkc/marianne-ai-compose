@@ -116,7 +116,7 @@ description: "Rashomon Gate proof — four blind frames over one deterministic a
 # workspace: intentionally omitted — auto-managed at <workspace-root>/breathing-atlas (#58).
 # This is the only path decision the score makes, and it makes it portably.
 
-instrument: claude-code
+instrument: strong
 instrument_config:
   timeout_seconds: 1800
 

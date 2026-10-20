@@ -62,7 +62,7 @@ workspace: "../../workspaces/quality-triage-workspace"
 # self-chain. Overwriting mid-run would corrupt the DAG. Re-run this score only
 # when the solver is stopped.
 
-instrument: claude-code
+instrument: strong
 instrument_fallbacks: [opencode]
 instrument_config:
   timeout_seconds: 2400   # scanner installs, persona reviews, synthesis stages all fit

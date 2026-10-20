@@ -95,7 +95,7 @@ name: "my-first-score"
 description: "Process files in sheets of 10"
 
 # Pick a ready instrument from `mzt instruments list`.
-instrument: claude-code
+instrument: strong   # a capability class: resolves to the best installed agent CLI
 
 sheet:
   size: 10
@@ -243,7 +243,7 @@ Marianne continues from where it left off.
 name: "code-review"
 description: "Review PRs in sheets"
 
-instrument: claude-code
+instrument: strong   # a capability class: resolves to the best installed agent CLI
 
 sheet:
   size: 5
@@ -271,7 +271,7 @@ validations:
 name: "generate-docs"
 description: "Generate API documentation"
 
-instrument: claude-code
+instrument: strong   # a capability class: resolves to the best installed agent CLI
 
 sheet:
   size: 10
@@ -303,7 +303,7 @@ validations:
 name: "process-data"
 description: "Process data with robust error handling"
 
-instrument: claude-code
+instrument: strong   # a capability class: resolves to the best installed agent CLI
 
 sheet:
   size: 20
@@ -336,7 +336,7 @@ validations:
 name: "parallel-reviews"
 description: "Fan-out pattern: multiple perspectives in parallel"
 
-instrument: claude-code
+instrument: strong   # a capability class: resolves to the best installed agent CLI
 
 sheet:
   size: 1

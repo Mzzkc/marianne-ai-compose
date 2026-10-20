@@ -272,7 +272,7 @@ description: "The Attested Merge Gate proof — five vendor-diverse writers agai
 # effects, both gated: the gh-pages subpath push + release asset at GO (armed
 # first), and the evidence-page seal push at movement 17.
 
-instrument: claude-code
+instrument: strong
 instrument_config:
   timeout_seconds: 1800
 

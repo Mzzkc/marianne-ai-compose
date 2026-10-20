@@ -71,7 +71,7 @@ description: "Contract-first full-stack app: parallel API + CLI tracks, integrat
 
 workspace: ../../workspaces/bookmark-manager
 
-instrument: claude-code
+instrument: strong
 instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 1200  # 20 min per stage — code generation + validation

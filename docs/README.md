@@ -122,7 +122,7 @@ name: code-review-batch
 description: Review pull requests with validation gates
 workspace: ./workspaces/code-review
 
-instrument: claude-code
+instrument: strong   # a capability class: resolves to the best installed agent CLI
 instrument_config:
   timeout_seconds: 1800
 

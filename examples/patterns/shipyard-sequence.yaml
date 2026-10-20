@@ -71,7 +71,7 @@ description: "Generate a Python library with validation gates — fail fast befo
 
 workspace: ../../workspaces/lib-builder
 
-instrument: claude-code
+instrument: strong
 instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 600

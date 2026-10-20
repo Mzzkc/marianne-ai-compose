@@ -117,7 +117,7 @@ workspace_lifecycle:
   archive_on_fresh: true
   max_archives: 10
 
-instrument: claude-code
+instrument: strong
 instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 2400  # 40 min per sheet for thorough analysis

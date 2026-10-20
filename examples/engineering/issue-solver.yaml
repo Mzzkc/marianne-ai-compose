@@ -84,7 +84,7 @@ workspace_lifecycle:
   archive_on_fresh: true
   max_archives: 30
 
-instrument: claude-code
+instrument: strong
 instrument_fallbacks: [goose]
 instrument_config:
   timeout_seconds: 2400  # 40 min default

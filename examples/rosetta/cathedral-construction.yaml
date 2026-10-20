@@ -241,7 +241,7 @@ description: >
 # portable across hosts; every path below is workspace-templated, score_dir-
 # anchored, or ~-relative (V004-clean).
 
-instrument: claude-code
+instrument: strong
 instrument_config:
   timeout_seconds: 3600
 

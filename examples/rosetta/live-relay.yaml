@@ -235,7 +235,7 @@ description: "Live Relay proof — a five-episode audio drama authored by rotati
 
 # workspace: intentionally omitted — auto-managed at <workspace-root>/five-hands-one-voice (#58).
 
-instrument: claude-code
+instrument: strong
 instrument_config:
   timeout_seconds: 1800
 

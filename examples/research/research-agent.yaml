@@ -61,7 +61,7 @@ description: >
 
 workspace: ../../workspaces/research-agent
 
-instrument: claude-code
+instrument: strong
 instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 900

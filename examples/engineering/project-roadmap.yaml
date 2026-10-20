@@ -75,7 +75,7 @@ description: "Multi-perspective project audit → prioritized roadmap + task lis
 
 # Workspace auto-derives to ~/workspaces/project-roadmap (#58).
 
-instrument: claude-code
+instrument: strong
 instrument_fallbacks: [gemini-cli, opencode]
 instrument_config:
   timeout_seconds: 2400

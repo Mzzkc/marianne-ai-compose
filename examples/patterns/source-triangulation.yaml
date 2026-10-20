@@ -60,7 +60,7 @@ description: "Verify technical claims through independent source analysis — co
 
 workspace: ../../workspaces/claim-verify
 
-instrument: claude-code
+instrument: strong
 instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 600
