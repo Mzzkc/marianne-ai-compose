@@ -486,6 +486,39 @@ def get_conductor_status(
         else:
             lines.append("  Pressure: [green]NONE[/green]")
 
+    # Hot-reload observability (GH #408, #450): the last reload's outcome is
+    # the only place an operator learns a profile on disk is not the one the
+    # conductor runs, and whether the remedy is an edit or a restart.
+    if daemon_info:
+        lines.append("")
+        lines.append("[bold]Config[/bold]")
+        generation = daemon_info.get("config_generation")
+        loaded_at = daemon_info.get("config_loaded_at")
+        lines.append(
+            f"  Generation: {generation}"
+            + (f" [dim]\u00b7[/dim] loaded {loaded_at}" if loaded_at else "")
+        )
+        last = daemon_info.get("last_config_reload")
+        if isinstance(last, dict):
+            state = (
+                "failed" if not last.get("success")
+                else "partial" if last.get("partial")
+                else "applied"
+            )
+            lines.append(f"  Last reload: {state} ({last.get('reason', '?')})")
+            for failed in last.get("failed_profiles") or []:
+                retained = failed.get("retained") or ""
+                keep = f" — previous entry '{retained}' retained" if retained else ""
+                lines.append(
+                    f"  [yellow]![/yellow] {failed.get('path')}: "
+                    f"{failed.get('reason_code')}{keep}"
+                )
+            if last.get("schema_stale"):
+                lines.append(
+                    "  [yellow]![/yellow] conductor predates a profile's schema: "
+                    "the file is valid for newer code; restart at a job-free boundary"
+                )
+
     border_style = "green" if ready and ready.get("status") == "ready" else "yellow"
     con.print(Panel("\n".join(lines), title="Conductor", border_style=border_style))
 

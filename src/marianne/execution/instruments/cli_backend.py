@@ -17,6 +17,7 @@ before passing to the subprocess.
 from __future__ import annotations
 
 import asyncio
+import errno
 import json
 import os
 import re
@@ -1772,6 +1773,15 @@ class PluginCliBackend(Backend):
             )
         except OSError as e:
             stderr_data = f"Failed to start process: {e}"
+            if getattr(e, "errno", None) == errno.E2BIG:
+                # The route is installed and fine; the PROMPT does not fit
+                # argv (kernel per-argument cap). Say so, or status reads
+                # as if the binary were missing (GH #450 gap 3).
+                stderr_data = (
+                    f"Failed to start process: {e} — the prompt exceeds the "
+                    "kernel argv limit for a profile that passes it in argv "
+                    "(prompt_via_stdin: false); use stdin delivery"
+                )
             exit_reason = "error"
             spawn_error_type = "spawn_failed"
             _logger.error(

@@ -336,6 +336,19 @@ mzt restart --profile dev
 
 The conductor supports hot-reloading configuration without a restart. Send `SIGHUP` to the conductor process and it will re-read the config file from disk:
 
+A profile file that exists but fails to load keeps its previous registry entry
+(an edit accident must not remove a live instrument). Two causes look alike on
+disk and need opposite remedies, so the reload result tells them apart
+(`failed_profiles[].reason_code`, GH #450): `instrument_yaml_parse_error` and
+`instrument_validation_error` mean the file is broken, fix the file;
+`instrument_schema_stale` (`schema_stale: true`) means the file names a key the
+running conductor's installed schema lacks, so the file is right and the
+conductor is older than it: restart at a job-free boundary. Both `mzt doctor`
+("Config reload" section) and `mzt conductor-status` ("Config" block) show the
+last reload's declined files with that code; `doctor` reads the running
+conductor rather than the files on disk, because the file on disk is not what
+a retained entry runs.
+
 ```bash
 # Reload config after editing ~/.marianne/conductor.yaml
 kill -SIGHUP $(cat ~/.config/mzt/mzt.pid)

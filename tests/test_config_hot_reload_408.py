@@ -991,3 +991,37 @@ class TestConductorStatusJsonPurity:
         captured = capsys.readouterr()
         assert captured.out == ""
         assert "not running" in captured.err
+
+
+async def test_schema_stale_profile_is_typed_and_retained(tmp_path: Path) -> None:
+    """GH #450: a profile naming a key this installed schema lacks is not a
+    broken file; the reload says so (schema_stale, reason_code) so doctor and
+    conductor-status can tell the operator to restart, not to edit."""
+    org = _profile_dir(tmp_path)
+    config = _load_config(_config_file(tmp_path))
+    manager = _manager(tmp_path, config=config, org_dir=org)
+    warm = await manager.reload_configuration("warm")
+    assert warm.success and not warm.schema_stale and warm.failed_profiles == []
+
+    newer = _profile_yaml().replace(
+        "    executable: echo\n",
+        "    executable: echo\n    key_from_a_newer_release: true\n",
+    )
+    (org / "alpha.yaml").write_text(newer)
+    result = await manager.reload_configuration("newer-file")
+
+    assert result.success is True and result.partial is True
+    assert result.schema_stale is True
+    assert len(result.failed_profiles) == 1
+    failed = result.failed_profiles[0]
+    assert failed["path"].endswith("alpha.yaml")
+    assert failed["reason_code"] == "instrument_schema_stale"
+    assert failed["retained"] == "alpha"
+    assert manager._instrument_registry.get("alpha") is not None
+    assert result.model_dump()["schema_stale"] is True  # travels over daemon.status
+
+    # A genuinely broken file is still the ordinary parse failure, not stale.
+    (org / "alpha.yaml").write_text(_BROKEN_YAML)
+    broken = await manager.reload_configuration("broken")
+    assert broken.partial and not broken.schema_stale
+    assert broken.failed_profiles[0]["reason_code"] == "instrument_yaml_parse_error"

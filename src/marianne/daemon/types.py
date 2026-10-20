@@ -342,6 +342,26 @@ class ConfigReloadResult(BaseModel):
             "predating this field."
         ),
     )
+    schema_stale: bool = Field(
+        default=False,
+        description=(
+            "True when at least one profile file failed to load because it "
+            "names a key the RUNNING conductor's installed schema lacks "
+            "(pydantic extra_forbidden): the file is valid for a newer "
+            "release and the conductor predates it. The previous entry is "
+            "retained like any broken file, but the remedy is a restart at a "
+            "job-free boundary, not an edit (GH #450)."
+        ),
+    )
+    failed_profiles: list[dict[str, str]] = Field(
+        default_factory=list,
+        description=(
+            "Every profile file that exists and failed to load in this "
+            "reload: {path, reason_code, reason, retained}. The same facts as "
+            "the `profile load failed (...)` entries in `declined`, typed for "
+            "`doctor` and `conductor-status` (GH #450)."
+        ),
+    )
     reason: str = Field(
         description="Trigger origin (sighup, ipc, cli, watcher).",
     )

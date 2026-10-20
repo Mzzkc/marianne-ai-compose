@@ -317,3 +317,17 @@ async def test_absent_binary_is_still_the_typed_route_unavailable_error() -> Non
     result = await PluginCliBackend(profile).execute("print(1)", timeout_seconds=5)
     assert result.error_type == "executable_not_found"
     assert result.exit_reason == "error"
+
+
+@pytest.mark.asyncio
+async def test_e2big_spawn_failure_names_the_prompt_not_the_binary() -> None:
+    """GH #450 gap 3: an argv-delivered prompt past the kernel cap is a prompt
+    problem on an installed route; the result must say so."""
+    profile = _profile(supervise=False)
+    assert profile.cli is not None
+    profile.cli.command.prompt_via_stdin = False
+    backend = PluginCliBackend(profile)
+    result = await backend.execute("x" * 300_000, timeout_seconds=10)
+    assert result.exit_reason == "error" and result.error_type == "spawn_failed"
+    assert "exceeds the kernel argv limit" in result.stderr
+    assert "prompt_via_stdin" in result.stderr

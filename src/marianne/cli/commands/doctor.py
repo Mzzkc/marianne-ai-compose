@@ -69,6 +69,29 @@ def _check_conductor_status() -> tuple[str, int | None]:
     return ("not running", None)
 
 
+def _last_conductor_reload() -> dict[str, Any] | None:
+    """The running conductor's last reload outcome, or None when unreachable."""
+    import asyncio
+
+    from marianne.daemon.detect import _resolve_socket_path
+
+    socket_path = _resolve_socket_path(None)
+    if not socket_path.exists():
+        return None
+    try:
+        from marianne.daemon.ipc.client import DaemonClient
+
+        async def _fetch() -> dict[str, Any] | None:
+            async with DaemonClient(socket_path) as client:
+                status = await client.call("daemon.status")
+            last = status.get("last_config_reload") if isinstance(status, dict) else None
+            return last if isinstance(last, dict) else None
+
+        return asyncio.run(_fetch())
+    except Exception:
+        return None
+
+
 def _check_pid_file() -> int | None:
     """Check PID file for a running conductor process.
 
@@ -500,6 +523,32 @@ def doctor(
     if not conductor_ok:
         warnings.append("Conductor not running")
 
+    # --- Last hot-reload (GH #450) ---
+    # A profile that failed to load on reload keeps its PREVIOUS entry live,
+    # so `doctor` reading the files on disk would call it ready while the
+    # conductor runs older bytes. Ask the conductor what it actually kept.
+    last_reload = _last_conductor_reload() if conductor_ok else None
+    reload_findings: list[str] = []
+    if last_reload:
+        for failed in last_reload.get("failed_profiles") or []:
+            retained = failed.get("retained") or ""
+            keep = f" (previous entry '{retained}' retained)" if retained else ""
+            reload_findings.append(
+                f"Reload declined {failed.get('path')}: {failed.get('reason_code')}{keep}"
+            )
+        if last_reload.get("schema_stale"):
+            reload_findings.append(
+                "Conductor predates a profile's schema: restart at a job-free "
+                "boundary to load the file as written"
+            )
+            checks.append({
+                "name": "Conductor schema",
+                "status": "warning",
+                "detail": "older than a profile on disk",
+                "hint": "Restart when no jobs run: mzt stop && mzt start",
+            })
+    warnings.extend(reload_findings)
+
     # --- Instruments ---
     all_profiles = _get_all_profiles()
     active_rate_limits = (
@@ -608,6 +657,7 @@ def doctor(
             "conductor": {
                 "status": conductor_status,
                 "pid": conductor_pid,
+                "last_reload": last_reload,
             },
             "instruments": instrument_results,
             "safety_warnings": safety_warnings,
@@ -648,6 +698,13 @@ def doctor(
         for warn in safety_warnings:
             out.print(f"  [yellow]![/yellow] {warn}")
             warnings.append(warn)
+
+    # Last hot-reload section (GH #450)
+    if reload_findings:
+        out.print()
+        out.print("  [bold]Config reload:[/bold]")
+        for finding in reload_findings:
+            out.print(f"  [yellow]![/yellow] {finding}")
 
     # Storage hygiene section (#352)
     if storage_findings:

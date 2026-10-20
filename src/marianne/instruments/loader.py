@@ -275,9 +275,16 @@ class InstrumentProfileLoader:
                 file=str(path),
                 error=str(e),
             )
+            reason_code = "instrument_validation_error"
+            if "extra_forbidden" in str(e):
+                # The file names a key this installed schema does not
+                # have: the file is not broken, the running code is older
+                # than the file (an editable install that moved on, or a
+                # profile written for a newer release). GH #450.
+                reason_code = "instrument_schema_stale"
             return None, ProfileLoadFailure(
                 path=path.resolve(),
-                reason_code="instrument_validation_error",
+                reason_code=reason_code,
                 reason=str(e) or type(e).__name__,
             )
 

@@ -1332,6 +1332,19 @@ class JobManager:
             result = ConfigReloadResult(
                 success=True,
                 partial=partial_reload,
+                schema_stale=any(
+                    failure.reason_code == "instrument_schema_stale"
+                    for failure in failed_profiles
+                ),
+                failed_profiles=[
+                    {
+                        "path": str(failure.path),
+                        "reason_code": failure.reason_code,
+                        "reason": failure.reason,
+                        "retained": retained_from.get(failure.path, ""),
+                    }
+                    for failure in failed_profiles
+                ],
                 reason=reason,
                 config_generation=self._config_generation,
                 config_loaded_at=self._config_loaded_at,

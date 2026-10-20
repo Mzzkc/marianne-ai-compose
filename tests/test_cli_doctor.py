@@ -640,3 +640,43 @@ class TestUnreferencedProfiles:
         data = json.loads(as_json.stdout)
         assert data["unreferenced_profiles"] == [finding]
         assert data["warnings_count"] >= 1
+
+
+def test_doctor_reports_the_conductors_last_reload(monkeypatch, tmp_path):
+    """GH #450: a reload-declined profile and a stale schema reach the operator."""
+    from typer.testing import CliRunner
+
+    from marianne.cli import app
+
+    last = {
+        "success": True, "partial": True, "schema_stale": True, "reason": "watcher",
+        "config_generation": 3, "applied": [], "declined": [],
+        "failed_profiles": [{
+            "path": "/x/antigravity.yaml", "reason_code": "instrument_schema_stale",
+            "reason": "extra_forbidden", "retained": "antigravity",
+        }],
+    }
+    import json as _json
+    from unittest.mock import patch
+
+    with (
+        patch("marianne.cli.commands.doctor._check_conductor_status",
+              return_value=("running", 4242)),
+        patch("marianne.cli.commands.doctor._last_conductor_reload", return_value=last),
+        patch("marianne.cli.commands.doctor._get_all_profiles", return_value={}),
+        patch("marianne.cli.commands.doctor._scan_storage_findings", return_value=[]),
+        patch("marianne.cli.commands.doctor._scan_unreferenced_user_profiles",
+              return_value=[]),
+    ):
+        result = CliRunner().invoke(app, ["doctor"])
+        # Rich wraps at 80 columns under CliRunner; compare without line breaks.
+        out = " ".join(result.output.split())
+        assert "Config reload:" in out, out
+        assert "Reload declined /x/antigravity.yaml: instrument_schema_stale" in out
+        assert "previous entry 'antigravity' retained" in out
+        assert "predates a profile's schema" in out
+        assert "mzt stop && mzt start" in out
+        result = CliRunner().invoke(app, ["doctor", "--json"])
+        payload = _json.loads(result.output)
+        assert payload["conductor"]["last_reload"]["schema_stale"] is True
+        assert payload["conductor"]["last_reload"]["failed_profiles"][0]["retained"] == "antigravity"
