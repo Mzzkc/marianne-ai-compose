@@ -292,7 +292,7 @@ schedule:
 # SCHEDULED RUN, not each sheet.
 max_wall_seconds: 28800
 
-instrument: claude-code            # default applies to the two judgment sheets
+instrument: strong            # default applies to the two judgment sheets
 instrument_config:
   timeout_seconds: 1800
 

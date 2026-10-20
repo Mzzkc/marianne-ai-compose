@@ -322,7 +322,7 @@ description: "The Precedent Bench proof — a typed-force precedent index over t
 # variables; movement 1 writes them to run/bench-config.json and every script
 # reads DISK (never a hardcoded case list). Override with --var github_owner=…
 
-instrument: claude-code            # score default; every deterministic movement
+instrument: strong            # score default; every deterministic movement
 instrument_config:                 # overrides to cli / codex-cli below
   timeout_seconds: 2400
 

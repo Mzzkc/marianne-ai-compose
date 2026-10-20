@@ -223,7 +223,7 @@ description: "Condorcet's Premise proven on this host's real fleet (revised agai
 # theater this experiment measures (instrument letterheads <= derived model
 # families) is out of scope: movement 2 says PREMISE FAIL and names the fact.
 
-instrument: claude-code            # score default; every deterministic movement
+instrument: strong            # score default; every deterministic movement
 instrument_config:                 # and every juror sheet overrides below
   timeout_seconds: 3600
 

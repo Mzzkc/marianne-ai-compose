@@ -299,7 +299,7 @@ description: "The Unprimed Falsifier proof — FDA Medication Guides for warfari
 # run/deployment.json, and EVERY script reads disk (never a hardcoded drug
 # list). Override with --var github_owner=<login> etc.
 
-instrument: claude-code            # score default; every deterministic movement
+instrument: strong            # score default; every deterministic movement
 instrument_config:                 # overrides to cli below
   timeout_seconds: 1800
 
