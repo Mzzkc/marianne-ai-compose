@@ -133,9 +133,13 @@ sheet:
   size: 1
   total_items: 11  # 11 stages → 13 concrete sheets after fan-out
 
-  # The implementation loop gets extra time per pass.
+  # Every sheet that re-runs the full harness gets an hour: the
+  # implementation loop, the review synthesis and the final verification.
+  # A 40-minute default timed the synthesis out once on a 14-minute suite.
   per_sheet_instrument_config:
     4: {timeout_seconds: 3600}
+    8: {timeout_seconds: 3600}
+    10: {timeout_seconds: 3600}
 
   fan_out:
     5: 3  # Stage 5: 3 parallel reviewers
@@ -1275,7 +1279,11 @@ validations:
     description: "verify.sh exits 0 at final verification"
     condition: "sheet_num >= 10"
     stage: 2
-    timeout_seconds: 600
+    # verify.sh runs the project's whole harness; Marianne's own suite takes
+    # 14 minutes under load. A 600 s budget failed every attempt of the first
+    # live iteration (20 Oct 2026) after the musician had already recorded
+    # 13/13. Size the budget for the suite, not for the script.
+    timeout_seconds: 1800
 
   # Parse actual counts, refusing empty, inconsistent, duplicate and stale
   # summaries. The report, preserved output and fresh execution must agree.
