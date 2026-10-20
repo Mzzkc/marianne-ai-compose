@@ -8,6 +8,7 @@ this module provides thin Typer command wrappers.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Annotated
 
@@ -69,6 +70,14 @@ def start(
 def stop(
     pid_file: Path | None = typer.Option(None, "--pid-file", help="PID file path"),
     force: bool = typer.Option(False, "--force", help="Send SIGKILL instead of SIGTERM"),
+    wait: str | None = typer.Option(
+        None,
+        "--wait",
+        help="Wait for the conductor to exit after signaling. "
+        "Use --wait= (with equals sign) for the default 30s budget, "
+        "or --wait=SECONDS (or --wait SECONDS) for a custom budget. "
+        "Without --wait, stop returns immediately after signaling.",
+    ),
     conductor_clone: Annotated[
         str | None,
         typer.Option(
@@ -82,11 +91,31 @@ def stop(
 ) -> None:
     """Stop the Marianne conductor.
 
+    Non-blocking by default: the signal is sent and the command returns
+    without waiting for the conductor to exit. Pass --wait= for a 30s
+    budget, or --wait=SECONDS for a custom budget.
+
     When jobs are actively running, warns and asks for confirmation.
     Use --force to skip the safety check and send SIGKILL.
     """
     from marianne.daemon.clone import get_clone_name, is_clone_active, set_clone_name
     from marianne.daemon.process import stop_conductor
+
+    # --wait= (empty) means "wait with the default 30s budget";
+    # --wait=SECONDS or --wait SECONDS means "wait with that budget".
+    wait_seconds: float | None
+    if wait is None:
+        wait_seconds = None
+    else:
+        budget = wait.strip() or "30"
+        try:
+            wait_seconds = float(budget)
+        except ValueError:
+            typer.echo(f"Invalid --wait value: {wait!r} (expected seconds)")
+            raise typer.Exit(2) from None
+        if not math.isfinite(wait_seconds) or wait_seconds < 0:
+            typer.echo(f"Invalid --wait value: {wait!r} (must be finite and >= 0)")
+            raise typer.Exit(2) from None
 
     # Determine which clone name to use
     clone_name_to_use: str | None = None
@@ -106,7 +135,9 @@ def stop(
         pid_file = clone.pid_file
         socket_path = clone.socket
 
-    stop_conductor(pid_file=pid_file, force=force, socket_path=socket_path)
+    stop_conductor(
+        pid_file=pid_file, force=force, socket_path=socket_path, wait=wait_seconds
+    )
 
 
 def restart(
@@ -139,7 +170,6 @@ def restart(
         _resolve_live_pid_file,
         start_conductor,
         stop_conductor,
-        wait_for_conductor_exit,
     )
 
     # Determine which clone name to use
@@ -170,8 +200,12 @@ def restart(
 
     # Stop. If no conductor was running, continue into start. If stop refused
     # or failed while a conductor is still alive, do not start a second one.
+    # wait=30.0 makes stop block until the old process fully exits — without
+    # it, start_conductor would see the dying process (it now supersedes a
+    # draining conductor itself, GH #115, but waiting here keeps the restart
+    # sequencing explicit and fails fast with restart-specific hints).
     try:
-        stop_conductor(pid_file=pid_file)
+        stop_conductor(pid_file=pid_file, wait=30.0)
     except (SystemExit, typer.Exit):
         if conductor_still_running(pid_file):
             output_error(
@@ -183,19 +217,6 @@ def restart(
                 ],
             )
             raise typer.Exit(1) from None
-
-    # Wait for old process to fully exit before starting the new one.
-    # Without this, start_conductor sees the dying process and says
-    # "already running" (race condition).
-    if not wait_for_conductor_exit(pid_file, timeout=30.0):
-        output_error(
-            "Old conductor did not exit within 30 seconds.",
-            hints=[
-                "Check active scores before retrying: mzt status",
-                "Try 'mzt stop --force' only when you accept orphaning active work.",
-            ],
-        )
-        raise typer.Exit(1)
 
     start_conductor(
         config_file=config_file,

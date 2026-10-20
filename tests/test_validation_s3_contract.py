@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from typer.testing import CliRunner
@@ -67,6 +68,10 @@ def test_distant_unknown_is_info_and_dict_keys_are_data(tmp_path: Path) -> None:
     assert any(issue["check_id"] == "V011" for issue in json.loads(result.stdout)["issues"])
 
 
+# Spawns the CLI twice through CliRunner; ~9s standalone and at the margin
+# of the 30s global timeout under xdist contention (flaked as a timeout in
+# full-suite runs on a busy host).
+@pytest.mark.timeout(120)
 def test_suppression_truth_and_strict(tmp_path: Path) -> None:
     path = _score(tmp_path, "sheetz: 1\nvalidate: {suppress: [V010]}\n")
     result = CliRunner().invoke(app, ["validate", str(path), "--json", "--strict"])
@@ -161,6 +166,10 @@ def test_dependency_range_is_structural_exit_one(tmp_path: Path) -> None:
     assert json.loads(result.stdout)["issues"][0]["check_id"] == "V214"
 
 
+# Spawns the CLI twice through CliRunner; ~9s standalone and at the margin
+# of the 30s global timeout under xdist contention (flaked as a timeout in
+# full-suite runs on a busy host).
+@pytest.mark.timeout(120)
 def test_info_is_verbose_only_and_run_warns_on_unknown_field(tmp_path: Path) -> None:
     path = _score(tmp_path, "unknownthing: value\n")
     default = CliRunner().invoke(app, ["validate", str(path)])

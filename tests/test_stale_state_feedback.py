@@ -92,8 +92,7 @@ class TestStalePidDetection:
         pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
 
-        mock_config = MagicMock(spec=DaemonConfig)
-        mock_config.pid_file = pid_file
+        mock_config = DaemonConfig(pid_file=pid_file)
 
         with (
             patch(
@@ -102,6 +101,7 @@ class TestStalePidDetection:
             ),
             patch("marianne.daemon.process._read_pid", return_value=12345),
             patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process._probe_shutting_down", return_value=False),
             pytest.raises(click.exceptions.Exit),
         ):
             start_conductor(foreground=True)

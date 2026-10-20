@@ -6,6 +6,7 @@ installation, and _daemonize() skip in foreground mode.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import signal
 from pathlib import Path
@@ -19,6 +20,7 @@ from marianne.daemon.config import DaemonConfig
 from marianne.daemon.process import (
     DaemonProcess,
     _pid_alive,
+    _probe_shutting_down,
     _read_pid,
     _write_pid,
     get_conductor_status,
@@ -27,6 +29,58 @@ from marianne.daemon.process import (
 )
 
 # ─── PID File Helpers ──────────────────────────────────────────────────
+
+
+class TestProbeShuttingDown:
+    @pytest.mark.parametrize(
+        ("payload", "expected"),
+        [
+            ({"shutting_down": True}, True),
+            ({"shutting_down": False}, False),
+            ({}, None),
+            ({"shutting_down": "true"}, None),
+            ({"shutting_down": 1}, None),
+            (None, None),
+        ],
+    )
+    def test_shutting_down_readiness_payload(self, tmp_path, payload, expected):
+        socket = tmp_path / "conductor.sock"
+        client = MagicMock(readiness=AsyncMock(return_value=payload), close=AsyncMock())
+        with patch(
+            "marianne.daemon.ipc.client.DaemonClient", return_value=client
+        ) as factory:
+            assert _probe_shutting_down(socket) is expected
+
+        factory.assert_called_once_with(socket, timeout=2.0)
+        client.readiness.assert_awaited_once()
+        client.close.assert_awaited_once()
+
+    def test_shutting_down_probe_connection_failure(self, tmp_path):
+        with patch(
+            "marianne.daemon.ipc.client.DaemonClient",
+            side_effect=ConnectionError("refused"),
+        ):
+            assert _probe_shutting_down(tmp_path / "missing.sock") is None
+
+    def test_shutting_down_probe_deadline_cancels_silent_readiness(self, tmp_path):
+        cancelled = False
+
+        async def silent_readiness():
+            nonlocal cancelled
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled = True
+
+        client = MagicMock(readiness=silent_readiness, close=AsyncMock())
+        with (
+            patch("marianne.daemon.ipc.client.DaemonClient", return_value=client),
+            patch("marianne.daemon.process.CONDUCTOR_PROBE_TIMEOUT", 0.01),
+        ):
+            assert _probe_shutting_down(tmp_path / "silent.sock") is None
+
+        assert cancelled
+        client.close.assert_awaited_once()
 
 
 class TestWritePid:
@@ -129,6 +183,158 @@ class TestStartConductor:
             with pytest.raises(typer.Exit) as exc_info:
                 start_conductor(foreground=True)
             assert exc_info.value.exit_code == 0
+
+    # ── GH #115: start must supersede a draining conductor ──────────────
+
+    def test_start_supersedes_shutting_down_conductor(self, tmp_path: Path):
+        """start_conductor waits for a draining conductor, then starts.
+
+        A live PID whose daemon.ready reports shutting_down=true is NOT
+        "already running": start must wait for its exit (bounded) and
+        proceed to a normal start (GH #115).
+        """
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text(str(os.getpid()))
+
+        with (
+            patch("marianne.daemon.process._load_config") as mock_config,
+            patch(
+                "marianne.daemon.process._probe_shutting_down", return_value=True
+            ) as mock_probe,
+            patch(
+                "marianne.daemon.process.wait_for_conductor_exit", return_value=True
+            ) as mock_wait,
+            patch("marianne.daemon.process._daemonize"),
+            patch("marianne.core.logging.configure_logging"),
+            patch("marianne.daemon.process.DaemonProcess"),
+            patch("marianne.daemon.process.asyncio.run"),
+        ):
+            cfg = MagicMock()
+            cfg.pid_file = pid_file
+            cfg.log_level = "info"
+            cfg.log_file = None
+            mock_config.return_value = cfg
+
+            start_conductor(foreground=True)
+
+        mock_probe.assert_called_once()
+        mock_wait.assert_called_once()
+        wait_args = mock_wait.call_args
+        assert wait_args.args[0] == pid_file
+        assert wait_args.kwargs["timeout"] == 30.0
+
+    def test_start_supersedes_shutting_down_legacy_conductor(self, tmp_path: Path):
+        from marianne.daemon.config import SocketConfig
+
+        legacy_pid = tmp_path / "legacy.pid"
+        legacy_pid.write_text(str(os.getpid()))
+        legacy_socket = tmp_path / "legacy.sock"
+        config = DaemonConfig(
+            pid_file=tmp_path / "modern.pid",
+            socket=SocketConfig(path=tmp_path / "modern.sock"),
+        )
+
+        def readiness(socket):
+            # Only the legacy endpoint belongs to the draining PID.
+            return True if socket == legacy_socket else None
+
+        with (
+            patch("marianne.daemon.process._load_config", return_value=config),
+            patch("marianne.daemon.process._resolve_live_pid_file", return_value=legacy_pid),
+            patch("marianne.daemon.process.LEGACY_SOCKET_PATH", legacy_socket, create=True),
+            patch("marianne.daemon.process._probe_shutting_down", side_effect=readiness) as probe,
+            patch("marianne.daemon.process.wait_for_conductor_exit", return_value=True) as wait,
+            patch("marianne.core.logging.configure_logging"),
+            patch("marianne.daemon.process.DaemonProcess") as daemon,
+            patch("marianne.daemon.process.asyncio.run"),
+        ):
+            start_conductor(foreground=True)
+
+        probe.assert_called_once_with(legacy_socket)
+        wait.assert_called_once_with(legacy_pid, timeout=30.0)
+        daemon.assert_called_once_with(config, start_profile=None)
+
+    def test_start_serving_conductor_still_exits_0(self, tmp_path: Path):
+        """A daemon.ready answering shutting_down=false is serving: exit 0
+        "already running" is preserved (GH #459)."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text(str(os.getpid()))
+
+        with (
+            patch("marianne.daemon.process._load_config") as mock_config,
+            patch(
+                "marianne.daemon.process._probe_shutting_down", return_value=False
+            ) as mock_probe,
+            patch(
+                "marianne.daemon.process.wait_for_conductor_exit"
+            ) as mock_wait,
+        ):
+            cfg = MagicMock()
+            cfg.pid_file = pid_file
+            cfg.log_level = "info"
+            mock_config.return_value = cfg
+
+            with pytest.raises(typer.Exit) as exc_info:
+                start_conductor(foreground=True)
+
+        assert exc_info.value.exit_code == 0
+        mock_probe.assert_called_once()
+        mock_wait.assert_not_called()
+
+    def test_start_silent_socket_still_already_running(self, tmp_path: Path):
+        """A silent probe (None) is treated as running: conservative exit 0
+        — slow is not dead (GH #455)."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text(str(os.getpid()))
+
+        with (
+            patch("marianne.daemon.process._load_config") as mock_config,
+            patch(
+                "marianne.daemon.process._probe_shutting_down", return_value=None
+            ),
+            patch(
+                "marianne.daemon.process.wait_for_conductor_exit"
+            ) as mock_wait,
+        ):
+            cfg = MagicMock()
+            cfg.pid_file = pid_file
+            cfg.log_level = "info"
+            mock_config.return_value = cfg
+
+            with pytest.raises(typer.Exit) as exc_info:
+                start_conductor(foreground=True)
+
+        assert exc_info.value.exit_code == 0
+        mock_wait.assert_not_called()
+
+    def test_start_abort_when_drain_never_finishes(self, tmp_path: Path):
+        """Draining conductor that never exits in budget: truthful exit 1,
+        and no second daemon is spawned into the held locks (GH #115)."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text(str(os.getpid()))
+
+        with (
+            patch("marianne.daemon.process._load_config") as mock_config,
+            patch(
+                "marianne.daemon.process._probe_shutting_down", return_value=True
+            ),
+            patch(
+                "marianne.daemon.process.wait_for_conductor_exit", return_value=False
+            ),
+            patch("marianne.daemon.process._daemonize") as mock_daemonize,
+            patch("marianne.daemon.process.DaemonProcess") as mock_daemon,
+        ):
+            cfg = MagicMock()
+            cfg.pid_file = pid_file
+            cfg.log_level = "info"
+            mock_config.return_value = cfg
+
+            with pytest.raises(typer.Exit) as exc_info:
+                start_conductor(foreground=True)
+
+        assert exc_info.value.exit_code == 1
+        mock_daemonize.assert_not_called()
+        mock_daemon.assert_not_called()
 
     def test_start_foreground_skips_daemonize(self, tmp_path: Path):
         """In foreground mode, _daemonize() is NOT called."""
