@@ -1471,7 +1471,11 @@ class PluginCliBackend(Backend):
             # Every descendant of the instrument dies with the attempt: the
             # supervisor is a subreaper in the instrument's own group, so a
             # grandchild whose parent exits re-parents to it, not to init.
-            if self._cli.command.supervise:
+            # Only a RESOLVED executable is wrapped: an absent binary must
+            # still surface as this spawn's FileNotFoundError (the typed
+            # executable_not_found route, GH #418), not as the supervisor's
+            # own exit 127.
+            if self._cli.command.supervise and _resolved:
                 cmd = supervised_argv(cmd, io_priority=self._cli.command.io_priority)
 
             # Ensure working directory exists before spawning —

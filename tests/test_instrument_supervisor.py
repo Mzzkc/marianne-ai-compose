@@ -248,3 +248,41 @@ def test_profile_defaults_supervise_with_low_io() -> None:
     assert command.supervise is True and command.io_priority == "low"
     with pytest.raises(ValueError):
         CliCommand(executable="x", io_priority="high")  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_child_forked_during_post_exit_grace_dies_too() -> None:
+    """GH #406 residual: a detached, closed-stdio child forked AFTER the agent
+    printed and exited, during the post-exit drain grace, re-parents to the
+    supervisor and is ended with the attempt."""
+    marker = Path("/tmp") / f"mzt-406-residual-{os.getpid()}.pid"
+    script = (
+        "import subprocess, sys\n"
+        "print('agent done', flush=True)\n"
+        f"subprocess.Popen(['bash', '-c', 'sleep 0.3; setsid sleep 40 >/dev/null 2>&1 </dev/null & echo $! > {marker}'],\n"
+        "                 start_new_session=True)\n"
+        "sys.exit(0)\n"
+    )
+    backend = PluginCliBackend(_profile(supervise=True))
+    try:
+        result = await backend.execute(script, timeout_seconds=8)
+        assert result.exit_reason == "completed" and result.exit_code == 0
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline and not marker.exists():
+            await asyncio.sleep(0.05)
+        if marker.exists():
+            late_pid = int(marker.read_text().split()[0])
+            assert await _wait_gone(late_pid, 3.0), "late-forked detached child outlived the attempt"
+    finally:
+        marker.unlink(missing_ok=True)
+
+
+@pytest.mark.asyncio
+async def test_absent_binary_is_still_the_typed_route_unavailable_error() -> None:
+    """A missing instrument must not be hidden behind the supervisor's 127."""
+    profile = _profile(supervise=True)
+    assert profile.cli is not None
+    profile.cli.command.executable = "marianne-supervisor-missing-binary-4242"
+    result = await PluginCliBackend(profile).execute("print(1)", timeout_seconds=5)
+    assert result.error_type == "executable_not_found"
+    assert result.exit_reason == "error"

@@ -1727,7 +1727,11 @@ score. File reads are bounded and happen off the baton loop. Invalid expression 
 runtime variable fails the loop condition at its boundary. The legacy
 `validation(...)` and `output(...)` expression forms are reserved.
 
-`on_success` runs after a successful attempt. `on_fail` replaces retry,
+`on_success` runs after a successful attempt. A failed attempt leaves its own
+sheet FAILED whatever its `on_fail` chain does: `skip` and forward `goto` act on
+*other* sheets, so a job whose last failure is handled by `skip` alone still
+ends FAILED; use `goto` back to the failing sheet (or an earlier one) to retry
+it, or `continue: true` to record the choice. `on_fail` replaces retry,
 fallback, completion mode, and healing for that sheet, with one exception: an
 instrument that cannot be reached at all (binary absent, endpoint refusing
 connections) or that rejects the route's credentials still advances the
