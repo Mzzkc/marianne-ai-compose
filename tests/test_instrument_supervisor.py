@@ -45,7 +45,8 @@ SUPERVISOR = str(instrument_supervisor.__file__)
 def _state(pid: int) -> str | None:
     try:
         return open(f"/proc/{pid}/stat").read().split(") ", 1)[1][0]
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):
+        # A pid mid-teardown answers ESRCH on 3.12 rather than ENOENT.
         return None
 
 
