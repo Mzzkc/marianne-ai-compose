@@ -8,6 +8,8 @@ import shlex
 from collections.abc import Callable
 from pathlib import Path
 
+import pytest
+
 from marianne.daemon.baton.events import CronTick
 from marianne.daemon.config import DaemonConfig
 from marianne.daemon.manager import DaemonJobStatus, JobManager
@@ -89,14 +91,23 @@ def _completion_barrier(
     return immediate_done, scheduled_done, lambda: list(scheduled_ids)
 
 
+# Both waits cover a REAL `cli` subprocess spawn and completion. 12 s was
+# enough serially and not under xdist on a loaded box (GH #441: the test
+# passed 3/3 serially at load 17 and failed under -n 4); the budget is a
+# ceiling, not a duration, so a generous one costs a passing run nothing.
+_WAIT_SECONDS = 45.0
+
+
 async def _wait(event: asyncio.Event) -> None:
-    await asyncio.wait_for(event.wait(), timeout=12.0)
+    await asyncio.wait_for(event.wait(), timeout=_WAIT_SECONDS)
 
 
 async def _wait_until(predicate: Callable[[], bool]) -> None:
-    async with asyncio.timeout(12.0):
+    async with asyncio.timeout(_WAIT_SECONDS):
         while not predicate():
-            await asyncio.sleep(0)
+            # Yield real time, not just the loop turn: a spin on sleep(0)
+            # competes with the very subprocess drain it is waiting for.
+            await asyncio.sleep(0.01)
 
 
 async def _redeliver_due(manager: JobManager, due_at: float) -> None:
@@ -113,6 +124,7 @@ async def _redeliver_due(manager: JobManager, due_at: float) -> None:
     )
 
 
+@pytest.mark.timeout(120)
 async def test_recurring_cli_score_restarts_without_overlap_or_duplicate_due_child(
     tmp_path: Path,
 ) -> None:
