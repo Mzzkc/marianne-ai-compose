@@ -679,4 +679,5 @@ def test_doctor_reports_the_conductors_last_reload(monkeypatch, tmp_path):
         result = CliRunner().invoke(app, ["doctor", "--json"])
         payload = _json.loads(result.output)
         assert payload["conductor"]["last_reload"]["schema_stale"] is True
-        assert payload["conductor"]["last_reload"]["failed_profiles"][0]["retained"] == "antigravity"
+        failed_profiles = payload["conductor"]["last_reload"]["failed_profiles"]
+        assert failed_profiles[0]["retained"] == "antigravity"

@@ -548,7 +548,9 @@ async def test_refused_and_missing_socket_still_read_as_absent(tmp_path):
     with pytest.raises(DaemonNotRunningError):
         async with DaemonClient(path) as client:
             await client.call("daemon.health")
-    bound = __import__("socket").socket(__import__("socket").AF_UNIX, __import__("socket").SOCK_STREAM)
+    import socket as _socket
+
+    bound = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
     bound.bind(str(path))
     bound.close()  # a socket file with no listener behind it: ECONNREFUSED
     with pytest.raises(DaemonNotRunningError):
