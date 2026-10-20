@@ -29,6 +29,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from marianne.core.config.instruments import InstrumentProfile, InteractiveCliConfig
+from marianne.core.config.workspace import SCRATCH_ENV_VAR, scratch_root
 from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger
 from marianne.execution.base import Backend, ExecutionResult, SheetRequestState
@@ -404,6 +405,7 @@ class InteractiveCliBackend(Backend):
                 max_nudges=self._max_nudges,
                 transcript_path=transcript,
                 on_pane_pid=_register_pid,
+                env=self._scratch_env(workspace),
             )
         finally:
             await self._ensure_session_gone(session)
@@ -429,6 +431,16 @@ class InteractiveCliBackend(Backend):
             transcript=str(transcript),
         )
         return result
+
+    @staticmethod
+    def _scratch_env(workspace: Path) -> dict[str, str] | None:
+        """The job's scratch root for the pane environment (GH #460)."""
+        root = scratch_root(workspace)
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return None
+        return {SCRATCH_ENV_VAR: str(root)}
 
     async def _ensure_session_gone(self, session: str) -> None:
         """Backend-level final tmux teardown guard.

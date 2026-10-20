@@ -141,8 +141,10 @@ class FakeTmux:
 
     async def new_session(
         self, session: str, command: list[str], *, cwd: Path, width: int, height: int,
+        env: dict[str, str] | None = None,
     ) -> None:
         self.created.append((session, command))
+        self.env = env
         self.alive_sessions.add(session)
 
     async def has_session(self, session: str) -> bool:

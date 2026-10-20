@@ -193,6 +193,15 @@ class WorkspaceLifecycleConfig(BaseModel):
         description="Maximum archive directories to keep. 0 = unlimited. "
         "When exceeded, oldest archives are deleted.",
     )
+    scratch: Literal["remove", "keep"] = Field(
+        default="remove",
+        description="What happens to the job's scratch root "
+        "(`<workspace>/.marianne-scratch`, exported to every instrument as "
+        "MARIANNE_SCRATCH) when the job reaches COMPLETED or FAILED: `remove` "
+        "(default) deletes it; `keep` leaves it for inspection. Probe clones, "
+        "mutants and worktrees belong there, not in a system temp directory, "
+        "so nothing outlives the job (GH #460).",
+    )
     preserve_patterns: list[str] = Field(
         default=[
             ".iteration",
@@ -407,3 +416,12 @@ class FeedbackConfig(BaseModel):
         description="Format of the extracted feedback block. "
         "'json': parsed as JSON dict, 'yaml': parsed as YAML, 'text': stored as-is.",
     )
+
+
+SCRATCH_DIR_NAME = ".marianne-scratch"
+SCRATCH_ENV_VAR = "MARIANNE_SCRATCH"
+
+
+def scratch_root(workspace: Path) -> Path:
+    """The per-job scratch root every instrument is told about (GH #460)."""
+    return workspace / SCRATCH_DIR_NAME

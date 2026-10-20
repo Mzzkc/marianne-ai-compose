@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import time
 import traceback
 from collections import deque
@@ -5855,6 +5856,7 @@ class JobManager:
                             meta.workspace,
                             config_path=meta.config_path,
                         )
+                        await self._remove_scratch_root(job_id, meta)
 
                     await self._set_job_status(
                         job_id,
@@ -6017,6 +6019,35 @@ class JobManager:
             return await self._run_via_baton(job_id, config, request)
 
         await self._run_managed_task(job_id, _execute())
+
+    async def _remove_scratch_root(self, job_id: str, meta: JobMeta) -> None:
+        """Delete ``<workspace>/.marianne-scratch`` at a terminal state (GH #460).
+
+        Probe clones and worktrees an agent made under ``$MARIANNE_SCRATCH``
+        must not outlive the job. ``workspace_lifecycle.scratch: keep`` opts
+        out; a missing or unreadable score is treated as the default.
+        """
+        from marianne.core.config.workspace import scratch_root
+
+        root = scratch_root(meta.workspace)
+        if not root.is_dir():
+            return
+        policy = "remove"
+        try:
+            from marianne.core.config import JobConfig
+
+            policy = JobConfig.from_yaml(meta.config_path).workspace_lifecycle.scratch
+        except Exception:
+            pass
+        if policy != "remove":
+            return
+        try:
+            await asyncio.to_thread(shutil.rmtree, root, True)
+            _logger.info("manager.scratch_root_removed", job_id=job_id, path=str(root))
+        except Exception:
+            _logger.warning(
+                "manager.scratch_root_remove_failed", job_id=job_id, path=str(root), exc_info=True,
+            )
 
     @staticmethod
     async def _archive_workspace_on_fresh(config: Any, *, fresh: bool) -> None:

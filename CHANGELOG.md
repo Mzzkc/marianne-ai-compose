@@ -60,6 +60,7 @@ that no submitted score names and no class chain includes (GH #443). A seat is
 an alias over an existing profile; archive what nothing names.
 
 ### Added
+- **Per-job scratch root (GH #460)** — Every CLI and interactive instrument now receives `MARIANNE_SCRATCH=<workspace>/.marianne-scratch`; the conductor deletes that directory when the job reaches COMPLETED or FAILED (`workspace_lifecycle.scratch: remove|keep`, default `remove`). Probe clones, mutants and worktrees belong there instead of a system temp directory, where 112 orphaned clones had accumulated on one box.
 
 #### Daemon Mode (marianned) — 2026-02-11
 - **Daemon service** (`marianned start/stop/status`) — Long-running conductor process that manages multiple concurrent score runs

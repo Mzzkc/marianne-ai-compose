@@ -35,6 +35,7 @@ from marianne.core.config.instruments import (
     InstrumentProfile,
     validate_openai_response_format,
 )
+from marianne.core.config.workspace import SCRATCH_ENV_VAR, scratch_root
 from marianne.core.logging import get_logger
 from marianne.execution.base import (
     Backend,
@@ -831,6 +832,25 @@ class PluginCliBackend(Backend):
 
         return env
 
+    def _scratch_env(self, env: dict[str, str] | None) -> dict[str, str] | None:
+        """Add the job's scratch root to the child's environment (GH #460).
+
+        Probe clones, mutants and worktrees an agent makes belong under
+        ``$MARIANNE_SCRATCH`` (``<workspace>/.marianne-scratch``), which the
+        conductor removes when the job ends. Without a working directory
+        there is no job and nothing is exported.
+        """
+        if self._working_directory is None:
+            return env
+        root = scratch_root(self._working_directory)
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return env
+        merged = dict(os.environ) if env is None else dict(env)
+        merged[SCRATCH_ENV_VAR] = str(root)
+        return merged
+
     def _schema_conformance_refusal(
         self,
         structured: dict[str, Any],
@@ -1429,7 +1449,7 @@ class PluginCliBackend(Backend):
                     error_type="attempt_route_drift", error_message=message,
                     model=self._model,
                 )
-        env = self._build_env()
+        env = self._scratch_env(self._build_env())
 
         _logger.info(
             "plugin_cli_execute_start",

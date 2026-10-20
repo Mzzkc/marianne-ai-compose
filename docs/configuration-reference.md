@@ -269,6 +269,7 @@ Controls how workspace files are handled across score iterations, particularly f
 | `archive_dir` | `str` | `"archive"` | | Subdirectory within workspace for archive storage. |
 | `archive_naming` | `"iteration" \| "timestamp"` | `"iteration"` | | Naming scheme for archive directories. `iteration` reads `.iteration` file, `timestamp` uses current time. |
 | `max_archives` | `int` | `0` | `>= 0` | Maximum archive directories to keep. 0 = unlimited. When exceeded, oldest archives are deleted. |
+| `scratch` | `"remove" \| "keep"` | `"remove"` | | What happens to the job's scratch root `<workspace>/.marianne-scratch` when the job ends COMPLETED or FAILED. Every instrument receives its path as `MARIANNE_SCRATCH`; probe clones, mutants and worktrees belong there, not in a system temp directory, so nothing outlives the job (GH #460). `keep` leaves it for inspection. |
 | `preserve_patterns` | `list[str]` | `[".iteration", ".marianne-*", ".coverage", "archive/**", ".worktrees/**"]` | | Glob patterns for files/directories to preserve (not archive). Matched against paths relative to workspace root. |
 
 ```yaml
@@ -276,6 +277,7 @@ workspace_lifecycle:
   archive_on_fresh: true
   archive_dir: archive
   max_archives: 10
+  scratch: remove          # $MARIANNE_SCRATCH is deleted when the job ends
   preserve_patterns:
     - ".iteration"
     - ".marianne-*"

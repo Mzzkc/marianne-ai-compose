@@ -284,15 +284,21 @@ class TmuxControl:
         cwd: Path,
         width: int,
         height: int,
+        env: dict[str, str] | None = None,
     ) -> None:
         """Create a detached session running ``command`` as the pane process.
 
         The command is passed as an explicit argv tail — tmux execs it
         directly (no shell), so the pane process is the agent itself in its
         own process group (spike-verified; integration tests pin this).
+        ``env`` entries are set in the pane's environment (tmux ``-e``,
+        3.2+), e.g. the job's scratch root (GH #460).
         """
         if not command:
             raise ValueError("command must be non-empty")
+        env_args: list[str] = []
+        for key, value in (env or {}).items():
+            env_args += ["-e", f"{key}={value}"]
         await self._run(
             "new-session",
             "-d",
@@ -300,6 +306,7 @@ class TmuxControl:
             "-x", str(width),
             "-y", str(height),
             "-c", str(cwd),
+            *env_args,
             "--",
             *command,
         )

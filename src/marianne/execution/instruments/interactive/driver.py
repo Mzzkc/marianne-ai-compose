@@ -162,6 +162,7 @@ class InteractiveSessionDriver:
         max_nudges: int,
         transcript_path: Path | None = None,
         on_pane_pid: Callable[[int], None] | None = None,
+        env: dict[str, str] | None = None,
     ) -> DriverResult:
         """Run one full attempt: launch, gate, submit, drive, harvest.
 
@@ -212,6 +213,7 @@ class InteractiveSessionDriver:
                 cwd=cwd,
                 width=cfg.terminal_width,
                 height=cfg.terminal_height,
+                env=env,
             )
 
             if transcript_path is not None:

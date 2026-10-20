@@ -264,6 +264,17 @@ and used by the conductor for instrument selection in future versions.
 | `stdin_sentinel` | No | | What to put after `prompt_flag` when the prompt goes to stdin: `-` for Claude Code's `-p -`; `""` keeps the flag with an empty value (Antigravity's `-p ''`). Unset = omit the flag entirely |
 | `stdin_json_template` | No | | For a CLI whose only stdin path is a structured stream: this object is written as ONE JSON line with every `"{prompt}"` string replaced by the prompt (nested keys are walked). Antigravity: `{event: user, message: {role: user, content: "{prompt}"}}` with `--input-format stream-json` |
 
+#### Environment the musician receives
+
+Besides the profile's `env` and (when `required_env` filters) the system
+essentials, every CLI and interactive instrument is started with
+`MARIANNE_SCRATCH` set to the job's scratch root `<workspace>/.marianne-scratch`
+(created before launch). Anything an agent needs outside the workspace proper,
+such as a probe clone, a mutant tree or a git worktree, belongs under that path:
+the conductor deletes it when the job ends (`workspace_lifecycle.scratch`,
+GH #460). A clone made in a system temp directory has no owner once the sheet
+ends and is never reaped.
+
 #### `cli` — Lifecycle bounds
 
 Every CLI attempt is one process tree. The backend starts the instrument in
