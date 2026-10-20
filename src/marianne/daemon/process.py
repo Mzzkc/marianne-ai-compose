@@ -143,6 +143,13 @@ def start_conductor(
 
     Called by ``mzt start`` via ``cli/commands/conductor.py``.
 
+    A live conductor that is *serving* is reported as already running
+    (exit 0, GH #459). A live conductor that is *draining* (graceful
+    shutdown) is superseded (GH #115): this waits up to
+    ``CONDUCTOR_SUPERSEDE_TIMEOUT`` for the old process to exit, then
+    starts a fresh conductor; it never spawns a second daemon beside a
+    draining one, which holds the PID-file flock and socket lock.
+
     When *clone_name* is provided, the conductor runs with isolated
     paths (socket, PID file, state DB, log) so it can coexist with the
     production conductor.  The base config is loaded normally, then

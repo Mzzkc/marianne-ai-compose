@@ -1762,18 +1762,20 @@ mzt start --config /etc/marianne/daemon.yaml
 mzt start --log-level debug
 ```
 
+**Supersede:** A live PID is probed before "already running" is decided. A conductor that is serving is reported as already running (exit 0). A conductor that is draining (graceful shutdown, up to `shutdown_timeout_seconds`) is superseded instead: `mzt start` waits up to 30s for it to exit, then starts a fresh conductor. It never spawns a second conductor beside a draining one, which holds the PID-file flock and socket lock for its whole life. If the drain exceeds 30s, start exits 1. A silent probe is conservatively treated as running (GH #455: slow is not dead).
+
 #### Exit Codes
 
 | Code | Meaning |
 |------|---------|
-| 0 | Conductor started, or a conductor was already running (its PID is printed). A process supervisor must treat the second case as success: with `Restart=on-failure` an exit 1 here restarted `mzt start` every 30 s against a hand-started conductor (GH #459). |
-| 1 | Configuration error, or the conductor failed to start |
+| 0 | Conductor started, or a conductor was already serving (its PID is printed). A process supervisor must treat the second case as success: with `Restart=on-failure` an exit 1 here restarted `mzt start` every 30 s against a hand-started conductor (GH #459). |
+| 1 | Configuration error, the conductor failed to start, or a draining conductor did not exit within the 30s supersede budget |
 
 ---
 
 ### `mzt stop`
 
-Stop the running conductor. If scores are actively running, warns and asks for confirmation before proceeding. Stopping the conductor while scores run can orphan active agents and corrupt score state.
+Stop the running conductor. Non-blocking by default: after the safety check (and any confirmation) the signal is sent and the command returns without waiting for the conductor to exit. If scores are actively running, warns and asks for confirmation before proceeding. Stopping the conductor while scores run can orphan active agents and corrupt score state.
 
 ```
 Usage: mzt stop [OPTIONS]
@@ -1783,16 +1785,25 @@ Usage: mzt stop [OPTIONS]
 |--------|-------|---------|-------------|
 | `--pid-file` | | `~/.config/mzt/mzt.pid` | Path to PID file |
 | `--force` | | false | Skip safety check, send SIGKILL instead of SIGTERM |
+| `--wait` | | | Wait for the conductor to exit after signaling. `--wait=` (equals sign, empty value) waits with the default 30s budget; `--wait=SECONDS` (or `--wait SECONDS`) sets a custom budget. Budgets must be finite and non-negative; `--wait=0` keeps the signal-and-return behavior. |
 | `--conductor-clone` | | | Stop a clone conductor; use `--conductor-clone=` for the default clone or `--conductor-clone=NAME` for a named clone |
 
 **Safety guard:** When scores are running, `mzt stop` probes the conductor via IPC to check for active scores. If any are found, it warns with the count and asks for confirmation. The `--force` flag bypasses this check entirely and sends SIGKILL.
 
+With a positive `--wait` budget, the command blocks until the conductor exits (prints `Marianne conductor stopped`) or exits 1 with a message naming the still-draining PID. A graceful drain can take up to `shutdown_timeout_seconds` (default 300s) while running jobs checkpoint — a `--wait` budget shorter than that is a bounded poll, not a guarantee.
+
 ```bash
-# Normal stop (warns if jobs running)
+# Normal stop (warns if jobs running; signals and returns immediately)
 mzt stop
 
 # Force stop (SIGKILL, no safety check)
 mzt stop --force
+
+# Block up to the default 30s for the conductor to exit
+mzt stop --wait=
+
+# Block up to 60s
+mzt stop --wait=60
 ```
 
 ---

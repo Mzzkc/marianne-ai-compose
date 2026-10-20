@@ -569,6 +569,10 @@ the conductor crashed and left the file behind; `mzt stop` cleans it up and
 `mzt start` starts a new one. If the PID **is** alive and only the socket is
 silent, the conductor is busy (previous entry): do not stop or start it.
 
+A conductor that is *shutting down* (draining active work) no longer reports
+"already running": `mzt start` supersedes it — see
+[Non-blocking Stop and Bounded Wait](#non-blocking-stop-and-bounded-wait) below.
+
 ### Stale PID File
 
 If `mzt stop` reports "conductor is not running" but a PID file exists, the file is automatically cleaned up. If it persists:
