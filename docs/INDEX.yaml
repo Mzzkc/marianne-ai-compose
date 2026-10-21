@@ -12,6 +12,8 @@ instructions: 'This is the master navigation index for the public Marianne docum
 
   notes, and other working history live outside this repository.'
 top_level_docs:
+- name: orchestra/2026-10-20.jsonl
+  purpose: Orchestra view replay sample (one real day of the fleet, public-safe projection)
 - name: DISTRIBUTED-LEARNING-ARCHITECTURE.md
   purpose: Distributed learning architecture notes
 - name: MCP-INTEGRATION.md

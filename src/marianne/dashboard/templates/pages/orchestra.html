@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}Orchestra — Marianne{% endblock %}
+
+{% block content %}
+<div x-data="orchestraPage()" x-init="init()" class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Orchestra</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                Every score on stage. Each row is a sheet; the colour is what it is doing.
+            </p>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+            <span :class="mode === 'live' ? 'bg-green-500 animate-pulse' : 'bg-amber-500'" class="w-2 h-2 rounded-full"></span>
+            <span x-text="mode === 'live' ? (connected ? 'Live' : 'Reconnecting…') : 'Replay ' + replayDay"></span>
+            <button @click="goLive()" :disabled="mode === 'live'"
+                    class="ml-2 px-2.5 py-1 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700">Live</button>
+            <input type="date" x-model="replayPick" class="px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+            <button @click="startReplay()" :disabled="!replayPick"
+                    class="px-2.5 py-1 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700">Replay</button>
+            <template x-if="mode === 'replay'">
+                <div class="flex items-center gap-1">
+                    <button @click="paused = !paused" class="px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300" x-text="paused ? 'Play' : 'Pause'"></button>
+                    <select x-model.number="speed" class="px-1 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                        <option :value="60">60×</option><option :value="300">300×</option><option :value="1200">1200×</option><option :value="6000">6000×</option>
+                    </select>
+                    <span class="text-gray-500 dark:text-gray-400 tabular-nums" x-text="clock"></span>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <template x-if="!enabled">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-10 text-center text-gray-500 dark:text-gray-400">
+            The conductor is not connected, or its orchestra view is disabled (<code>orchestra.enabled</code>).
+        </div>
+    </template>
+
+    <template x-if="enabled && jobsOrdered().length === 0">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-10 text-center text-gray-500 dark:text-gray-400">
+            The stage is empty. Scores appear here the moment the conductor starts one.
+        </div>
+    </template>
+
+    <!-- Stage -->
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <template x-for="job in jobsOrdered()" :key="job.job">
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3"
+                 :class="{'opacity-60': job.status !== 'running' && job.status !== 'paused'}">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="font-semibold text-gray-900 dark:text-white truncate" x-text="job.job" :title="job.job"></div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                            <span x-text="progressText(job)"></span>
+                            <span> · </span>
+                            <span x-text="elapsedText(job)"></span>
+                        </div>
+                    </div>
+                    <span class="text-xs px-2 py-0.5 rounded-full whitespace-nowrap" :class="jobBadge(job.status)" x-text="job.status"></span>
+                </div>
+                <div class="flex flex-wrap gap-1">
+                    <template x-for="s in sheetRows(job)" :key="s.sheet">
+                        <div class="h-6 min-w-[1.5rem] px-1 rounded text-[10px] leading-6 text-center font-mono"
+                             :class="sheetClass(s.status)"
+                             :title="'sheet ' + s.sheet + ' · ' + s.status + (s.instrument ? ' · ' + s.instrument : '')"
+                             x-text="s.sheet"></div>
+                    </template>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 truncate" x-text="nowPlaying(job)"></div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Beats -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300">Beats</div>
+        <div class="max-h-72 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/60 font-mono text-xs">
+            <template x-for="(b, i) in beatsNewestFirst()" :key="b.ts + ':' + i">
+                <div class="px-4 py-1 flex gap-3 text-gray-700 dark:text-gray-300">
+                    <span class="text-gray-400 dark:text-gray-500 tabular-nums" x-text="hhmmss(b.ts)"></span>
+                    <span class="w-2 h-2 mt-1.5 rounded-full shrink-0" :class="beatDot(b)"></span>
+                    <span class="truncate" x-text="beatText(b)"></span>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+function orchestraPage() {
+    return {
+        enabled: true, connected: false, mode: 'live', paused: false, speed: 300,
+        replayPick: '', replayDay: '', clock: '',
+        jobs: {}, beats: [], _es: null, _tick: null, _replay: null, _replayIdx: 0, _replayClock: 0,
+
+        async init() {
+            await this.loadSnapshot();
+            this.connect();
+            this._tick = setInterval(() => { if (this.mode === 'live') this.$nextTick(); }, 1000);
+        },
+
+        async loadSnapshot() {
+            try {
+                const res = await fetch('/api/orchestra/snapshot?limit=300');
+                const snap = await res.json();
+                this.enabled = !!snap.enabled;
+                this.jobs = {};
+                (snap.jobs || []).forEach(j => { this.jobs[j.job] = j; });
+                this.beats = (snap.recent || []).slice(-300);
+            } catch (e) { this.enabled = false; }
+        },
+
+        connect() {
+            if (this._es) { this._es.close(); this._es = null; }
+            const es = new EventSource('/api/orchestra/stream');
+            es.onopen = () => { this.connected = true; };
+            es.onerror = () => { this.connected = false; };
+            es.addEventListener('beat', ev => {
+                if (this.mode !== 'live') return;
+                const b = JSON.parse(ev.data);
+                this.apply(b);
+            });
+            this._es = es;
+        },
+
+        goLive() {
+            this.mode = 'live'; this.paused = false; this.replayDay = '';
+            if (this._replay) { clearInterval(this._replay); this._replay = null; }
+            this.loadSnapshot(); this.connect();
+        },
+
+        async startReplay() {
+            const day = this.replayPick;
+            const res = await fetch('/api/orchestra/replay?day=' + encodeURIComponent(day));
+            const data = await res.json();
+            const events = data.events || [];
+            if (!events.length) { this.replayDay = day + ' (no beats)'; this.mode = 'replay'; this.jobs = {}; this.beats = []; return; }
+            if (this._es) { this._es.close(); this._es = null; }
+            this.mode = 'replay'; this.replayDay = day; this.paused = false;
+            this.jobs = {}; this.beats = [];
+            this._replayEvents = events; this._replayIdx = 0; this._replayClock = events[0].ts;
+            if (this._replay) clearInterval(this._replay);
+            this._replay = setInterval(() => {
+                if (this.paused) return;
+                this._replayClock += this.speed * 0.25;
+                while (this._replayIdx < this._replayEvents.length && this._replayEvents[this._replayIdx].ts <= this._replayClock) {
+                    this.apply(this._replayEvents[this._replayIdx++]);
+                }
+                this.clock = new Date(this._replayClock * 1000).toISOString().slice(11, 19) + 'Z';
+                if (this._replayIdx >= this._replayEvents.length) { clearInterval(this._replay); this._replay = null; this.paused = true; }
+            }, 250);
+        },
+
+        apply(b) {
+            this.beats.push(b); if (this.beats.length > 500) this.beats.shift();
+            let job = this.jobs[b.job];
+            if (!job) { job = { job: b.job, status: 'running', started_at: b.ts, ended_at: null, total_sheets: null, sheets: [] }; this.jobs[b.job] = job; }
+            if (b.kind === 'job.started') { job.status = 'running'; job.started_at = b.ts; }
+            else if (b.kind === 'job.ended') { job.status = b.outcome || 'ended'; job.ended_at = b.ts; }
+            else if (b.kind === 'job.paused') job.status = 'paused';
+            else if (b.kind === 'job.resumed') job.status = 'running';
+            if (b.sheet == null) { this.jobs = { ...this.jobs }; return; }
+            let s = job.sheets.find(x => x.sheet === b.sheet);
+            if (!s) { s = { sheet: b.sheet, status: 'pending', instrument: null }; job.sheets.push(s); job.sheets.sort((a, c) => a.sheet - c.sheet); }
+            if (b.kind === 'sheet.dispatched') { s.status = 'playing'; s.instrument = b.instrument || s.instrument; s.since = b.ts; }
+            else if (b.kind === 'sheet.ended') { s.status = b.outcome || 'ended'; s.instrument = b.instrument || s.instrument; }
+            else if (b.kind === 'sheet.skipped') s.status = 'skipped';
+            else if (b.kind === 'sheet.fallback') { s.status = 'playing'; s.instrument = b.instrument || s.instrument; }
+            else if (b.kind === 'sheet.retry') s.status = 'retrying';
+            this.jobs = { ...this.jobs };
+        },
+
+        jobsOrdered() {
+            const order = { running: 0, paused: 1 };
+            return Object.values(this.jobs).sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2) || b.started_at - a.started_at);
+        },
+        sheetRows(job) {
+            const known = new Map(job.sheets.map(s => [s.sheet, s]));
+            const n = Math.max(job.total_sheets || 0, ...job.sheets.map(s => s.sheet), 0);
+            const rows = [];
+            for (let i = 1; i <= n; i++) rows.push(known.get(i) || { sheet: i, status: 'pending', instrument: null });
+            return rows;
+        },
+        progressText(job) {
+            const done = job.sheets.filter(s => s.status === 'completed' || s.status === 'skipped').length;
+            return job.total_sheets ? `${done}/${job.total_sheets} sheets` : `${done} sheets done`;
+        },
+        elapsedText(job) {
+            const end = job.ended_at || (this.mode === 'replay' ? this._replayClock : Date.now() / 1000);
+            const s = Math.max(0, Math.floor(end - job.started_at));
+            return `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m`;
+        },
+        nowPlaying(job) {
+            const p = job.sheets.filter(s => s.status === 'playing' || s.status === 'retrying');
+            if (!p.length) return job.status === 'running' ? 'between sheets' : '';
+            return p.map(s => `sheet ${s.sheet} on ${s.instrument || '…'}`).join(' · ');
+        },
+        jobBadge(st) {
+            return { running: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+                     paused: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+                     completed: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+                     failed: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' }[st]
+                   || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+        },
+        sheetClass(st) {
+            return { playing: 'bg-green-500 text-white animate-pulse', retrying: 'bg-amber-500 text-white',
+                     completed: 'bg-blue-500 text-white', partial: 'bg-amber-400 text-white',
+                     failed: 'bg-red-500 text-white', skipped: 'bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200' }[st]
+                   || 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500';
+        },
+        beatsNewestFirst() { return this.beats.slice().reverse().slice(0, 200); },
+        beatDot(b) {
+            if (b.kind === 'sheet.ended') return { completed: 'bg-blue-500', partial: 'bg-amber-400', failed: 'bg-red-500' }[b.outcome] || 'bg-gray-400';
+            if (b.kind === 'job.ended') return { completed: 'bg-blue-500', failed: 'bg-red-500', cancelled: 'bg-gray-500' }[b.outcome] || 'bg-gray-400';
+            if (b.kind === 'sheet.dispatched' || b.kind === 'job.started') return 'bg-green-500';
+            if (b.kind === 'sheet.fallback' || b.kind === 'sheet.retry') return 'bg-amber-500';
+            return 'bg-gray-400';
+        },
+        beatText(b) {
+            const where = b.sheet != null ? ` sheet ${b.sheet}` : '';
+            const who = b.instrument ? ` on ${b.instrument}` : '';
+            const how = b.outcome ? ` ${b.outcome}` : '';
+            const note = b.note ? ` (${b.note})` : '';
+            return `${b.job}${where}: ${b.kind.split('.')[1]}${how}${who}${note}`;
+        },
+        hhmmss(ts) { return new Date(ts * 1000).toISOString().slice(11, 19) + 'Z'; },
+    };
+}
+</script>
+{% endblock %}

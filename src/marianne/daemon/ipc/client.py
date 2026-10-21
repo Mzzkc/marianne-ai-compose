@@ -57,6 +57,7 @@ _SAFE_RETRY_METHODS = frozenset({
     "daemon.rate_limits", "daemon.learning.patterns", "job.list", "job.status",
     "job.errors", "job.diagnose", "job.history",
     "schedule.current",
+    "daemon.orchestra.snapshot", "daemon.orchestra.replay",
 })
 _HEALTH_TIMEOUT_SECONDS = 2.0
 _CLOSE_TIMEOUT_SECONDS = 0.05

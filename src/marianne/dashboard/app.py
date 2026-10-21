@@ -221,18 +221,25 @@ def create_app(
     app.state.analytics = analytics
     set_analytics(analytics)
 
+    from marianne.dashboard.routes.orchestra import set_orchestra_view
+    from marianne.dashboard.services.orchestra_view import OrchestraView
+
     if daemon_client is not None:
         event_bridge = DaemonEventBridge(daemon_client)
         system_view = DaemonSystemView(daemon_client)
+        orchestra_view = OrchestraView(daemon_client)
 
         app.state.event_bridge = event_bridge
         app.state.system_view = system_view
+        app.state.orchestra_view = orchestra_view
 
         set_event_bridge(event_bridge)
         set_system_view(system_view)
+        set_orchestra_view(orchestra_view)
     else:
         set_event_bridge(None)
         set_system_view(None)
+        set_orchestra_view(None)
 
     # Register routes
     from marianne.dashboard.routes import router as base_router
@@ -242,6 +249,7 @@ def create_app(
     from marianne.dashboard.routes.events import router as events_router
     from marianne.dashboard.routes.jobs import router as jobs_router
     from marianne.dashboard.routes.monitor import router as monitor_router
+    from marianne.dashboard.routes.orchestra import router as orchestra_router
     from marianne.dashboard.routes.pages import router as pages_router
     from marianne.dashboard.routes.scores import router as scores_router
     from marianne.dashboard.routes.stream import router as stream_router
@@ -255,6 +263,7 @@ def create_app(
     app.include_router(scores_router)
     app.include_router(stream_router)
     app.include_router(monitor_router)
+    app.include_router(orchestra_router)
     app.include_router(analytics_router)
     app.include_router(events_router)
     app.include_router(system_router)

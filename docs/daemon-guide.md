@@ -412,6 +412,31 @@ tail -f ~/.marianne/logs/conductor.log
 mzt logs my-score --follow
 ```
 
+### The Orchestra View
+
+`mzt dashboard` serves `/orchestra`: every score on stage as a card, each sheet a
+cell coloured by what it is doing (playing, retrying, completed, partial, failed,
+skipped), the instrument it is playing on, and a beat log underneath. The page
+watches live over SSE and can replay any recorded day at 60× to 6000×.
+
+What it shows is the conductor's **orchestra projection**: score name, sheet
+number, instrument, outcome, timestamp. The projection whitelists both the source
+events and the payload fields it reads, so no workspace path, prompt, error text
+or cost ever reaches the page. That is what makes it the one view safe to put
+behind a public hostname (mzt.dev). The projection comes from the EventBus, so it
+costs the conductor nothing it was not already doing; the one event the bus did
+not previously carry, `sheet.dispatched`, is published by the baton adapter now.
+
+Each beat is appended to `~/.marianne/orchestra/<YYYY-MM-DD>.jsonl`. The same
+files drive replay, and a copy of one real day ships with the docs
+(`docs/orchestra/2026-10-20.jsonl`: the first live issue-solver proof, triage and
+solver, 16:57Z to 22:17Z).
+
+IPC: `daemon.orchestra.snapshot` (fleet now plus recent beats),
+`daemon.orchestra.replay` (`{"day": "YYYY-MM-DD"}`), `daemon.orchestra.stream`
+(live beats). Config: `orchestra:` on the daemon config (`enabled`, `persist`,
+`directory`, `ring_size`, `keep_ended_seconds`); restart-only, like `observer`.
+
 ### Programmatic Health Probes
 
 The `daemon.health` and `daemon.ready` IPC methods are available for integration with external monitoring. They are used internally by `mzt conductor-status`:

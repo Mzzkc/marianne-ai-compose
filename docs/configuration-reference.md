@@ -1443,6 +1443,7 @@ Available but rarely need changing:
 | `monitor_interval_seconds` | `float` | `15.0` | `>= 5` | Interval between resource monitor checks |
 | `max_job_history` | `int` | `1000` | `>= 10` | Completed/failed/cancelled jobs to keep in memory |
 | `observer` | `ObserverConfig` | *(see sub-config)* | | Observer and event bus configuration |
+| `orchestra` | `OrchestraConfig` | *(see sub-config)* | | Orchestra view: a public-safe fleet timeline, live over IPC and appended daily to `~/.marianne/orchestra/<day>.jsonl` for replay. Keys: `enabled` (true), `persist` (true), `directory`, `ring_size` (2000, `>= 100`), `keep_ended_seconds` (1800). The projection carries score name, sheet, instrument, outcome and time only |
 | `profiler` | `ProfilerConfig` | *(see sub-config)* | | System profiler (strace off by default, GPU probing off by default) |
 | `preflight` | `PreflightConfig` | *(see sub-config)* | | Preflight prompt analysis thresholds. Controls when prompts are warned or rejected based on estimated token count. |
 | `hot_reload` | `HotReloadConfig` | *(see [Hot Reload](#hot-reload))* | | Opt-in watcher that hot-applies config and instrument profile changes without a restart |
@@ -1540,6 +1541,7 @@ value is kept):
 | `config_file` | Restart-only (reload anchor identity) |
 | `logging` / `log_file` (destination) | Restart-only — file handles held at boot |
 | `observer` | Restart-only — recorder built at boot |
+| `orchestra` | Restart-only — recorder built at boot |
 | `learning` | Restart-only — semantic analyzer built at boot |
 | `profiler` | Restart-only — collector built at boot |
 | `mcp_pool` | Restart-only — server pool started at boot |

@@ -54,6 +54,7 @@ from marianne.daemon.learning_hub import LearningHub
 from marianne.daemon.monitor import ResourceMonitor
 from marianne.daemon.observer import JobObserver
 from marianne.daemon.observer_recorder import ObserverRecorder
+from marianne.daemon.orchestra.recorder import OrchestraRecorder
 from marianne.daemon.output import StructuredOutput
 from marianne.daemon.pgroup import ProcessGroupManager
 from marianne.daemon.rate_coordinator import RateLimitCoordinator
@@ -628,6 +629,7 @@ class JobManager:
         # Observer event recorder — persists per-job observer events to JSONL.
         # Initialized eagerly, started in start() after event bus.
         self._observer_recorder: ObserverRecorder | None = None
+        self._orchestra: OrchestraRecorder | None = None
 
         # Baton adapter — the execution engine for all jobs.
         # Initialized in start(). Import deferred to avoid circular import.
@@ -833,6 +835,15 @@ class JobManager:
                 config=self._config.observer,
             )
             await self._observer_recorder.start(self._event_bus)
+
+        # The orchestra view (GH #468): a public-safe projection of every job
+        # and sheet beat, live over IPC and appended to a daily JSONL for
+        # replay. Built after the bus, before any job can start.
+        if self._config.orchestra.enabled:
+            from marianne.daemon.orchestra import OrchestraRecorder
+
+            self._orchestra = OrchestraRecorder(self._config.orchestra)
+            await self._orchestra.start(self._event_bus)
 
         # Initialize the baton execution engine with the shared registry.
         self._baton_adapter = BatonAdapter(
@@ -5163,6 +5174,12 @@ class JobManager:
         for jid in list(self._job_meta.keys()):
             await self._stop_observer(jid)
 
+        if self._orchestra is not None:
+            try:
+                await self._orchestra.stop(self._event_bus)
+            except (OSError, RuntimeError):
+                _logger.warning("manager.orchestra_stop_failed", exc_info=True)
+
         # Stop observer recorder before event bus (needs bus for unsubscribe).
         if self._observer_recorder is not None:
             try:
@@ -5381,6 +5398,11 @@ class JobManager:
         return self._observer_recorder
 
     @property
+    def orchestra(self) -> OrchestraRecorder | None:
+        """The orchestra view recorder, for IPC readers (GH #468)."""
+        return self._orchestra
+
+    @property
     def event_bus(self) -> EventBus:
         """Access the event bus for subscribing to events."""
         return self._event_bus
@@ -5419,6 +5441,13 @@ class JobManager:
 
         if self._observer_recorder is not None:
             self._observer_recorder.register_job(job_id, meta.workspace)
+        if self._orchestra is not None:
+            live = self._live_states.get(job_id)
+            self._orchestra.seed_job(
+                job_id,
+                total_sheets=live.total_sheets if live is not None else None,
+                started_at=meta.started_at or meta.submitted_at,
+            )
 
     async def _stop_observer(self, job_id: str) -> None:
         """Stop the JobObserver co-task for a job."""

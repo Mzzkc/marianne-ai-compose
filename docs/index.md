@@ -56,6 +56,7 @@ intelligence through inspectable scores. That's what this is.
 ### System Guides
 
 - [**Daemon Guide**](daemon-guide.md) — Conductor daemon setup, operation, and debugging
+- [**Orchestra replay sample**](orchestra/2026-10-20.jsonl) — One real day of the fleet (the first live issue-solver proof) in the orchestra view's replay format
 - [**MCP Integration**](MCP-INTEGRATION.md) — Marianne's MCP server for external tool integration
 - [**Marianne Reference**](marianne-reference.md) — Architecture overview and internal concepts
 

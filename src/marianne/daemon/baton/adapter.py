@@ -2864,6 +2864,28 @@ class BatonAdapter:
                 "mode": mode.value,
             },
         )
+        # The one lifecycle beat the bus did not carry: a viewer cannot show
+        # "sheet 4 is playing on codex-cli" without it (orchestra view, GH #468).
+        if self._event_bus is not None:
+            dispatched: ObserverEvent = {
+                "job_id": job_id,
+                "sheet_num": sheet_num,
+                "event": "sheet.dispatched",
+                "data": {
+                    "instrument": effective_instrument,
+                    "attempt": state.attempt_count,
+                    "mode": mode.value,
+                },
+                "timestamp": time.time(),
+            }
+            try:
+                await self._event_bus.publish(dispatched)
+            except Exception:
+                _logger.warning(
+                    "adapter.dispatch_event_publish_failed",
+                    extra={"job_id": job_id, "sheet_num": sheet_num},
+                    exc_info=True,
+                )
         return True
 
     def _is_dispatch_registration_current(

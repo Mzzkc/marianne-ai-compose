@@ -1124,6 +1124,12 @@ Launches the Marianne dashboard API server for submitted scores, conductor
 state, logs, artifacts, and controls. API payloads still use `job_id` as the
 conductor's runtime record handle.
 
+`/orchestra` is the fleet on stage: one card per score, one cell per sheet, live
+over `/api/orchestra/stream` (SSE) with a replay transport for any recorded day
+(`/api/orchestra/replay?day=YYYY-MM-DD`). It renders the conductor's public-safe
+projection only (names, sheets, instruments, outcomes, times), so it is the one
+page meant to be exposed on a public hostname.
+
 #### Options
 
 | Option | Short | Default | Description |

@@ -15,6 +15,7 @@ import fcntl
 import json
 import math
 import os
+import re
 import signal
 import sys
 import time
@@ -1349,6 +1350,58 @@ class DaemonProcess:
             return {"events": events}
 
         handler.register("daemon.observer_events", handle_observer_events)
+
+        # Orchestra view (GH #468): public-safe fleet snapshot, recent beats,
+        # a live stream, and one day's replay. Read-only, no paths, no prompts.
+        async def handle_orchestra_snapshot(params: dict[str, Any], _w: Any) -> dict[str, Any]:
+            orchestra = manager.orchestra
+            if orchestra is None:
+                return {"enabled": False, "jobs": [], "recent": []}
+            limit = int(params.get("limit", 200))
+            snapshot = orchestra.snapshot()
+            snapshot["enabled"] = True
+            snapshot["recent"] = orchestra.recent(limit=limit)
+            return snapshot
+
+        async def handle_orchestra_replay(params: dict[str, Any], _w: Any) -> dict[str, Any]:
+            from marianne.daemon.orchestra.recorder import read_day
+
+            orchestra = manager.orchestra
+            if orchestra is None:
+                return {"enabled": False, "day": None, "events": []}
+            day = params.get("day")
+            if day is not None and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(day)):
+                raise ValueError("day must be YYYY-MM-DD")
+            path = orchestra.day_path(str(day) if day else None)
+            limit = params.get("limit")
+            events = read_day(path, limit=int(limit) if limit else None)
+            return {"enabled": True, "day": path.stem, "events": events}
+
+        async def handle_orchestra_stream(
+            _p: dict[str, Any], writer: asyncio.StreamWriter
+        ) -> None:
+            orchestra = manager.orchestra
+            if orchestra is None:
+                return
+            queue = orchestra.watch()
+            try:
+                while True:
+                    beat = await queue.get()
+                    notification = {
+                        "jsonrpc": "2.0",
+                        "method": "orchestra.beat",
+                        "params": beat,
+                    }
+                    writer.write(json.dumps(notification).encode() + b"\n")
+                    await asyncio.wait_for(writer.drain(), self._config.socket.write_timeout)
+            except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError):
+                pass
+            finally:
+                orchestra.unwatch(queue)
+
+        handler.register("daemon.orchestra.snapshot", handle_orchestra_snapshot)
+        handler.register("daemon.orchestra.replay", handle_orchestra_replay)
+        handler.register("daemon.orchestra.stream", handle_orchestra_stream, streaming=True)
 
         # Rate limit and learning IPC methods — used by dashboard bridge
         async def handle_rate_limits(

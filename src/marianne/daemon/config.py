@@ -194,6 +194,37 @@ class SocketConfig(BaseModel):
     )
 
 
+class OrchestraConfig(BaseModel):
+    """The orchestra view: a public-safe, replayable timeline of the fleet (GH #468)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = Field(
+        default=True,
+        description="Project conductor events into the orchestra timeline and serve "
+        "them over IPC (daemon.orchestra.snapshot / daemon.orchestra.stream).",
+    )
+    persist: bool = Field(
+        default=True,
+        description="Append each projected event to <directory>/<YYYY-MM-DD>.jsonl so a "
+        "day can be replayed. Off keeps the live view only.",
+    )
+    directory: Path = Field(
+        default=Path("~/.marianne/orchestra"),
+        description="Directory for the daily orchestra JSONL files.",
+    )
+    ring_size: int = Field(
+        default=2000,
+        ge=100,
+        description="Projected events kept in memory for late-joining viewers.",
+    )
+    keep_ended_seconds: float = Field(
+        default=1800.0,
+        ge=0.0,
+        description="How long an ended score stays in the fleet snapshot after it ends.",
+    )
+
+
 class ObserverConfig(BaseModel):
     """Configuration for the job observer and event bus."""
 
@@ -527,6 +558,10 @@ class DaemonConfig(BaseModel):
     observer: ObserverConfig = Field(
         default_factory=ObserverConfig,
         description="Observer and event bus configuration.",
+    )
+    orchestra: OrchestraConfig = Field(
+        default_factory=OrchestraConfig,
+        description="Orchestra view: public-safe fleet timeline, live and replayable.",
     )
     learning: SemanticLearningConfig = Field(
         default_factory=SemanticLearningConfig,

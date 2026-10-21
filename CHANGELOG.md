@@ -60,6 +60,16 @@ that no submitted score names and no class chain includes (GH #443). A seat is
 an alias over an existing profile; archive what nothing names.
 
 ### Added
+
+- **Orchestra view (GH #468).** `mzt dashboard` serves `/orchestra`: every score
+  on stage, each sheet a cell coloured by state, the instrument it plays on, a
+  beat log, live over SSE, with a replay transport for any recorded day. The
+  conductor's `OrchestraRecorder` projects EventBus events into a public-safe
+  vocabulary (score, sheet, instrument, outcome, time; nothing else is read),
+  keeps the fleet snapshot, appends beats to `~/.marianne/orchestra/<day>.jsonl`,
+  and serves `daemon.orchestra.snapshot|replay|stream` over IPC. The baton
+  adapter now publishes `sheet.dispatched`. `orchestra:` daemon config. A copy
+  of the 20 Oct proof day ships as `docs/orchestra/2026-10-20.jsonl`.
 - **Per-job scratch root (GH #460)** — Every CLI and interactive instrument now receives `MARIANNE_SCRATCH=<workspace>/.marianne-scratch`; the conductor deletes that directory when the job reaches COMPLETED or FAILED (`workspace_lifecycle.scratch: remove|keep`, default `remove`). Probe clones, mutants and worktrees belong there instead of a system temp directory, where 112 orphaned clones had accumulated on one box.
 
 #### Daemon Mode (marianned) — 2026-02-11
