@@ -251,9 +251,11 @@ class TestStopCommand:
 
     def test_stop_help_shows_wait_option(self):
         """``mzt stop --help`` documents --wait."""
-        result = runner.invoke(app, ["stop", "--help"])
+        result = runner.invoke(app, ["stop", "--help"], env={"COLUMNS": "200"})
         assert result.exit_code == 0
-        assert "--wait" in result.output
+        # Rich wraps the option column at CI's 80 columns, splitting the
+        # literal across lines; compare whitespace-collapsed.
+        assert "--wait" in " ".join(result.output.split())
 
     def test_stop_default_does_not_wait(self, tmp_path: Path):
         """Default stop is non-blocking: wait_for_conductor_exit is never
