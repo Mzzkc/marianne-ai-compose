@@ -289,6 +289,8 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **A failed CLI attempt keeps the API's refusal as its witness (GH #486).** When Claude Code's terminal JSON reports `is_error` with an `api_error_status` (a 400 for a tool `input_schema` the API rejects: a top-level `oneOf`, a missing top-level `type`), the backend kept neither the message nor a stderr tail, so the job could only say E009 after 5 s. The message is now the attempt's error and its stderr tail, typed `api_error`; a 4xx other than 429 classifies as E301 (the request's fault, not retried as weather), 429/5xx stay transient. Recorded as a capture fixture and replayed through the real parser.
+
 - **`mzt run --dry-run` honours `--var` (examples QA, 21 Oct).** The preview rendered the YAML's placeholder values (`[CHANGE THIS]`) whatever `--var` said, so the advertised safe verification path verified nothing; the runtime-variable merge now lives in `core/config/job.py` and both the conductor's submit/resume seam and the preview apply it. V106 also warns when a `content_contains` pattern carries regex syntax (a literal no prose contains); V201 also scans validation commands for Jinja.
 
 - **A schema with `$schema` no longer breaks Claude Code schema mode (GH #479).** `claude -p --json-schema` exits 1 on a schema whose top level carries `$schema` (it tries to resolve the draft URL); the CLI backend now drops top-level `$schema` and `$id` before building the argument, and the `instruments check --live` probe schema carries a `$schema` so the probe fails the way a sheet would if the strip regressed.

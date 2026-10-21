@@ -1342,6 +1342,15 @@ def _classify_error(exec_result: ExecutionResult) -> _ErrorClassification:
         # configuration bucket rather than misclassifying exit 1 as transient.
         return _ErrorClassification("EXECUTION_ERROR", exec_result.error_message, "E301")
 
+    if exec_result.error_type == "api_error":
+        # The API refused the request (GH #486). A 4xx other than 429 is the
+        # request's fault — a schema the API will not take — and no retry on
+        # this or any entry changes it: configuration, not weather.
+        message = exec_result.error_message or ""
+        if message.startswith("API error 429") or message.startswith("API error 5"):
+            return _ErrorClassification("TRANSIENT", message, "E009")
+        return _ErrorClassification("EXECUTION_ERROR", message, "E301")
+
     # Rate limits are NOT errors — handled upstream (the baton's rate-limit
     # timer / rate_limit_wait_seconds). Short-circuit BEFORE the classifier so
     # a rate-limit is never mapped into an error bucket or counted toward

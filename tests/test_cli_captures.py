@@ -67,3 +67,19 @@ def test_real_schema_miss_is_a_refusal_not_unschematized_text() -> None:
     assert result.stdout == ""
     assert "structured_output" in (result.error_message or "")
     assert _classify_error(result).classification == "EXECUTION_ERROR"
+
+
+def test_real_api_refusal_keeps_its_witness_and_is_not_transient() -> None:
+    """Recorded 2026-10-21 (GH #486): the API refused a tool input_schema with a
+    top-level oneOf (400). The CLI's terminal result carries is_error, the
+    status and the message; the attempt must keep that message as its error
+    and its stderr tail, and the baton must not retry it as weather."""
+    _meta, result = _replay("claude-code-api-400-oneof", "schema")
+    assert result.success is False
+    assert result.stdout == ""
+    assert result.error_type == "api_error"
+    assert "input_schema does not support oneOf" in (result.error_message or "")
+    assert "input_schema does not support oneOf" in result.stderr
+    classified = _classify_error(result)
+    assert classified.classification == "EXECUTION_ERROR"
+    assert classified.error_code == "E301"

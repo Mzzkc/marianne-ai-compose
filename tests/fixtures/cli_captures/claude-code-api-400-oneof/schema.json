@@ -1,0 +1,49 @@
+{
+  "instrument": "claude-code",
+  "cli_version": "2.1.306 (Claude Code)",
+  "captured_at": "2026-10-21T23:22:59+00:00",
+  "mode": "schema",
+  "prompt": "Return kind=a with n=7",
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "oneof_probe",
+      "schema": {
+        "type": "object",
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "a"
+              },
+              "n": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "n"
+            ]
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "b"
+              },
+              "m": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "m"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "exit_code": 1,
+  "reduced": "system init kept with model only; result event kept whole with session_id/uuid redacted; stream events dropped",
+  "why": "GH #486: the API refuses a top-level oneOf in a tool input_schema; the CLI's terminal result carries is_error true, api_error_status 400 and the message in `result`"
+}

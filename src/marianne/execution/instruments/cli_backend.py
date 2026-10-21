@@ -266,6 +266,22 @@ SYSTEM_ENV_VARS: frozenset[str] = frozenset({
 
 
 
+def _cli_api_error(data: Any) -> tuple[int | None, str] | None:
+    """The CLI's own report that the API refused the request (GH #486).
+
+    Claude Code's terminal result carries ``is_error: true``, an
+    ``api_error_status`` (400 for a tool input_schema the API rejects — a
+    top-level oneOf, a missing top-level type) and the message in ``result``.
+    Returns ``(status, message)`` or None when the terminal object does not
+    say the API refused.
+    """
+    if not isinstance(data, dict) or not data.get("is_error"):
+        return None
+    status = data.get("api_error_status")
+    message = data.get("result") or data.get("error") or "CLI reported is_error"
+    return (int(status) if isinstance(status, int) else None, str(message))
+
+
 def _terminal_json_object(data: Any) -> Any:
     """The CLI's terminal result object from ``--output-format json`` output.
 
@@ -1075,6 +1091,17 @@ class PluginCliBackend(Backend):
                     "schema mode: CLI terminal JSON lacks an object "
                     "'structured_output' — refusing unschematized result"
                 )
+            api_refusal = _cli_api_error(data)
+            if api_refusal is not None and not is_success:
+                # The API refused the request itself (GH #486): keep the
+                # CLI's message as the error AND as the stderr tail so the
+                # failed attempt carries its witness; a 4xx other than 429
+                # is the request's fault, not the weather's.
+                status, message = api_refusal
+                error_type = "api_error"
+                error_message = f"API error {status or '?'}: {message}"
+                if not stderr.strip():
+                    stderr = error_message
             if not is_success and error_message is None:
                 # Surface the CLI's own error path if configured; nothing
                 # in this branch logs or returns candidate content.
@@ -1103,6 +1130,13 @@ class PluginCliBackend(Backend):
                     extracted_err = extract_json_path(data, output.error_path)
                     if extracted_err is not None:
                         error_message = str(extracted_err)
+                api_refusal = _cli_api_error(data)
+                if api_refusal is not None and not is_success and error_message is None:
+                    status, message = api_refusal
+                    error_type = "api_error"
+                    error_message = f"API error {status or '?'}: {message}"
+                    if not stderr.strip():
+                        stderr = error_message
 
                 # Extract tokens
                 if output.input_tokens_path:
