@@ -1349,7 +1349,7 @@ with confidence gating and a durable per-sheet cap.
 | `model` | `str \| None` | `None` | Model override for the judge |
 | `min_confidence` | `float` | `0.8` | Confidence below which a judgment is refused |
 | `allowed_decisions` | `list[str]` | `["retry", "fail"]` | Decisions a judge may make (never accept) |
-| `max_judgments_per_sheet` | `int` | `3` | Durable per-sheet cap on automated judgments |
+| `max_judgments_per_sheet` | `int` | `3` | Durable per-sheet cap on automated judgments. The counter is persisted the moment a judgment resolves, so a conductor crash cannot hand the judge an extra turn (GH #382) |
 
 ---
 

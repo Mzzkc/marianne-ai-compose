@@ -258,6 +258,59 @@ class TestJudgePipeline:
         assert states["j1"].sheets[1].judgment_count == 0
         assert states["j1"].sheets[1].last_judgment["resolved"] is False
 
+    async def test_resolved_judgment_persists_the_counter_immediately(self) -> None:
+        """GH #382: the counter is the durable cap; a crash between the
+        judgment and the next state-transition persist must not reset it."""
+        states = _fermata_state()
+        resolve = _ResolveSpy(ok=True)
+        backend = _FakeBackend("JUDGMENT: retry 0.9")
+        persisted: list[str] = []
+        client = JudgmentClient(
+            live_states=states, resolve_fn=resolve,
+            backend_factory=lambda name: backend, diagnostic_fn=None,
+            persist_fn=persisted.append,
+        )
+
+        await client._judge("j1", 1, JudgmentConfig(enabled=True))
+
+        assert states["j1"].sheets[1].judgment_count == 1
+        assert persisted == ["j1"]
+
+    async def test_failed_resolution_does_not_persist(self) -> None:
+        states = _fermata_state()
+        resolve = _ResolveSpy(ok=False)
+        backend = _FakeBackend("JUDGMENT: retry 0.9")
+        persisted: list[str] = []
+        client = JudgmentClient(
+            live_states=states, resolve_fn=resolve,
+            backend_factory=lambda name: backend, diagnostic_fn=None,
+            persist_fn=persisted.append,
+        )
+
+        await client._judge("j1", 1, JudgmentConfig(enabled=True))
+
+        assert states["j1"].sheets[1].judgment_count == 0
+        assert persisted == []
+
+    async def test_persist_failure_does_not_unwind_the_judgment(self) -> None:
+        states = _fermata_state()
+        resolve = _ResolveSpy(ok=True)
+        backend = _FakeBackend("JUDGMENT: retry 0.9")
+
+        def boom(job_id: str) -> None:
+            raise OSError("disk full")
+
+        client = JudgmentClient(
+            live_states=states, resolve_fn=resolve,
+            backend_factory=lambda name: backend, diagnostic_fn=None,
+            persist_fn=boom,
+        )
+
+        await client._judge("j1", 1, JudgmentConfig(enabled=True))
+
+        assert states["j1"].sheets[1].judgment_count == 1
+        assert states["j1"].sheets[1].last_judgment["resolved"] is True
+
     async def test_backend_failure_fails_open(self) -> None:
         states = _fermata_state()
         resolve = _ResolveSpy()

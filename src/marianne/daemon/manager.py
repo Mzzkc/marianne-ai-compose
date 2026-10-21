@@ -956,6 +956,7 @@ class JobManager:
                 resolve_fn=adapter.resolve_fermata,
                 backend_factory=_judgment_backend,
                 diagnostic_fn=self._diagnostic_snapshot,
+                persist_fn=self._on_baton_persist,  # GH #382: counter is the cap
             )
             await judgment_client.start(self._event_bus)
             self._judgment_client = judgment_client

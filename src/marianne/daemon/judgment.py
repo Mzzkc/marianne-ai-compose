@@ -79,6 +79,10 @@ ResolveFn = Callable[[str, int, str], "tuple[bool, str]"]
 BackendFactory = Callable[[str], "Backend"]
 # Runtime diagnostics provider (#133 shape).
 DiagnosticFn = Callable[[str], "dict[str, Any] | None"]
+# Persist a job's live checkpoint now (GH #382): the judgment counter is
+# the durable cap, so it must reach the registry before the next
+# state-transition persist would otherwise carry it.
+PersistFn = Callable[[str], None]
 
 
 def parse_judgment(text: str) -> tuple[str, float] | None:
@@ -241,11 +245,13 @@ class JudgmentClient:
         backend_factory: BackendFactory,
         diagnostic_fn: DiagnosticFn | None = None,
         max_concurrent: int = 1,
+        persist_fn: PersistFn | None = None,
     ) -> None:
         self._live_states = live_states
         self._resolve_fn = resolve_fn
         self._backend_factory = backend_factory
         self._diagnostic_fn = diagnostic_fn
+        self._persist_fn = persist_fn
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._sub_id: str | None = None
         self._pending: set[tuple[str, int]] = set()
@@ -268,11 +274,14 @@ class JudgmentClient:
         path) BEFORE baton registration, which precedes the re-emit, so an
         event pre-dating this subscription implies the job is already
         visible to this sweep, and a sweep-miss implies the event hasn't
-        fired yet and will arrive after subscription. On a typical restart
-        this sweep finds nothing (orphan recovery is async; RUNNING-at-
-        death jobs classify FAILED) — that is the event path doing the
-        work, not a defect. Double-processing is idempotent: the durable
-        ``judgment_count`` cap + the FERMATA-status check in
+        fired yet and will arrive after subscription. On the restart path
+        this sweep finds nothing by construction (GH #382): orphan recovery
+        spawns resume tasks and returns, so ``_live_states`` is empty when
+        ``start()`` runs, and every restart-recovered fermata reaches the
+        judge through the adapter's re-emit instead. The sweep earns its
+        keep only when a client is started against an already-populated
+        state map (tests, embedding). Double-processing is idempotent: the
+        durable ``judgment_count`` cap + the FERMATA-status check in
         ``resolve_fermata``.
         """
         self._sub_id = event_bus.subscribe(
@@ -465,6 +474,17 @@ class JudgmentClient:
         if not ok:
             sheet.judgment_count -= 1
         self._record(sheet, decision, confidence, rationale, resolved=ok)
+        # GH #382: the counter IS the cap. Persist it now; a crash before the
+        # next state-transition persist must not hand the judge an extra
+        # turn on a sheet it already judged.
+        if ok and self._persist_fn is not None:
+            try:
+                self._persist_fn(job_id)
+            except Exception:
+                _logger.warning(
+                    "judgment.persist_failed", job_id=job_id, sheet_num=sheet_num,
+                    exc_info=True,
+                )
         _logger.info(
             "judgment.decided",
             job_id=job_id,

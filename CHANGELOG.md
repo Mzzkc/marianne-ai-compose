@@ -206,6 +206,14 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **Judgment counter persists on resolution (GH #382).** `judgment_count` is
+  the durable `max_judgments_per_sheet` cap; it is now written to the registry
+  as soon as a judgment resolves instead of riding the next state-transition
+  persist, so a crash in between cannot reset it. The startup sweep's
+  docstring now states that it finds nothing on the restart path by
+  construction and that restart-recovered fermatas reach the judge through
+  the adapter's re-emit.
+
 - **`mzt watch` follows interactive sheets (GH #381).** The interactive driver
   tails the pipe-pane transcript once per poll and hands each new slice to the
   live output sink; the interactive backend exposes `set_output_callback`, so
