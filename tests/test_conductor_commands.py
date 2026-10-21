@@ -253,9 +253,13 @@ class TestStopCommand:
         """``mzt stop --help`` documents --wait."""
         result = runner.invoke(app, ["stop", "--help"], env={"COLUMNS": "200"})
         assert result.exit_code == 0
-        # Rich wraps the option column at CI's 80 columns, splitting the
-        # literal across lines; compare whitespace-collapsed.
-        assert "--wait" in " ".join(result.output.split())
+        # Under CI Rich emits ANSI styling inside the option text and wraps
+        # at 80 columns, so the literal is split by escapes and newlines.
+        # Compare against the plain text.
+        import re
+
+        plain = " ".join(re.sub(r"\x1b\[[0-9;]*m", "", result.output).split())
+        assert "--wait" in plain
 
     def test_stop_default_does_not_wait(self, tmp_path: Path):
         """Default stop is non-blocking: wait_for_conductor_exit is never
