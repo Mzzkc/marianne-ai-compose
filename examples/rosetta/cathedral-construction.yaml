@@ -467,10 +467,9 @@ retry:
   base_delay_seconds: 30
   max_delay_seconds: 900
 
-circuit_breaker:
-  enabled: true
-  failure_threshold: 6
-  recovery_timeout_seconds: 600
+# circuit_breaker: deliberately ABSENT — the score section is reserved (no
+# runtime reader; V327). The conductor's per-instrument breaker is the one
+# that trips.
 
 # CLI gates run silent subprocesses (pytest, mkdocs, genanki) — stale detection
 # must not kill a healthy verification stage (essentials pitfall 24).
@@ -533,7 +532,7 @@ on_success:
   - type: run_job
     job_path: "{workspace}/self-chain.yaml"
     description: "Chain to the next cathedral iteration (ends via the sheet-21 terminator swap)"
-    detached: true
+    # detached: reserved (V327) — a run_job hook never waits on its child.
     fresh: true
 
 prompt:

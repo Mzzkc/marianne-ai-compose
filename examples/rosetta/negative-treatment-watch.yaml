@@ -281,16 +281,18 @@ description: "Negative-Treatment Watch proof — a leased weekly citator over th
 schedule:
   interval: 7d
   timezone: "Europe/Amsterdam"
-  overlap: skip
+  # overlap: reserved (V327) — a tick due while a run is active is always
+  # skipped; there is nothing else to choose.
   misfire: skip
+  # Sheet ceilings sum: M1 1800 + M2 900 + M3 1800 + M4 3600 + M5 3600 +
+  # M6 1800 + M7 900 + M8 1800 + M9 900 + M10 900 + M11 1200 + M12 1500 +
+  # M13 900 + M14 2700 = 24,000 s. Wall = 24,000 + 4,800 headroom (20%).
+  # Separate deadlines are separate authorities: the r9 quarantine taught what
+  # reading the larger number as protective costs. The wall bounds each
+  # SCHEDULED RUN (one tick), not each sheet — which is why it lives here and
+  # not at the root (root max_wall_seconds is deprecated, V328).
+  max_wall_seconds: 28800
 
-# Sheet ceilings sum: M1 1800 + M2 900 + M3 1800 + M4 3600 + M5 3600 +
-# M6 1800 + M7 900 + M8 1800 + M9 900 + M10 900 + M11 1200 + M12 1500 +
-# M13 900 + M14 2700 = 24,000 s. Wall = 24,000 + 4,800 headroom (20%).
-# Separate deadlines are separate authorities: the r9 quarantine taught what
-# reading the larger number as protective costs. The wall bounds each
-# SCHEDULED RUN, not each sheet.
-max_wall_seconds: 28800
 
 instrument: strong            # default applies to the two judgment sheets
 instrument_config:
@@ -500,15 +502,13 @@ retry:
   base_delay_seconds: 30
   max_completion_attempts: 2
 
-# circuit_breaker is wired to its ACTUAL semantics: consecutive sheet
-# failures. If the watch starts failing every cycle (endpoint moved for
-# good), the breaker stops the bleeding — and the un-updated lease makes
-# the stop PUBLIC via the STALE banner. Domain arithmetic (flag rate) never
-# touches this; that gate lives in the sweep script as a count comparison.
-circuit_breaker:
-  enabled: true
-  failure_threshold: 4
-  recovery_timeout_seconds: 3600
+# circuit_breaker: deliberately ABSENT — the score section is reserved (no
+# runtime reader; V327). The breaker that actually trips is the conductor's
+# per-instrument one (consecutive sheet failures, 30 s → 300 s recovery). If
+# the watch starts failing every cycle (endpoint moved for good) that breaker
+# stops the bleeding, and the un-updated lease makes the stop PUBLIC via the
+# STALE banner. Domain arithmetic (flag rate) never touches this; that gate
+# lives in the sweep script as a count comparison.
 
 cost_limits:
   enabled: true

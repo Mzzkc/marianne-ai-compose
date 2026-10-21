@@ -759,7 +759,7 @@ on_success:
   - type: run_job
     job_path: "{workspace}/self-chain.yaml"
     description: "Chain to the next falsification round (ends via the movement-15 terminator swap)"
-    detached: true
+    # detached: reserved (V327) — a run_job hook never waits on its child.
     fresh: true
 
 prompt:

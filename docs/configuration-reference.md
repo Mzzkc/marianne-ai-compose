@@ -296,12 +296,12 @@ it receives V327; the retained syntax below does not enable Ollama MCP tools.
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `enabled` | `bool` | `false` | | Enable bridge mode (Ollama with MCP tools) |
-| `mcp_proxy_enabled` | `bool` | `true` | | Enable MCP server proxy for tool access |
+| `mcp_proxy_enabled` | `bool` | `true` | | Reserved: no runtime reader (V327 warns when set). Enable MCP server proxy for tool access |
 | `mcp_servers` | `list[MCPServerConfig]` | `[]` | | MCP servers to connect to |
-| `hybrid_routing_enabled` | `bool` | `false` | | Enable hybrid routing between Ollama and Claude |
-| `complexity_threshold` | `float` | `0.7` | `0.0–1.0` | Complexity threshold for routing to Claude |
-| `fallback_to_claude` | `bool` | `true` | | Fall back to Claude if Ollama execution fails |
-| `context_budget_percent` | `int` | `75` | `10–95` | Percent of context window for tools (rest for conversation) |
+| `hybrid_routing_enabled` | `bool` | `false` | | Reserved: no runtime reader (V327 warns when set). Enable hybrid routing between Ollama and Claude |
+| `complexity_threshold` | `float` | `0.7` | `0.0–1.0` | Reserved: no runtime reader (V327 warns when set). Complexity threshold for routing to Claude |
+| `fallback_to_claude` | `bool` | `true` | | Reserved: no runtime reader (V327 warns when set). Fall back to Claude if Ollama execution fails |
+| `context_budget_percent` | `int` | `75` | `10–95` | Reserved: no runtime reader (V327 warns when set). Percent of context window for tools (rest for conversation) |
 
 ### MCP Server Sub-Config
 
@@ -583,7 +583,7 @@ Enables running multiple sheets concurrently when the dependency DAG permits.
 | `max_concurrent` | `int` | `3` | `1–10` | Maximum sheets to execute concurrently |
 | `fail_fast` | `bool` | `true` | | Stop starting new sheets when one fails |
 | `stagger_delay_ms` | `int` | `0` | `0–5000` | Delay in milliseconds between launching parallel sheets. Reduces rate limit surge when many sheets hit the same API. |
-| `budget_partition` | `bool` | `true` | **Not yet implemented** | Partition cost budget across parallel branches. Accepted but not enforced; cost checks use global total. |
+| `budget_partition` | `bool` | `true` | **Not yet implemented** | Reserved: no runtime reader (V327 warns when set). Partition cost budget across parallel branches. Accepted but not enforced; cost checks use global total. |
 
 ```yaml
 parallel:
@@ -611,7 +611,7 @@ Controls retry behavior including partial completion recovery.
 | `startup_failure_floor_seconds` | `float` | `120.0` | `>= 0` | Minimum backoff after a startup failure: an attempt that exited non-zero within `startup_failure_window_seconds` did no work (the harness could not boot: locked local store, session not found, provider refused at launch). Raises the computed backoff to at least this; a longer backoff is unchanged; `0` disables (GH #470) |
 | `startup_failure_window_seconds` | `float` | `60.0` | `> 0` | An execution failure whose attempt lasted no longer than this is a startup failure. Timeouts, signals and rate limits never are |
 | `max_completion_attempts` | `int` | `5` | `>= 0` | Maximum completion prompt attempts before full retry |
-| `completion_delay_seconds` | `float` | `5.0` | `>= 0` | Delay between completion attempts (seconds) |
+| `completion_delay_seconds` | `float` | `5.0` | `>= 0` | Reserved: no runtime reader (V327 warns when set). Delay between completion attempts (seconds) |
 | `completion_threshold_percent` | `float` | `50.0` | `> 0`, `<= 100` | Minimum pass percentage to trigger completion mode |
 
 **Completion mode:** When a sheet partially passes validation (more than `completion_threshold_percent`), Marianne sends a targeted "complete the remaining work" prompt instead of a full retry. This is more efficient and preserves already-completed work.
@@ -646,9 +646,9 @@ handling; the table below describes retained syntax, not active behaviour.
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `detection_patterns` | `list[str]` | `["rate.?limit", "usage.?limit", "quota", "too many requests", "429", "capacity", "try again later"]` | Must be valid regex | Regex patterns to detect rate limiting in output |
-| `wait_minutes` | `int` | `60` | `>= 1` | Minutes to wait when rate limited |
-| `max_waits` | `int` | `24` | `>= 1` | Maximum wait cycles (24 = 24 hours) |
-| `max_quota_waits` | `int` | `48` | `>= 1` | Maximum quota exhaustion wait cycles before failing (48 = 48 hours at 60min/wait) |
+| `wait_minutes` | `int` | `60` | `>= 1` | Reserved: no runtime reader (V327 warns when set). Minutes to wait when rate limited |
+| `max_waits` | `int` | `24` | `>= 1` | Reserved: no runtime reader (V327 warns when set). Maximum wait cycles (24 = 24 hours) |
+| `max_quota_waits` | `int` | `48` | `>= 1` | Reserved: no runtime reader (V327 warns when set). Maximum quota exhaustion wait cycles before failing (48 = 48 hours at 60min/wait) |
 
 ```yaml
 rate_limit:
@@ -674,7 +674,7 @@ active CLOSED → OPEN → HALF_OPEN behaviour.
 |-------|------|---------|-------------|-------------|
 | `enabled` | `bool` | `true` | | Enable circuit breaker pattern |
 | `failure_threshold` | `int` | `5` | `1–100` | Consecutive failures before opening circuit |
-| `recovery_timeout_seconds` | `float` | `300.0` | `> 0`, `<= 3600` | Seconds in OPEN state before testing recovery (max 1 hour) |
+| `recovery_timeout_seconds` | `float` | `300.0` | `> 0`, `<= 3600` | Reserved: no runtime reader (V327 warns when set). Seconds in OPEN state before testing recovery (max 1 hour) |
 | `cross_workspace_coordination` | `bool` | `true` | | Reserved. In-process cross-job rate-limit coordination is structural (all jobs share one conductor) and always on; reserved for future cross-process coordination. |
 | `honor_other_jobs_rate_limits` | `bool` | `true` | | Reserved. A rate limit detected by any job already pauses dispatch to that instrument for all jobs (matches this default). Setting `false` has no effect in-process. |
 
@@ -702,9 +702,9 @@ otherwise successful attempt.
 | `enabled` | `bool` | `false` | | Enable cost tracking and limit enforcement |
 | `max_cost_per_sheet` | `float \| None` | `None` | `> 0` | Maximum cost per sheet in USD |
 | `max_cost_per_job` | `float \| None` | `None` | `> 0` | Maximum cost for entire score in USD |
-| `cost_per_1k_input_tokens` | `float` | `0.003` | `> 0` | Cost per 1000 input tokens (Claude Sonnet default: $0.003) |
-| `cost_per_1k_output_tokens` | `float` | `0.015` | `> 0` | Cost per 1000 output tokens (Claude Sonnet default: $0.015) |
-| `warn_at_percent` | `float` | `80.0` | `> 0`, `<= 100` | Emit warning at this percentage of limit |
+| `cost_per_1k_input_tokens` | `float` | `0.003` | `> 0` | Reserved: no runtime reader (V327 warns when set). Cost per 1000 input tokens (Claude Sonnet default: $0.003) |
+| `cost_per_1k_output_tokens` | `float` | `0.015` | `> 0` | Reserved: no runtime reader (V327 warns when set). Cost per 1000 output tokens (Claude Sonnet default: $0.015) |
+| `warn_at_percent` | `float` | `80.0` | `> 0`, `<= 100` | Reserved: no runtime reader (V327 warns when set). Emit warning at this percentage of limit |
 
 **Model-specific rates:** Default rates are for Claude Sonnet. For Opus, use `cost_per_1k_input_tokens: 0.015` and `cost_per_1k_output_tokens: 0.075`.
 
@@ -924,7 +924,7 @@ Git worktree isolation for parallel-safe score execution. Each score runs in an 
 | `enabled` | `bool` | `false` | | Enable worktree isolation |
 | `mode` | `"none" \| "worktree"` | `"worktree"` | | Isolation method. Currently only `worktree` is supported. |
 | `worktree_base` | `Path \| None` | `None` | | Directory for worktrees. `None` resolves to `<repo>/.worktrees` at runtime. |
-| `branch_prefix` | `str` | `"marianne"` | Pattern: `^[a-zA-Z][a-zA-Z0-9_-]*$` | Prefix for worktree branch names. Format: `{prefix}/{job-id}` |
+| `branch_prefix` | `str` | `"marianne"` | Pattern: `^[a-zA-Z][a-zA-Z0-9_-]*$` | Reserved: no runtime reader (V327 warns when set). Prefix for worktree branch names. Format: `{prefix}/{job-id}` |
 | `source_branch` | `str \| None` | `None` | | Branch to base worktree on. Default: current branch (HEAD). |
 | `cleanup_on_success` | `bool` | `true` | | Remove worktree after successful score completion |
 | `cleanup_on_failure` | `bool` | `false` | | Remove worktree when score fails. Default `false` for debugging. |
@@ -948,14 +948,16 @@ isolation:
 
 *Source: `src/marianne/core/config/learning.py` — `GroundingConfig`*
 
-External grounding hooks validate sheet outputs against external sources to prevent model drift.
+Reserved score section: no runtime code reads `grounding:`. A score that sets
+it receives V327. The table below describes retained syntax, not an active
+grounding pass; validate outputs with `validations:` instead.
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `enabled` | `bool` | `false` | | Enable external grounding hooks |
 | `hooks` | `list[GroundingHookConfig]` | `[]` | | Grounding hook configurations |
-| `fail_on_grounding_failure` | `bool` | `true` | | Fail validation if grounding fails |
-| `escalate_on_failure` | `bool` | `true` | | Escalate to human if grounding fails (requires escalation handler) |
+| `fail_on_grounding_failure` | `bool` | `true` | | Reserved: no runtime reader (V327 warns when set). Fail validation if grounding fails |
+| `escalate_on_failure` | `bool` | `true` | | Reserved: no runtime reader (V327 warns when set). Escalate to human if grounding fails (requires escalation handler) |
 | `timeout_seconds` | `float` | `30.0` | `> 0` | Maximum time per grounding hook |
 
 ### Grounding Hook Sub-Config
@@ -966,8 +968,8 @@ External grounding hooks validate sheet outputs against external sources to prev
 |-------|------|---------|-------------|-------------|
 | `type` | `"file_checksum"` | **required** | | Hook type |
 | `name` | `str \| None` | `None` | | Custom name (uses type if not specified) |
-| `expected_checksums` | `dict[str, str]` | `{}` | | Map of file path to expected checksum |
-| `checksum_algorithm` | `"md5" \| "sha256"` | `"sha256"` | | Checksum algorithm |
+| `expected_checksums` | `dict[str, str]` | `{}` | | Reserved: no runtime reader (V327 warns when set). Map of file path to expected checksum |
+| `checksum_algorithm` | `"md5" \| "sha256"` | `"sha256"` | | Reserved: no runtime reader (V327 warns when set). Checksum algorithm |
 
 ```yaml
 grounding:
@@ -992,8 +994,8 @@ Identifies who (or what) is conducting the job. Affects escalation behavior and 
 |-------|------|---------|-------------|-------------|
 | `name` | `str` | `"default"` | 1–100 chars | Human-readable conductor name |
 | `role` | `"human" \| "ai" \| "hybrid"` | `"human"` | | Role classification |
-| `identity_context` | `str \| None` | `None` | Max 500 chars | Brief description of the conductor's identity/purpose |
-| `preferences` | `ConductorPreferences` | *(see sub-config)* | | Conductor interaction preferences |
+| `identity_context` | `str \| None` | `None` | Max 500 chars | Reserved: no runtime reader (V327 warns when set). Brief description of the conductor's identity/purpose |
+| `preferences` | `ConductorPreferences` | *(see sub-config)* | | Reserved: no runtime reader (V327 warns when set). Conductor interaction preferences |
 
 ### Conductor Preferences Sub-Config
 
@@ -1001,10 +1003,10 @@ Identifies who (or what) is conducting the job. Affects escalation behavior and 
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| `prefer_minimal_output` | `bool` | `false` | | Reduce console output verbosity |
-| `escalation_response_timeout_seconds` | `float` | `300.0` | `> 0` | Maximum time to wait for escalation response (defaults to abort after timeout) |
-| `auto_retry_on_transient_errors` | `bool` | `true` | | Automatically retry transient errors before escalating |
-| `notification_channels` | `list[str]` | `[]` | | Preferred notification channels. Empty = use job-level settings. |
+| `prefer_minimal_output` | `bool` | `false` | | Reserved: no runtime reader (V327 warns when set). Reduce console output verbosity |
+| `escalation_response_timeout_seconds` | `float` | `300.0` | `> 0` | Reserved: no runtime reader (V327 warns when set). Maximum time to wait for escalation response (defaults to abort after timeout) |
+| `auto_retry_on_transient_errors` | `bool` | `true` | | Reserved: no runtime reader (V327 warns when set). Automatically retry transient errors before escalating |
+| `notification_channels` | `list[str]` | `[]` | | Reserved: no runtime reader (V327 warns when set). Preferred notification channels. Empty = use job-level settings. |
 
 ```yaml
 conductor:
@@ -1030,7 +1032,7 @@ Concert orchestration chains multiple jobs in sequence. Each job can dynamically
 | `max_chain_depth` | `int` | `5` | `1–100` | Maximum chained jobs. Prevents infinite loops. |
 | `cooldown_between_jobs_seconds` | `float` | `30.0` | `>= 0` | Minimum wait between job transitions |
 | `inherit_workspace` | `bool` | `true` | | Child jobs inherit parent workspace if not explicitly specified |
-| `concert_log_path` | `Path \| None` | `None` | | Consolidated concert log (default: `workspace/concert.log`) |
+| `concert_log_path` | `Path \| None` | `None` | | Reserved: no runtime reader (V327 warns when set). Consolidated concert log (default: `workspace/concert.log`) |
 | `abort_concert_on_hook_failure` | `bool` | `false` | | Abort entire concert if any hook fails |
 
 ```yaml
@@ -1061,7 +1063,7 @@ on_failure:
 | `type` | `"run_job" \| "run_command" \| "run_script"` | **required** | | Hook type |
 | `job_path` | `Path \| None` | `None` | Required for `run_job` | Path to job config YAML. Supports `{workspace}` template. |
 | `job_workspace` | `Path \| None` | `None` | | Override workspace for chained job |
-| `inherit_learning` | `bool` | `true` | | Chained job shares outcome store with parent |
+| `inherit_learning` | `bool` | `true` | | Reserved: no runtime reader (V327 warns when set). Chained job shares outcome store with parent |
 | `command` | `str \| None` | `None` | Required for `run_command`/`run_script` | Shell command or script path. Supports `{workspace}`, `{job_id}`, `{sheet_count}`. |
 | `working_directory` | `Path \| None` | `None` | | Working directory for command (default: job workspace) |
 | `description` | `str \| None` | `None` | | Human-readable description |
@@ -1119,20 +1121,20 @@ Controls outcome recording, confidence thresholds, pattern application, and esca
 |-------|------|---------|-------------|-------------|
 | `enabled` | `bool` | `true` | | Enable learning and outcome recording |
 | `outcome_store_type` | `"json" \| "sqlite"` | `"json"` | | Backend for storing learning outcomes |
-| `outcome_store_path` | `Path \| None` | `None` | | Path for outcome store (default: `workspace/.marianne-outcomes.json`) |
-| `min_confidence_threshold` | `float` | `0.3` | `0.0–1.0` | Confidence below this triggers escalation (if enabled) |
-| `high_confidence_threshold` | `float` | `0.7` | `0.0–1.0` | Confidence above this uses completion mode for partial failures |
+| `outcome_store_path` | `Path \| None` | `None` | | Reserved: no runtime reader (V327 warns when set). Path for outcome store (default: `workspace/.marianne-outcomes.json`) |
+| `min_confidence_threshold` | `float` | `0.3` | `0.0–1.0` | Reserved: no runtime reader (V327 warns when set). Confidence below this triggers escalation (if enabled) |
+| `high_confidence_threshold` | `float` | `0.7` | `0.0–1.0` | Reserved: no runtime reader (V327 warns when set). Confidence above this uses completion mode for partial failures |
 | `escalation_enabled` | `bool` | `false` | | Enable escalation for low-confidence decisions |
 | `use_global_patterns` | `bool` | `true` | | Query and apply patterns from global learning store |
-| `exploration_rate` | `float` | `0.15` | `0.0–1.0` | Epsilon-greedy exploration rate. 0.0 = pure exploitation, 1.0 = try everything. |
-| `exploration_min_priority` | `float` | `0.05` | `0.0–1.0` | Minimum priority threshold for exploration candidates |
-| `entropy_alert_threshold` | `float` | `0.5` | `0.0–1.0` | Shannon entropy below this triggers alert for low diversity |
-| `entropy_check_interval` | `int` | `100` | `>= 1` | Check entropy every N pattern applications |
-| `auto_apply_enabled` | `bool` | `false` | **Deprecated** — use `auto_apply` block | Enable auto-apply for high-trust patterns |
-| `auto_apply_trust_threshold` | `float` | `0.85` | `0.0–1.0` | **Deprecated** — use `auto_apply` block | Minimum trust score to auto-apply |
+| `exploration_rate` | `float` | `0.15` | `0.0–1.0` | Reserved: no runtime reader (V327 warns when set). Epsilon-greedy exploration rate. 0.0 = pure exploitation, 1.0 = try everything. |
+| `exploration_min_priority` | `float` | `0.05` | `0.0–1.0` | Reserved: no runtime reader (V327 warns when set). Minimum priority threshold for exploration candidates |
+| `entropy_alert_threshold` | `float` | `0.5` | `0.0–1.0` | Reserved: no runtime reader (V327 warns when set). Shannon entropy below this triggers alert for low diversity |
+| `entropy_check_interval` | `int` | `100` | `>= 1` | Reserved: no runtime reader (V327 warns when set). Check entropy every N pattern applications |
+| `auto_apply_enabled` | `bool` | `false` | **Deprecated** — use `auto_apply` block | Reserved: no runtime reader (V327 warns when set). Enable auto-apply for high-trust patterns |
+| `auto_apply_trust_threshold` | `float` | `0.85` | `0.0–1.0` | **Deprecated** — use `auto_apply` block | Reserved: no runtime reader (V327 warns when set). Minimum trust score to auto-apply |
 | `exploration_budget` | `ExplorationBudgetConfig` | *(see sub-config)* | | Dynamic exploration budget configuration |
-| `entropy_response` | `EntropyResponseConfig` | *(see sub-config)* | | Automatic entropy response configuration |
-| `auto_apply` | `AutoApplyConfig \| None` | `None` | | Structured autonomous pattern application config (replaces flat fields) |
+| `entropy_response` | `EntropyResponseConfig` | *(see sub-config)* | | Reserved: no runtime reader (V327 warns when set). Automatic entropy response configuration |
+| `auto_apply` | `AutoApplyConfig \| None` | `None` | | Reserved: no runtime reader (V327 warns when set). Structured autonomous pattern application config (replaces flat fields) |
 
 ### Exploration Budget Sub-Config
 
@@ -1143,11 +1145,11 @@ Nested under `learning.exploration_budget`. Maintains a dynamic exploration budg
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `enabled` | `bool` | `false` | | Enable dynamic exploration budget |
-| `floor` | `float` | `0.05` | `0.0–1.0`, must be `<= ceiling` | Minimum exploration budget (never below this) |
-| `ceiling` | `float` | `0.50` | `0.0–1.0` | Maximum exploration budget |
-| `decay_rate` | `float` | `0.95` | `0.0–1.0` | Decay per check interval. `budget = max(floor, budget * decay_rate)` |
-| `boost_amount` | `float` | `0.10` | `0.0–0.5` | Budget boost when entropy is low. `budget = min(ceiling, budget + boost_amount)` |
-| `initial_budget` | `float` | `0.15` | `0.0–1.0`, must be between floor and ceiling | Starting exploration budget |
+| `floor` | `float` | `0.05` | `0.0–1.0`, must be `<= ceiling` | Reserved: no runtime reader (V327 warns when set). Minimum exploration budget (never below this) |
+| `ceiling` | `float` | `0.50` | `0.0–1.0` | Reserved: no runtime reader (V327 warns when set). Maximum exploration budget |
+| `decay_rate` | `float` | `0.95` | `0.0–1.0` | Reserved: no runtime reader (V327 warns when set). Decay per check interval. `budget = max(floor, budget * decay_rate)` |
+| `boost_amount` | `float` | `0.10` | `0.0–0.5` | Reserved: no runtime reader (V327 warns when set). Budget boost when entropy is low. `budget = min(ceiling, budget + boost_amount)` |
+| `initial_budget` | `float` | `0.15` | `0.0–1.0`, must be between floor and ceiling | Reserved: no runtime reader (V327 warns when set). Starting exploration budget |
 
 ### Entropy Response Sub-Config
 
@@ -1173,10 +1175,10 @@ Nested under `learning.auto_apply`. Enables high-trust patterns to be applied wi
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `enabled` | `bool` | `false` | | Enable autonomous pattern application |
-| `trust_threshold` | `float` | `0.85` | `0.0–1.0` | Minimum trust score for autonomous application |
-| `max_patterns_per_sheet` | `int` | `3` | `1–10` | Maximum patterns to auto-apply per sheet |
-| `require_validated_status` | `bool` | `true` | | Require patterns to have VALIDATED quarantine status |
-| `log_applications` | `bool` | `true` | | Log when patterns are auto-applied |
+| `trust_threshold` | `float` | `0.85` | `0.0–1.0` | Reserved: no runtime reader (V327 warns when set). Minimum trust score for autonomous application |
+| `max_patterns_per_sheet` | `int` | `3` | `1–10` | Reserved: no runtime reader (V327 warns when set). Maximum patterns to auto-apply per sheet |
+| `require_validated_status` | `bool` | `true` | | Reserved: no runtime reader (V327 warns when set). Require patterns to have VALIDATED quarantine status |
+| `log_applications` | `bool` | `true` | | Reserved: no runtime reader (V327 warns when set). Log when patterns are auto-applied |
 
 ```yaml
 learning:
@@ -1239,15 +1241,17 @@ checkpoints:
 
 *Source: `src/marianne/core/config/workspace.py` — `AIReviewConfig`*
 
-AI-powered code review after batch execution with scoring.
+Reserved score section: no runtime code reads `ai_review:`. A score that sets
+it receives V327. The table below describes retained syntax, not an active
+reviewer pass; a review is a sheet of its own (see the `review` examples).
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `enabled` | `bool` | `false` | | Enable AI code review |
 | `min_score` | `int` | `60` | `0–100`, must be `<= target_score` | Minimum score to pass. Below triggers action. |
 | `target_score` | `int` | `80` | `0–100` | Target score for high quality |
-| `on_low_score` | `"retry" \| "warn" \| "fail"` | `"warn"` | | Action when `score < min_score` |
-| `max_retry_for_review` | `int` | `2` | `0–5` | Maximum retries when score is too low |
+| `on_low_score` | `"retry" \| "warn" \| "fail"` | `"warn"` | | Reserved: no runtime reader (V327 warns when set). Action when `score < min_score` |
+| `max_retry_for_review` | `int` | `2` | `0–5` | Reserved: no runtime reader (V327 warns when set). Maximum retries when score is too low |
 | `review_prompt_template` | `str \| None` | `None` | | Custom prompt template for review |
 
 ```yaml
@@ -1276,8 +1280,8 @@ table below describes retained score syntax, not active log routing.
 | `file_path` | `Path \| None` | `None` | | Log file output path |
 | `max_file_size_mb` | `int` | `50` | `1–1000` | Maximum log file size before rotation (MB). Rotation renames inline; gzip runs on a helper thread so the event loop never waits on it |
 | `backup_count` | `int` | `5` | `0–100` | Rotated log files to keep |
-| `include_timestamps` | `bool` | `true` | | Include ISO8601 UTC timestamps |
-| `include_context` | `bool` | `true` | | Include bound context (job_id, sheet_num) |
+| `include_timestamps` | `bool` | `true` | | Reserved: no runtime reader (V327 warns when set). Include ISO8601 UTC timestamps |
+| `include_context` | `bool` | `true` | | Reserved: no runtime reader (V327 warns when set). Include bound context (job_id, sheet_num) |
 
 ```yaml
 logging:
@@ -1292,7 +1296,9 @@ logging:
 
 *Source: `src/marianne/core/config/workspace.py` — `FeedbackConfig`*
 
-Extracts structured feedback from agent output after each sheet.
+Reserved score section: no runtime code reads `feedback:`. A score that sets
+it receives V327. The table below describes retained syntax, not an active
+extraction step.
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|

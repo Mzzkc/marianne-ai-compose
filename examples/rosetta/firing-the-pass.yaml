@@ -336,13 +336,9 @@ instruments:
     profile: opencode
     config: {timeout_seconds: 1500}
 
-# Circuit breaker — verified semantics only: trips on CONSECUTIVE SHEET
-# FAILURES (execution.py), never on spend. 7 judgment sheets; 3 failures
-# means the fan-out is sick, not unlucky.
-circuit_breaker:
-  enabled: true
-  failure_threshold: 3
-  recovery_timeout_seconds: 600
+# circuit_breaker: deliberately ABSENT — the score section is reserved (no
+# runtime reader; V327). The conductor's per-instrument breaker (5 consecutive
+# failures, 30 s → 300 s recovery backoff) already guards this fan-out.
 
 movements:
   # ── Phase 1 · The clock before the work — Firing the Pass stage 1 ──────────

@@ -33,7 +33,7 @@
 # How to Adapt:
 #   - Change project_path to point at YOUR project directory
 #   - Adjust analysis_focus to highlight different health dimensions
-#   - Change logging.level to "INFO" for quieter score-local output
+#   - Set the conductor's log_level back to "info" for quieter logs
 #
 # Output:
 #   workspaces/observability-demo/
@@ -87,11 +87,11 @@ cross_sheet:
 # ============================================================
 # OBSERVABILITY CONFIGURATION
 # ============================================================
-# These settings maximize what you can observe during execution.
-# In production, you would typically use level: INFO.
-
-logging:
-  level: DEBUG              # Capture all log levels for learning     # Add job_id, sheet_num to log entries
+# Log level is the CONDUCTOR's setting, not the score's: the score-level
+# `logging:` section is reserved (no runtime reader; V327). To capture DEBUG
+# for this walkthrough set `log_level: debug` in ~/.marianne/conductor.yaml
+# (or start with `mzt start --log-level debug`) and read it back with
+# `mzt logs observability-demo --level DEBUG`.
 
 # Job state lives in the conductor's registry (inspect it with
 # `mzt status <job> --json`); there is no per-workspace state file to pick.

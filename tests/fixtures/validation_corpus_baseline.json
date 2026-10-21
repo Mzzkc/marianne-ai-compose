@@ -973,8 +973,7 @@
     },
     "venue:examples/getting-started/observability-demo.yaml": {
       "issues": {
-        "V325": 1,
-        "V327": 1
+        "V325": 1
       },
       "parse": "ok"
     },
@@ -1105,8 +1104,7 @@
     },
     "venue:examples/rosetta/cathedral-construction.yaml": {
       "issues": {
-        "V202": 1,
-        "V327": 2
+        "V202": 1
       },
       "parse": "ok"
     },
@@ -1117,9 +1115,7 @@
       "parse": "ok"
     },
     "venue:examples/rosetta/firing-the-pass.yaml": {
-      "issues": {
-        "V327": 1
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:examples/rosetta/join-semilattice-merge.yaml": {
@@ -1131,10 +1127,7 @@
       "parse": "ok"
     },
     "venue:examples/rosetta/negative-treatment-watch.yaml": {
-      "issues": {
-        "V327": 2,
-        "V328": 1
-      },
+      "issues": {},
       "parse": "ok",
       "reason": "Root max_wall_seconds is the one-release tick-window alias; V328 names schedule.max_wall_seconds."
     },
@@ -1155,9 +1148,7 @@
       "parse": "ok"
     },
     "venue:examples/rosetta/the-unprimed-falsifier.yaml": {
-      "issues": {
-        "V327": 1
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:scores/generic-fleet-technique-research.yaml": {

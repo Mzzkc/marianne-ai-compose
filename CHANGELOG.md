@@ -48,6 +48,13 @@ readable default-off section (`parallel`, `stale_detection`, `isolation`,
 `code_execution`, `judgment`, `concert`) with settings but no `enabled:` warns
 V329 this release; from the next release those settings enable their section.
 Write `enabled: true` now, or explicit `enabled: false` to keep it off.
+The configuration reference now carries that mark on every one of the 60
+score keys the runtime does not read (the language checker's L08 list, the
+audit GH #353 asked for), `grounding:`, `ai_review:` and `feedback:` are
+introduced as reserved sections, the getting-started, score-writing and
+troubleshooting guides stop teaching `rate_limit.wait_minutes` as the way to
+configure waits (detection is the instrument profile's
+`rate_limit_patterns`), and no shipped example sets a reserved key any more.
 
 **New checks you may see:** V010 curated typo hints now fire at any depth (an
 unknown `timeout` beside a trigger action names `instrument_config.timeout_seconds`);
