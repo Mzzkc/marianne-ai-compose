@@ -414,6 +414,10 @@ ruff check src/      # Lint
 - **Contributing:** [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - **Issues & roadmap:** [GitHub Issues](https://github.com/Mzzkc/marianne-ai-compose/issues)
   · [`docs/roadmap.md`](docs/roadmap.md)
+- **Documentation site:** [mzzkc.github.io/marianne-ai-compose](https://mzzkc.github.io/marianne-ai-compose/)
+  — these docs, rendered and searchable
+- **Product site:** [mzt.dev](https://mzt.dev/) — what Marianne is, how it works,
+  the evidence archive
 
 Build the documentation site locally:
 

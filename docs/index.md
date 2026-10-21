@@ -19,6 +19,11 @@ The music metaphor isn't just aesthetic. It's structural. Scores, sheets, moveme
 A tool named after a silenced prodigy, built to coordinate collaborative
 intelligence through inspectable scores. That's what this is.
 
+## Where Else Marianne Lives
+
+- **Source and issues:** [github.com/Mzzkc/marianne-ai-compose](https://github.com/Mzzkc/marianne-ai-compose)
+- **Product site:** [mzt.dev](https://mzt.dev/) — what Marianne is, how it works, the evidence archive
+
 ## Suggested Reading Paths
 
 **New Users:**
