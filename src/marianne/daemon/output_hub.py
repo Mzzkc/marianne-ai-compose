@@ -21,10 +21,30 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections import deque
 from collections.abc import Callable
 
 from marianne.utils.credential_scanner import redact_credentials
+
+# Terminal control sequences: CSI (ESC [ ... final), OSC (ESC ] ... BEL or
+# ESC \), other two-byte ESC sequences, and C0/DEL control bytes except tab.
+# Stripped BEFORE redaction so a credential a TUI redraws around cursor moves
+# is seen whole by the scanner, and BEFORE fan-out so no subscriber's terminal
+# can be driven by what a musician printed (interactive transcripts are raw
+# pipe-pane bytes; GH #381 security review).
+_CONTROL_RE = re.compile(
+    r"\x1b\[[0-?]*[ -/]*[@-~]"          # CSI
+    r"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"  # OSC
+    r"|\x1b[ -/]+[0-~]"                # ESC + intermediate(s) + final (charset designators)
+    r"|\x1b[@-Z\\-_]"                  # two-byte ESC sequences
+    r"|[\x00-\x08\x0b-\x1f\x7f]"        # C0 (not \t, \n handled by split) + DEL
+)
+
+
+def strip_terminal_controls(text: str) -> str:
+    """Remove escape sequences and control bytes; keep tabs and printable text."""
+    return _CONTROL_RE.sub("", text)
 
 _logger = logging.getLogger("daemon.output_hub")
 
@@ -91,6 +111,11 @@ class SheetOutputBuffer:
         out: list[str] = []
         for raw in complete:
             text = raw.decode("utf-8", errors="replace")
+            # Carriage-return redraws (progress bars, TUIs) leave the last
+            # segment as the visible line; earlier segments were overwritten.
+            if "\r" in text:
+                text = text.rsplit("\r", 1)[-1]
+            text = strip_terminal_controls(text)
             text = redact_credentials(text)
             if stream == "stderr":
                 text = f"[stderr] {text}"

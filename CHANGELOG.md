@@ -61,6 +61,15 @@ an alias over an existing profile; archive what nothing names.
 
 ### Added
 
+- **`mzt run --require-lock LOCK` (GH #403).** An opt-in admission gate: the
+  conductor verifies the composition lock the release gate wrote
+  (`check_score_release.py --write-lock`) against the exact score bytes it is
+  about to parse, and refuses a missing, stale, unreadable or malformed lock
+  with that reason. Unlocked submission is unchanged. Also: the output hub
+  strips terminal control sequences before redaction and fan-out, so an
+  interactive transcript cannot drive a watcher's terminal and a credential a
+  TUI redraws around cursor moves is still redacted.
+
 - **Orchestra view (GH #468).** `mzt dashboard` serves `/orchestra`: every score
   on stage, each sheet a cell coloured by state, the instrument it plays on, a
   beat log, live over SSE, with a replay transport for any recorded day. The

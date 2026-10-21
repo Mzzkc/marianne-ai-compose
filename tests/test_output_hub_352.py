@@ -14,6 +14,8 @@ Contract under test (lab design, ~/lab-archives/2026-06-11-streaming-352):
 
 from __future__ import annotations
 
+from typing import Any
+
 from marianne.daemon.output_hub import (
     SUBSCRIBER_QUEUE_SIZE,
     OutputStreamHub,
@@ -207,3 +209,45 @@ class TestInstrumentSeam:
         result = await instrument.execute("print('quiet')", timeout_seconds=30)
         assert result.success is True
         assert received == []
+
+
+def _drain(sub: Any) -> list[str]:
+    out: list[str] = []
+    while not sub.queue.empty():
+        out.append(sub.queue.get_nowait())
+    return out
+
+
+class TestTerminalControlsStripped:
+    """Interactive transcripts are raw pipe-pane bytes (GH #381): escape
+    sequences must never reach a subscriber's terminal, and a credential a
+    TUI redraws around cursor moves must still be seen whole by redaction."""
+
+    def test_csi_osc_and_c0_are_removed(self) -> None:
+        from marianne.daemon.output_hub import strip_terminal_controls
+
+        raw = "\x1b[31mred\x1b[0m \x1b]0;title\x07 \x1b(B\x07bell \x00nul\ttab"
+        assert strip_terminal_controls(raw) == "red  bell nul\ttab"
+
+    def test_subscriber_never_sees_escape_sequences(self) -> None:
+        hub = OutputStreamHub()
+        sub = hub.subscribe("job", 1)
+        hub.make_writer("job", 1)("stdout", b"\x1b[2J\x1b[H\x1b]52;c;cGVsbG8=\x07hello\n")
+        got = _drain(sub)
+        assert got == ["hello"]
+        assert all("\x1b" not in line for line in got)
+
+    def test_credential_split_by_cursor_moves_is_still_redacted(self) -> None:
+        hub = OutputStreamHub()
+        sub = hub.subscribe("job", 1)
+        key = "sk-ant-api03-" + "A" * 40
+        chunk = (key[:10] + "\x1b[5C" + key[10:20] + "\x1b[0m" + key[20:] + "\n").encode()
+        hub.make_writer("job", 1)("stdout", chunk)
+        got = _drain(sub)
+        assert got and key not in got[0] and "A" * 40 not in got[0]
+
+    def test_carriage_return_keeps_the_last_redraw(self) -> None:
+        hub = OutputStreamHub()
+        sub = hub.subscribe("job", 1)
+        hub.make_writer("job", 1)("stdout", b"10%\r50%\r100% done\n")
+        assert _drain(sub) == ["100% done"]

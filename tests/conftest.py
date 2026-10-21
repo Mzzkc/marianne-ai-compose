@@ -48,6 +48,28 @@ def pytest_sessionfinish(
 
 
 @pytest.fixture(autouse=True)
+def _no_venue_class_layer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    """The venue class layer is ``<cwd>/.marianne/classes.yaml``. A developer
+    checkout may carry one (Pallas seats GLM there); tests that reason about
+    the packaged default must not see it. Tests that want a venue layer
+    patch ``class_source_paths`` themselves.
+    """
+    from marianne.instruments import classes
+
+    original = classes.class_source_paths
+    absent = tmp_path_factory.mktemp("no-venue") / "classes.yaml"
+
+    def isolated(*, user_path: Path | None = None, venue_path: Path | None = None):  # type: ignore[no-untyped-def]
+        return original(
+            user_path=user_path, venue_path=venue_path if venue_path is not None else absent,
+        )
+
+    monkeypatch.setattr(classes, "class_source_paths", isolated)
+
+
+@pytest.fixture(autouse=True)
 def _no_host_registry_in_doctor(monkeypatch: pytest.MonkeyPatch) -> None:
     """`mzt doctor`'s instrument-hygiene scan parses every score the host's
     conductor was ever given (GH #443). A test that invokes doctor must never

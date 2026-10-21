@@ -117,6 +117,15 @@ def run(
         "the score file also triggers this automatically for completed "
         "scores.)",
     ),
+    require_lock: Path | None = typer.Option(
+        None,
+        "--require-lock",
+        help="Admission gate: refuse unless this composition lock (written by "
+        "the composing skill's release gate, check_score_release.py "
+        "--write-lock) attests the exact score bytes. A missing, stale or "
+        "malformed lock rejects the job with a specific reason. Omit for "
+        "ordinary unlocked submission.",
+    ),
     var: list[str] | None = typer.Option(
         None,
         "--var",
@@ -253,6 +262,7 @@ def run(
             start_sheet=start_sheet,
             escalation=escalation,
             runtime_vars=runtime_vars,
+            require_lock=require_lock,
         ),
     )
     if routed:
@@ -311,6 +321,7 @@ async def _try_daemon_submit(
     start_sheet: int | None = None,
     escalation: bool = False,
     runtime_vars: dict[str, str] | None = None,
+    require_lock: Path | None = None,
 ) -> bool:
     """Submit a job to the running conductor.
 
@@ -345,6 +356,8 @@ async def _try_daemon_submit(
             params["start_sheet"] = start_sheet
         if runtime_vars:
             params["runtime_variables"] = runtime_vars
+        if require_lock is not None:
+            params["required_lock"] = str(Path(require_lock).resolve())
 
         routed, result = await try_daemon_route("job.submit", params)
         if not routed:
@@ -439,6 +452,13 @@ def _rejection_hints(msg: str, *, fresh: bool = False) -> list[str]:
         return [
             "The conductor is shutting down.",
             "Wait for shutdown to complete, then restart: mzt start",
+        ]
+
+    if "composition lock" in msg_lower:
+        return [
+            "The release gate must attest the exact score bytes before admission.",
+            "Run: python check_score_release.py SCORE --project-root ROOT "
+            "--lock LOCK --write-lock, then resubmit with --require-lock LOCK.",
         ]
 
     if "pressure" in msg_lower:

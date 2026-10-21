@@ -103,6 +103,15 @@ class JobRequest(BaseModel):
         "submissions leave it None (ordinary semantics; the registration "
         "channel is the amendment authority).",
     )
+    required_lock: Path | None = Field(
+        default=None,
+        description="Opt-in admission gate (GH #403): path to the composition "
+        "lock the caller's release gate wrote over the exact score bytes "
+        "(check_score_release.py --write-lock). The manager refuses the job "
+        "when the lock is missing, unreadable, malformed, or its score_sha256 "
+        "does not match the bytes about to be parsed. None keeps ordinary "
+        "unlocked admission.",
+    )
     workspace: Path | None = Field(
         default=None,
         description="Override workspace directory. "

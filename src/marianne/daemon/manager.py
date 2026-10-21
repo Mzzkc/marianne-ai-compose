@@ -359,6 +359,43 @@ def _config_snapshot_of(config: JobConfig) -> dict[str, Any] | None:
     return dumped if isinstance(dumped, dict) else None
 
 
+def _verify_required_lock(lock_path: Path, score_bytes: bytes, job_id: str) -> str | None:
+    """Return a refusal message when ``lock_path`` does not attest ``score_bytes``.
+
+    The lock is the JSON the composing skill's release gate writes
+    (``check_score_release.py --write-lock``): ``score_sha256`` is the digest
+    of the exact score file. Missing, unreadable, malformed or mismatching
+    locks all refuse; the message names which (GH #403).
+    """
+    try:
+        raw = lock_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return (
+            f"Required composition lock is missing: {lock_path}. The release gate "
+            f"did not write it; job '{job_id}' refused. Run the gate with --write-lock."
+        )
+    except OSError as exc:
+        return f"Required composition lock could not be read: {lock_path} ({exc})."
+    try:
+        lock = json.loads(raw)
+    except ValueError as exc:
+        return f"Required composition lock is not valid JSON: {lock_path} ({exc})."
+    expected = lock.get("score_sha256") if isinstance(lock, dict) else None
+    if not isinstance(expected, str) or len(expected) != 64:
+        return (
+            f"Required composition lock has no score_sha256: {lock_path}. "
+            "Only a lock written by check_score_release.py attests a score."
+        )
+    actual = hashlib.sha256(score_bytes).hexdigest()
+    if actual != expected:
+        return (
+            f"Required composition lock is stale: {lock_path} attests "
+            f"{expected[:12]}… but the score bytes hash to {actual[:12]}…. "
+            "The score changed after the gate ran; re-run the release gate."
+        )
+    return None
+
+
 def _merge_runtime_variables(
     config: JobConfig, runtime_variables: dict[str, str]
 ) -> JobConfig:
@@ -2189,6 +2226,28 @@ class JobManager:
                         "schedule to amend the pin."
                     ),
                 )
+
+        # GH #403: an opt-in composition lock. The caller's release gate
+        # wrote a lock over the exact score bytes; admission verifies the
+        # bytes it is about to parse against that lock, so shell control
+        # flow around a failed gate cannot reach RUNNING. Ordinary scores
+        # carry no lock and are unaffected.
+        if request.required_lock is not None:
+            lock_bytes = verified_source_bytes
+            if lock_bytes is None:
+                try:
+                    lock_bytes = request.config_path.read_bytes()
+                except OSError as exc:
+                    return JobResponse(
+                        job_id=job_id, status="rejected",
+                        message=f"Locked score could not be read: {request.config_path} ({exc}).",
+                    )
+            refusal = _verify_required_lock(request.required_lock, lock_bytes, job_id)
+            if refusal is not None:
+                return JobResponse(job_id=job_id, status="rejected", message=refusal)
+            # Parse only the bytes the lock admitted (same check-then-parse
+            # discipline as the pinned-schedule path above).
+            verified_source_bytes = lock_bytes
 
         # Fleet detection: route fleet configs to the fleet manager
         from marianne.daemon.fleet import is_fleet_config, submit_fleet
