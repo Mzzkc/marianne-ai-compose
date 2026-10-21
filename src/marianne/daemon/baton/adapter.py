@@ -2823,8 +2823,12 @@ class BatonAdapter:
             if hasattr(backend, "set_mcp_config"):
                 try:
                     backend.set_mcp_config(None)
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — cleanup on a failed dispatch must not mask the dispatch error
+                    _logger.warning(
+                        "adapter.dispatch.mcp_config_reset_failed",
+                        extra={"job_id": job_id, "sheet_num": sheet_num},
+                        exc_info=True,
+                    )
             await asyncio.shield(
                 self._backend_pool.release(effective_instrument, backend)
             )
@@ -3272,9 +3276,12 @@ class BatonAdapter:
                             model_cap = profile.models[0]
                         cost_input = model_cap.cost_per_1k_input
                         cost_output = model_cap.cost_per_1k_output
-                except Exception:
-                    # Profile pricing is best-effort — fall back to hardcoded
-                    pass
+                except Exception:  # noqa: BLE001 — profile pricing is best-effort; the hardcoded table applies
+                    _logger.debug(
+                        "adapter.profile_pricing_unavailable",
+                        extra={"job_id": job_id, "instrument": actual_instrument},
+                        exc_info=True,
+                    )
 
             # #209: when this job opted into code execution, classify the
             # sheet's output (Stage 2a) AND run any code blocks through the

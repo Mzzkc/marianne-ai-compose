@@ -100,7 +100,7 @@ async def _forward_loop(
         sock_writer.close()
         try:
             await sock_writer.wait_closed()
-        except Exception:
+        except Exception:  # noqa: BLE001 — teardown of an already-closing socket; the copy loops reported their own errors
             pass
 
 
@@ -225,7 +225,7 @@ async def run_proxy(socket_path: str) -> int:
         sock_writer.close()
         try:
             await sock_writer.wait_closed()
-        except Exception:
+        except Exception:  # noqa: BLE001 — teardown of an already-closing socket; the copy loops reported their own errors
             pass
 
     for task in done:

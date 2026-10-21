@@ -681,3 +681,45 @@ def test_doctor_reports_the_conductors_last_reload(monkeypatch, tmp_path):
         assert payload["conductor"]["last_reload"]["schema_stale"] is True
         failed_profiles = payload["conductor"]["last_reload"]["failed_profiles"]
         assert failed_profiles[0]["retained"] == "antigravity"
+
+
+class TestConductorProbeBusy:
+    """A socket that accepts but does not answer is a busy conductor (GH #455);
+    doctor must not tell the operator to start a second one (GH #308 slice)."""
+
+    def test_unresponsive_socket_reads_as_running(self, tmp_path) -> None:
+        import importlib
+        from unittest.mock import AsyncMock, patch
+
+        doctor = importlib.import_module("marianne.cli.commands.doctor")
+        from marianne.daemon.exceptions import DaemonUnresponsiveError
+
+        sock = tmp_path / "conductor.sock"
+        sock.touch()
+        with (
+            patch.object(doctor, "_check_pid_file", return_value=None),
+            patch("marianne.daemon.detect._resolve_socket_path", return_value=sock),
+            patch(
+                "marianne.daemon.ipc.client.DaemonClient.is_daemon_running",
+                AsyncMock(side_effect=DaemonUnresponsiveError("busy")),
+            ),
+        ):
+            assert doctor._check_conductor_status() == ("running", None)
+
+    def test_refused_socket_reads_as_not_running(self, tmp_path) -> None:
+        import importlib
+        from unittest.mock import AsyncMock, patch
+
+        doctor = importlib.import_module("marianne.cli.commands.doctor")
+
+        sock = tmp_path / "conductor.sock"
+        sock.touch()
+        with (
+            patch.object(doctor, "_check_pid_file", return_value=None),
+            patch("marianne.daemon.detect._resolve_socket_path", return_value=sock),
+            patch(
+                "marianne.daemon.ipc.client.DaemonClient.is_daemon_running",
+                AsyncMock(return_value=False),
+            ),
+        ):
+            assert doctor._check_conductor_status() == ("not running", None)

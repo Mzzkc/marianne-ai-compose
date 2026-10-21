@@ -430,8 +430,10 @@ class McpSocketBridge:
                 )
         except asyncio.CancelledError:
             raise
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — a dead stderr pipe ends the drain only
+            _logger.debug(
+                "mcp_bridge.stderr_drain_ended", extra={"server": self.name}, exc_info=True,
+            )
 
     def _next_request_id(self) -> int:
         self._request_id += 1

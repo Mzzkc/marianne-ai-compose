@@ -57,6 +57,8 @@ def _check_conductor_status() -> tuple[str, int | None]:
     # missing but the conductor is running (F-090: doctor/status disagree)
     socket_path = _resolve_socket_path(None)
     if socket_path.exists():
+        from marianne.daemon.exceptions import DaemonUnresponsiveError
+
         try:
             from marianne.daemon.ipc.client import DaemonClient
 
@@ -64,7 +66,13 @@ def _check_conductor_status() -> tuple[str, int | None]:
             alive = asyncio.run(client.is_daemon_running())
             if alive:
                 return ("running", None)
-        except Exception:
+        except DaemonUnresponsiveError:
+            # A socket that accepts but does not answer is a busy conductor,
+            # not an absent one (GH #455: absence needs a missing socket or a
+            # refused connect). Report it as running so doctor does not tell
+            # the operator to start a second one.
+            return ("running", None)
+        except Exception:  # noqa: BLE001 — any other probe failure: absence is the honest default
             pass
 
     return ("not running", None)

@@ -168,8 +168,8 @@ class MonitorStorage:
         if self._pool is not None:
             try:
                 await self._pool.close()
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — closing a pool we are discarding
+                _logger.debug("profiler.storage_pool_close_failed", exc_info=True)
             self._pool = None
 
     async def close(self) -> None:

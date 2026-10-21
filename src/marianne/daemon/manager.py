@@ -3458,8 +3458,10 @@ class JobManager:
                     current_task = asyncio.current_task()
                     if current_task is not None and current_task.cancelling():
                         raise
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — the task's own failure was recorded by its runner
+                    _logger.debug(
+                        "manager.pause_task_ended_with_error", job_id=meta.job_id, exc_info=True,
+                    )
             await self._set_job_status(meta.job_id, DaemonJobStatus.PAUSED)
             return
         if meta.status is DaemonJobStatus.RUNNING:
@@ -4081,8 +4083,8 @@ class JobManager:
                         raise
                     # Expected: the stale child completed its requested
                     # cancellation while the resume caller remains live.
-                except Exception:
-                    pass  # Expected — the stale task may already have errored
+                except Exception:  # noqa: BLE001 — stale task may have errored; its runner recorded it
+                    _logger.debug("manager.stale_task_ended_with_error", exc_info=True)
 
             # Apply new config path before creating the task (task reads
             # meta.config_path).
@@ -4580,8 +4582,8 @@ class JobManager:
                         current_task = asyncio.current_task()
                         if current_task is not None and current_task.cancelling():
                             raise
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — the task's own failure was recorded by its runner
+                        _logger.debug("manager.cancelled_task_ended_with_error", exc_info=True)
                 if self._baton_adapter is not None and self._baton_adapter.has_job(
                     meta.job_id
                 ):
@@ -5226,8 +5228,8 @@ class JobManager:
                         self._baton_loop_task.cancel()
                         try:
                             await self._baton_loop_task
-                        except (asyncio.CancelledError, Exception):
-                            pass
+                        except (asyncio.CancelledError, Exception):  # noqa: BLE001 — shutdown must finish
+                            _logger.warning("manager.baton_loop_shutdown_error", exc_info=True)
                 # Cancel any remaining musician tasks
                 await self._baton_adapter.shutdown()
                 _logger.info("manager.baton_adapter_stopped")
@@ -6162,8 +6164,14 @@ class JobManager:
             from marianne.core.config import JobConfig
 
             policy = JobConfig.from_yaml(meta.config_path).workspace_lifecycle.scratch
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — an unreadable score keeps the documented default
+            _logger.warning(
+                "manager.scratch_policy_unreadable",
+                job_id=job_id,
+                config_path=str(meta.config_path),
+                default=policy,
+                exc_info=True,
+            )
         if policy != "remove":
             return
         try:

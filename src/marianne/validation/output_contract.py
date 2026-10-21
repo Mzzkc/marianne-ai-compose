@@ -109,8 +109,8 @@ def class_summary(config: JobConfig) -> dict[str, Any]:
                     "snapshot_digest": resolution.snapshot_digest,
                 }
             )
-    except Exception:
-        pass  # unresolvable chains already carry V310 rows
+    except Exception:  # noqa: BLE001 — unresolvable chains already carry V310 rows; the summary omits them
+        pass
     return summary
 
 

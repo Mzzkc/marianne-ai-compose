@@ -17,11 +17,14 @@ import shutil
 from typing import TYPE_CHECKING
 
 from marianne.core.errors.codes import ErrorCode
+from marianne.core.logging import get_logger
 from marianne.healing.diagnosis import Diagnosis
 from marianne.healing.remedies.base import BaseRemedy, RemedyCategory, RemedyResult, RiskLevel
 
 if TYPE_CHECKING:
     from marianne.healing.context import ErrorContext
+
+_logger = get_logger("healing.remedies.diagnostics")
 
 
 # Instruments known to authenticate via ANTHROPIC_API_KEY. The list is
@@ -68,9 +71,10 @@ def _cli_binary_for(instrument: str) -> str:
         executable = getattr(getattr(cli, "command", None), "executable", None)
         if executable:
             return str(executable)
-    except Exception:
-        # Registry lookup is best-effort; heuristic fallback below.
-        pass
+    except Exception:  # noqa: BLE001 — registry failure falls back to the heuristic
+        _logger.debug(
+            "healing.instrument_executable_lookup_failed", instrument=instrument, exc_info=True,
+        )
 
     normalized = instrument.lower().replace("_", "-")
     if "claude" in normalized:

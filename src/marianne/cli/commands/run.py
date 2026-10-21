@@ -696,8 +696,8 @@ async def _show_rate_limits_on_rejection(msg: str) -> None:
             console.print("[bold]Active rate limits:[/bold]")
             for line in lines:
                 console.print(f"  [yellow]{line}[/yellow]")
-    except Exception:
-        pass  # Fail-open — extra info, not critical
+    except Exception:  # noqa: BLE001 — fail-open: rate-limit info is extra, never blocks run
+        _logger.debug("run.rate_limit_info_unavailable", exc_info=True)
 
 
 def _show_dry_run(config: JobConfig, config_path: Path) -> None:

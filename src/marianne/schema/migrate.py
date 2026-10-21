@@ -127,8 +127,8 @@ async def apply_migrations(
             except Exception:
                 try:
                     await db.execute("ROLLBACK")
-                except Exception:
-                    pass  # Best-effort rollback
+                except Exception:  # noqa: BLE001 — best-effort rollback; the migration error is logged next
+                    _logger.debug("migration_rollback_failed", db=db_name, exc_info=True)
                 _logger.error(
                     "migration_failed",
                     db=db_name,

@@ -2269,8 +2269,8 @@ def _show_active_rate_limits_sync() -> None:
             console.print("  [bold]Active limits:[/bold]")
             for line in lines:
                 console.print(f"    [yellow]{line}[/yellow]")
-    except Exception:
-        pass  # Fail-open
+    except Exception:  # noqa: BLE001 — fail-open: rate-limit info is extra, never blocks status
+        _logger.debug("status.rate_limit_info_unavailable", exc_info=True)
 
 
 # =============================================================================

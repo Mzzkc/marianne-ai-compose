@@ -425,7 +425,7 @@ class JudgmentClient:
                 try:
                     await close()
                 except Exception:  # noqa: BLE001 — cleanup must not mask
-                    pass
+                    _logger.debug("judgment.backend_close_failed", exc_info=True)
 
         if not result.success:
             _logger.warning(

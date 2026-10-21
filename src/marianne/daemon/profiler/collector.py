@@ -558,8 +558,8 @@ class ProfilerCollector:
                     vm.available / (1024 * 1024),
                     vm.used / (1024 * 1024),
                 )
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — psutil failure falls back to /proc/meminfo
+                _logger.debug("profiler.psutil_memory_failed", exc_info=True)
 
         # Fallback: /proc/meminfo
         total = available = 0.0

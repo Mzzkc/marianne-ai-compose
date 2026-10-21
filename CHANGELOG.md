@@ -222,6 +222,14 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **No broad `except` passes in silence any more (GH #308, first slice).**
+  The 22 `except Exception: pass` sites now say why they catch broadly and
+  leave a log line (DEBUG for expected teardown and best-effort fallbacks,
+  WARNING where state can be lost: an unreadable scratch policy, a baton
+  loop that errored at shutdown, an MCP reset that failed on a failed
+  dispatch). `mzt doctor` now reports a conductor whose socket accepts but
+  does not answer as running, not absent, so it stops telling an operator
+  to start a second one (GH #455 rule: absence needs two proofs).
 - **Dashboard pre-exposure hardening (GH #387).** The artifact read opens
   with `O_NOFOLLOW`, verifies the descriptor is the regular file the path
   named (device and inode against a fresh `lstat`), and serves its bytes;

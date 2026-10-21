@@ -140,8 +140,8 @@ class GpuProbe:
         finally:
             try:
                 _pynvml.nvmlShutdown()
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — NVML shutdown after a completed probe
+                _logger.debug("pynvml_shutdown_failed", exc_info=True)
         return metrics
 
     # ─── nvidia-smi fallback (sync) ────────────────────────────────
