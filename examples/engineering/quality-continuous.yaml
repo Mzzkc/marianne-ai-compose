@@ -1962,6 +1962,7 @@ validations:
     command: |
       SCRIPT="{workspace}/.run-tests.sh"
       if [ -f "$SCRIPT" ]; then
+        set -o pipefail
         bash "$SCRIPT" 2>&1 | tail -10
       else
         echo "No test runner script — cannot verify"
@@ -1988,7 +1989,7 @@ validations:
 
   # Verify commit was created (by stage 12 or stage 13)
   - type: command_succeeds
-    command: "git log --oneline -1 --since='30 minutes ago' 2>/dev/null | grep -qE '.' && echo 'passed' || echo 'no recent commit'"
+    command: "cd {workspace} && git log --oneline -1 --since='30 minutes ago' 2>/dev/null | grep -qE '.'"
     description: "Recent commit should exist after commit/merge-resolve"
     condition: "stage == 13"
 

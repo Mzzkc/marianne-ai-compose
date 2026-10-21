@@ -603,7 +603,7 @@ validations:
     description: "Scan findings created"
 
   - type: command_succeeds
-    command: >
+    command: |
       python3 -c "
       import yaml;
       m = yaml.safe_load(open('{workspace}/02-echelon-manifest.yaml'));

@@ -529,7 +529,7 @@ validations:
 
   # Movement 4: Build succeeds
   - type: command_succeeds
-    command: "cd {workspace} && npm run build 2>&1 | tail -10"
+    command: "cd {workspace} && set -o pipefail && npm run build 2>&1 | tail -10"
     condition: "stage >= 4"
 
   - type: file_exists

@@ -217,8 +217,8 @@ sheet:
       description: "Skip unit tests if no rewrite occurred"
       timeout_seconds: 10
     8:
-      command: 'grep -q "status: CONVERGED" "{workspace}/05-gate-status.yaml"'
-      description: "Skip integration tests if no rewrite occurred"
+      command: 'grep -q "status: CONVERGED" "{workspace}/05-gate-status.yaml" || grep -qE "\*\*Results:\*\*\s*FAIL" "{workspace}/07-unit-test-results.md"'
+      description: "Skip integration tests if no rewrite occurred, or if unit tests failed (fail-fast)"
       timeout_seconds: 10
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -806,6 +806,15 @@ validations:
     condition: "sheet_num == 7"
     stage: 2
     description: "Unit test results contain PASS/FAIL verdict"
+  # The report is the musician's account; the harness is the oracle. Run the
+  # bound command from project_root so a FAIL report (or a PASS report over a
+  # red suite) cannot pass this sheet — the fail-fast the header promises.
+  - type: command_succeeds
+    command: 'cd "{project_root}" && {test_command}'
+    condition: "sheet_num == 7"
+    stage: 3
+    timeout_seconds: 1800
+    description: "Unit test command exits 0 in project_root (the header's fail-fast)"
 
   # ── Sheet 8: Integration Validation ────────────────────────────────────
   - type: file_exists
@@ -819,6 +828,12 @@ validations:
     condition: "sheet_num == 8"
     stage: 2
     description: "Integration results contain PASS/FAIL verdict"
+  - type: command_succeeds
+    command: 'cd "{project_root}" && {integration_test_command}'
+    condition: "sheet_num == 8"
+    stage: 3
+    timeout_seconds: 1800
+    description: "Integration test command exits 0 in project_root"
 
   # ── Sheet 9: Quality Review ────────────────────────────────────────────
   - type: file_exists

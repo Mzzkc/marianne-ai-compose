@@ -818,9 +818,7 @@
       "parse": "ok"
     },
     "venue:examples/advanced/instrument-showcase.yaml": {
-      "issues": {
-        "V303": 1
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:examples/advanced/parallel-research.yaml": {
@@ -1001,9 +999,7 @@
       "parse": "ok"
     },
     "venue:examples/patterns/dead-letter-quarantine.yaml": {
-      "issues": {
-        "V303": 6
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:examples/patterns/design-review.yaml": {
@@ -1013,9 +1009,7 @@
       "parse": "ok"
     },
     "venue:examples/patterns/echelon-repair.yaml": {
-      "issues": {
-        "V303": 3
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:examples/patterns/immune-cascade.yaml": {
@@ -1023,9 +1017,7 @@
       "parse": "ok"
     },
     "venue:examples/patterns/prefabrication.yaml": {
-      "issues": {
-        "V303": 2
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:examples/patterns/shipyard-sequence.yaml": {

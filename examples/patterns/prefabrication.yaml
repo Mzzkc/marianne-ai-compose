@@ -572,7 +572,7 @@ validations:
     description: "Interface contract exists"
 
   - type: command_succeeds
-    command: >
+    command: |
       python3 -c "
       import yaml
       c = yaml.safe_load(open('{{ workspace }}/contract.yaml'))
@@ -597,7 +597,7 @@ validations:
     description: "Integration test file exists"
 
   - type: command_succeeds
-    command: >
+    command: |
       bash -c 'cd {{ workspace }} && python3 -m pytest tests/ -v --tb=short 2>&1;
       exit ${PIPESTATUS[0]}'
     condition: "stage == 3"

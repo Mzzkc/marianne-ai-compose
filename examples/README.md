@@ -100,6 +100,15 @@ examples, weak file-exists-only validations, and folded multi-line validation
 commands. Do not use this README as proof that every checked-in YAML is clean;
 run `mzt validate` on the score you plan to copy.
 
+The 2026-10-21 examples QA (one detail-driven voice per category, every score
+validated, dry-rendered and its gates probed against the real validation
+engine) found validation contracts the dominant defect class: gates a stub
+passes (`file_exists` alone, heading-only checks, word counts), gates a correct
+output fails (folded multi-line commands), and gates that cannot fail
+(`| tail` swallowing exit status, `… && echo ok || echo no`). Those found in
+the first pass are repaired; when you adapt a score, probe each gate with one
+good and one bad fixture before trusting it.
+
 Every public score should use `instrument_fallbacks` intentionally. Validation
 paths use Python format strings (`{workspace}` for validation paths and
 commands, `{{ workspace }}` for Jinja2 templates). If a score is template-only

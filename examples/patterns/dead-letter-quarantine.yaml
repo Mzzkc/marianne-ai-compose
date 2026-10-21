@@ -620,7 +620,7 @@ validations:
     description: "Script specifications file exists"
 
   - type: command_succeeds
-    command: >
+    command: |
       python3 -c "
       import yaml;
       s = yaml.safe_load(open('{workspace}/specs.yaml'));
@@ -655,7 +655,7 @@ validations:
     description: "Validation summary exists"
 
   - type: command_succeeds
-    command: >
+    command: |
       python3 -c "
       import yaml, os;
       s = yaml.safe_load(open('{workspace}/validation-results/summary.yaml'));
@@ -677,7 +677,7 @@ validations:
     description: "Quarantine manifest exists"
 
   - type: command_succeeds
-    command: >
+    command: |
       python3 -c "
       import yaml;
       q = yaml.safe_load(open('{workspace}/quarantine.yaml'));
@@ -717,7 +717,7 @@ validations:
     description: "Reprocess results exist"
 
   - type: command_succeeds
-    command: >
+    command: |
       python3 -c "
       import yaml;
       r = yaml.safe_load(open('{workspace}/reprocess-results.yaml'));
@@ -747,7 +747,7 @@ validations:
     description: "Report includes script usage guide"
 
   - type: command_succeeds
-    command: >
+    command: |
       python3 -c "
       import os;
       scripts_dir = '{workspace}/scripts';
@@ -766,7 +766,7 @@ validations:
     description: "At least 7 of 10 scripts are syntactically valid Python"
 
   - type: command_succeeds
-    command: >
+    command: |
       python3 -c "
       report = open('{workspace}/toolkit-report.md').read();
       words = len(report.split());

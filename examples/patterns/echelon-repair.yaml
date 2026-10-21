@@ -522,7 +522,7 @@ validations:
     description: "Security surface inventory exists"
 
   - type: command_succeeds
-    command: >
+    command: |
       python3 -c "
       import yaml
       s = yaml.safe_load(open('{workspace}/security-surface.yaml'))
@@ -541,7 +541,7 @@ validations:
     description: "Work orders exist"
 
   - type: command_succeeds
-    command: >
+    command: |
       python3 -c "
       import yaml
       w = yaml.safe_load(open('{workspace}/work-orders.yaml'))
@@ -618,7 +618,7 @@ validations:
     description: "Report has remediation roadmap"
 
   - type: command_succeeds
-    command: >
+    command: |
       python3 -c "
       report = open('{workspace}/audit-report.md').read()
       words = len(report.split())

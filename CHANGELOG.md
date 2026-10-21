@@ -283,6 +283,8 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **Example validation gates that could never pass, or could never fail (examples QA, 21 Oct).** Twelve folded `command: >` scalars (dead-letter-quarantine ×6, echelon-repair ×3, prefabrication ×2, instrument-showcase) collapsed multi-line `python3 -c` bodies into one line with a leading space, so a correct artifact failed with `IndentationError`; they are literal blocks now and every body parses. `lovable-generator`'s build gate and `quality-continuous`'s test gate returned `tail`'s status, so a failing build or suite passed — `set -o pipefail`. `quality-continuous`'s commit gate was `… && echo passed || echo 'no recent commit'`, true on both branches and in no repository — it now runs in the workspace and exits non-zero without a recent commit. `codebase-rewrite`'s unit/integration gates accepted a `**Results:** FAIL` report; each tier now also runs the bound test command in `project_root` and a FAIL unit report skips integration, the fail-fast the header promised. The corpus baseline shrank by the twelve V303 rows.
+
 - **V105 accepts a declared loop index as a validation placeholder (GH #475).** A validation path scoped to a loop (`{pass_no}`, the documented form) failed `mzt validate` with "undefined variable" while the baton defined it at runtime; the check now seeds every `sheet.loops.<span>.index` as the V101 side already did (#448).
 
 - **Fewer instruments see every credential (GH #335).** The `opencode` builtin
