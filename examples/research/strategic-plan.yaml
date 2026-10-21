@@ -956,21 +956,21 @@ validations:
     condition: "sheet_num >= 1"
     stage: 1
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/01-context-scope.md"
     pattern: "[Ss]cope|[Bb]oundary|[Bb]oundaries"
     description: "Context must contain scope definition"
     condition: "sheet_num >= 1"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/01-context-scope.md"
     pattern: "[Ss]takeholder"
     description: "Context must contain stakeholder analysis"
     condition: "sheet_num >= 1"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/01-context-scope.md"
     pattern: "[Ss]uccess|[Mm]etric|[Cc]riteria"
     description: "Context must contain success criteria"
@@ -986,42 +986,42 @@ validations:
     condition: "sheet_num >= 2"
     stage: 1
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/02-pestel-analysis.md"
     pattern: "[Pp]olitical"
     description: "PESTEL must cover Political factors"
     condition: "sheet_num >= 2"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/02-pestel-analysis.md"
     pattern: "[Ee]conomic"
     description: "PESTEL must cover Economic factors"
     condition: "sheet_num >= 2"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/02-pestel-analysis.md"
     pattern: "[Ss]ocial|[Ss]ocietal"
     description: "PESTEL must cover Social factors"
     condition: "sheet_num >= 2"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/02-pestel-analysis.md"
     pattern: "[Tt]echnolog"
     description: "PESTEL must cover Technological factors"
     condition: "sheet_num >= 2"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/02-pestel-analysis.md"
     pattern: "[Ee]nvironment"
     description: "PESTEL must cover Environmental factors"
     condition: "sheet_num >= 2"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/02-pestel-analysis.md"
     pattern: "[Ll]egal"
     description: "PESTEL must cover Legal factors"
@@ -1044,35 +1044,35 @@ validations:
     condition: "sheet_num >= 3"
     stage: 1
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/03-competitive-analysis.md"
     pattern: "[Nn]ew [Ee]ntrant|[Bb]arrier.*[Ee]ntry"
     description: "Porter's must cover threat of new entrants"
     condition: "sheet_num >= 3"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/03-competitive-analysis.md"
     pattern: "[Ss]upplier"
     description: "Porter's must cover supplier power"
     condition: "sheet_num >= 3"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/03-competitive-analysis.md"
     pattern: "[Bb]uyer|[Cc]ustomer"
     description: "Porter's must cover buyer power"
     condition: "sheet_num >= 3"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/03-competitive-analysis.md"
     pattern: "[Ss]ubstitut"
     description: "Porter's must cover threat of substitutes"
     condition: "sheet_num >= 3"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/03-competitive-analysis.md"
     pattern: "[Rr]ivalry|[Cc]ompetit"
     description: "Porter's must cover industry rivalry"
@@ -1095,28 +1095,28 @@ validations:
     condition: "sheet_num >= 4"
     stage: 1
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/04-swot-analysis.md"
     pattern: "[Ss]trength"
     description: "SWOT must cover Strengths"
     condition: "sheet_num >= 4"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/04-swot-analysis.md"
     pattern: "[Ww]eakness"
     description: "SWOT must cover Weaknesses"
     condition: "sheet_num >= 4"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/04-swot-analysis.md"
     pattern: "[Oo]pportunit"
     description: "SWOT must cover Opportunities"
     condition: "sheet_num >= 4"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/04-swot-analysis.md"
     pattern: "[Tt]hreat"
     description: "SWOT must cover Threats"
@@ -1139,21 +1139,21 @@ validations:
     condition: "sheet_num >= 5"
     stage: 1
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/05-strategic-options.md"
     pattern: "[Oo]ption [0-9]|[Oo]ption 1"
     description: "Options must be numbered"
     condition: "sheet_num >= 5"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/05-strategic-options.md"
     pattern: "[Rr]ationale|[Jj]ustif"
     description: "Options must include rationales"
     condition: "sheet_num >= 5"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/05-strategic-options.md"
     pattern: "[Rr]isk|[Aa]ssumption"
     description: "Options must address risks or assumptions"
@@ -1176,21 +1176,21 @@ validations:
     condition: "sheet_num >= 6"
     stage: 1
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/06-option-evaluation.md"
     pattern: "[Ss]core|[Rr]ating|[Ww]eight"
     description: "Evaluation must include scoring"
     condition: "sheet_num >= 6"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/06-option-evaluation.md"
     pattern: "[Rr]ecommend"
     description: "Evaluation must include recommendation"
     condition: "sheet_num >= 6"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/06-option-evaluation.md"
     pattern: "[Ss]ensitivity|[Tt]rade-off|[Tt]radeoff"
     description: "Evaluation must include sensitivity or trade-off analysis"
@@ -1206,21 +1206,21 @@ validations:
     condition: "sheet_num >= 7"
     stage: 1
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/07-goals-roadmap.md"
     pattern: "SMART|[Ss]pecific.*[Mm]easurable|[Mm]easurable.*[Aa]chievable"
     description: "Goals must reference SMART criteria"
     condition: "sheet_num >= 7"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/07-goals-roadmap.md"
     pattern: "[Rr]oadmap|[Qq]uarter|[Mm]ilestone|[Tt]imeline"
     description: "Must include implementation roadmap"
     condition: "sheet_num >= 7"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/07-goals-roadmap.md"
     pattern: "KPI|[Ii]ndicator|[Mm]etric"
     description: "Must include KPIs or metrics"
@@ -1255,21 +1255,21 @@ validations:
     condition: "sheet_num >= 8"
     stage: 1
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/08-risk-contingency.md"
     pattern: "[Rr]isk|[Mm]itigat"
     description: "Risk document must address risks"
     condition: "sheet_num >= 8"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/08-risk-contingency.md"
     pattern: "[Cc]ontingency|[Ss]cenario"
     description: "Risk document must include contingencies or scenarios"
     condition: "sheet_num >= 8"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/08-strategic-plan-summary.md"
     pattern: "[Ee]xecutive|[Ss]ummary"
     description: "Summary must contain executive summary"
@@ -1283,7 +1283,7 @@ validations:
     condition: "sheet_num >= 8"
     stage: 2
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/08-implementation-checklist.md"
     pattern: "30.day|60.day|90.day|[Pp]riority|[Cc]hecklist"
     description: "Implementation checklist must include time-based priorities"

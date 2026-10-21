@@ -813,25 +813,25 @@ validations:
     description: "Premise document exists"
     condition: "stage >= 1"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/01-premise.md"
     pattern: "[Pp]remise"
     description: "Premise contains the core premise section"
     condition: "stage >= 1"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/01-premise.md"
     pattern: "[Aa]udience"
     description: "Premise contains target audience profile"
     condition: "stage >= 1"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/01-premise.md"
     pattern: "[Cc]ompet|[Cc]omparable"
     description: "Premise contains competitive analysis"
     condition: "stage >= 1"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/01-premise.md"
     pattern: "[Aa]uthority|[Ee]xpertise"
     description: "Premise contains author authority statement"
@@ -851,25 +851,25 @@ validations:
     description: "Synopsis document exists"
     condition: "stage >= 2"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/02-synopsis.md"
     pattern: "[Ss]ynopsis"
     description: "Synopsis contains the expanded synopsis section"
     condition: "stage >= 2"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/02-synopsis.md"
     pattern: "[Tt]heme"
     description: "Synopsis identifies key themes"
     condition: "stage >= 2"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/02-synopsis.md"
     pattern: "[Ss]tructur|[Rr]ationale"
     description: "Synopsis addresses structural rationale"
     condition: "stage >= 2"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/02-synopsis.md"
     pattern: "[Tt]akeaway|[Ii]nsight"
     description: "Synopsis lists key takeaways"
@@ -889,19 +889,19 @@ validations:
     description: "Outline contains numbered chapter entries"
     condition: "stage >= 3"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/03-chapter-outline.md"
     pattern: "[Nn]arrative|[Aa]rc|[Ff]low"
     description: "Outline addresses narrative arc"
     condition: "stage >= 3"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/03-chapter-outline.md"
     pattern: "[Tt]heme"
     description: "Outline maps themes to chapters"
     condition: "stage >= 3"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/03-chapter-outline.md"
     pattern: "[Ff]ront|[Bb]ack [Mm]atter|[Ii]ntroduction|[Cc]onclusion"
     description: "Outline includes front/back matter planning"
@@ -920,25 +920,25 @@ validations:
     description: "Source index exists"
     condition: "stage >= 4"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/04-entity-bible.md"
     pattern: "[Cc]oncept|[Dd]efinition|[Tt]erm"
     description: "Entity bible contains concept definitions"
     condition: "stage >= 4"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/04-entity-bible.md"
     pattern: "[Cc]onsistency|[Rr]ule|[Tt]erminology"
     description: "Entity bible contains consistency rules"
     condition: "stage >= 4"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/04-entity-bible.md"
     pattern: "[Ee]xample|[Ss]tor|[Cc]ase [Ss]tudy"
     description: "Entity bible catalogs examples and stories"
     condition: "stage >= 4"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/04-source-index.md"
     pattern: "[Ss]ource|[Cc]itation|[Rr]eference"
     description: "Source index contains citation entries"
@@ -967,13 +967,13 @@ validations:
     description: "Draft manifest exists"
     condition: "stage >= 5"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/05-introduction.md"
     pattern: "[Hh]ook|[Oo]pening|[Pp]romise"
     description: "Introduction contains hook or opening"
     condition: "stage >= 5"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/05-conclusion.md"
     pattern: "[Ss]ynthe|[Ii]nsight|[Cc]all to [Aa]ction"
     description: "Conclusion contains synthesis or call to action"
@@ -985,7 +985,7 @@ validations:
     description: "Draft manifest contains word count data"
     condition: "stage >= 5"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/05-draft-manifest.md"
     pattern: "[Tt]otal|[Tt]arget"
     description: "Draft manifest includes total/target comparison"
@@ -1009,19 +1009,19 @@ validations:
     description: "Issues tracker exists"
     condition: "stage >= 6"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/06-consistency-report.md"
     pattern: "[Ii]ssue|[Ee]rror|[Vv]iolation|[Ff]inding"
     description: "Consistency report documents findings"
     condition: "stage >= 6"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/06-consistency-report.md"
     pattern: "[Ss]everity|[Cc]ritical|[Mm]oderate|[Mm]inor"
     description: "Consistency report includes severity ratings"
     condition: "stage >= 6"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/06-consistency-report.md"
     pattern: "[Ff]ix|[Rr]ecommend"
     description: "Consistency report includes recommended fixes"
@@ -1033,7 +1033,7 @@ validations:
     description: "Issues tracker uses issue IDs"
     condition: "stage >= 6"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/06-issues-tracker.md"
     pattern: "[Pp]riority|[Pp]ending|[Ss]tatus"
     description: "Issues tracker includes priority and status"
@@ -1057,25 +1057,25 @@ validations:
     description: "Revision log exists"
     condition: "stage >= 7"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/07-introduction.md"
     pattern: "#|Chapter|Introduction"
     description: "Revised introduction contains structural content"
     condition: "stage >= 7"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/07-revision-log.md"
     pattern: "[Rr]eadability|[Ss]core"
     description: "Revision log documents readability scores"
     condition: "stage >= 7"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/07-revision-log.md"
     pattern: "[Ff]ix|[Rr]esolve|ISS-"
     description: "Revision log documents issues fixed"
     condition: "stage >= 7"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/07-revision-log.md"
     pattern: "[Tt]ransition|[Pp]acing"
     description: "Revision log documents transition and pacing improvements"
@@ -1104,13 +1104,13 @@ validations:
     description: "Author notes exists"
     condition: "stage >= 8"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/08-final-manuscript.md"
     pattern: "Table of Contents|# Chapter|## Chapter"
     description: "Final manuscript contains structured chapters"
     condition: "stage >= 8"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/08-bibliography.md"
     pattern: "[Bb]ibliograph|[Ss]ource|[Rr]eference"
     description: "Bibliography contains citation entries"
@@ -1122,25 +1122,25 @@ validations:
     description: "Manuscript stats include word count totals"
     condition: "stage >= 8"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/08-manuscript-stats.md"
     pattern: "[Rr]eadability"
     description: "Manuscript stats include readability score"
     condition: "stage >= 8"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/08-manuscript-stats.md"
     pattern: "[Pp]age [Cc]ount|[Ee]stimated"
     description: "Manuscript stats include estimated page count"
     condition: "stage >= 8"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/08-author-notes.md"
     pattern: "[Nn]ext [Ss]tep|[Ff]uture|[Ee]xpansion"
     description: "Author notes include next steps or future expansion"
     condition: "stage >= 8"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/08-author-notes.md"
     pattern: "[Rr]eview|[Ee]xpert"
     description: "Author notes identify sections needing expert review"
