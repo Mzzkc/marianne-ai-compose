@@ -913,7 +913,7 @@ Usage: mzt diagnose [OPTIONS] JOB_ID
 
 The diagnostic report includes:
 - Score-run overview and current status
-- Preflight warnings from all sheets
+- Preflight warnings from all sheets (`preflight:` prompt-size notes; `artifact:` a sheet wrote a file a later, non-ancestor sheet is declared to produce — GH #386)
 - Prompt metrics (token counts, line counts)
 - Execution timeline with timing information, and under it one line per attempt for any sheet that needed more than one or ended abnormally: `1. claude-code (claude-opus-5-5): 30m → TIMEOUT`, `2. codex-cli: 1m 9s → ok` (GH #434)
 - All errors with full context and output tails

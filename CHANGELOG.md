@@ -68,6 +68,16 @@ an alias over an existing profile; archive what nothing names.
 
 ### Added
 
+- **A sheet that writes another sheet's declared artifact is named (GH #386).**
+  The producer signal is the existing proxy — a sheet-gated `file_exists`
+  validation (what V108/V109 already read; it now lives in
+  `core/producers.py`). Each sheet carries the artifacts non-ancestor sheets
+  are declared to produce; the musician snapshots them around execution and
+  an attempt that created or modified one reports an `artifact:` warning,
+  folded into the sheet's preflight warnings for `mzt status` and
+  `mzt diagnose`. Advisory only: the owning sheet still has to write the
+  file, and nothing is reverted.
+
 - **Alias chains with `select` modifiers (GH #473).** A score alias may bind
   an ordered `chain` of entries instead of one profile; `select` decides which
   entry each sheet starts on and the rest follow as that sheet's fallbacks.

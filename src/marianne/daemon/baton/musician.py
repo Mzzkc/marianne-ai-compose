@@ -206,8 +206,17 @@ async def sheet_task(
                 else tuple(sheet.prompt_extensions)
             ),
         )
+        # #386: note which other-sheet artifacts exist now, so a write by
+        # this attempt is attributable to it and not to a prior sheet.
+        artifact_paths = _expand_artifact_paths(
+            sheet, total_sheets=total_sheets, total_movements=total_movements,
+        )
+        artifacts_before = _snapshot_artifacts(artifact_paths)
         exec_result = await _execute(
             backend, prompt, sheet.timeout_seconds, request_state
+        )
+        preflight_warnings.extend(
+            _foreign_artifact_warnings(artifact_paths, artifacts_before)
         )
 
         # Step 3a: Classify output via TechniqueRouter (Stage 2a).
@@ -409,6 +418,75 @@ async def sheet_task(
 # =========================================================================
 # Internal helpers
 # =========================================================================
+
+
+def _expand_artifact_paths(
+    sheet: Sheet, *, total_sheets: int, total_movements: int,
+) -> list[tuple[str, Path]]:
+    """The sheet's declared foreign artifacts as (template, resolved path).
+
+    Uses the validation engine's own expansion so the paths are exactly the
+    ones the producing sheet's ``file_exists`` validation will check.
+    Templates this sheet's context cannot expand (a loop index it does not
+    carry) are skipped: the guard observes, it never blocks.
+    """
+    if not sheet.foreign_artifacts:
+        return []
+    from marianne.execution.validation.engine import ValidationEngine
+
+    engine = ValidationEngine(
+        workspace=sheet.workspace,
+        sheet_context=sheet.template_variables(
+            total_sheets=total_sheets, total_movements=total_movements,
+        ),
+    )
+    out: list[tuple[str, Path]] = []
+    for template in sheet.foreign_artifacts:
+        try:
+            out.append((template, engine.expand_path(template)))
+        except (KeyError, ValueError, IndexError):
+            continue
+    return out
+
+
+def _snapshot_artifacts(paths: list[tuple[str, Path]]) -> dict[str, float | None]:
+    """mtime per resolved artifact path, None when absent."""
+    snap: dict[str, float | None] = {}
+    for _, path in paths:
+        try:
+            snap[str(path)] = path.stat().st_mtime
+        except OSError:
+            snap[str(path)] = None
+    return snap
+
+
+def _foreign_artifact_warnings(
+    paths: list[tuple[str, Path]], before: dict[str, float | None],
+) -> list[str]:
+    """Warn when this attempt wrote a file another sheet owns (GH #386).
+
+    A sheet that writes a downstream movement's declared artifact before
+    that movement runs plants content later sheets will read as upstream
+    input. Advisory only — the owner's own sheet still has to write the
+    file (``file_modified`` guards that); this names the contamination so
+    the composer can quarantine it.
+    """
+    warnings: list[str] = []
+    for template, path in paths:
+        key = str(path)
+        try:
+            after: float | None = path.stat().st_mtime
+        except OSError:
+            after = None
+        if after is None or after == before.get(key):
+            continue
+        verb = "created" if before.get(key) is None else "modified"
+        warnings.append(
+            f"artifact: this sheet {verb} {template}, which a later, "
+            f"non-ancestor sheet is declared to produce (file_exists); "
+            f"downstream sheets may read it as upstream input"
+        )
+    return warnings
 
 
 def _preflight_token_warnings(

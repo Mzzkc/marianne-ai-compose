@@ -3,11 +3,11 @@
 Validates that paths referenced in the configuration exist and are accessible.
 """
 
-import re
 from pathlib import Path
 
 from marianne.core.config import JobConfig
 from marianne.core.config.job import InjectionItem
+from marianne.core.producers import dag_ancestors, producer_basenames
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import (
     find_line_in_yaml,
@@ -101,46 +101,11 @@ class ValidationPathScopeCheck:
         return issues
 
 
-def _gated_producer_sheet(condition: str | None) -> int | None:
-    """The sheet a ``file_exists`` validation is gated to, parsed from its
-    condition (``sheet_num == N`` / ``sheet_num >= N``). None for other shapes.
-
-    A ``file_exists`` validation gated to a sheet is the score author
-    declaring that sheet produces the file — the producer PROXY that #137's
-    ordering check and V108's suppression both reason about.
-    """
-    if not condition:
-        return None
-    m = re.search(r"sheet_num\s*(==|>=)\s*(\d+)", condition)
-    return int(m.group(2)) if m else None
-
-
 def _infer_producers(config: JobConfig) -> dict[str, set[int]]:
     """Map a produced file's basename to the set of sheets declared (via a
-    sheet-gated ``file_exists`` validation) to produce it."""
-    producers: dict[str, set[int]] = {}
-    for rule in config.validations:
-        if rule.type != "file_exists" or not rule.path:
-            continue
-        sheet = _gated_producer_sheet(rule.condition)
-        if sheet is None:
-            continue
-        producers.setdefault(Path(str(rule.path)).name, set()).add(sheet)
-    return producers
-
-
-def _dag_ancestors(sheet: int, deps: dict[int, list[int]]) -> set[int]:
-    """Transitive dependency ancestors of ``sheet`` — the sheets guaranteed
-    to run before it."""
-    seen: set[int] = set()
-    stack = list(deps.get(sheet, []))
-    while stack:
-        s = stack.pop()
-        if s in seen:
-            continue
-        seen.add(s)
-        stack.extend(deps.get(s, []))
-    return seen
+    sheet-gated ``file_exists`` validation) to produce it. The producer
+    proxy lives in ``core.producers`` so the baton shares it (GH #386)."""
+    return producer_basenames(config.validations)
 
 
 class WorkspaceParentExistsCheck:
@@ -520,7 +485,7 @@ class CadenzaOrderingCheck:
                 producing_sheets = producers.get(name)
                 if not producing_sheets:
                     continue  # no producer signal — V108 covers disk existence
-                ancestors = _dag_ancestors(reader_sheet, deps)
+                ancestors = dag_ancestors(reader_sheet, deps)
                 # Safe iff SOME producer is guaranteed to run before the
                 # reader (a strict DAG ancestor).
                 if producing_sheets & ancestors:

@@ -1382,6 +1382,19 @@ validations:
 |-------|------|----------|-------------|
 | `path` | str | yes | File path. Supports `{workspace}`, `{sheet_num}`, `{instance}` placeholders. |
 
+A `file_exists` validation gated to one sheet (`condition: "sheet_num == N"`)
+is also the score's declaration that sheet N **produces** the file. Two
+things read that declaration: `mzt validate` (V108 stops warning that the
+file is missing before the run; V109 warns when a cadenza reads it before
+its producer is guaranteed to have run) and the conductor at run time — a
+sheet that writes a file some later, non-ancestor sheet is declared to
+produce gets an `artifact:` warning in `mzt status` / `mzt diagnose`
+(GH #386). A musician that "helpfully" writes the whole downstream pipeline
+is planting content later sheets will read as upstream input; the warning
+names the file so the composer can quarantine it before those sheets run.
+Gate each stage's own output with a sheet-scoped `file_exists` and that
+guard works for free.
+
 ### `file_modified`
 
 Checks that a file was modified during sheet execution (mtime comparison).

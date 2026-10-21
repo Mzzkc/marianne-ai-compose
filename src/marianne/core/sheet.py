@@ -28,6 +28,7 @@ from marianne.core.config.classes import ClassEntry, ClassSnapshot, InstrumentRe
 from marianne.core.config.execution import ValidationRule
 from marianne.core.config.job import AliasEntry, InjectionItem, InstrumentDef
 from marianne.core.constants import SHEET_NUM_KEY, positional_template_variables
+from marianne.core.producers import foreign_artifacts
 
 if TYPE_CHECKING:
     from marianne.core.config.job import JobConfig
@@ -148,6 +149,14 @@ class Sheet(BaseModel):
     validations: list[ValidationRule] = Field(
         default_factory=list,
         description="Validation rules — what 'done' means for this sheet",
+    )
+    foreign_artifacts: list[str] = Field(
+        default_factory=list,
+        description="Path templates (``{workspace}/x.md``) that sheets other "
+        "than this one and its DAG ancestors are declared to produce, via "
+        "their sheet-gated file_exists validations. A sheet that writes one "
+        "fabricates a downstream artifact before its owner runs (GH #386); "
+        "the musician reports it as a preflight warning.",
     )
 
     # --- Timeout ---
@@ -454,6 +463,8 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
         # --- Validations ---
         # Score-level validations apply to all sheets
         validations = list(config.validations)
+        # Artifacts other, non-ancestor sheets are declared to produce (#386).
+        foreign = foreign_artifacts(sheet_num, validations, config.sheet.dependencies)
 
         # --- Instrument Fallbacks ---
         # Resolution: per_sheet > movement > score-level
@@ -566,6 +577,7 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
                 cadenza=cadenza,
                 prompt_extensions=extensions,
                 validations=validations,
+                foreign_artifacts=foreign,
                 timeout_seconds=timeout,
             )
         )
