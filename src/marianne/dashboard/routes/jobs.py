@@ -413,7 +413,7 @@ async def daemon_status() -> dict[str, Any]:
             "connected": False,
             "message": "Daemon status probe timed out",
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — return failure details through the public result contract
         return {
             "connected": False,
             "message": f"Daemon status unavailable: {exc}",

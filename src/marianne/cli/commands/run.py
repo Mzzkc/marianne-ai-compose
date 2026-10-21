@@ -184,7 +184,7 @@ def run(
                 ],
             )
         raise typer.Exit(1) from None
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — CLI boundary reports the error and exits unsuccessfully
         if json_output:
             output_json({"error": str(e)})
         else:
@@ -590,7 +590,7 @@ def _run_fleet(
                 ],
             )
         raise typer.Exit(1) from None
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — CLI boundary reports the error and exits unsuccessfully
         if json_output:
             output_json({"error": str(e)})
         else:

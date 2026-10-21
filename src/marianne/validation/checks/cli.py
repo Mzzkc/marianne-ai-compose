@@ -12,10 +12,13 @@ import jinja2
 from marianne.core.config import JobConfig, PromptConfig
 from marianne.core.config.flow import span_range
 from marianne.core.config.instruments import InstrumentProfile
+from marianne.core.logging import get_logger
 from marianne.core.sheet import Sheet, build_sheets
 from marianne.prompts.templating import PromptBuilder, SheetContext
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml, resolve_path
+
+_logger = get_logger("validation.cli")
 
 
 class CliRawPromptBashCheck:
@@ -46,18 +49,31 @@ class CliRawPromptBashCheck:
         config_path: Path,
         raw_yaml: str,
     ) -> list[ValidationIssue]:
-        """Check every resolved raw-prompt shell sheet."""
+        """Check every resolved raw-prompt shell sheet.
+
+        Profile loading exceptions log a WARNING and return no findings.
+        Class-map loading exceptions warn and continue without custom class
+        resolution. Both use ``validation.profiles_unavailable_skip``.
+        """
         try:
             from marianne.instruments.loader import load_all_profiles
 
             profiles = load_all_profiles()
-        except Exception:
+        except Exception:  # noqa: BLE001 — unavailable profiles skip this check, loudly
+            _logger.warning(
+                "validation.profiles_unavailable_skip", check=self.check_id,
+                operation="load_profiles", exc_info=True,
+            )
             return []
         try:
             from marianne.instruments.classes import load_class_map
 
             class_map = load_class_map(profile_names=set(profiles))
-        except Exception:
+        except Exception:  # noqa: BLE001 — shell checks continue without custom class resolution
+            _logger.warning(
+                "validation.profiles_unavailable_skip", check=self.check_id,
+                operation="load_class_map", exc_info=True,
+            )
             class_map = None
 
         issues: list[ValidationIssue] = []

@@ -323,7 +323,7 @@ class BackpressureController:
                 confidence=confidence,
             )
 
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports backpressure.resource_estimate_failed
             _logger.debug(
                 "backpressure.resource_estimate_failed",
                 job_config_hash=job_config_hash,

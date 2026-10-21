@@ -305,7 +305,7 @@ class TestPatternFeedbackIntegration:
                     retry_count_before=0,
                     retry_count_after=0,
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 — count injected store failures for the assertion below
                 # In real code, this is caught and logged
                 errors_caught += 1
 

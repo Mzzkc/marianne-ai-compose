@@ -199,7 +199,7 @@ async def dashboard_system_partial(
             }
     except RuntimeError:
         pass  # SystemView not configured — fall through to file-based path
-    except Exception:
+    except Exception:  # noqa: BLE001 — structured logger reports dashboard.system_partial.daemon_error
         _logger.debug("dashboard.system_partial.daemon_error", exc_info=True)
 
     # Fallback: read from monitor.db directly
@@ -224,7 +224,7 @@ async def dashboard_system_partial(
                         "process_count": getattr(snap, "marianne_process_count", 0),
                         "pressure": getattr(snap, "pressure_level", "none") or "none",
                     }
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports dashboard.system_partial.read_error
                 _logger.debug("dashboard.system_partial.read_error", exc_info=True)
 
     return templates.TemplateResponse(request,

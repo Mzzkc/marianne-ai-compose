@@ -81,7 +81,8 @@ async def jobs_list_partial(
                 "applied_filter": status,
             },
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — structured logger reports dashboard.jobs_load_failed
+        _logger.warning("dashboard.jobs_load_failed", exc_info=True)
         # Return error partial
         return templates.TemplateResponse(request,
             "partials/error_message.html",
@@ -120,7 +121,8 @@ async def job_details_page(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — structured logger reports dashboard.job_details_load_failed
+        _logger.warning("dashboard.job_details_load_failed", job_id=job_id, exc_info=True)
         return templates.TemplateResponse(request,
             "partials/error_message.html",
             {
@@ -158,7 +160,8 @@ async def job_logs_page(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — structured logger reports dashboard.job_logs_load_failed
+        _logger.warning("dashboard.job_logs_load_failed", job_id=job_id, exc_info=True)
         return templates.TemplateResponse(request,
             "partials/error_message.html",
             {
@@ -245,7 +248,7 @@ async def templates_list_partial(
 
                 filtered_templates.append(tmpl.model_dump())
 
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports dashboard.template_load_failed
                 _logger.warning("dashboard.template_load_failed", exc_info=True)
                 continue
 
@@ -260,7 +263,8 @@ async def templates_list_partial(
             },
         )
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — structured logger reports dashboard.templates_load_failed
+        _logger.warning("dashboard.templates_load_failed", exc_info=True)
         # Return error partial
         return templates.TemplateResponse(request,
             "partials/error_message.html",

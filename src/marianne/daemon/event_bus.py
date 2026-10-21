@@ -295,7 +295,7 @@ class EventBus:
             if sub.event_filter is not None:
                 try:
                     matched = sub.event_filter(event)
-                except Exception:
+                except Exception:  # noqa: BLE001 — record subscriber failure and evict repeatedly failing callbacks
                     if self._record_failure(sub_id, sub, "filter_error", event):
                         to_evict.append(sub_id)
                     continue
@@ -332,7 +332,7 @@ class EventBus:
                 except TimeoutError:
                     if self._record_failure(sub_id, sub, "callback_timeout", event):
                         return
-                except Exception:
+                except Exception:  # noqa: BLE001 — record subscriber failure and evict repeatedly failing callbacks
                     if self._record_failure(sub_id, sub, "callback_error", event):
                         return
 

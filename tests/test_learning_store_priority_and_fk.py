@@ -397,7 +397,7 @@ class TestFKConstraints:
             try:
                 barrier.wait()
                 store.soft_delete_pattern(pid)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — collect worker failures for the explicit errors assertion
                 errors.append(e)
 
         def record_feedback() -> None:
@@ -408,7 +408,7 @@ class TestFKConstraints:
                     execution_id="race_exec_001",
                     pattern_led_to_success=True,
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — collect worker failures for the explicit errors assertion
                 errors.append(e)
 
         t1 = threading.Thread(target=delete_pattern)
@@ -532,7 +532,7 @@ class TestFKConstraints:
                     execution_id=f"bulk_post_prune_{pid}",
                     pattern_led_to_success=True,
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — collect worker failures for the explicit errors assertion
                 errors.append(e)
 
         assert len(errors) == 0, f"All 25 feedbacks must succeed: {errors}"

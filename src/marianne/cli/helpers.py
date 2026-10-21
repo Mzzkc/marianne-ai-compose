@@ -349,10 +349,10 @@ async def _try_registry_state(
             return state, backend  # caller closes backend → closes registry
         await registry.close()
         return None
-    except Exception:
+    except Exception:  # noqa: BLE001 — structured logger reports find_job_state.registry_close_failed
         try:
             await registry.close()
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports find_job_state.registry_close_failed
             _logger.debug("find_job_state.registry_close_failed", job_id=job_id)
         _logger.warning(
             "find_job_state.registry_read_failed", job_id=job_id, exc_info=True
@@ -504,7 +504,8 @@ async def await_early_failure(
                     continue
 
         return None
-    except Exception:
+    except Exception:  # noqa: BLE001 — submission must survive failure of the advisory status probe
+        _logger.debug("cli.early_failure_probe_failed", exc_info=True)
         return None
     finally:
         if client is not None:
@@ -531,7 +532,8 @@ async def query_rate_limits() -> dict[str, dict[str, float]] | None:
         if isinstance(backends, dict):
             return backends
         return None
-    except Exception:
+    except Exception:  # noqa: BLE001 — optional rate limit display must not block the CLI
+        _logger.debug("cli.rate_limits_unavailable", exc_info=True)
         return None
 
 

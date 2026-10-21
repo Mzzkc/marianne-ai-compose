@@ -122,7 +122,7 @@ class ValidationRunner:
             try:
                 issues = check.check(config, config_path, raw_yaml)
                 all_issues.extend(issues)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — failed check becomes an ERROR finding while other checks continue
                 # Don't let one check failure break all validation
                 all_issues.append(
                     ValidationIssue(

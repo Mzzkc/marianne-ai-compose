@@ -80,6 +80,34 @@ def route_identity(binding: InstrumentRouteBinding) -> tuple[str | int | None, .
     )
 
 
+# PyYAML's pure-Python parser spends ~35 ms per profile; `mzt validate`
+# loads every profile up to a dozen times per run (one per check that asks),
+# so a 50-profile host paid ~20 s per validate and the suite's validate tests
+# tripped their 30 s timeouts under load. The C parser is the same SafeLoader
+# semantics ~10x faster, and a per-file memo keyed on the file's identity
+# (resolved path, mtime_ns, size) makes the repeat loads free while an edited
+# profile is always re-read — hot reload (#408) and `instruments check` see
+# the new bytes without any invalidation call.
+_SAFE_LOADER: type[yaml.SafeLoader] = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+_FileKey = tuple[str, int, int]
+_MemoValue = tuple[InstrumentProfile | None, "ProfileLoadFailure | None"]
+_profile_memo: dict[_FileKey, _MemoValue] = {}
+
+
+def _file_key(path: Path) -> _FileKey | None:
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return (str(path.resolve()), st.st_mtime_ns, st.st_size)
+
+
+def clear_profile_memo() -> None:
+    """Forget memoised profile loads (tests that rewrite a file in place
+    within one mtime tick, or callers that want a cold read)."""
+    _profile_memo.clear()
+
+
 class InstrumentProfileLoader:
     """Loads InstrumentProfile instances from YAML files in directories.
 
@@ -215,6 +243,22 @@ class InstrumentProfileLoader:
     def _load_file_detailed(
         path: Path,
     ) -> tuple[InstrumentProfile | None, ProfileLoadFailure | None]:
+        """Memoised ``_load_file_uncached``: the same bytes (path, mtime,
+        size) parse once per process; a changed file is parsed afresh."""
+        key = _file_key(path)
+        if key is not None:
+            hit = _profile_memo.get(key)
+            if hit is not None:
+                return hit
+        result = InstrumentProfileLoader._load_file_uncached(path)
+        if key is not None:
+            _profile_memo[key] = result
+        return result
+
+    @staticmethod
+    def _load_file_uncached(
+        path: Path,
+    ) -> tuple[InstrumentProfile | None, ProfileLoadFailure | None]:
         """Load and validate one file, returning WHY it failed.
 
         Returns ``(profile, None)`` on success and ``(None, failure)``
@@ -238,9 +282,9 @@ class InstrumentProfileLoader:
                 reason=str(e) or type(e).__name__,
             )
 
-        # Parse YAML
+        # Parse YAML (C parser when available; SafeLoader semantics either way)
         try:
-            data: Any = yaml.safe_load(raw_text)
+            data: Any = yaml.load(raw_text, Loader=_SAFE_LOADER)  # noqa: S506 - SafeLoader variant
         except yaml.YAMLError as e:
             _logger.warning(
                 "instrument_yaml_parse_error",
@@ -269,7 +313,7 @@ class InstrumentProfileLoader:
         # Validate through Pydantic
         try:
             profile = InstrumentProfile.model_validate(data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — structured logger reports instrument_validation_error
             _logger.warning(
                 "instrument_validation_error",
                 file=str(path),

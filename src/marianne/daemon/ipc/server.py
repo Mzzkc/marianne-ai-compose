@@ -418,7 +418,7 @@ class DaemonServer:
         # Build typed request (outside semaphore — validation only)
         try:
             request = JsonRpcRequest.model_validate(raw)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — malformed request errors are returned to the IPC caller
             await self._write_response(
                 writer, invalid_request(raw.get("id"), str(exc)),
             )

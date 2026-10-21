@@ -425,7 +425,7 @@ async def pause_fleet(manager: JobManager, fleet_id: str) -> dict[str, Any]:
         try:
             ok = await manager.pause_job(job_id)
             results[job_id] = ok
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — structured logger reports fleet.pause_member_failed
             _logger.warning("fleet.pause_member_failed", job_id=job_id, error=str(exc))
             results[job_id] = False
 
@@ -443,7 +443,7 @@ async def resume_fleet(manager: JobManager, fleet_id: str) -> dict[str, Any]:
         try:
             response = await manager.resume_job(job_id)
             results[job_id] = response.status
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — structured logger reports fleet.resume_member_failed
             _logger.warning("fleet.resume_member_failed", job_id=job_id, error=str(exc))
             results[job_id] = f"error: {exc}"
 
@@ -461,7 +461,7 @@ async def cancel_fleet(manager: JobManager, fleet_id: str) -> dict[str, Any]:
         try:
             ok = await manager.cancel_job(job_id, source=f"fleet:{fleet_id}")
             results[job_id] = ok
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — structured logger reports fleet.cancel_member_failed
             _logger.warning("fleet.cancel_member_failed", job_id=job_id, error=str(exc))
             results[job_id] = False
 

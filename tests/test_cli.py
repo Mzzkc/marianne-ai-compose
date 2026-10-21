@@ -742,7 +742,8 @@ class TestDashboardCommand:
         mock_uvicorn = AsyncMock()
         mock_uvicorn.run = lambda *args, **kwargs: None
 
-        with patch.dict(sys.modules, {"uvicorn": mock_uvicorn}):
+        with pytest.MonkeyPatch.context() as modules:
+            modules.setitem(sys.modules, "uvicorn", mock_uvicorn)
             result = runner.invoke(app, ["dashboard", "--workspace", str(tmp_path)])
 
             assert result.exit_code == 0
@@ -757,7 +758,8 @@ class TestDashboardCommand:
         mock_uvicorn = AsyncMock()
         mock_uvicorn.run = lambda *args, **kwargs: None
 
-        with patch.dict(sys.modules, {"uvicorn": mock_uvicorn}):
+        with pytest.MonkeyPatch.context() as modules:
+            modules.setitem(sys.modules, "uvicorn", mock_uvicorn)
             result = runner.invoke(
                 app, ["dashboard", "--port", "3000", "--workspace", str(tmp_path)]
             )
@@ -772,7 +774,8 @@ class TestDashboardCommand:
         mock_uvicorn = AsyncMock()
         mock_uvicorn.run = lambda *args, **kwargs: None
 
-        with patch.dict(sys.modules, {"uvicorn": mock_uvicorn}):
+        with pytest.MonkeyPatch.context() as modules:
+            modules.setitem(sys.modules, "uvicorn", mock_uvicorn)
             result = runner.invoke(
                 app, ["dashboard", "--host", "0.0.0.0", "--workspace", str(tmp_path)]
             )
@@ -787,7 +790,8 @@ class TestDashboardCommand:
         mock_uvicorn = AsyncMock()
         mock_uvicorn.run = lambda *args, **kwargs: None
 
-        with patch.dict(sys.modules, {"uvicorn": mock_uvicorn}):
+        with pytest.MonkeyPatch.context() as modules:
+            modules.setitem(sys.modules, "uvicorn", mock_uvicorn)
             result = runner.invoke(app, ["dashboard", "--workspace", str(tmp_path)])
 
             assert result.exit_code == 0
@@ -800,7 +804,8 @@ class TestDashboardCommand:
         mock_uvicorn = AsyncMock()
         mock_uvicorn.run = lambda *args, **kwargs: None
 
-        with patch.dict(sys.modules, {"uvicorn": mock_uvicorn}):
+        with pytest.MonkeyPatch.context() as modules:
+            modules.setitem(sys.modules, "uvicorn", mock_uvicorn)
             result = runner.invoke(app, ["dashboard", "--workspace", str(tmp_path)])
 
             assert result.exit_code == 0
@@ -814,7 +819,8 @@ class TestDashboardCommand:
         mock_uvicorn = AsyncMock()
         mock_uvicorn.run = lambda *args, **kwargs: None
 
-        with patch.dict(sys.modules, {"uvicorn": mock_uvicorn}):
+        with pytest.MonkeyPatch.context() as modules:
+            modules.setitem(sys.modules, "uvicorn", mock_uvicorn)
             result = runner.invoke(
                 app, ["dashboard", "--workspace", str(tmp_path), "--port", "9000"]
             )

@@ -277,7 +277,7 @@ class TestFromSheetThreading:
             task.cancel()
             try:
                 await task
-            except (asyncio.CancelledError, Exception):
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001 — join cancelled test task after assertions without masking teardown
                 pass
 
         assert captured == [

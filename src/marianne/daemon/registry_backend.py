@@ -58,7 +58,7 @@ class RegistryStateBackend(StateBackend):
                 continue
             try:
                 states.append(CheckpointState.model_validate_json(checkpoint_json))
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports registry_backend.list_skip_invalid
                 # A single corrupt checkpoint must not break listing the rest.
                 _logger.warning(
                     "registry_backend.list_skip_invalid", job_id=record.job_id, exc_info=True
@@ -121,7 +121,7 @@ class RegistryFirstReadBackend(StateBackend):
 
             async with JobRegistry(self._db_path) as registry:
                 return await RegistryStateBackend(registry).load(job_id)
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports registry_first.read_failed
             _logger.warning(
                 "registry_first.read_failed", job_id=job_id, exc_info=True
             )
@@ -155,7 +155,7 @@ class RegistryFirstReadBackend(StateBackend):
                     if state is not None:
                         states.append(state)
                 return states
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports registry_first.list_failed
             _logger.warning("registry_first.list_failed", exc_info=True)
             return []
 

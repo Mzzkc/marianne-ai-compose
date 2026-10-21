@@ -161,6 +161,9 @@ class TestGooseEndToEnd:
     model). Uses a trivial prompt so cost/time stay minimal.
     """
 
+    # Allow the subprocess's own 120-second deadline to expire and reap it
+    # before pytest interrupts the enclosing test on a loaded host.
+    @pytest.mark.timeout(150)
     def test_goose_accepts_stdin_via_configured_argv(
         self, goose_profile: InstrumentProfile
     ) -> None:

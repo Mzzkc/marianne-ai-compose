@@ -195,7 +195,7 @@ class SelfHealingCoordinator:
         """
         try:
             return remedy.apply(context)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — structured logger reports healing.remedy_apply_crashed
             _logger.warning(
                 "healing.remedy_apply_crashed",
                 remedy=remedy.name,

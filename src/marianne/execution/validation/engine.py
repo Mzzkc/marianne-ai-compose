@@ -396,7 +396,7 @@ class ValidationEngine:
                     return result
 
                 last_result = result
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — rule failure becomes a failed ValidationResult for retry policy
                 # Classify exception into a known error type, else internal_error
                 for exc_type, (label, error_type) in self._ERROR_TYPE_MAP.items():
                     if isinstance(e, exc_type):
@@ -1099,7 +1099,7 @@ class ValidationEngine:
                 confidence_factors={"exit_code": 0.5},
             )
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — return failure details through the public result contract
             return ValidationResult(
                 rule=rule, passed=False,
                 expected_value="exit_code=0",

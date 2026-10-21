@@ -645,7 +645,8 @@ class TestAllCLICommandsFunctional:
         mock_uvicorn = MagicMock()
         mock_uvicorn.run = lambda *args, **kwargs: None
 
-        with patch.dict(sys.modules, {"uvicorn": mock_uvicorn}):
+        with pytest.MonkeyPatch.context() as modules:
+            modules.setitem(sys.modules, "uvicorn", mock_uvicorn)
             result = runner.invoke(app, ["dashboard", "--workspace", str(tmp_path)])
             assert result.exit_code == 0
             assert "Marianne Dashboard" in result.stdout

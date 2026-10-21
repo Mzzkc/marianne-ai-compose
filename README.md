@@ -164,6 +164,13 @@ collisions, raw `cli` prompt bodies that do not render as shell, partial
 fan-out instrument coverage, and prompt/validation section-label drift.
 Validation paths use Python format strings: `{workspace}`, `{sheet_num}`.
 
+If profile or capability-class loading fails during preflight, affected checks
+log `validation.profiles_unavailable_skip` at WARNING level and retain their
+fallback behavior. A skipped check has not verified the score; repair the
+reported loading failure and validate again. See the
+[validation diagnostics reference](docs/configuration-reference.md#validation-dependency-failures)
+for the fallback and exit-status details.
+
 For parallel execution, declare dependencies as a DAG:
 
 ```yaml

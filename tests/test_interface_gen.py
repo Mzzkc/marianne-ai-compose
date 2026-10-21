@@ -120,7 +120,7 @@ async def test_generated_runtime_calls_mcp_socket(tmp_path: Path) -> None:
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:
+            except OSError:
                 pass
 
     server = await asyncio.start_unix_server(handle, path=str(socket_path))

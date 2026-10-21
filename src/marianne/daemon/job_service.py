@@ -64,7 +64,7 @@ class _PublishingBackend:
             result = self._callback(state)
             if asyncio.iscoroutine(result):
                 await result
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports state_publish_callback.error
             _logger.warning(
                 "state_publish_callback.error",
                 job_id=state.job_id,

@@ -489,7 +489,7 @@ async def _cleanup_worktree_isolation(
         mgr = GitWorktreeManager(Path(config.workspace))
         await mgr.remove_worktree(wt_path, force=True)
         _logger.info("worktree.removed", job_id=job_id, worktree=str(wt_path))
-    except Exception:
+    except Exception:  # noqa: BLE001 — structured logger reports worktree.cleanup_failed
         _logger.warning(
             "worktree.cleanup_failed",
             job_id=job_id,
@@ -924,11 +924,11 @@ class JobManager:
             try:
                 await self._mcp_pool.start_all()
                 self._baton_adapter.set_mcp_pool(self._mcp_pool)
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports manager.mcp_pool_start_failed
                 _logger.warning("manager.mcp_pool_start_failed", exc_info=True)
                 try:
                     await self._mcp_pool.stop_all()
-                except Exception:
+                except Exception:  # noqa: BLE001 — structured logger reports manager.mcp_pool_stop_after_start_failed
                     _logger.warning("manager.mcp_pool_stop_after_start_failed", exc_info=True)
                 self._mcp_pool = None
 
@@ -997,7 +997,7 @@ class JobManager:
             )
             await judgment_client.start(self._event_bus)
             self._judgment_client = judgment_client
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports manager.judgment_client_start_failed
             _logger.warning(
                 "manager.judgment_client_start_failed", exc_info=True
             )
@@ -1212,7 +1212,7 @@ class JobManager:
                         organization_dir=org_dir, venue_dir=venue_dir,
                     )
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — return failure details through the public result contract
                 return fail(
                     reason,
                     f"reload validation failed — running config kept: "
@@ -1647,7 +1647,7 @@ class JobManager:
 
             checkpoint_json = live.model_dump_json()
             self._persist_checkpoint(job_id, checkpoint_json)
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports baton.persist_failed
             _logger.warning(
                 "baton.persist_failed",
                 extra={"job_id": job_id},
@@ -1874,7 +1874,7 @@ class JobManager:
             try:
                 checkpoint_json = live.model_dump_json()
                 self._persist_checkpoint(job_id, checkpoint_json)
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports baton.state_sync.persist_failed
                 _logger.warning(
                     "baton.state_sync.persist_failed",
                     job_id=job_id,
@@ -2290,7 +2290,7 @@ class JobManager:
                 with open(request.config_path) as f:
                     raw = yaml.safe_load(f)
                 fleet_config = FleetConfig.model_validate(raw)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — return failure details through the public result contract
                 return JobResponse(
                     job_id=job_id,
                     status="rejected",
@@ -2859,7 +2859,7 @@ class JobManager:
 
             parsed = JobConfig.from_yaml(config_path)
             return parsed.workspace
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports pending.workspace_resolve_failed
             _logger.debug(
                 "pending.workspace_resolve_failed",
                 job_id=job_id,
@@ -3005,7 +3005,7 @@ class JobManager:
                         job_id,
                         checkpoint_data,
                     )
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports get_job_status.registry_checkpoint_failed
                 _logger.debug(
                     "get_job_status.registry_checkpoint_failed",
                     job_id=job_id,
@@ -3054,7 +3054,7 @@ class JobManager:
                             job_id,
                             failed_data,
                         )
-                except Exception:
+                except Exception:  # noqa: BLE001 — structured logger reports get_job_status.checkpoint_load_after_fail
                     _logger.debug(
                         "get_job_status.checkpoint_load_after_fail",
                         job_id=job_id,
@@ -3476,7 +3476,7 @@ class JobManager:
         for meta in reversed(resumed):
             try:
                 await self._pause_related_job(meta)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — finish rollback for every child then re-raise the first failure
                 if first_error is None:
                     first_error = exc
         if first_error is not None:
@@ -3629,7 +3629,7 @@ class JobManager:
             for meta, prior_status in reversed(staged_children):
                 try:
                     await self._set_job_status(meta.job_id, prior_status)
-                except BaseException as rollback_exc:
+                except BaseException as rollback_exc:  # noqa: BLE001 — retain child rollback failure for the aggregate exception below
                     if child_rollback_error is None:
                         child_rollback_error = rollback_exc
             baton_rollback_error: BaseException | None = None
@@ -3647,7 +3647,7 @@ class JobManager:
                     adapter._baton._state_dirty = True
                 try:
                     await self._set_job_status(meta.job_id, DaemonJobStatus.RUNNING)
-                except BaseException as rollback_exc:
+                except BaseException as rollback_exc:  # noqa: BLE001 — retain baton rollback failure for the aggregate exception below
                     if baton_rollback_error is None:
                         baton_rollback_error = rollback_exc
             for event in changed_events:
@@ -3673,7 +3673,7 @@ class JobManager:
                         score_path=authority.score_path,
                         before_mutation=claim,
                     )
-                except BaseException as rollback_exc:
+                except BaseException as rollback_exc:  # noqa: BLE001 — report recurrence rollback failure with the original pause error
                     raise RuntimeError(
                         f"Failed to pause active job {job_id!r}; recurrence rollback "
                         f"also failed: {rollback_exc}"
@@ -3892,9 +3892,9 @@ class JobManager:
                     deferred_cancellation = cancel_exc
                     try:
                         await rollback_task
-                    except BaseException as rollback_exc:
+                    except BaseException as rollback_exc:  # noqa: BLE001 — retain active rollback failure for the aggregate exception below
                         active_rollback_error = rollback_exc
-                except BaseException as rollback_exc:
+                except BaseException as rollback_exc:  # noqa: BLE001 — retain active rollback failure for the aggregate exception below
                     active_rollback_error = rollback_exc
 
             recurrence_rollback_error: BaseException | None = None
@@ -3905,7 +3905,7 @@ class JobManager:
                         score_path=authority.score_path,
                         before_mutation=claim,
                     )
-                except BaseException as rollback_exc:
+                except BaseException as rollback_exc:  # noqa: BLE001 — retain recurrence rollback failure for the aggregate exception below
                     recurrence_rollback_error = rollback_exc
 
             if (
@@ -4303,7 +4303,7 @@ class JobManager:
                         score_path=record.score_path,
                         before_mutation=claim,
                     )
-                except BaseException as safety_exc:
+                except BaseException as safety_exc:  # noqa: BLE001 — retain safety-pause failure until shielded cancellation finishes
                     removal_error = RuntimeError(
                         f"Failed to remove recurrence for {job_id!r}; safety pause "
                         f"also failed: {safety_exc}"
@@ -4589,7 +4589,7 @@ class JobManager:
                 ):
                     self._baton_adapter.deregister_job(meta.job_id)
                 await self._set_job_status(meta.job_id, DaemonJobStatus.CANCELLED)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — finish cancellation for every child then re-raise the first failure
                 if first_error is None:
                     first_error = exc
         if first_error is not None:
@@ -4864,7 +4864,7 @@ class JobManager:
             sqlite_backend = SQLiteStateBackend(sqlite_path)
             try:
                 await sqlite_backend.delete(job_id)
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports clear.workspace_sqlite_delete_failed
                 _logger.warning(
                     "clear.workspace_sqlite_delete_failed", job_id=job_id, exc_info=True
                 )
@@ -4874,7 +4874,7 @@ class JobManager:
         json_backend = JsonStateBackend(workspace)
         try:
             await json_backend.delete(job_id)
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports clear.workspace_json_delete_failed
             _logger.warning(
                 "clear.workspace_json_delete_failed", job_id=job_id, exc_info=True
             )
@@ -5059,7 +5059,7 @@ class JobManager:
                         job_id, limit=50
                     )
                 ]
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports manager.diagnostic_snapshot.observer_read_failed
                 _logger.debug(
                     "manager.diagnostic_snapshot.observer_read_failed",
                     job_id=job_id,
@@ -5162,7 +5162,7 @@ class JobManager:
         if self._recurrence_controller is not None:
             try:
                 await self._recurrence_controller.shutdown()
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports manager.recurrence_stop_failed
                 _logger.warning(
                     "manager.recurrence_stop_failed",
                     exc_info=True,
@@ -5263,7 +5263,7 @@ class JobManager:
                 # Cancel any remaining musician tasks
                 await self._baton_adapter.shutdown()
                 _logger.info("manager.baton_adapter_stopped")
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports manager.baton_adapter_stop_failed
                 _logger.warning(
                     "manager.baton_adapter_stop_failed",
                     exc_info=True,
@@ -5272,7 +5272,7 @@ class JobManager:
         if self._mcp_pool is not None:
             try:
                 await self._mcp_pool.stop_all()
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports manager.mcp_pool_stop_failed
                 _logger.warning("manager.mcp_pool_stop_failed", exc_info=True)
             finally:
                 self._mcp_pool = None
@@ -5305,7 +5305,7 @@ class JobManager:
                 await self._judgment_client.stop(self._event_bus)
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports manager.judgment_client_stop_failed
                 _logger.warning(
                     "manager.judgment_client_stop_failed", exc_info=True
                 )
@@ -5413,7 +5413,7 @@ class JobManager:
                 await self._registry.save_checkpoint(jid, checkpoint_json)
                 await self._registry.update_status(jid, live_status)
                 flushed += 1
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports manager.shutdown_flush_failed
                 _logger.warning(
                     "manager.shutdown_flush_failed",
                     job_id=jid,
@@ -6000,7 +6000,7 @@ class JobManager:
                     if self._observer_recorder is not None:
                         try:
                             self._observer_recorder.flush(job_id)
-                        except Exception:
+                        except Exception:  # noqa: BLE001 — structured logger reports observer_recorder.flush_failed
                             _logger.warning(
                                 "observer_recorder.flush_failed",
                                 job_id=job_id,
@@ -6209,7 +6209,7 @@ class JobManager:
         try:
             await asyncio.to_thread(shutil.rmtree, root, True)
             _logger.info("manager.scratch_root_removed", job_id=job_id, path=str(root))
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports manager.scratch_root_remove_failed
             _logger.warning(
                 "manager.scratch_root_remove_failed", job_id=job_id, path=str(root), exc_info=True,
             )
@@ -7592,7 +7592,7 @@ class JobManager:
 
         except asyncio.CancelledError:
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — hook failure is returned in the error_message field
             result["error_message"] = str(exc)
         finally:
             await kill_process_group_if_alive(proc, pgid)
@@ -7816,7 +7816,7 @@ class JobManager:
                     quarantined=len(result["quarantined"]),
                     degraded=len(result["degraded"]),
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports pattern_lifecycle.promotion_failed
             _logger.warning(
                 "pattern_lifecycle.promotion_failed",
                 exc_info=True,

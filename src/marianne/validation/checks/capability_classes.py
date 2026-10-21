@@ -18,9 +18,12 @@ from typing import Any
 
 from marianne.core.config import JobConfig
 from marianne.core.config.instruments import InstrumentProfile
+from marianne.core.logging import get_logger
 from marianne.instruments.classes import ClassMap
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml
+
+_logger = get_logger("validation.capability_classes")
 
 _VOCABULARY_HINT = "run 'mzt instruments classes write' or define it in ~/.marianne/classes.yaml"
 
@@ -77,15 +80,19 @@ class _ClassContext:
         return bool(self.class_map.failures) and unresolved
 
 
-def _load_context() -> _ClassContext | None:
-    """Load profiles + class map through the one loader; degrade silently."""
+def _load_context(check_id: str) -> _ClassContext | None:
+    """Load profiles + class map through the one loader; warn when unavailable."""
     try:
         from marianne.instruments.classes import load_class_map
         from marianne.instruments.loader import load_all_profiles
 
         profiles = load_all_profiles()
         class_map = load_class_map(profile_names=set(profiles))
-    except Exception:
+    except Exception:  # noqa: BLE001 — unavailable class state skips the calling check, loudly
+        _logger.warning(
+            "validation.profiles_unavailable_skip", check=check_id,
+            operation="load_context", exc_info=True,
+        )
         return None
     if not profiles:
         return None
@@ -154,6 +161,9 @@ class ClassNameResolutionCheck:
     registered here are submit refusals (§4.3); this reports them at validate
     time with the fix command. Entirely unknown names stay V210/V211 — the
     loader already folds configured classes into their valid set.
+
+    Profile/class-map loading exceptions log
+    ``validation.profiles_unavailable_skip`` at WARNING and return no findings.
     """
 
     @property
@@ -174,7 +184,7 @@ class ClassNameResolutionCheck:
         config_path: Path,  # noqa: ARG002 (protocol shape)
         raw_yaml: str,
     ) -> list[ValidationIssue]:
-        ctx = _load_context()
+        ctx = _load_context(self.check_id)
         if ctx is None:
             return []
         issues: list[ValidationIssue] = []
@@ -245,6 +255,11 @@ class ClassChainAvailabilityCheck:
     Also warns when a name the score uses resolves to a profile that shadows a
     packaged-default class of the same name (V-CLS-08 WARN arm): the profile
     wins (§3.1) and the class is unreachable.
+
+    Profile/class-map loading exceptions log
+    ``validation.profiles_unavailable_skip`` at WARNING and return no findings.
+    A response-format collection exception also warns, then the remaining
+    availability checks continue without those requests.
     """
 
     @property
@@ -265,7 +280,7 @@ class ClassChainAvailabilityCheck:
         config_path: Path,  # noqa: ARG002 (protocol shape)
         raw_yaml: str,
     ) -> list[ValidationIssue]:
-        ctx = _load_context()
+        ctx = _load_context(self.check_id)
         if ctx is None:
             return []
         used = ctx.used_classes(config)
@@ -425,7 +440,11 @@ class ClassChainAvailabilityCheck:
                 if request is not None:
                     requests.setdefault(resolution.requested, []).append(request)
             return requests
-        except Exception:
+        except Exception:  # noqa: BLE001 — unbuildable sheets skip response-format collection
+            _logger.warning(
+                "validation.profiles_unavailable_skip", check=self.check_id,
+                operation="collect_response_formats", exc_info=True,
+            )
             return {}
 
     def _shadowed_default_classes(
@@ -473,6 +492,9 @@ class ClassAliasProfileCheck:
     An alias must name a profile; a class there would nest a second chain
     inside one alias slot (§3.2). The conductor refuses the same condition at
     submit through ``resolve_job_classes``.
+
+    Profile/class-map loading exceptions log
+    ``validation.profiles_unavailable_skip`` at WARNING and return no findings.
     """
 
     @property
@@ -493,7 +515,7 @@ class ClassAliasProfileCheck:
         config_path: Path,  # noqa: ARG002 (protocol shape)
         raw_yaml: str,
     ) -> list[ValidationIssue]:
-        ctx = _load_context()
+        ctx = _load_context(self.check_id)
         if ctx is None or not config.instruments:
             return []
         issues: list[ValidationIssue] = []
@@ -526,6 +548,9 @@ class AliasShadowsClassCheck:
 
     The alias wins under the §3.1 resolution order; the author should know
     their alias is masking the class of the same name.
+
+    Profile/class-map loading exceptions log
+    ``validation.profiles_unavailable_skip`` at WARNING and return no findings.
     """
 
     @property
@@ -546,7 +571,7 @@ class AliasShadowsClassCheck:
         config_path: Path,  # noqa: ARG002 (protocol shape)
         raw_yaml: str,
     ) -> list[ValidationIssue]:
-        ctx = _load_context()
+        ctx = _load_context(self.check_id)
         if ctx is None or not config.instruments:
             return []
         class_shaped = ctx.class_shaped_names()
@@ -580,6 +605,10 @@ class ClassModelConfigCheck:
     A model id cannot be honoured across heterogeneous profiles (§2.4); the
     conductor refuses the same condition at submit. Applies at score, movement
     and per-sheet scope, exactly as ``resolve_job_classes`` does.
+
+    Profile/class-map loading exceptions log
+    ``validation.profiles_unavailable_skip`` at WARNING and return no findings.
+    Class-snapshot exceptions likewise warn and skip this check.
     """
 
     @property
@@ -600,7 +629,7 @@ class ClassModelConfigCheck:
         config_path: Path,  # noqa: ARG002 (protocol shape)
         raw_yaml: str,
     ) -> list[ValidationIssue]:
-        ctx = _load_context()
+        ctx = _load_context(self.check_id)
         if ctx is None:
             return []
         used = ctx.used_classes(config)
@@ -610,7 +639,11 @@ class ClassModelConfigCheck:
             from marianne.core.sheet import build_sheets
 
             snapshot = ctx.class_map.snapshot(set(used))
-        except Exception:
+        except Exception:  # noqa: BLE001 — unresolved class names already carry V310 rows
+            _logger.warning(
+                "validation.profiles_unavailable_skip", check=self.check_id,
+                operation="class_snapshot", exc_info=True,
+            )
             return []  # unresolvable names already carry V310 rows
         issues: list[ValidationIssue] = []
         reported: set[tuple[str, str]] = set()
@@ -663,6 +696,9 @@ class ClassesFileValidCheck:
     (pydantic message included) — the way A4 renders ``FlowConfigError``,
     never re-validating the file. File-level, gated on class usage so a broken
     user file stays silent for scores that never name a class.
+
+    Profile/class-map loading exceptions log
+    ``validation.profiles_unavailable_skip`` at WARNING and return no findings.
     """
 
     @property
@@ -683,7 +719,7 @@ class ClassesFileValidCheck:
         config_path: Path,  # noqa: ARG002 (protocol shape)
         raw_yaml: str,  # noqa: ARG002 (layer files are outside the score)
     ) -> list[ValidationIssue]:
-        ctx = _load_context()
+        ctx = _load_context(self.check_id)
         if ctx is None:
             return []
         if not ctx.names_class_usage(config):
@@ -709,6 +745,9 @@ class ClassChainSummaryCheck:
 
     One row per used class; the ``--json`` summary block carries the per-sheet
     resolution and every layer path + sha256 the validator read (§2.1).
+
+    Profile/class-map loading exceptions log
+    ``validation.profiles_unavailable_skip`` at WARNING and return no findings.
     """
 
     @property
@@ -729,7 +768,7 @@ class ClassChainSummaryCheck:
         config_path: Path,  # noqa: ARG002 (protocol shape)
         raw_yaml: str,  # noqa: ARG002 (summary reads layers, not the score text)
     ) -> list[ValidationIssue]:
-        ctx = _load_context()
+        ctx = _load_context(self.check_id)
         if ctx is None:
             return []
         used = ctx.used_classes(config)

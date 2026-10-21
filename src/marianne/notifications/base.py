@@ -259,7 +259,7 @@ class NotificationManager:
                 try:
                     success = await notifier.send(context)
                     results[notifier_name] = success
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 — structured logger reports notifier_failed
                     # Log but don't raise - notifications shouldn't break execution
                     _logger.warning(
                         "notifier_failed",
@@ -422,7 +422,7 @@ class NotificationManager:
         for notifier in self._notifiers:
             try:
                 await notifier.close()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — structured logger reports notifier_close_error
                 _logger.warning(
                     "notifier_close_error",
                     notifier=type(notifier).__name__,

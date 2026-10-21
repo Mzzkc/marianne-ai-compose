@@ -38,7 +38,7 @@ async def _blocks(coro_fn, timeout: float = 0.15) -> bool:
         task.cancel()
         try:
             await task
-        except (asyncio.CancelledError, Exception):
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001 — join cancelled test task after assertions without masking teardown
             pass
         return True
 

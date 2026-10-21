@@ -83,7 +83,7 @@ async def evaluate_skip_command(
 
     try:
         expanded = _substitute(swc.command, full_context)
-    except Exception as exc:  # pragma: no cover — replace() is total, defensive
+    except Exception as exc:  # noqa: BLE001 — structured logger reports baton.skip_command.substitution_failed  #  pragma: no cover — replace() is total, defensive
         _logger.warning(
             "baton.skip_command.substitution_failed",
             extra={"sheet_num": sheet_num, "error": str(exc), "command": _truncate(swc.command)},
@@ -170,7 +170,7 @@ async def evaluate_skip_command(
             return (True, reason)
         return (False, "")
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — structured logger reports baton.skip_command.error
         # Any unexpected runtime error: fail-open.
         _logger.warning(
             "baton.skip_command.error",

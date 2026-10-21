@@ -287,7 +287,8 @@ def _probe_shutting_down(socket_path: Path | None = None) -> bool | None:
             if not isinstance(shutting_down, bool):
                 return None
             return shutting_down
-        except Exception:
+        except Exception:  # noqa: BLE001 — unreachable conductor leaves shutdown state unknown
+            _logger.debug("conductor.shutdown_probe_failed", exc_info=True)
             return None
         finally:
             if client is not None:
@@ -295,7 +296,8 @@ def _probe_shutting_down(socket_path: Path | None = None) -> bool | None:
 
     try:
         return asyncio.run(_probe())
-    except Exception:
+    except Exception:  # noqa: BLE001 — probe execution or cleanup failure leaves shutdown state unknown
+        _logger.debug("conductor.shutdown_probe_cleanup_failed", exc_info=True)
         return None
 
 
@@ -325,7 +327,8 @@ def _check_running_jobs(
                 "running_jobs": running,
                 "job_ids": ready.get("job_ids", []),
             }
-        except Exception:
+        except Exception:  # noqa: BLE001 — unreachable conductor leaves running job state unknown
+            _logger.debug("conductor.running_jobs_probe_failed", exc_info=True)
             return None
         finally:
             if client is not None:
@@ -333,7 +336,8 @@ def _check_running_jobs(
 
     try:
         return asyncio.run(_probe())
-    except Exception:
+    except Exception:  # noqa: BLE001 — probe execution or cleanup failure leaves running job state unknown
+        _logger.debug("conductor.running_jobs_probe_cleanup_failed", exc_info=True)
         return None
 
 

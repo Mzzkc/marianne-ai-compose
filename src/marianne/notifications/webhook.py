@@ -342,7 +342,7 @@ class WebhookNotifier:
 
             return success
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — structured logger reports webhook_notification_unexpected_error
             _logger.warning(
                 "webhook_notification_unexpected_error",
                 error=str(e),

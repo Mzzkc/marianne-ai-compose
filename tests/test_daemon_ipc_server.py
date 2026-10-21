@@ -449,7 +449,7 @@ class TestDaemonServerConcurrency:
         writer.close()
         try:
             await writer.wait_closed()
-        except Exception:
+        except OSError:
             pass
 
         # Now stop the server — should complete quickly since client is gone

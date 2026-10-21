@@ -154,7 +154,7 @@ def _seed_jobs(backend: JsonStateBackend) -> None:
     def _run() -> None:
         try:
             asyncio.run(_save())
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — transfer thread failure to the caller which re-raises it after join
             result[0] = exc
 
     t = threading.Thread(target=_run)
@@ -175,7 +175,7 @@ def _save_state(backend: JsonStateBackend, state: CheckpointState) -> None:
     def _run() -> None:
         try:
             asyncio.run(_save())
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — transfer thread failure to the caller which re-raises it after join
             result[0] = exc
 
     t = threading.Thread(target=_run)

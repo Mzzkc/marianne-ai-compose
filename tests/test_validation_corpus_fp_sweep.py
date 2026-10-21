@@ -41,12 +41,16 @@ def test_no_new_corpus_hits(
     # .marianne layers, their PATH, and their class map are facts about one
     # machine, not about the corpus; CI's bare runner (CI run 38644391651)
     # grew V215 ×60, V310 ×20, V311 ×6, V210 ×6 on the same scores.
+    original_load_all_profiles = loader.load_all_profiles
     builtins_only = lru_cache(maxsize=1)(
-        lambda: loader.load_all_profiles(
+        lambda: original_load_all_profiles(
             organization_dir=tmp_path / "no-org", venue_dir=tmp_path / "no-venue",
         )
     )
     monkeypatch.setattr(loader, "load_all_profiles", builtins_only)
+    # Fail here if the hermetic loader breaks; validators deliberately degrade
+    # on profile errors, so a sweep alone cannot prove it exercised profiles.
+    assert builtins_only(), "The corpus sweep requires the shipped profiles"
     monkeypatch.setattr(availability, "check_profile_available", lambda profile: (True, ""))
     monkeypatch.setattr(
         availability, "check_instrument_available", lambda name, registry: (True, "")
@@ -60,6 +64,7 @@ def test_no_new_corpus_hits(
         [c for c in create_default_checks() if c.check_id != "V002"]
     )  # V002 (workspace parent exists) is about the machine's filesystem
     checked = 0
+    new_hits: dict[str, dict[str, int]] = {}
     for name, expected in selected.items():
         path = root / name.split(":", 1)[1]
         if expected.get("absent") and not path.exists():
@@ -79,8 +84,10 @@ def test_no_new_corpus_hits(
             for code, count in actual.items()
             if count > prior.get(code, 0)
         }
-        assert not growth, (
-            f"New validation hits in {name}: {growth}; read the score before refreshing"
-        )
+        if growth:
+            new_hits[name] = growth
         checked += 1
     assert checked > 0, f"Corpus sweep vacuous for {scope}: {root}"
+    assert not new_hits, (
+        f"New validation hits: {new_hits}; read the scores before refreshing"
+    )

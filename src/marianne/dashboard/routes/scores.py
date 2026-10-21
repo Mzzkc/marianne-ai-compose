@@ -110,7 +110,7 @@ def validate_schema(
 
     except ValidationError as e:
         return None, f"Schema validation failed: {e}"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — return failure details through the public result contract
         return None, f"Score YAML error: {e}"
 
 
@@ -268,7 +268,7 @@ async def validate_config(request: ValidateConfigRequest) -> ValidateConfigRespo
                     # Build score summary for valid score YAML.
                     config_summary = build_config_summary(config)
 
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 — validator failure becomes a V999 error in the HTTP response
                     # Extended validation failed - this is unusual but handle gracefully
                     issues = [
                         ValidationIssueResponse(
@@ -419,7 +419,7 @@ async def submit_score(
             client_cwd=client_cwd,
             runtime_variables=request.runtime_variables,
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — structured logger reports dashboard.score_submission_failed
         _logger.error("dashboard.score_submission_failed", error=str(e))
         raise HTTPException(
             status_code=503,

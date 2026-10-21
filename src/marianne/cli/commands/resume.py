@@ -151,7 +151,7 @@ async def _resume_job(
     }
     try:
         routed, result = await try_daemon_route("job.resume", params)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — CLI boundary reports the error and exits unsuccessfully
         # Business logic error from conductor (e.g., job not found)
         output_error(
             str(exc),

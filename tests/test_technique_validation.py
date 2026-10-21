@@ -56,7 +56,7 @@ def _check_mcp_instrument(
                             "MCP tools will only be available via code mode.",
                         )
                     )
-        except Exception:
+        except (LookupError, ValueError, OSError):
             pass
     return issues
 

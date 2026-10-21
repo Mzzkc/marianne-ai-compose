@@ -203,7 +203,7 @@ class McpPoolManager:
             if handle.bridge is not None:
                 try:
                     await handle.bridge.stop()
-                except Exception:
+                except Exception:  # noqa: BLE001 — structured logger reports mcp_pool.bridge_stop_error
                     _logger.warning(
                         "mcp_pool.bridge_stop_error",
                         extra={"server": name},
@@ -249,7 +249,7 @@ class McpPoolManager:
                     "mcp_pool.server_already_exited",
                     extra={"server": name},
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports mcp_pool.server_stop_error
                 _logger.warning(
                     "mcp_pool.server_stop_error",
                     extra={"server": name},

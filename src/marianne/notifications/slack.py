@@ -307,7 +307,7 @@ class SlackNotifier:
         except httpx.RequestError as e:
             _logger.warning("slack_notification_failed", error=str(e))
             return False
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — structured logger reports slack_notification_unexpected_error
             _logger.warning("slack_notification_unexpected_error", error=str(e), exc_info=True)
             return False
 

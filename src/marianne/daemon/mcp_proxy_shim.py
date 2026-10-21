@@ -128,7 +128,7 @@ async def forward_stdin_to_socket(
             await writer.drain()
     except (ConnectionResetError, BrokenPipeError):
         pass
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — proxy task reports the stream failure on stderr
         print(f"mcp_proxy_shim: stdin->socket error: {exc}", file=sys.stderr)
 
 
@@ -153,7 +153,7 @@ async def forward_socket_to_stdout(
             await stdout_writer.drain()
     except (ConnectionResetError, BrokenPipeError):
         pass
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — proxy task reports the stream failure on stderr
         print(f"mcp_proxy_shim: socket->stdout error: {exc}", file=sys.stderr)
 
 

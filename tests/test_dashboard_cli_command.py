@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 import typer
 
 from marianne.cli.commands.dashboard import dashboard, mcp
@@ -55,9 +56,10 @@ class TestDashboardCreateAppInvocation:
         mock_create_app = MagicMock(return_value=MagicMock())
 
         with (
-            patch.dict(sys.modules, {"uvicorn": mock_uvicorn}),
+            pytest.MonkeyPatch.context() as modules,
             patch("marianne.dashboard.create_app", mock_create_app),
         ):
+            modules.setitem(sys.modules, "uvicorn", mock_uvicorn)
             runner.invoke(_app, ["dashboard", "--workspace", str(tmp_path)])
 
         mock_create_app.assert_called_once()
@@ -77,9 +79,10 @@ class TestDashboardKeyboardInterrupt:
         mock_create_app = MagicMock(return_value=MagicMock())
 
         with (
-            patch.dict(sys.modules, {"uvicorn": mock_uvicorn}),
+            pytest.MonkeyPatch.context() as modules,
             patch("marianne.dashboard.create_app", mock_create_app),
         ):
+            modules.setitem(sys.modules, "uvicorn", mock_uvicorn)
             result = runner.invoke(_app, ["dashboard", "--workspace", str(tmp_path)])
 
         # Should exit cleanly (0) after catching KeyboardInterrupt
@@ -110,9 +113,10 @@ class TestDashboardCustomOptions:
         mock_create_app = MagicMock(return_value=MagicMock())
 
         with (
-            patch.dict(sys.modules, {"uvicorn": mock_uvicorn}),
+            pytest.MonkeyPatch.context() as modules,
             patch("marianne.dashboard.create_app", mock_create_app),
         ):
+            modules.setitem(sys.modules, "uvicorn", mock_uvicorn)
             runner.invoke(
                 _app,
                 [
@@ -138,10 +142,11 @@ class TestExposedBindWarning:
     def _run(self, tmp_path: Path, host: str) -> str:
         mock_uvicorn = MagicMock()
         with (
-            patch.dict(sys.modules, {"uvicorn": mock_uvicorn}),
+            pytest.MonkeyPatch.context() as modules,
             patch("marianne.dashboard.create_app", MagicMock(return_value=MagicMock())),
             patch.dict("os.environ", {"MZT_AUTH_MODE": "localhost_only"}),
         ):
+            modules.setitem(sys.modules, "uvicorn", mock_uvicorn)
             result = runner.invoke(
                 _app, ["dashboard", "--host", host, "--workspace", str(tmp_path)],
                 env={"COLUMNS": "200"},

@@ -225,7 +225,7 @@ class ProfilerCollector:
 
         try:
             system_total, system_available, system_used = self._get_system_memory()
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports profiler.system_memory_probe_failed
             _logger.debug("profiler.system_memory_probe_failed", exc_info=True)
 
         # 2. Per-process metrics
@@ -236,7 +236,7 @@ class ProfilerCollector:
         if self._config.gpu_enabled:
             try:
                 gpus_raw = await GpuProbe.get_gpu_metrics_async()
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports profiler.gpu_probe_failed
                 _logger.debug("profiler.gpu_probe_failed", exc_info=True)
 
         # Convert gpu_probe.GpuMetric (dataclass) → profiler.models.GpuMetric (Pydantic)
@@ -271,7 +271,7 @@ class ProfilerCollector:
         if self._manager is not None:
             try:
                 pressure_level = self._manager.backpressure.current_level().value
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports profiler.pressure_level_failed
                 _logger.debug("profiler.pressure_level_failed", exc_info=True)
 
         # 7. Running jobs / active sheets
@@ -339,7 +339,7 @@ class ProfilerCollector:
                 try:
                     await self._storage.write_snapshot(snapshot)
                     self._storage.append_jsonl(snapshot)
-                except Exception:
+                except Exception:  # noqa: BLE001 — structured logger reports profiler.storage_write_failed
                     _logger.warning("profiler.storage_write_failed", exc_info=True)
 
                 # 3. Run anomaly detection
@@ -369,7 +369,7 @@ class ProfilerCollector:
                 ):
                     try:
                         await self._storage.cleanup(self._config.retention)
-                    except Exception:
+                    except Exception:  # noqa: BLE001 — structured logger reports profiler.retention_cleanup_failed
                         _logger.warning(
                             "profiler.retention_cleanup_failed", exc_info=True
                         )
@@ -382,7 +382,7 @@ class ProfilerCollector:
 
             except asyncio.CancelledError:
                 break
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports profiler.collection_loop_error
                 _logger.warning("profiler.collection_loop_error", exc_info=True)
                 # Back off on error to avoid tight error loops
                 try:
@@ -723,7 +723,7 @@ class ProfilerCollector:
         """Write a process event to storage, swallowing errors."""
         try:
             await self._storage.write_event(event)
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports profiler.event_write_failed
             _logger.debug("profiler.event_write_failed", exc_info=True)
 
     # ------------------------------------------------------------------
@@ -781,7 +781,7 @@ class ProfilerCollector:
             context["anomalies_active"] = [
                 a.anomaly_type.value for a in anomalies
             ]
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports profiler.anomaly_check_for_context_failed
             _logger.debug("profiler.anomaly_check_for_context_failed", exc_info=True)
 
         return context
@@ -812,7 +812,7 @@ class ProfilerCollector:
             context["anomalies_active"] = [
                 a.anomaly_type.value for a in anomalies
             ]
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports profiler.anomaly_check_for_context_failed
             _logger.debug("profiler.anomaly_check_for_context_failed", exc_info=True)
 
         return context

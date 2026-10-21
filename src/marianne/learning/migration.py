@@ -212,7 +212,7 @@ class OutcomeMigrator:
                     result.imported_workspaces.append(str(outcome_file.parent))
                 else:
                     result.skipped_workspaces.append(str(outcome_file.parent))
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — structured logger reports migration error
                 error_msg = f"Error migrating {outcome_file}: {e}"
                 _logger.warning(error_msg)
                 result.errors.append(error_msg)
@@ -222,7 +222,7 @@ class OutcomeMigrator:
             try:
                 detected_count: int = self._detect_patterns_from_store()
                 result.patterns_detected = detected_count
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — structured logger reports pattern_detection_error
                 _logger.warning("pattern_detection_error", error=str(e), exc_info=True)
                 result.errors.append(f"Pattern detection error: {e}")
 
@@ -260,7 +260,7 @@ class OutcomeMigrator:
                 result.imported_workspaces.append(str(workspace_path))
             else:
                 result.skipped_workspaces.append(str(workspace_path))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — structured logger reports workspace_migration_error
             _logger.warning(
                 "workspace_migration_error",
                 workspace=str(workspace_path),
@@ -311,7 +311,7 @@ class OutcomeMigrator:
                         model=outcome_data.get("model"),
                     )
                     imported_count += 1
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — structured logger reports skipping_invalid_outcome
                 skipped_count += 1
                 _logger.warning("skipping_invalid_outcome", error=str(e), exc_info=True)
                 continue
@@ -393,7 +393,7 @@ class OutcomeMigrator:
                 applied_pattern_ids=_string_list(data.get("applied_pattern_ids")),
                 timestamp=parsed_timestamp,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — structured logger reports outcome_parse_failed
             _logger.warning("outcome_parse_failed", error=str(e), exc_info=True)
             return None
 
@@ -421,7 +421,7 @@ class OutcomeMigrator:
             # Return current pattern count
             stats = self._store.get_execution_stats()
             return int(stats.get("total_patterns", 0))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — structured logger reports pattern_detection_error
             _logger.warning("pattern_detection_error", error=str(e))
             return 0
 

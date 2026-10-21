@@ -827,13 +827,17 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
 
         Verifies that the API key is present and the httpx client can be
         created. Does NOT make any HTTP requests.
+        Client initialization exceptions log
+        ``openai_compatible_initialization_failed`` at WARNING and return False.
+        A missing required API key returns False before attempting initialization.
         """
         if self.api_key_env and not self._api_key:
             return False
         try:
             await self._get_client()
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001 — initialization failure marks the backend unavailable
+            _logger.warning("openai_compatible_initialization_failed", exc_info=True)
             return False
 
     async def close(self) -> None:

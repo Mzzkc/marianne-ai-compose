@@ -161,7 +161,7 @@ class MonitorApp(App[None]):
         try:
             async for event in self._reader.stream_events():
                 await self._handle_event(event)
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports event_stream_failed
             _logger.debug("event_stream_failed", exc_info=True)
             # Retry after delay
             await asyncio.sleep(5.0)
@@ -208,7 +208,8 @@ class MonitorApp(App[None]):
             if self._reader._ipc_client is not None:
                 try:
                     self._conductor_up = await self._reader._ipc_client.is_daemon_running()
-                except Exception:
+                except Exception:  # noqa: BLE001 — periodic status probing tolerates an unreachable conductor
+                    _logger.debug("tui.conductor_probe_failed", exc_info=True)
                     self._conductor_up = False
             else:
                 self._conductor_up = snapshot is not None
@@ -241,7 +242,7 @@ class MonitorApp(App[None]):
             timeline = self.query_one("#timeline-panel", TimelinePanel)
             timeline.update_data(events=events, observer_events=observer_events)
 
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports refresh_data failed
             _logger.debug("refresh_data failed", exc_info=True)
 
     # ------------------------------------------------------------------

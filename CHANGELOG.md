@@ -234,6 +234,19 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **Diagnosable fallback paths (GH #308, MN-007).** Profile and capability-class
+  preflight failures now emit `validation.profiles_unavailable_skip` warnings
+  with check identity and exception information while retaining existing
+  skip/fallback results. These are log events, not new validation findings.
+  Previously silent runtime fallbacks now report their failures, including
+  instrument metadata, judgment context, dashboard data, profiler storage,
+  backend initialization, output decoding, and schema type hints; optional
+  probes log at DEBUG. Ruff BLE001 and an AST regression guard enforce reviewed
+  broad exception boundaries. The validation corpus fixture now exercises the
+  real profile loader and records reviewed diagnostics; timestamp tests no
+  longer swallow assertions, and dashboard CLI mocks restore only their own
+  module entry so later route tests retain their injected state.
+
 - **Pausing then stopping no longer costs five minutes.** Graceful shutdown
   waited on every job task, and a PAUSED job's task waits for a resume that
   cannot come during shutdown, so `mzt stop` after `mzt pause` always ran the
