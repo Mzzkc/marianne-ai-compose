@@ -602,7 +602,7 @@ store.delete_pattern(pattern_id="xyz0987654321")
 
 ### Entropy Response Tuning
 
-Customize entropy response behavior in the score itself — `learning.entropy_response` is a score-level key:
+`learning.entropy_response` is a **reserved** score key: the schema accepts it and `mzt validate` warns V327, but no runtime code reads it today. The retained syntax:
 
 ```yaml
 # score YAML (learning.entropy_response)

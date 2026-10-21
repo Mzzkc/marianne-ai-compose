@@ -471,3 +471,35 @@ def test_l12_anchor_inventory_ignores_code_and_handles_repeated_headings(repo: P
     )
     findings = cl.glossary_findings(repo, cl.schema_inventory(Root, repo), Root)
     assert [f.id for f in findings] == ["L12:workspace"]
+
+
+class _ReservedRoot(BaseModel):
+    """A schema with one live key and one reserved key."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(description="Score name")
+    live_knob: int = Field(default=0, description="A knob the runtime reads")
+    dead_knob: int = Field(default=0, description="Reserved: no runtime reader yet (V327).")
+
+
+def test_l13_fires_on_reserved_keys_taught_and_not_on_live_or_labelled(tmp_path: Path) -> None:
+    """GH #472: a teaching surface (doc block or example score) that sets a
+    reserved key teaches a setting that does nothing."""
+    _write(tmp_path, "plugins/marianne/skills/score-authoring/SKILL.md", "")
+    _write(tmp_path, "plugins/marianne/skills/composing/SKILL.md", "")
+    for ref in cl.SKILL_REFS:
+        _write(tmp_path, ref, "")
+    _write(tmp_path, "docs/guide.md", (
+        "Live example:\n```yaml\nname: ok\nlive_knob: 1\n```\n"
+        "Teaches a dead key:\n```yaml\nname: bad\ndead_knob: 1\n```\n"
+        "Retained syntax for the reserved key:\n```yaml\nname: shown\ndead_knob: 2\n```\n"
+        "Broken example:\n```yaml\nname: broken\ndead_knob: 3\n```\n"
+    ))
+    _write(tmp_path, "examples/good.yaml", "name: good\nlive_knob: 1\n")
+    _write(tmp_path, "examples/bad.yaml", "name: bad\ndead_knob: 1\n")
+
+    hits = cl.reserved_taught(tmp_path, _ReservedRoot, {"dead_knob"})
+    assert sorted((rel, idx) for rel, idx, _ in hits) == [
+        ("docs/guide.md", 1), ("examples/bad.yaml", -1),
+    ]
+    assert all(path == "dead_knob" for _, _, path in hits)

@@ -115,7 +115,6 @@ concert:
   max_chain_depth: 10
   cooldown_between_jobs_seconds: 60
   inherit_workspace: true
-  concert_log_path: null
   abort_concert_on_hook_failure: false
 ```
 
@@ -141,18 +140,16 @@ on_success:
   - type: run_job
     job_path: "next-phase.yaml"
     description: "Start next phase"
-    detached: true
     fresh: true
-    inherit_learning: true
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
 | `job_path` | *required* | Path to score YAML. Supports `{workspace}` template. |
 | `job_workspace` | `null` | Override workspace for chained job. |
-| `detached` | `false` | Spawn the job and do not wait for completion. |
+| `detached` | `false` | Reserved (V327): a `run_job` hook already returns once the child is accepted. |
 | `fresh` | `false` | Pass `--fresh` to clear previous state. Required for self-chaining. |
-| `inherit_learning` | `true` | Share the learning store with the parent. |
+| `inherit_learning` | `true` | Reserved (V327): every score already shares the one global learning store. |
 | `on_failure` | `"continue"` | `"continue"` runs the next hook; `"abort"` stops remaining hooks. |
 | `timeout_seconds` | `300.0` | Maximum hook execution time. |
 
@@ -237,7 +234,6 @@ validations:
 on_success:
   - type: run_job
     job_path: "quality-loop.yaml"
-    detached: true
     fresh: true              # CRITICAL: prevents resuming from previous state
 
 concert:
@@ -419,8 +415,9 @@ each score can see.
 
 ### Mechanism 3: Learning Store Inheritance
 
-With `inherit_learning: true` (the default), chained scores share the same
-learning store. This means patterns discovered during Score A are available
+Chained scores share the same learning store: there is one global store
+(`~/.marianne/global-learning.db`) for every score on the conductor, so
+`inherit_learning` is reserved and changes nothing. This means patterns discovered during Score A are available
 to Score B's agents immediately — the learning system carries forward
 optimization insights, failure patterns, and success strategies across the
 entire concert.
@@ -429,12 +426,11 @@ entire concert.
 on_success:
   - type: run_job
     job_path: "phase-2.yaml"
-    inherit_learning: true    # Default — patterns carry forward
 ```
 
-Set `inherit_learning: false` when you want a score to start with a clean
-learning context, such as when the next score operates in a completely
-different domain where prior patterns would be misleading.
+A score that should not draw on prior patterns sets `learning.use_global_patterns:
+false` (or `learning.enabled: false`) for itself; `inherit_learning: false` on
+the hook does not isolate it.
 
 ### Mechanism 4: Dynamic Score Generation
 
@@ -582,9 +578,9 @@ The conductor maintains a `ConcertContext` across the entire chain, tracking:
 | `total_sheets_completed` | Accumulated sheets across all jobs |
 | `jobs_in_chain` | List of all job IDs in the chain |
 
-This context is passed from parent to child via the conductor's IPC when
-using `detached: true`, or via subprocess environment when falling back to
-direct execution.
+This context is passed from parent to child via the conductor's IPC, which
+records it with the chained job (the conductor submits the child and does not
+wait on it).
 
 ---
 
@@ -623,9 +619,9 @@ mzt diagnose phase-2-write
 
 ### Hook Timeout
 
-If a `run_job` hook times out, increase `timeout_seconds`. For long-running
-chained jobs, use `detached: true` so the hook returns immediately after
-submitting the job to the conductor.
+If a `run_job` hook times out, increase `timeout_seconds`. A `run_job` hook
+returns once the conductor has accepted the chained job; it never waits for
+that job to finish, so hook-level `detached` is reserved (V327) and not needed.
 
 ### Workspace Conflicts in Self-Chaining
 

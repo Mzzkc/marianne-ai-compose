@@ -318,6 +318,8 @@ Each entry in `bridge.mcp_servers`.
 | `working_dir` | `str \| None` | `None` | | Working directory for the server |
 | `timeout_seconds` | `float` | `30.0` | | Timeout for server operations |
 
+Retained syntax for the reserved `bridge:` section (V327 warns when a score sets it):
+
 ```yaml
 bridge:
   enabled: true
@@ -650,6 +652,8 @@ handling; the table below describes retained syntax, not active behaviour.
 | `max_waits` | `int` | `24` | `>= 1` | Reserved: no runtime reader (V327 warns when set). Maximum wait cycles (24 = 24 hours) |
 | `max_quota_waits` | `int` | `48` | `>= 1` | Reserved: no runtime reader (V327 warns when set). Maximum quota exhaustion wait cycles before failing (48 = 48 hours at 60min/wait) |
 
+Retained syntax for the reserved `rate_limit:` section (V327 warns when a score sets it):
+
 ```yaml
 rate_limit:
   detection_patterns:
@@ -677,6 +681,8 @@ active CLOSED → OPEN → HALF_OPEN behaviour.
 | `recovery_timeout_seconds` | `float` | `300.0` | `> 0`, `<= 3600` | Reserved: no runtime reader (V327 warns when set). Seconds in OPEN state before testing recovery (max 1 hour) |
 | `cross_workspace_coordination` | `bool` | `true` | | Reserved. In-process cross-job rate-limit coordination is structural (all jobs share one conductor) and always on; reserved for future cross-process coordination. |
 | `honor_other_jobs_rate_limits` | `bool` | `true` | | Reserved. A rate limit detected by any job already pauses dispatch to that instrument for all jobs (matches this default). Setting `false` has no effect in-process. |
+
+Retained syntax for the reserved `circuit_breaker:` section (V327 warns when a score sets it):
 
 ```yaml
 circuit_breaker:
@@ -713,7 +719,6 @@ cost_limits:
   enabled: true
   max_cost_per_sheet: 5.00
   max_cost_per_job: 100.00
-  warn_at_percent: 80
 ```
 
 ---
@@ -937,7 +942,6 @@ Git worktree isolation for parallel-safe score execution. Each score runs in an 
 isolation:
   enabled: true
   mode: worktree
-  branch_prefix: marianne
   cleanup_on_success: true
   cleanup_on_failure: false
 ```
@@ -970,6 +974,8 @@ grounding pass; validate outputs with `validations:` instead.
 | `name` | `str \| None` | `None` | | Custom name (uses type if not specified) |
 | `expected_checksums` | `dict[str, str]` | `{}` | | Reserved: no runtime reader (V327 warns when set). Map of file path to expected checksum |
 | `checksum_algorithm` | `"md5" \| "sha256"` | `"sha256"` | | Reserved: no runtime reader (V327 warns when set). Checksum algorithm |
+
+Retained syntax for the reserved `grounding:` section (V327 warns when a score sets it):
 
 ```yaml
 grounding:
@@ -1008,15 +1014,8 @@ Identifies who (or what) is conducting the job. Affects escalation behavior and 
 | `auto_retry_on_transient_errors` | `bool` | `true` | | Reserved: no runtime reader (V327 warns when set). Automatically retry transient errors before escalating |
 | `notification_channels` | `list[str]` | `[]` | | Reserved: no runtime reader (V327 warns when set). Preferred notification channels. Empty = use job-level settings. |
 
-```yaml
-conductor:
-  name: "Claude Evolution Agent"
-  role: ai
-  identity_context: "Self-improving orchestration agent"
-  preferences:
-    prefer_minimal_output: true
-    auto_retry_on_transient_errors: true
-```
+The whole `conductor:` score section is deprecated (V328): nothing reads it,
+and conductor behaviour lives in `~/.marianne/conductor.yaml`. Omit it.
 
 ---
 
@@ -1078,7 +1077,6 @@ on_success:
   - type: run_job
     job_path: "{workspace}/next-phase.yaml"
     description: "Chain to next phase"
-    detached: true
     fresh: true
   - type: run_command
     command: "curl -X POST https://api.example.com/notify"
@@ -1183,15 +1181,7 @@ Nested under `learning.auto_apply`. Enables high-trust patterns to be applied wi
 ```yaml
 learning:
   enabled: true
-  exploration_rate: 0.15
-  exploration_budget:
-    enabled: true
-    floor: 0.05
-    ceiling: 0.50
-  auto_apply:
-    enabled: true
-    trust_threshold: 0.85
-    max_patterns_per_sheet: 3
+  use_global_patterns: true
 ```
 
 ---
@@ -1200,7 +1190,9 @@ learning:
 
 *Source: `src/marianne/core/config/learning.py` — `CheckpointConfig`*
 
-Proactive checkpoints ask for confirmation before dangerous operations.
+Reserved score section: no runtime code reads `checkpoints:`. A score that
+sets it receives V327. The table below describes retained syntax, not an
+active confirmation gate.
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -1221,6 +1213,8 @@ Each trigger must have at least one condition (`sheet_nums`, `prompt_contains`, 
 | `min_retry_count` | `int \| None` | `None` | `>= 0` | Trigger if retry count >= this value |
 | `requires_confirmation` | `bool` | `true` | | Require explicit confirmation vs. just warn |
 | `message` | `str` | `""` | | Custom message shown when triggered |
+
+Retained syntax for the reserved `checkpoints:` section (V327 warns when a score sets it):
 
 ```yaml
 checkpoints:
@@ -1254,6 +1248,8 @@ reviewer pass; a review is a sheet of its own (see the `review` examples).
 | `max_retry_for_review` | `int` | `2` | `0–5` | Reserved: no runtime reader (V327 warns when set). Maximum retries when score is too low |
 | `review_prompt_template` | `str \| None` | `None` | | Custom prompt template for review |
 
+Retained syntax for the reserved `ai_review:` section (V327 warns when a score sets it):
+
 ```yaml
 ai_review:
   enabled: true
@@ -1283,6 +1279,8 @@ table below describes retained score syntax, not active log routing.
 | `include_timestamps` | `bool` | `true` | | Reserved: no runtime reader (V327 warns when set). Include ISO8601 UTC timestamps |
 | `include_context` | `bool` | `true` | | Reserved: no runtime reader (V327 warns when set). Include bound context (job_id, sheet_num) |
 
+Retained syntax for the reserved `logging:` section (V327 warns when a score sets it):
+
 ```yaml
 logging:
   level: DEBUG
@@ -1305,6 +1303,8 @@ extraction step.
 | `enabled` | `bool` | `false` | | Enable agent feedback extraction |
 | `pattern` | `str` | `"(?s)FEEDBACK_START(.+?)FEEDBACK_END"` | Must be valid regex | Regex with capture group to extract feedback |
 | `format` | `"json" \| "yaml" \| "text"` | `"json"` | | Format of extracted feedback block |
+
+Retained syntax for the reserved `feedback:` section (V327 warns when a score sets it):
 
 ```yaml
 feedback:

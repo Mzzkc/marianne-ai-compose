@@ -401,7 +401,6 @@ prompt:
 on_success:
   - type: run_job
     job_path: "monitor-loop.yaml"
-    detached: true
     fresh: true
 
 concert:

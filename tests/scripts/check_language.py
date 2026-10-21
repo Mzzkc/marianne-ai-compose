@@ -44,6 +44,10 @@ L11 orphan-check     a V-code check class defined in ``src/marianne/
                       doc row marks retired (GH #439)
 
 L12 glossary-unresolved  a glossary row whose code name is not a schema key
+L13 reserved-taught  a doc, skill or shipped example score sets a key the schema
+                      marks Reserved/Deprecated: it teaches a setting that does
+                      nothing (GH #472; V327 warns on scores, this gates the
+                      teaching layers)
                       path, ``mzt`` command, or status value, and not a
                       ``(concept)`` row with an existing doc anchor; a broken
                       link target is the same defect (PL-10)
@@ -83,8 +87,9 @@ CHECKS = {
     "L10": "dead-end-hint",
     "L11": "orphan-check",
     "L12": "glossary-unresolved",
+    "L13": "reserved-taught",
 }
-GATING = {"L01", "L02", "L03", "L04", "L05", "L06", "L07", "L10", "L11", "L12"}
+GATING = {"L01", "L02", "L03", "L04", "L05", "L06", "L07", "L10", "L11", "L12", "L13"}
 
 # Author surfaces, relative to the repository root. The plugin tree is the
 # ``plugins`` submodule.
@@ -321,7 +326,7 @@ def homonym_leaves(keys: list[KeyInfo]) -> frozenset[str]:
 # nothing about the current language. Kept explicit: widening it is a reviewed
 # edit, never a regex tweak to make a finding disappear.
 _NOT_TEACHING = re.compile(
-    r"\b(proposed|does not exist|now rejected|removed|legacy|wrong|not yet exposed|"
+    r"\b(proposed|does not exist|now rejected|removed|legacy|wrong|broken example|not yet exposed|"
     r"sidecar|agent-card|instrument profile|classes\.yaml|composition-design)\b",
     re.IGNORECASE,
 )
@@ -395,6 +400,89 @@ def stale_example_keys(repo: Path, root: type[BaseModel]) -> list[tuple[str, int
             for item in unknown:
                 location = f"{item.path}.{item.key}" if item.path else item.key
                 out.append((rel, index, _normalize_path(location)))
+    return out
+
+
+_RESERVED_MARK = ("Reserved:", "Reserved.", "Loader-owned", "Deprecated:")
+
+
+def _set_paths(data: Any, prefix: str = "") -> list[str]:
+    """Every key path a YAML mapping sets, normalized like schema paths."""
+    out: list[str] = []
+    if isinstance(data, dict):
+        for k, v in data.items():
+            path = f"{prefix}.{k}" if prefix else str(k)
+            out.append(_normalize_path(path))
+            out.extend(_set_paths(v, path))
+    elif isinstance(data, list):
+        for item in data:
+            out.extend(_set_paths(item, f"{prefix}[]"))
+    return out
+
+
+def reserved_taught(
+    repo: Path, root: type[BaseModel], reserved: set[str],
+) -> list[tuple[str, int, str]]:
+    """Reserved keys set by a score-shaped doc/skill block or a shipped example.
+
+    Uses the same block selection as L06 (score-shaped, not marked as a
+    counter-example, not a conductor block), plus every ``examples/**/*.yaml``
+    file whole. Returns ``(file, block_index, key_path)``; block_index is -1
+    for a whole example file.
+    """
+    roots = {(f.alias if isinstance(f.alias, str) else n) for n, f in root.model_fields.items()}
+    rels = list(SKILL_FILES + SKILL_REFS) + sorted(
+        str(p.relative_to(repo)) for p in (repo / "docs").glob("*.md")
+    )
+    plugin = repo / "plugins" / "marianne"
+    rels += sorted(
+        str(p.relative_to(repo))
+        for pattern in ("skills/**/*.md", "docs/**/*.md")
+        for p in plugin.glob(pattern)
+        if str(p.relative_to(repo)) not in rels
+    )
+    out: list[tuple[str, int, str]] = []
+    for rel in rels:
+        text = _read(repo, rel)
+        for index, match in enumerate(re.finditer(r"```ya?ml\n(.*?)```", text, flags=re.DOTALL)):
+            block = match.group(1)
+            context = _block_context(text, match.start(), block)
+            if _NOT_TEACHING.search(context) or _CONDUCTOR_FILE.search(context):
+                continue
+            lead_lines = [
+                ln for ln in text[: match.start()].rstrip().splitlines()[-6:]
+                if not ln.lstrip().startswith("|")
+            ]
+            if re.search(r"\breserved\b", "\n".join(lead_lines), re.IGNORECASE):
+                continue  # the prose right above the block says it is reserved
+            try:
+                data = yaml.safe_load(block)
+            except yaml.YAMLError:
+                continue
+            if not isinstance(data, dict) or not data:
+                continue
+            top = {str(k) for k in data}
+            if len(top & roots) < 0.6 * len(top):
+                continue
+            for path in sorted(set(_set_paths(data)) & reserved):
+                out.append((rel, index, path))
+    example_files = sorted((repo / "examples").rglob("*.yaml")) + sorted(
+        p for pattern in ("skills/**/*.yaml", "docs/examples/**/*.yaml")
+        for p in (repo / "plugins" / "marianne").glob(pattern)
+    )
+    for example in example_files:
+        try:
+            data = yaml.safe_load(example.read_text(encoding="utf-8"))
+        except (yaml.YAMLError, OSError, UnicodeDecodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        top = {str(k) for k in data}
+        if not top or len(top & roots) < 0.6 * len(top):
+            continue
+        rel = str(example.relative_to(repo))
+        for path in sorted(set(_set_paths(data)) & reserved):
+            out.append((rel, -1, path))
     return out
 
 
@@ -922,6 +1010,23 @@ def run_checks(
                 "L06",
                 location,
                 f"taught in {rel} YAML block {block_index}; the loader drops it",
+                where=[rel],
+            )
+        )
+
+    # L13 reserved-taught: a teaching surface sets a key that does nothing.
+    # The rows themselves are allowed to exist (configuration-reference marks
+    # them); setting one in an example is what teaches it.
+    reserved_paths = {
+        k.path for k in keys if k.description.startswith(_RESERVED_MARK)
+    }
+    for rel, block_index, location in reserved_taught(repo, root, reserved_paths):
+        where = f"YAML block {block_index}" if block_index >= 0 else "example score"
+        findings.append(
+            Finding(
+                "L13",
+                location,
+                f"set in {rel} {where}; the schema marks it reserved",
                 where=[rel],
             )
         )

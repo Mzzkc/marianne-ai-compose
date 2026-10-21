@@ -68,6 +68,17 @@ an alias over an existing profile; archive what nothing names.
 
 ### Added
 
+- **Language gate L13 `reserved-taught`.** A doc, skill or shipped example
+  score that sets a key the schema marks Reserved or Deprecated now fails the
+  score-language gate (GH #472). It found 31 such settings across the
+  configuration reference, the score-writing, concert, conductor and
+  learning guides, the plugin refs and four plugin example scores, all
+  fixed here: hook-level `detached` and `inherit_learning` (a `run_job` hook
+  never waits; there is one global learning store), `concert_log_path`,
+  `warn_at_percent`, `branch_prefix`, the deprecated `conductor:` section,
+  and reserved learning sub-blocks. Blocks that show reserved syntax on
+  purpose now say so in the line above them.
+
 - **`mzt instruments check NAME --live` and `mzt doctor --live`.** A profile
   could validate, its binary sit on PATH, and every dispatch still fail:
   a flag the installed CLI rejects (crush `--yolo`, since April), an

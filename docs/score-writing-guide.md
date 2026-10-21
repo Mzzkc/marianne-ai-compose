@@ -163,7 +163,6 @@ sheet:
 on_success:
   - type: run_job
     job_path: "examples/engineering/quality-continuous.yaml"
-    detached: true
     fresh: true         # Clear state for next iteration
 
 concert:
@@ -1914,6 +1913,9 @@ They run **after** standard validations pass, as an additional quality gate.
 
 ### Enabling Grounding
 
+> **Reserved.** No runtime code reads `grounding:` today; `mzt validate` warns
+> V327 when a score sets it. The retained syntax:
+
 ```yaml
 grounding:
   enabled: true
@@ -1965,7 +1967,6 @@ on_success:
   - type: run_job
     job_path: "examples/engineering/quality-continuous.yaml"
     description: "Chain to next quality iteration"
-    detached: true          # Don't wait for completion
     fresh: true             # Clear previous state
 
   # Run a shell command
@@ -2007,7 +2008,6 @@ concert:
   max_chain_depth: 10       # Maximum number of chained jobs
   cooldown_between_jobs_seconds: 120
   inherit_workspace: true   # Child jobs inherit parent workspace
-  concert_log_path: null    # Default: workspace/concert.log
   abort_concert_on_hook_failure: false
 ```
 
@@ -2017,7 +2017,6 @@ concert:
 on_success:
   - type: run_job
     job_path: "examples/engineering/quality-continuous.yaml"   # Chain to itself
-    detached: true
     fresh: true        # CRITICAL: prevents infinite empty-run loop
 
 concert:
@@ -2027,7 +2026,9 @@ concert:
 
 ### Conductor Configuration
 
-Identify who is conducting the score:
+> **Reserved.** `conductor.identity_context` and `conductor.preferences` have
+> no runtime reader (V327 warns); `name` and `role` are read. The retained
+> syntax:
 
 ```yaml
 conductor:
