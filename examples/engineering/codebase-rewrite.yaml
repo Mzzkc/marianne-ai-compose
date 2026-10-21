@@ -37,12 +37,12 @@
 # ║         |                                                                   ║
 # ║    Stage 3: Triage           → verify REAL vs FALSE_POSITIVE (CEGAR)        ║
 # ║         |                                                                   ║
-# ║    Stage 4: Rewrite Planning → prioritize, plan order (CEGAR refine)        ║
+# ║    Stage 4: Decomposition    → units, each with the tests that bind it      ║
 # ║         |                                                                   ║
 # ║    Stage 5: Candidate Gate   → verify REAL candidates exist (CEGAR gate)    ║
 # ║         |                                                                   ║
-# ║    Stage 6: Execute Rewrite  → actual code translation (skip if CONVERGED)  ║
-# ║         |                                                                   ║
+# ║    Stage 6: Unit Loop        → one unit per pass: adapt its tests, then     ║
+# ║         |                      write code to pass them (skip if CONVERGED)  ║
 # ║    Stage 7: Unit Validation  → run unit tests (Commissioning tier 1)        ║
 # ║         |                                                                   ║
 # ║    Stage 8: Integration      → run integration tests (Commissioning tier 2) ║
@@ -51,18 +51,18 @@
 # ║         |                      Commissioning acceptance)                    ║
 # ║    (sheet-9 trigger self-chains; next sheet 1 skips on COMPLETE)            ║
 # ║                                                                             ║
-# ║  Instruments (6 named definitions, matched to task grain):                  ║
-# ║    planner  (600s)  — Reasoning-focused planning: stages 1, 4              ║
-# ║    scanner  (600s)  — Fast scanning and test execution: stages 2, 7, 8     ║
-# ║    analyst  (1200s) — Deep code reasoning for triage: stage 3              ║
-# ║    gate     (300s)  — Lightweight verification: stage 5                    ║
-# ║    builder  (1800s) — Code generation with tool access: stage 6            ║
-# ║    reviewer (900s)  — Quality judgment and iteration decisions: stage 9    ║
+# ║  Instruments are bound per role on the movements (capability classes        ║
+# ║  from your classes.yaml, so the score is portable):                         ║
+# ║    strong    — recon, decomposition, triage: stages 1, 3, 4                 ║
+# ║    fast      — coarse scan, gate, test runs: stages 2, 5, 7, 8              ║
+# ║    workhorse — the unit loop's edit/test cycles: stage 6                    ║
+# ║    review    — quality judgment and the iteration decision: stage 9         ║
 # ║                                                                             ║
 # ║  Usage:                                                                     ║
-# ║    1. Copy this score to your project directory                             ║
-# ║    2. Edit prompt.variables for your migration (search [CHANGE THIS])       ║
-# ║    3. mzt start && mzt run codebase-rewrite.yaml                            ║
+# ║    1. Copy this score next to the project you are rewriting                 ║
+# ║    2. Edit prompt.variables (search [CHANGE THIS]); project_root is the     ║
+# ║       checkout the rewrite edits — the workspace holds only the ledgers     ║
+# ║    3. mzt start && mzt run codebase-rewrite.yaml --var project_root=/abs    ║
 # ║    4. mzt status codebase-rewrite --watch                                   ║
 # ║    The sheet-9 trigger chains the next iteration by itself (the score      ║
 # ║    names itself relative to its own path); the chain stops when the       ║
@@ -73,23 +73,27 @@
 # ║      01-reconnaissance.md       — Module inventory and dependencies         ║
 # ║      02-candidates.yaml         — Rewrite candidates with classification    ║
 # ║      03-triage.yaml             — Verified verdicts per candidate           ║
-# ║      04-rewrite-plan.md         — Prioritized rewrite plan                  ║
+# ║      04-rewrite-plan.md        — Units in loop order, each with its tests   ║
 # ║      05-gate-status.yaml        — PROCEED/CONVERGED gate decision           ║
-# ║      06-migration-log.md        — What was actually rewritten              ║
+# ║      06-migration-log.md       — One section per unit pass (red → green)    ║
+# ║      06-units-done.txt         — Written only when every unit is DONE       ║
 # ║      07-unit-test-results.md    — Unit test outcomes                       ║
 # ║      08-integration-results.md  — Integration test outcomes                ║
 # ║      09-quality-review.md       — Quality assessment + iteration gate      ║
 # ║                                                                             ║
-# ║  Sheets: 9 per iteration | Time: ~25-45 min | Cost: ~$3-10                ║
-# ║  Expected iterations: 2-5 for medium codebases (50-200 files)              ║
+# ║  Sheets: 9 per iteration (stage 6 loops, up to 8 passes)                    ║
+# ║  Time: ~1-4 h per iteration | Cost: ~$5-40, loop-bounded (cost_limit_usd)   ║
+# ║  Expected iterations: 1-3 for small codebases, 2-5 for medium (50-200 files)║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 name: codebase-rewrite
 description: >
   Generic codebase rewrite with iterative refinement. Cathedral Construction
   provides the iteration loop, CEGAR Loop provides progressive analysis
-  (coarse scan, triage, gate), and Commissioning Cascade provides
-  multi-scope validation (unit, integration, acceptance).
+  (coarse scan, triage, gate), the unit loop rewrites one decomposed unit
+  per pass by adapting its existing tests first and writing code to pass
+  them, and Commissioning Cascade provides multi-scope validation (unit,
+  integration, acceptance).
 
 workspace: ../../workspaces/codebase-rewrite
 
@@ -97,73 +101,56 @@ workspace: ../../workspaces/codebase-rewrite
 # INSTRUMENT CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-instrument: strong
+# Score default; every movement below binds its own role (see `movements`).
+instrument: workhorse
 instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 1200
-
-# Named instrument definitions — match capability to task grain.
-# CEGAR pattern guidance: sonnet-class for coarse-check, opus-class for triage.
-# Commissioning pattern guidance: CLI for test execution (Marianne has no pure
-# CLI instrument, so scanner with short timeout is the pragmatic equivalent).
-instruments:
-  planner:
-    profile: claude-code
-    config:
-      timeout_seconds: 600
-  scanner:
-    profile: claude-code
-    config:
-      timeout_seconds: 600
-  analyst:
-    profile: claude-code
-    config:
-      timeout_seconds: 1200
-  gate:
-    profile: claude-code
-    config:
-      timeout_seconds: 300
-  builder:
-    profile: claude-code
-    config:
-      timeout_seconds: 1800
-  reviewer:
-    profile: claude-code
-    config:
-      timeout_seconds: 900
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # MOVEMENTS — named stages visible in `mzt status`
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Instruments are bound per role: recon and decomposition want the strongest
+# reasoner, scanning and test runs want a fast one, the unit loop wants a
+# tool-driven workhorse, and the review wants a judge.
 movements:
   1:
     name: Reconnaissance
-    instrument: planner
+    instrument: strong
+    instrument_config: {timeout_seconds: 900}
   2:
     name: Coarse Analysis
-    instrument: scanner
+    instrument: fast
+    instrument_config: {timeout_seconds: 600}
   3:
     name: Triage
-    instrument: analyst
+    instrument: strong
+    instrument_config: {timeout_seconds: 1200}
   4:
-    name: Rewrite Planning
-    instrument: planner
+    name: Decomposition
+    instrument: strong
+    instrument_config: {timeout_seconds: 900}
   5:
     name: Candidate Gate
-    instrument: gate
+    instrument: fast
+    instrument_config: {timeout_seconds: 300}
   6:
-    name: Execute Rewrite
-    instrument: builder
+    name: Unit Loop
+    instrument: workhorse
+    instrument_config: {timeout_seconds: 2400}
   7:
     name: Unit Validation
-    instrument: scanner
+    instrument: fast
+    instrument_config: {timeout_seconds: 900}
   8:
     name: Integration Validation
-    instrument: scanner
+    instrument: fast
+    instrument_config: {timeout_seconds: 900}
   9:
     name: Quality Review
-    instrument: reviewer
+    instrument: review
+    instrument_config: {timeout_seconds: 900}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SHEET CONFIGURATION — 9 stages, fully sequential
@@ -176,9 +163,9 @@ sheet:
     1: "Analyze codebase structure and map rewrite scope"
     2: "Broad scan for modules needing rewrite"
     3: "Verify candidates: REAL need vs FALSE_POSITIVE"
-    4: "Create prioritized rewrite plan from verified candidates"
+    4: "Decompose verified candidates into units, each bound to its tests"
     5: "Gate check: verify REAL candidates exist before expensive rewrite"
-    6: "Execute code translation on priority modules"
+    6: "Unit loop: adapt the next unit's tests, then write code to pass them"
     7: "Run unit tests against rewritten code"
     8: "Run integration tests"
     9: "Review quality, decide CONTINUE or COMPLETE"
@@ -191,6 +178,17 @@ sheet:
     7: [6]
     8: [7]
     9: [8]
+
+  # Unit loop: sheet 6 repeats, one unit per pass, until the pass that
+  # completes the last unit writes the marker (or the cap hits). At cap
+  # without marker the loop ends with a warning and stage 9 decides
+  # CONTINUE, so the next iteration picks up the remaining units.
+  loops:
+    6:
+      index: unit_pass
+      until: 'file("06-units-done.txt").exists'
+      max_iterations: 8
+      cost_limit_usd: 30.0
 
   # CEGAR check-termination: skip expensive stages when no REAL candidates.
   # Exit 0 from grep = pattern found = skip the stage.
@@ -290,9 +288,15 @@ stale_detection:
 
 prompt:
   variables:
+    # The checkout the rewrite edits. ABSOLUTE path; set it per run with
+    # `--var project_root=/abs` (chained iterations inherit it) rather than
+    # editing it in. The workspace holds only this score's ledgers.
+    project_root: "[CHANGE THIS: ABSOLUTE path to the project checkout]"
     source_language: "[CHANGE THIS: e.g., JavaScript, Python 2, Java 8]"
     target_language: "[CHANGE THIS: e.g., TypeScript, Python 3, Kotlin]"
     source_dir: "src"
+    test_dir: "tests"
+    # Both commands run from project_root.
     test_command: "[CHANGE THIS: e.g., pytest tests/ -x, npm test, cargo test]"
     integration_test_command: "[CHANGE THIS: e.g., pytest tests/integration/, npm run test:e2e]"
     improvement_specs: |
@@ -319,8 +323,10 @@ prompt:
     {% if stage == 1 %}
     # Reconnaissance — Codebase Analysis
 
-    Analyze the codebase at `{{ workspace }}/{{ source_dir }}` for migration
-    from **{{ source_language }}** to **{{ target_language }}**.
+    Analyze the codebase at `{{ project_root }}/{{ source_dir }}` (tests in
+    `{{ project_root }}/{{ test_dir }}`) for migration from
+    **{{ source_language }}** to **{{ target_language }}**. The project is
+    edited in place there; this workspace holds only the ledgers.
 
     If previous iteration files exist in the workspace (01-reconnaissance.md,
     09-quality-review.md), read them first — this is a subsequent Cathedral
@@ -332,7 +338,10 @@ prompt:
     2. **Map dependencies** — imports, function calls, class inheritance
     3. **Identify external dependencies** and their {{ target_language }} equivalents
     4. **Assess complexity** per module: simple (1) / moderate (2-3) / complex (4-5)
-    5. **Check existing test coverage** — which modules have tests?
+    5. **Check existing test coverage** — which modules have tests, how the
+       tests reach the code (import, CLI subprocess, HTTP), and whether they
+       can drive a {{ target_language }} implementation unchanged or need
+       adapting
     6. **Check prior iteration progress** — which modules were already rewritten?
 
     {{ write_to("01-reconnaissance.md") }}
@@ -423,33 +432,50 @@ prompt:
       total_triaged: 12
     ```
 
-    {# ── Stage 4: Rewrite Planning (CEGAR: refine-or-report) ────────── #}
+    {# ── Stage 4: Decomposition (CEGAR: refine-or-report) ──────────── #}
 
     {% elif stage == 4 %}
-    # Rewrite Planning — Prioritize Verified Candidates
+    # Decomposition — Units Bound to Their Tests
 
     {{ read_file("01-reconnaissance.md") }}
     {{ read_file("03-triage.yaml") }}
 
-    Create a prioritized rewrite plan using ONLY modules with verdict: REAL.
-    Ignore FALSE_POSITIVE modules entirely.
+    Decompose the modules with verdict: REAL into **units** the unit loop
+    (stage 6) can finish one per pass. Ignore FALSE_POSITIVE modules.
+
+    A unit is the smallest piece that can be rewritten and proven on its
+    own: a module, or a cluster of functions behind one interface. Each
+    unit is bound to the tests that prove it — existing tests from
+    `{{ project_root }}/{{ test_dir }}` first, new tests only where none
+    exist. The tests are the specification; the rewrite is done when they
+    pass against the {{ target_language }} code, not when the code "looks
+    complete".
 
     Ordering rules:
-    1. Dependency leaves first (modules that nothing else imports)
-    2. Within same dependency level: easiest first (build momentum)
-    3. Group related modules when they share interfaces
+    1. Dependency leaves first (units nothing else depends on)
+    2. Within one level: the unit with the best existing tests first
+    3. Group functions that share an interface into one unit
 
-    For each module in the plan:
-    - Specific {{ target_language }} patterns to apply
-    - Test strategy: port existing tests, write new, or both
-    - Expected output files and their locations
-    - Estimated effort (lines of code, complexity)
+    For each unit:
+    - **Scope:** source files/functions it covers
+    - **Interface:** what callers see (signatures, CLI flags, wire format)
+      — the interface the rewritten unit must keep so its tests still bind
+    - **Tests:** existing test files/cases that cover it, and for each
+      whether it runs unchanged against {{ target_language }} or needs
+      adapting (and how: swap the entrypoint, port the harness, port the
+      assertions). Name any behaviour with NO test; the loop writes a
+      test for it before writing code.
+    - **Acceptance command:** the narrowed test command that proves this
+      unit alone (from `{{ test_command }}`, narrowed to its tests)
+    - **{{ target_language }} patterns** to apply, and expected output files
+    - **Effort:** lines, complexity
 
     Additional improvement specifications to apply during rewrite:
     {{ improvement_specs }}
 
     {{ write_to("04-rewrite-plan.md") }}
-    Include a priority-ordered table and detailed per-module plans.
+    Begin with a table (unit, scope, tests, acceptance command, status
+    PENDING) in loop order, then the per-unit plans.
 
     {# ── Stage 5: Candidate Gate (CEGAR: check-termination) ─────────── #}
 
@@ -483,31 +509,73 @@ prompt:
 
     {{ write_to("05-gate-status.yaml") }}
 
-    {# ── Stage 6: Execute Rewrite (Cathedral: build) ────────────────── #}
+    {# ── Stage 6: Unit Loop (Cathedral: build; one unit per pass) ───── #}
 
     {% elif stage == 6 %}
-    # Execute Rewrite — Code Translation
+    # Unit Loop — Pass {{ loops.unit_pass }} of 8 max
+
+    You are unit pass **{{ loops.unit_pass }}**. The conductor re-runs
+    this sheet until the pass that completes the last unit writes the
+    marker (or the pass/cost cap is hit). Each pass takes the NEXT unit in
+    `04-rewrite-plan.md` whose status is not DONE.
 
     {{ read_file("04-rewrite-plan.md") }}
+    {% if loops.unit_pass > 1 %}
+    Read `{{ workspace }}/06-migration-log.md` — the previous passes'
+    sections. Continue from the first unit that is not DONE; never redo a
+    DONE unit.
+    {% endif %}
 
-    Execute the rewrite plan in priority order:
+    **Pass start — clear the loop marker (it proves THIS pass finished the
+    plan):**
+    ```bash
+    rm -f {{ workspace }}/06-units-done.txt
+    ```
 
-    1. **Translate** each module from {{ source_language }} to {{ target_language }}
-    2. **Apply** the improvement specifications from the plan
-    3. **Port or create** tests for each rewritten module
-    4. **Update** import paths and references in dependent modules
+    Work in `{{ project_root }}`. Write {{ target_language }} files
+    alongside the originals; do NOT delete originals until the unit's
+    tests pass against the rewrite.
 
-    Write new {{ target_language }} files alongside originals in
-    `{{ workspace }}/{{ source_dir }}`. Do NOT delete originals until
-    tests confirm the rewrite works.
+    **Step 1 — Tests first (red).** Take the unit's tests from the plan.
+    Adapt the ones that need it (entrypoint, harness, assertions) so they
+    drive the {{ target_language }} implementation, and write tests for
+    the behaviours the plan marked untested. Run the unit's acceptance
+    command: it must FAIL for the right reason (missing implementation),
+    not for a harness error. Record the red run.
 
-    Work methodically — complete one module fully (translate + test) before
-    starting the next. If a module proves harder than planned, document
-    what went wrong and move on.
+    **Step 2 — Code to pass them (green).** Translate the unit from
+    {{ source_language }} to {{ target_language }}, keeping the interface
+    the plan names. Apply the improvement specifications. Run the unit's
+    acceptance command until it passes. Do not widen scope to other units.
 
-    {{ write_to("06-migration-log.md") }}
-    Log each module: what was rewritten, changes made, tests created or
-    ported, issues encountered, and status (DONE / PARTIAL / BLOCKED).
+    **Step 3 — Prove, then record.** Run the acceptance command one final
+    time and paste its tail. Then update the unit's row in
+    `{{ workspace }}/04-rewrite-plan.md` to DONE (or PARTIAL / BLOCKED
+    with the concrete blocker: the failing test and its message).
+
+    **Step 4 — Marker, only when the plan is finished.** If and only if
+    every unit's row now reads DONE:
+    ```bash
+    date -u +"units done %Y-%m-%dT%H:%M:%SZ" > {{ workspace }}/06-units-done.txt
+    ```
+    Never write it by hand for a plan with PENDING, PARTIAL or BLOCKED
+    rows — it is the conductor's only loop evidence.
+
+    **Output:** append to `{{ workspace }}/06-migration-log.md` (keep the
+    previous passes' sections):
+
+    ```markdown
+    ## Pass {{ loops.unit_pass }} — <unit name> — <date>
+    ### Tests adapted / written
+    | Test | Change | Reason |
+    ### Red run
+    [tail of the acceptance command before the rewrite]
+    ### Rewrite
+    [files written, interface kept, improvements applied]
+    ### Green run
+    [tail of the acceptance command after the rewrite]
+    ### Status: DONE | PARTIAL | BLOCKED (<concrete blocker>)
+    ```
 
     {# ── Stage 7: Unit Validation (Commissioning: unit-check) ────────── #}
 
@@ -517,7 +585,7 @@ prompt:
     Run the unit test suite against the rewritten code:
 
     ```bash
-    cd {{ workspace }} && {{ test_command }}
+    cd {{ project_root }} && {{ test_command }}
     ```
 
     Capture ALL output. If tests fail, document which tests failed and why.
@@ -540,7 +608,7 @@ prompt:
     Run the integration test suite:
 
     ```bash
-    cd {{ workspace }} && {{ integration_test_command }}
+    cd {{ project_root }} && {{ integration_test_command }}
     ```
 
     Capture ALL output. Focus on cross-module interaction failures that
@@ -561,7 +629,7 @@ prompt:
     # Quality Review — Iteration Gate
 
     Read all workspace artifacts:
-    - `{{ workspace }}/04-rewrite-plan.md` — what was planned
+    - `{{ workspace }}/04-rewrite-plan.md` — the units and their status rows
     - `{{ workspace }}/05-gate-status.yaml` — gate decision
     - `{{ workspace }}/06-migration-log.md` — what was completed (if exists)
     - `{{ workspace }}/07-unit-test-results.md` — unit test outcomes (if exists)
@@ -574,7 +642,8 @@ prompt:
 
     ## Assessment
 
-    1. **Progress:** How many REAL candidates were addressed vs remaining?
+    1. **Progress:** How many units are DONE vs PARTIAL / BLOCKED / PENDING?
+       (`06-units-done.txt` present means the loop finished the plan.)
     2. **Quality:** Are rewritten modules clean, idiomatic {{ target_language }}?
     3. **Test health:** Do tests pass? Any regressions?
     4. **Blockers:** Anything preventing further progress?
@@ -584,12 +653,12 @@ prompt:
     Evaluate and write ONE of these decisions on its own line:
 
     **CONTINUE** — if ANY of these are true:
-    - Verified REAL candidates remain unaddressed
+    - Any unit is not DONE (the unit loop hit its cap, or a unit is BLOCKED)
     - Tests are failing on rewritten modules (need fixes next iteration)
     - Quality issues were found that need another pass
 
     **COMPLETE** — if ALL of these are true:
-    - All REAL candidates have been addressed (or gate said CONVERGED)
+    - Every unit is DONE (or gate said CONVERGED)
     - Unit tests pass (or were skipped due to convergence)
     - Integration tests pass (or were skipped due to convergence)
     - Code quality meets {{ target_language }} idioms
@@ -675,6 +744,12 @@ validations:
     condition: "sheet_num == 4"
     stage: 2
     description: "Rewrite plan has substantive content (100+ words)"
+  - type: content_regex
+    path: "{workspace}/04-rewrite-plan.md"
+    pattern: "(?i)acceptance command"
+    condition: "sheet_num == 4"
+    stage: 2
+    description: "Every unit names the test command that proves it"
 
   # ── Sheet 5: Candidate Gate ────────────────────────────────────────────
   - type: file_exists
@@ -708,10 +783,16 @@ validations:
     description: "Migration log documents actual work done"
   - type: content_regex
     path: "{workspace}/06-migration-log.md"
-    pattern: "(DONE|PARTIAL|BLOCKED)"
+    pattern: "Status: (DONE|PARTIAL|BLOCKED)"
     condition: "sheet_num == 6"
     stage: 2
-    description: "Migration log has per-module completion status"
+    description: "Migration log has a per-unit status (partial passes may repeat)"
+  - type: content_regex
+    path: "{workspace}/06-migration-log.md"
+    pattern: "### Red run"
+    condition: "sheet_num == 6"
+    stage: 2
+    description: "Each unit pass ran its tests before writing code"
 
   # ── Sheet 7: Unit Validation ───────────────────────────────────────────
   - type: file_exists
