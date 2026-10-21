@@ -182,6 +182,10 @@ cli:
     auto_approve_flag: "--dangerously-skip-permissions"
     output_format_flag: "--output-format"
     output_format_value: "json"
+    # Schema mode (verified 2026-10-21, Claude Code 2.1.306): `-p ...
+    # --output-format json --json-schema '<schema>'` puts the validated object
+    # in the terminal result's `structured_output`.
+    json_schema_flag: "--json-schema"
     system_prompt_flag: "--system-prompt"
     allowed_tools_flag: "--allowedTools"
     mcp_config_flag: "--mcp-config"

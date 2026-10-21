@@ -459,3 +459,60 @@ async def test_concurrent_schema_a_b_no_cross_leak() -> None:
     stdout, _ = await proc.communicate()
     assert proc.returncode == 0
     assert stdout == b"subprocess restored\n"
+
+
+# =========================================================================
+# Claude Code under `verbose: true` prints an ARRAY of stream events for
+# `--output-format json`; the terminal `type: result` object carries the
+# result, usage and structured_output (Pallas, 2026-10-21).
+# =========================================================================
+
+
+def _event_array(final: dict[str, Any]) -> bytes:
+    return json.dumps([
+        {"type": "system", "subtype": "init"},
+        {"type": "assistant", "message": {"content": [{"type": "text", "text": "x"}]}},
+        {"type": "user", "message": {}},
+        final,
+    ]).encode("utf-8")
+
+
+@pytest.mark.asyncio
+async def test_event_array_schema_mode_reads_terminal_structured_output() -> None:
+    backend = _make_backend()
+    backend.set_response_format(JSON_SCHEMA_RF)
+    final = {"type": "result", "subtype": "success", "result": "{}",
+             "structured_output": STRUCTURED, "session_id": "x"}
+    result, _ = await _execute_captured(backend, _event_array(final))
+    assert result.success is True, result.error_message
+    assert json.loads(result.stdout) == STRUCTURED
+
+
+@pytest.mark.asyncio
+async def test_event_array_plain_mode_reads_terminal_result_and_usage() -> None:
+    backend = _make_backend(json_schema_flag=None)
+    final = {"type": "result", "subtype": "success", "result": "plain answer",
+             "usage": {"input_tokens": 3, "output_tokens": 5}}
+    result, _ = await _execute_captured(backend, _event_array(final))
+    assert result.success is True
+    assert result.stdout == "plain answer"
+
+
+def test_terminal_json_object_shapes() -> None:
+    from marianne.execution.instruments.cli_backend import _terminal_json_object
+
+    obj = {"type": "result", "result": "r"}
+    assert _terminal_json_object(obj) is obj
+    assert _terminal_json_object([{"type": "system"}, obj, {"type": "extra"}]) is obj
+    assert _terminal_json_object([{"a": 1}, {"b": 2}]) == {"b": 2}
+    assert _terminal_json_object([1, 2]) == [1, 2]
+    assert _terminal_json_object("s") == "s"
+
+
+def test_claude_code_builtin_declares_the_schema_flag() -> None:
+    from marianne.instruments.loader import InstrumentProfileLoader, profile_source_dirs
+
+    profile = InstrumentProfileLoader.load_directory(profile_source_dirs()[0])["claude-code"]
+    assert profile.cli is not None
+    assert profile.cli.command.json_schema_flag == "--json-schema"
+    assert profile.cli.output.format == "json"

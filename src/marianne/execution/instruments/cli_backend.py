@@ -265,6 +265,27 @@ SYSTEM_ENV_VARS: frozenset[str] = frozenset({
 })
 
 
+
+def _terminal_json_object(data: Any) -> Any:
+    """The CLI's terminal result object from ``--output-format json`` output.
+
+    Most CLIs print one JSON object. Claude Code prints an ARRAY of stream
+    events instead when the user's settings carry ``verbose: true`` (Pallas,
+    2026-10-21): system, assistant and user events, then one
+    ``{"type": "result", ...}`` object carrying ``result``, ``usage`` and
+    ``structured_output``. Every dot-path in a json profile is written
+    against that terminal object, so an array is reduced to its last
+    ``type: result`` dict (or, failing that, its last dict). Anything that
+    is not a list is returned unchanged.
+    """
+    if not isinstance(data, list):
+        return data
+    dicts = [item for item in data if isinstance(item, dict)]
+    for item in reversed(dicts):
+        if item.get("type") == "result":
+            return item
+    return dicts[-1] if dicts else data
+
 class PluginCliBackend(Backend):
     """Generic CLI backend driven by an InstrumentProfile.
 
@@ -1013,7 +1034,7 @@ class PluginCliBackend(Backend):
             data: Any = None
             if stdout.strip():
                 try:
-                    data = json.loads(stdout)
+                    data = _terminal_json_object(json.loads(stdout))
                 except json.JSONDecodeError:
                     data = None
             structured = (
@@ -1052,7 +1073,7 @@ class PluginCliBackend(Backend):
                     error_message = str(extracted_err)
         elif output.format == "json" and stdout.strip():
             try:
-                data = json.loads(stdout)
+                data = _terminal_json_object(json.loads(stdout))
 
                 # Extract result
                 if output.result_path and is_success:

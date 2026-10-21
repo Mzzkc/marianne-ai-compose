@@ -343,7 +343,64 @@ class ClassChainAvailabilityCheck:
                 ),
             )
 
+        issues.extend(self._plain_binding_rf_issues(config, ctx, raw_yaml))
         issues.extend(self._shadowed_default_classes(config, ctx, raw_yaml))
+        return issues
+
+    def _plain_binding_rf_issues(
+        self,
+        config: JobConfig,
+        ctx: _ClassContext,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        """Arm 4 for a sheet bound to a plain profile, not a class.
+
+        Dispatch refuses a ``json_schema`` response_format on a CLI profile
+        with no ``cli.command.json_schema_flag`` (``cli_backend`` raises
+        before spawning). A class-bound sheet is covered by the chain loop
+        above; a sheet bound straight to a profile (``instrument:``, a
+        movement or per-sheet binding, or a score alias) was not, so the
+        score validated and then failed every dispatch. One WARNING per
+        profile, naming the sheets.
+        """
+        try:
+            from marianne.core.sheet import build_sheets
+
+            sheets = build_sheets(
+                config, classes=ctx.class_map.snapshot(set(ctx.used_classes(config))),
+            )
+        except Exception:  # noqa: BLE001 — unbuildable sheets are reported by other checks
+            return []
+        by_profile: dict[str, list[int]] = {}
+        for sheet in sheets:
+            if sheet.instrument_resolution is not None:
+                continue  # class-bound: the chain loop owns it
+            request = sheet.instrument_config.get("response_format")
+            if _response_format_unenforceable(sheet.instrument_name, ctx, request):
+                by_profile.setdefault(sheet.instrument_name, []).append(sheet.num)
+        issues: list[ValidationIssue] = []
+        for profile_name, nums in sorted(by_profile.items()):
+            shown = ", ".join(str(n) for n in nums[:8]) + (", ..." if len(nums) > 8 else "")
+            issues.append(
+                ValidationIssue(
+                    check_id=self.check_id,
+                    severity=ValidationSeverity.WARNING,
+                    message=(
+                        f"instrument '{profile_name}' cannot enforce the json_schema "
+                        f"response_format set for sheet(s) {shown}: the profile declares "
+                        "no cli.command.json_schema_flag, so every dispatch of those "
+                        "sheets is refused"
+                    ),
+                    line=find_line_in_yaml(raw_yaml, "response_format"),
+                    context=profile_name,
+                    suggestion=(
+                        "bind those sheets to a profile that declares json_schema_flag "
+                        "(the claude-code builtin does) or an HTTP profile, or to a class "
+                        "whose chain contains one; or remove response_format"
+                    ),
+                    metadata={"instrument": profile_name, "sheets": ",".join(map(str, nums))},
+                )
+            )
         return issues
 
     def _sheet_rf_requests(

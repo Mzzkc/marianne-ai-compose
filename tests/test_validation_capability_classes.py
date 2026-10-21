@@ -632,3 +632,61 @@ def test_v215_docstring_no_longer_claims_skip() -> None:
     doc = config_checks.NoUsableInstrumentCheck.__doc__ or ""
     assert "skips uninstalled" not in doc
     assert "one dispatch attempt" in doc
+
+
+class TestV311PlainBindingResponseFormat:
+    """Arm 4 also covers a sheet bound straight to a profile (Harper cut-3
+    Inspect, 2026-10-21): dispatch refuses a json_schema response_format on a
+    CLI profile with no json_schema_flag, so validate must say so first."""
+
+    _RF = {"type": "json_schema", "json_schema": {"name": "out", "schema": {"type": "object"}}}
+
+    def test_plain_cli_binding_without_flag_warns_naming_sheets(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        _Layers(monkeypatch, tmp_path)
+        config = _config(
+            instrument="opencode",
+            sheet={"size": 1, "total_items": 3},
+            instrument_config={"response_format": self._RF},
+        )
+        issues = [i for i in _run(ClassChainAvailabilityCheck(), config) if i.check_id == "V311"]
+        assert len(issues) == 1
+        assert "opencode" in issues[0].message and "sheet(s) 1, 2, 3" in issues[0].message
+        assert issues[0].severity == ValidationSeverity.WARNING
+        assert issues[0].metadata["sheets"] == "1,2,3"
+
+    def test_plain_binding_with_flag_is_silent(self, monkeypatch, tmp_path) -> None:
+        import marianne.instruments.loader as loader_module
+
+        _Layers(monkeypatch, tmp_path)
+        flagged = _profile("schema-cli")
+        assert flagged.cli is not None
+        flagged.cli.command.json_schema_flag = "--json-schema"
+        monkeypatch.setattr(
+            loader_module, "load_all_profiles", lambda: _fake_profiles({"schema-cli": flagged})
+        )
+        config = _config(instrument="schema-cli", instrument_config={"response_format": self._RF})
+        issues = _run(ClassChainAvailabilityCheck(), config)
+        assert [i for i in issues if i.check_id == "V311"] == []
+
+    def test_plain_http_binding_is_silent(self, monkeypatch, tmp_path) -> None:
+        _Layers(monkeypatch, tmp_path)
+        config = _config(instrument="ollama", instrument_config={"response_format": self._RF})
+        issues = _run(ClassChainAvailabilityCheck(), config)
+        assert [i for i in issues if i.check_id == "V311"] == []
+
+    def test_no_response_format_is_silent(self, monkeypatch, tmp_path) -> None:
+        _Layers(monkeypatch, tmp_path)
+        config = _config(instrument="opencode")
+        issues = _run(ClassChainAvailabilityCheck(), config)
+        assert [i for i in issues if i.check_id == "V311"] == []
+
+    def test_class_binding_is_not_double_reported(self, monkeypatch, tmp_path) -> None:
+        _Layers(
+            monkeypatch, tmp_path,
+            user={"version": 1, "classes": {"schema-chain": ["claude-code", "ollama"]}},
+        )
+        config = _config(instrument="schema-chain", instrument_config={"response_format": self._RF})
+        v311 = [i for i in _run(ClassChainAvailabilityCheck(), config) if i.check_id == "V311"]
+        assert len(v311) == 1 and "class 'schema-chain'" in v311[0].message

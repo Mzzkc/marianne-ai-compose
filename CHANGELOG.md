@@ -222,6 +222,18 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **Structured output through Claude Code works, and validate catches the
+  case that cannot.** The `claude-code` builtin declares
+  `json_schema_flag: --json-schema` (verified on Claude Code 2.1.306: the
+  validated object arrives as the terminal result's `structured_output`). A
+  CLI that prints an array of stream events for `--output-format json`
+  (Claude Code with `verbose: true` in its settings) is now read from its
+  last `type: result` object, in schema mode and plain mode alike; before,
+  the result path came back empty. V311 now also warns when a sheet bound
+  straight to a CLI profile asks for a `json_schema` `response_format` that
+  profile cannot enforce, naming the sheets, instead of letting every
+  dispatch be refused at run time. `opencode` has no schema flag (its
+  `--format json` is a raw event stream), so it stays without one.
 - **No broad `except` passes in silence any more (GH #308, first slice).**
   The 22 `except Exception: pass` sites now say why they catch broadly and
   leave a log line (DEBUG for expected teardown and best-effort fallbacks,
