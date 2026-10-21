@@ -569,7 +569,7 @@ prompt:
     # ── Bound release configuration. Boulder and the three domain-specific
     # taxon policies are required by the first article; extending either set
     # requires a new characterization and release tag. ───────────────────────
-    github_owner: "Mzzkc"          # swap to run the release under your account
+    github_owner: "[CHANGE THIS: your GitHub login — gh must be authenticated as it]"          # swap to run the release under your account
     repo_name: "pollinator-ledger"
     release_tag: "v2026.09"
     release_as_of_date: "2026-09-04" # pins phenology's reference day

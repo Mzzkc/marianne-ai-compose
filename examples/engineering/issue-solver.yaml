@@ -262,7 +262,7 @@ retry:
 
 prompt:
   variables:
-    repo: "Mzzkc/marianne-ai-compose"
+    repo: "[CHANGE THIS: owner/repo the solver closes issues in, e.g. acme/widgets]"
     triage_workspace: "~/workspaces/issue-triage"
     project_root: "[CHANGE THIS: ABSOLUTE path to the project checkout, e.g. /home/me/src/project]"
     preamble: |

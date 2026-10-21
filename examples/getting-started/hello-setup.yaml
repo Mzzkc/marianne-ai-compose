@@ -38,7 +38,7 @@ prompt:
   template: >-
     mzt instruments classes write --if-absent &&
     mzt instruments classes check --class workhorse &&
-    python3 "{{ workspace }}/../../examples/getting-started/assets/resolve-hello.py"
+    python3 "{{ score_dir }}/assets/resolve-hello.py"
     "{{ workspace }}"
     "{{ workspace }}/../../examples/getting-started/hello.yaml"
 

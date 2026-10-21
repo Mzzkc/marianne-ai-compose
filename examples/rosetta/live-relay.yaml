@@ -476,7 +476,7 @@ stale_detection:
 prompt:
   variables:
     # Single point of change for the publishing identity.
-    github_owner: "Mzzkc"
+    github_owner: "[CHANGE THIS: your GitHub login — gh must be authenticated as it]"
     repo_name: "five-hands-one-voice"
     n_episodes: 5            # must equal the rotation list length (M4 refuses a mismatch)
     # Base interpreter — pinned to the SYSTEM python because ambient python3

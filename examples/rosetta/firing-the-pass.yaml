@@ -602,7 +602,7 @@ stale_detection:
 prompt:
   variables:
     # ── Publishing identity (single point of change) ──
-    github_owner: "Mzzkc"
+    github_owner: "[CHANGE THIS: your GitHub login — gh must be authenticated as it]"
     repo_name: "night-dispatch"
     # ── The pinned world (a future edition changes these, not the DAG) ──
     city_label: "Amsterdam"

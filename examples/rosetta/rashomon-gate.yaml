@@ -297,7 +297,7 @@ retry:
 prompt:
   variables:
     # Single point of change for the publishing identity.
-    github_owner: "Mzzkc"
+    github_owner: "[CHANGE THIS: your GitHub login — gh must be authenticated as it]"
     repo_name: "breathing-atlas"
     # Exposure days are LOCAL days (Europe/Amsterdam) — a resident's day.
     tz: "Europe/Amsterdam"

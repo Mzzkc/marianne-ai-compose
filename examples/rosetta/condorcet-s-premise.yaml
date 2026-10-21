@@ -638,7 +638,7 @@ prompt:
     #    run/review-config.json and every script reads DISK from there; site_url
     #    is DERIVED from owner/repo and an independent mismatched value is
     #    REFUSED — the cross-tenant trap cannot be configured by accident).
-    github_owner: "Mzzkc"
+    github_owner: "[CHANGE THIS: your GitHub login — gh must be authenticated as it]"
     repo_name: "six-letterheads"
     site_url: "https://mzzkc.github.io/six-letterheads/"
     # ── The jury roster (the rendered twin of per_sheet_instruments; movement 2  ──

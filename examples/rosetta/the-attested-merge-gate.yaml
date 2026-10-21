@@ -559,7 +559,7 @@ stale_detection:
 prompt:
   variables:
     # ── The only project-specific inputs (GENERICITY) ─────────────────────────
-    github_owner: "Mzzkc"
+    github_owner: "[CHANGE THIS: your GitHub login — gh must be authenticated as it]"
     docs_repo: "marianne-ai-compose"
     pinned_sha: "802f9903f0068310d21124a97f9fea3b759a00ea"
     pages_base: "mzzkc.github.io"

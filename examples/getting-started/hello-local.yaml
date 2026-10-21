@@ -72,7 +72,7 @@ sheet:
     5: [3, 4]                        # the page waits for the soundtrack AND the finale
   cadenzas:
     5:                               # craft guide → the soundtrack sheet only (sheet 5 = movement 3)
-      - file: "{{ workspace }}/../../examples/getting-started/assets/soundtrack-craft.md"
+      - file: "{{ score_dir }}/assets/soundtrack-craft.md"
         as: skill
 
 parallel:
@@ -176,7 +176,7 @@ prompt:
     the finale. Save it to {{ workspace }}/finale.md and stop.
 
     {% elif stage == 5 %}
-    python3 "{{ workspace }}/../../examples/getting-started/assets/assemble-site.py" "{{ workspace }}"
+    python3 "{{ score_dir }}/assets/assemble-site.py" "{{ workspace }}"
     {% endif %}
 
 validations:
@@ -207,7 +207,7 @@ validations:
     condition: "stage == 3"
     description: "Soundtrack has a tempo (setcps) — a runnable pattern"
   - type: command_succeeds
-    command: 'python3 "{workspace}/../../examples/getting-started/assets/check-strudel-errors.py" "{workspace}/soundtrack.strudel"'
+    command: 'python3 "{score_dir}/assets/check-strudel-errors.py" "{workspace}/soundtrack.strudel"'
     condition: "stage == 3"
     description: "Soundtrack uses only valid sounds (the static reality check)"
 

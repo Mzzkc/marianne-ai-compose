@@ -104,15 +104,15 @@ sheet:
     5: [4]
     6: [5]
   prelude:
-    - file: "../../../examples/finance/24x7-trader/_libretto/trading-philosophy.md"
+    - file: "{{ score_dir }}/_libretto/trading-philosophy.md"
       as: context
-    - file: "../../../examples/finance/24x7-trader/_libretto/glossary.md"
+    - file: "{{ score_dir }}/_libretto/glossary.md"
       as: context
-    - file: "../../../examples/finance/24x7-trader/_libretto/operator-charter.md"
+    - file: "{{ score_dir }}/_libretto/operator-charter.md"
       as: context
     - file: "{{ workspace }}/02-strategy.md"
       as: context
-    - file: "../../../examples/finance/24x7-trader/_techniques/broker.md"
+    - file: "{{ score_dir }}/_techniques/broker.md"
       as: tool
 
 cross_sheet:

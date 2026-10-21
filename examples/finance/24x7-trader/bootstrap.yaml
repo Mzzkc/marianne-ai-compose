@@ -66,13 +66,13 @@ sheet:
     2: [1]
     3: [2]
   prelude:
-    - file: "../../../examples/finance/24x7-trader/_libretto/trading-philosophy.md"
+    - file: "{{ score_dir }}/_libretto/trading-philosophy.md"
       as: context
-    - file: "../../../examples/finance/24x7-trader/_libretto/glossary.md"
+    - file: "{{ score_dir }}/_libretto/glossary.md"
       as: context
-    - file: "../../../examples/finance/24x7-trader/_libretto/risk-envelope.schema.md"
+    - file: "{{ score_dir }}/_libretto/risk-envelope.schema.md"
       as: skill
-    - file: "../../../examples/finance/24x7-trader/_libretto/operator-charter.md"
+    - file: "{{ score_dir }}/_libretto/operator-charter.md"
       as: context
 
 cross_sheet:

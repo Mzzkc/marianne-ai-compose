@@ -517,7 +517,7 @@ stale_detection:
 prompt:
   variables:
     # ── Deployment inputs (the only project-specific values) ──────────────────
-    github_owner: "Mzzkc"
+    github_owner: "[CHANGE THIS: your GitHub login — gh must be authenticated as it]"
     repo_name: "shed-wall"
     release_tag: "v2026.09"
     site_url: "https://mzzkc.github.io/shed-wall"

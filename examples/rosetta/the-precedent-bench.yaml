@@ -552,7 +552,7 @@ prompt:
     #    never an unexpandable placeholder). Movement 1 refuses to start unless
     #    gh is authenticated AS github_owner: the authorization failure that
     #    would otherwise surface at movement 16 surfaces before any token spend.
-    github_owner: "Mzzkc"
+    github_owner: "[CHANGE THIS: your GitHub login — gh must be authenticated as it]"
     repo_name: "precedent-bench"
     site_url: "https://mzzkc.github.io/precedent-bench/"
     # ── The doctrinal line (the ONLY case data in the score; movement 1 writes  ──

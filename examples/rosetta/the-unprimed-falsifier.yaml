@@ -769,7 +769,7 @@ prompt:
     #    placeholder). The M0 probe refuses to start unless gh is authenticated
     #    AS github_owner — the authorization failure that used to surface at
     #    movement 14 now surfaces before any token is spent.
-    github_owner: "Mzzkc"
+    github_owner: "[CHANGE THIS: your GitHub login — gh must be authenticated as it]"
     repo_name: "plain-language-dispensary"
     site_url: "https://mzzkc.github.io/plain-language-dispensary/"
     # ── Endpoints (keyless) ──────────────────────────────────────────────────────
