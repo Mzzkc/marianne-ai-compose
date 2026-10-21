@@ -260,9 +260,6 @@ retry:
   base_delay_seconds: 5
   exponential_base: 2.0
 
-rate_limit:
-  detection_patterns:
-    - "rate_limit"
-    - "429"
-    - "overloaded"
+# rate_limit: deliberately ABSENT — the score section is reserved (V327);
+# detection belongs to the instrument profile's cli.errors.rate_limit_patterns.
 

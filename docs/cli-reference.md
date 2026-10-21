@@ -1962,10 +1962,6 @@ retry:
   base_delay_seconds: 30
   exponential_base: 2.0
 
-rate_limit:
-  wait_minutes: 60
-  max_waits: 24
-
 validations:
   - type: file_exists
     path: "{workspace}/output-{sheet_num}.md"

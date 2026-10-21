@@ -368,18 +368,20 @@ mzt clear-rate-limits
 mzt clear-rate-limits --instrument claude-code
 ```
 
-**Prevention:** Configure appropriate rate limit detection patterns in your score:
+**Prevention:** Rate limits are detected by the instrument profile, not the
+score (the score-level `rate_limit:` section is reserved and V327 warns when
+set). Anchor the profile's patterns to the provider's real messages in a user
+or venue profile override (`~/.marianne/instruments/<name>.yaml`):
 
 ```yaml
-rate_limit:
-  detection_patterns:
-    - "rate.?limit"
-    - "usage.?limit"
-    - "quota"
-    - "429"
-    - "try again later"
-  wait_minutes: 60        # How long to wait
-  max_waits: 24           # Give up after 24 hours
+cli:
+  errors:
+    rate_limit_patterns:
+      - "rate.?limit"
+      - "usage.?limit"
+      - "quota"
+      - "(?:error|status|code)[^\\w]*429"
+      - "try again later"
 ```
 
 ### Pattern 7: Orphaned Agent Processes

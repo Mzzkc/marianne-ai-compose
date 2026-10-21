@@ -948,9 +948,7 @@
       "parse": "ok"
     },
     "venue:examples/getting-started/api-backend.yaml": {
-      "issues": {
-        "V327": 1
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:examples/getting-started/cross-sheet-test.yaml": {
@@ -1125,9 +1123,7 @@
       "parse": "ok"
     },
     "venue:examples/rosetta/join-semilattice-merge.yaml": {
-      "issues": {
-        "V327": 2
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:examples/rosetta/live-relay.yaml": {

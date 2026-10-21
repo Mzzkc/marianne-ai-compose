@@ -314,10 +314,6 @@ retry:
   base_delay_seconds: 30
   exponential_base: 2.0
 
-rate_limit:
-  wait_minutes: 15
-  max_waits: 10
-
 prompt:
   template: |
     Process data sheet {{ sheet_num }}.
@@ -474,13 +470,12 @@ mzt dashboard --port 3000
 
 ### Rate Limits
 
-Marianne detects rate limits and waits automatically. Configure wait times:
-
-```yaml
-rate_limit:
-  wait_minutes: 60
-  max_waits: 24
-```
+Marianne detects rate limits and waits automatically. Detection is the
+instrument profile's job (`cli.errors.rate_limit_patterns`, or HTTP 429 with
+its `Retry-After`), and the wait is the provider's stated retry window or
+60 seconds. The score-level `rate_limit:` section is reserved: no runtime
+code reads it, and `mzt validate` warns (V327) when a score sets it, so
+leave it out.
 
 If a score is stuck waiting on a rate limit that has already expired, clear it manually:
 

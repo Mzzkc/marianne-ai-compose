@@ -550,14 +550,10 @@ retry:
   max_retries: 1
   base_delay_seconds: 60
 
-rate_limit:
-  wait_minutes: 60
-  max_waits: 24
-
-circuit_breaker:
-  enabled: true
-  failure_threshold: 5       # parent parity — repeated instrument failure
-  recovery_timeout_seconds: 600
+# rate_limit: and circuit_breaker: deliberately ABSENT — both score sections
+# are reserved (no runtime reader; V327). Rate limits are the instrument
+# profile's rate_limit_patterns; the breaker is per instrument in the
+# conductor.
 
 stale_detection:
   enabled: true

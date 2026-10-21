@@ -392,14 +392,18 @@ Controls retry behavior and partial completion recovery.
 
 ### `rate_limit`
 
-Rate limit detection and handling.
+Reserved. No runtime code reads this section: rate limits are detected by the
+instrument profile (`cli.errors.rate_limit_patterns`, or HTTP 429) and the
+wait is the provider's retry window or 60 seconds. `mzt validate` warns (V327)
+when a score sets it. The keys below are accepted so older scores still
+parse; a new score should omit the section.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `detection_patterns` | list[str] | `["rate.?limit", "usage.?limit", "quota", "too many requests", "429", "capacity", "try again later"]` | Regex patterns to detect rate limiting in output. |
-| `wait_minutes` | int | `60` | Minutes to wait when rate limited. |
-| `max_waits` | int | `24` | Maximum wait cycles (24 hours at default). |
-| `max_quota_waits` | int | `48` | Maximum quota exhaustion wait cycles. |
+| `detection_patterns` | list[str] | `["rate.?limit", "usage.?limit", "quota", "too many requests", "429", "capacity", "try again later"]` | Reserved. Validated as regex (V007) but not consulted at runtime. |
+| `wait_minutes` | int | `60` | Reserved: no runtime reader. |
+| `max_waits` | int | `24` | Reserved: no runtime reader. |
+| `max_quota_waits` | int | `48` | Reserved: no runtime reader. |
 
 ### `cross_sheet`
 
