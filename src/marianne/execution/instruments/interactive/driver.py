@@ -41,6 +41,11 @@ _logger = get_logger("execution.interactive.driver")
 # the pathological loop.
 _TOTAL_NUDGE_MULTIPLIER = 5
 
+# Most transcript bytes handed to the live output sink per poll; a TUI that
+# repaints the whole screen can write megabytes in a second and the sink runs
+# on the event loop.
+_TAIL_READ_MAX_BYTES = 256 * 1024
+
 # Raw pipe-pane log size cap. The log is a debug artifact; a stuck TUI
 # redrawing at full speed must not exhaust the disk before the sheet
 # timeout fires. Checked each poll; piping stops (session keeps running)
@@ -163,6 +168,7 @@ class InteractiveSessionDriver:
         transcript_path: Path | None = None,
         on_pane_pid: Callable[[int], None] | None = None,
         env: dict[str, str] | None = None,
+        on_output: Callable[[str, bytes], None] | None = None,
     ) -> DriverResult:
         """Run one full attempt: launch, gate, submit, drive, harvest.
 
@@ -182,6 +188,11 @@ class InteractiveSessionDriver:
             on_pane_pid: callback fired with the pane PID once known —
                 the backend routes this to the baton's process-group
                 registration.
+            on_output: live output sink ``(stream_name, chunk)``; receives
+                each new slice of the pipe-pane transcript on every poll
+                so ``mzt watch`` can follow an interactive sheet (GH #381).
+                Needs ``transcript_path``; without a transcript there is
+                nothing to tail.
 
         Never raises TmuxError — tmux failures map to ``session_lost`` /
         ``startup_failed`` outcomes. CancelledError propagates (after
@@ -260,6 +271,7 @@ class InteractiveSessionDriver:
                 policy=policy,
                 max_nudges=max_nudges,
                 transcript_path=transcript_path,
+                on_output=on_output,
             )
 
             # ── HARVEST (exactly once — the single return below) ──────
@@ -373,6 +385,7 @@ class InteractiveSessionDriver:
         policy: ContinuationPolicy,
         max_nudges: int,
         transcript_path: Path | None,
+        on_output: Callable[[str, bytes], None] | None = None,
     ) -> tuple[DriverOutcome, str, int]:
         """The poll loop: busy / idle / done / dead until an outcome.
 
@@ -389,6 +402,13 @@ class InteractiveSessionDriver:
         total_nudges = 0
         nudged_since_busy = False
         transcript_live = transcript_path is not None
+        # GH #381: feed the transcript into the live output sink. The
+        # transcript was truncated at session start (GH #398), so offset 0
+        # is this attempt's first byte and nothing from a previous run is
+        # attributed here. Fail-open: a read error ends tailing, never the
+        # attempt.
+        tail_offset = 0
+        tailing = on_output is not None and transcript_path is not None
 
         while True:
             now = time.monotonic()
@@ -398,6 +418,13 @@ class InteractiveSessionDriver:
             await asyncio.sleep(
                 min(cfg.poll_interval_seconds, max(deadline - now, 0.05)),
             )
+
+            # Tail before the done check so the attempt's last bytes reach
+            # `mzt watch` even when this poll is the one that sees the marker.
+            if tailing and transcript_path is not None and on_output is not None:
+                tail_offset, tailing = self._tail_transcript(
+                    transcript_path, tail_offset, on_output,
+                )
 
             # Done check first — the marker is valid even if the pane has
             # already exited (agent wrote it, then quit).
@@ -611,6 +638,33 @@ class InteractiveSessionDriver:
             return await self._tmux.has_session(session)
         except TmuxError:
             return False
+
+    @staticmethod
+    def _tail_transcript(
+        transcript_path: Path,
+        offset: int,
+        on_output: Callable[[str, bytes], None],
+    ) -> tuple[int, bool]:
+        """Hand bytes appended since ``offset`` to the sink; return the new offset.
+
+        Returns ``(offset, still_tailing)``. A missing or unreadable file, or
+        a sink that raises, stops tailing for the rest of the attempt; the
+        attempt itself is unaffected (streaming is observability).
+        """
+        try:
+            with open(transcript_path, "rb") as handle:
+                handle.seek(offset)
+                chunk = handle.read(_TAIL_READ_MAX_BYTES)
+        except OSError:
+            return offset, False
+        if not chunk:
+            return offset, True
+        try:
+            on_output("stdout", chunk)
+        except Exception:
+            _logger.warning("interactive_output_sink_failed", exc_info=True)
+            return offset + len(chunk), False
+        return offset + len(chunk), True
 
     async def _enforce_transcript_cap(
         self, session: str, transcript_path: Path,

@@ -405,23 +405,6 @@ class Backend(ABC):
             _extensions: List of extension text blocks.
         """
 
-    def set_output_log_path(self, _path: Path | None) -> None:  # noqa: B027
-        """Set base path for real-time output logging.
-
-        Called per-sheet by the musician to enable streaming output to log files.
-        This provides visibility into backend output during long executions.
-
-        Uses industry-standard separate files for stdout and stderr:
-        - {path}.stdout.log - standard output
-        - {path}.stderr.log - standard error
-
-        Override in subclasses that support real-time output streaming.
-        Default implementation is a no-op for backends without this capability.
-
-        Args:
-            _path: Base path for log files (without extension), or None to disable.
-        """
-
 
 class HttpxClientMixin:
     """Shared lazy httpx.AsyncClient lifecycle for HTTP-based backends.

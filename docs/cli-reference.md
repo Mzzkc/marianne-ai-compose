@@ -451,6 +451,12 @@ backpressure drops lines with a marker rather than blocking.
 The ring is a live view: a conductor restart clears it. Persisted
 evidence lives in each sheet's recorded output tails (`mzt diagnose`).
 
+Interactive sheets (the default for `claude-code`) stream too: the driver
+tails the tmux pipe-pane transcript once per poll and hands each new slice to
+the same sink, so what you see is the raw terminal stream (cursor-addressing
+included), not a parsed log. If transcript capture failed for an attempt, that
+sheet has nothing to stream until it ends.
+
 #### Arguments
 
 | Argument | Required | Description |

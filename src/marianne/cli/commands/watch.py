@@ -37,6 +37,9 @@ def watch(
 ) -> None:
     """Live-tail musician output for a running score.
 
+    Interactive sheets (claude-code's default) stream their raw tmux
+    transcript; headless sheets stream their pipes.
+
     Examples:
         mzt watch my-score        # All sheets, lines tagged [s<n>]
         mzt watch my-score 3      # Only sheet 3

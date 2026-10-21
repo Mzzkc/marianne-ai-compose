@@ -206,6 +206,14 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **`mzt watch` follows interactive sheets (GH #381).** The interactive driver
+  tails the pipe-pane transcript once per poll and hands each new slice to the
+  live output sink; the interactive backend exposes `set_output_callback`, so
+  the adapter's existing wiring reaches it. Tailing starts at offset 0 because
+  the transcript is truncated at session start (#398); a sink failure ends
+  tailing, never the attempt. The dead `set_output_log_path` base-class
+  surface is removed.
+
 - **issue-solver: FLAGGED issues rank last in selection, and the close
   comment carries scope.** With a zero-edge DAG the selector took the lowest
   issue number regardless of the scanner verdict, so the first chained

@@ -195,6 +195,7 @@ async def run_driver(
     marker: Path | None = None,
     transcript: Path | None = None,
     on_pane_pid: Any = None,
+    on_output: Any = None,
 ) -> Any:
     """Run the driver with test-speed settings."""
     cfg = config or make_interactive_config()
@@ -210,6 +211,7 @@ async def run_driver(
         max_nudges=max_nudges,
         transcript_path=transcript,
         on_pane_pid=on_pane_pid,
+        on_output=on_output,
     )
 
 
@@ -1309,3 +1311,87 @@ class TestAdapterInteractiveStaleSkip:
         assert ("job-1", 1) not in adapter._stale_markers
         # Re-scheduled (the dead-task backstop continues to poll)
         adapter._timer_wheel.schedule.assert_called_once()
+
+
+# =============================================================================
+# GH #381: mzt watch follows interactive sheets through the transcript
+# =============================================================================
+
+
+class TestTranscriptTail:
+    async def test_transcript_bytes_reach_the_output_sink_in_order(self, tmp_path: Path) -> None:
+        """Each poll hands the sink whatever pipe-pane appended since the last
+        poll; the sink sees the attempt's bytes from offset 0 and in order."""
+        marker = tmp_path / ".marianne" / "m.complete"
+        transcript = tmp_path / "transcript.log"
+        transcript.write_bytes(b"stale bytes from a previous run\n")
+        seen: list[bytes] = []
+
+        def first_poll() -> str:
+            # pipe-pane truncates at start (GH #398), then the agent writes.
+            transcript.write_bytes(b"hello from the agent\n")
+            return BUSY_SCREEN
+
+        def second_poll() -> str:
+            with open(transcript, "ab") as fh:
+                fh.write(b"more output\n")
+            return BUSY_SCREEN
+
+        def done() -> str:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.touch()
+            return BUSY_SCREEN
+
+        fake = FakeTmux([READY_SCREEN, first_poll, second_poll, done, READY_SCREEN])
+        result = await run_driver(
+            fake, tmp_path, marker=marker, transcript=transcript,
+            on_output=lambda stream, chunk: seen.append(chunk),
+        )
+        assert result.outcome == "completed"
+        assert b"".join(seen) == b"hello from the agent\nmore output\n"
+        assert b"stale" not in b"".join(seen)
+
+    async def test_sink_failure_ends_tailing_not_the_attempt(self, tmp_path: Path) -> None:
+        marker = tmp_path / ".marianne" / "m.complete"
+        transcript = tmp_path / "transcript.log"
+        calls = {"n": 0}
+
+        def boom(stream: str, chunk: bytes) -> None:
+            calls["n"] += 1
+            raise RuntimeError("sink broke")
+
+        def write_then_done() -> str:
+            transcript.write_bytes(b"x\n")
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.touch()
+            return BUSY_SCREEN
+
+        fake = FakeTmux([READY_SCREEN, write_then_done, READY_SCREEN])
+        result = await run_driver(
+            fake, tmp_path, marker=marker, transcript=transcript, on_output=boom,
+        )
+        assert result.outcome == "completed"
+        assert calls["n"] == 1
+
+    async def test_no_transcript_means_nothing_delivered(self, tmp_path: Path) -> None:
+        marker = tmp_path / ".marianne" / "m.complete"
+
+        def done() -> str:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.touch()
+            return BUSY_SCREEN
+
+        fake = FakeTmux([READY_SCREEN, done, READY_SCREEN])
+        seen: list[bytes] = []
+        result = await run_driver(
+            fake, tmp_path, marker=marker, transcript=None,
+            on_output=lambda s, c: seen.append(c),
+        )
+        assert result.outcome == "completed" and seen == []
+
+    def test_backend_exposes_the_adapter_contract(self) -> None:
+        """The adapter wires the hub writer through ``set_output_callback``
+        when the backend has it; the interactive backend now does."""
+        from marianne.execution.instruments.interactive.backend import InteractiveCliBackend
+
+        assert callable(getattr(InteractiveCliBackend, "set_output_callback", None))

@@ -173,6 +173,9 @@ class InteractiveCliBackend(Backend):
         self._on_process_spawned: Callable[[int], None] | None = None
         self._on_process_exited: Callable[[int], None] | None = None
         self._on_process_group_spawned: Callable[[int, int], None] | None = None
+        # Live output sink — same contract as PluginCliBackend (#352 inc-3);
+        # the adapter wires the OutputStreamHub writer per dispatch (GH #381).
+        self._on_output: Callable[[str, bytes], None] | None = None
 
         # Override tracking — mirrors PluginCliBackend.
         self._saved_model: str | None = None
@@ -191,6 +194,17 @@ class InteractiveCliBackend(Backend):
         return f"{self._profile.display_name} (interactive)"
 
     # ── Per-sheet configuration surface ────────────────────────────────
+
+    def set_output_callback(
+        self, callback: Callable[[str, bytes], None] | None
+    ) -> None:
+        """Set (or clear with None) the live output sink (GH #381).
+
+        Receives ``("stdout", chunk)`` for each new slice of the pipe-pane
+        transcript, once per driver poll. Runs on the event loop; keep it
+        cheap. Without a transcript (capture failed) nothing is delivered.
+        """
+        self._on_output = callback
 
     def set_attempt_identity(
         self, job_id: str, sheet_num: int, attempt: int,
@@ -409,6 +423,7 @@ class InteractiveCliBackend(Backend):
                 transcript_path=transcript,
                 on_pane_pid=_register_pid,
                 env=self._scratch_env(workspace),
+                on_output=self._on_output,
             )
         finally:
             await self._ensure_session_gone(session)
