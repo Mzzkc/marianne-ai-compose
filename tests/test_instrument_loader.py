@@ -417,3 +417,42 @@ cli:
         profiles = InstrumentProfileLoader.load_directory(instruments_dir)
         assert "big-instrument" in profiles
         assert len(profiles["big-instrument"].models) == 50
+
+
+class TestProfileMemo:
+    """A profile file parses once per process; an edit is always re-read."""
+
+    def test_same_bytes_parse_once_and_edit_is_seen(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import os
+
+        from marianne.instruments import loader as loader_mod
+        from marianne.instruments.loader import InstrumentProfileLoader, clear_profile_memo
+
+        clear_profile_memo()
+        path = _write_yaml(
+            tmp_path / "memo.yaml", _minimal_cli_yaml().replace("test-cli", "memo-one"),
+        )
+        calls: list[Path] = []
+        real = InstrumentProfileLoader._load_file_uncached
+
+        def counting(p: Path):  # type: ignore[no-untyped-def]
+            calls.append(p)
+            return real(p)
+
+        monkeypatch.setattr(InstrumentProfileLoader, "_load_file_uncached", staticmethod(counting))
+        first = InstrumentProfileLoader.load_directory(tmp_path)
+        again = InstrumentProfileLoader.load_directory(tmp_path)
+        assert "memo-one" in first and again["memo-one"] is first["memo-one"]
+        assert len(calls) == 1
+
+        # Rewrite with a different name and a strictly newer mtime: re-read.
+        path.write_text(path.read_text().replace("memo-one", "memo-two"))
+        st = path.stat()
+        os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000))
+        third = InstrumentProfileLoader.load_directory(tmp_path)
+        assert "memo-two" in third and "memo-one" not in third
+        assert len(calls) == 2
+        assert loader_mod._SAFE_LOADER is not None
+        clear_profile_memo()
