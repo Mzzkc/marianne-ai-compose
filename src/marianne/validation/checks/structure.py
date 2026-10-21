@@ -170,6 +170,11 @@ class VariableCoverageCheck:
 
     def check(self, config: JobConfig, config_path: Path, raw_yaml: str) -> list[ValidationIssue]:
         declared = set(config.prompt.variables)
+        # A declared loop index is a validation placeholder too: the baton
+        # merges flow_vars into the validation context, so `{pass_no}` in a
+        # path scoped to the loop is defined at runtime (GH #475; the V101
+        # side of the same gap was #448).
+        declared.update(loop.index for loop in (config.sheet.loops or {}).values())
         referenced: set[str] = set()
         for rule in config.validations:
             values = [rule.path, rule.pattern, rule.working_directory]

@@ -1386,3 +1386,32 @@ class TestValidationReporter:
         text = reporter.format_plain(issues)
 
         assert "passed" in text.lower() or "no issues" in text.lower()
+
+
+class TestV105LoopIndex:
+    """GH #475: a declared loop index is a defined validation placeholder."""
+
+    def _config(self, *, loops: dict, path: str) -> JobConfig:
+        return JobConfig.model_validate({
+            "name": "loop-idx",
+            "workspace": "./ws",
+            "instrument": "claude-code",
+            "sheet": {"size": 1, "total_items": 1, "loops": loops},
+            "prompt": {"template": "x"},
+            "validations": [{"type": "file_exists", "path": path}],
+        })
+
+    def test_declared_loop_index_is_defined(self) -> None:
+        from marianne.validation.checks.structure import VariableCoverageCheck
+        cfg = self._config(
+            loops={"1": {"index": "pass_no", "count": 2}},
+            path="{workspace}/pass-{pass_no}/out.md",
+        )
+        assert VariableCoverageCheck().check(cfg, Path("s.yaml"), "") == []
+
+    def test_undeclared_index_still_flagged(self) -> None:
+        from marianne.validation.checks.structure import VariableCoverageCheck
+        cfg = self._config(loops={}, path="{workspace}/pass-{pass_no}/out.md")
+        issues = VariableCoverageCheck().check(cfg, Path("s.yaml"), "")
+        assert [i.check_id for i in issues] == ["V105"]
+        assert "{pass_no}" in issues[0].message

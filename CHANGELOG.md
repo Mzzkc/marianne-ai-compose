@@ -273,6 +273,8 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **V105 accepts a declared loop index as a validation placeholder (GH #475).** A validation path scoped to a loop (`{pass_no}`, the documented form) failed `mzt validate` with "undefined variable" while the baton defined it at runtime; the check now seeds every `sheet.loops.<span>.index` as the V101 side already did (#448).
+
 - **Fewer instruments see every credential (GH #335).** The `opencode` builtin
   now passes no credential variables (it reads its own store) and `goose` only
   its providers' variables; both verified live. `mzt doctor` warns, by name,

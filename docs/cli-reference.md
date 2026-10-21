@@ -568,7 +568,7 @@ code-registry and corpus-sweep tests.
 | ERROR | V008 | A validation rule is missing the field its type requires |
 | ERROR | V009 | An evolved score references its previous version's paths |
 | ERROR | V012 | Invalid `validate.suppress` entry (unknown code or ERROR-tier code) |
-| ERROR | V105, V108 | Undefined validation variable; missing static prelude/cadenza input |
+| ERROR | V105, V108 | Undefined validation variable (declared `prompt.variables`, built-ins and declared loop indices are defined); missing static prelude/cadenza input |
 | ERROR | V209, V214, V216, V217 | Dependency cycle; expanded-sheet incoherence; missing cadenza target; missing or invalid static concert target |
 | ERROR | V210, V211 | Instrument or fallback name cannot resolve to a known profile, score alias, or capability class |
 | ERROR | V221–V223, V227, V229, V233, V312–V314, V316–V317, V320 | Flow load errors and invalid flow references, reported with a code and hint rather than a raw schema trace |
