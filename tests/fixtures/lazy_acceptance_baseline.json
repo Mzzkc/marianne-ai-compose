@@ -1,0 +1,662 @@
+[
+ {
+  "score": "examples/advanced/instrument-showcase.yaml",
+  "sheet": "1",
+  "rules": "3"
+ },
+ {
+  "score": "examples/advanced/instrument-showcase.yaml",
+  "sheet": "3",
+  "rules": "3"
+ },
+ {
+  "score": "examples/advanced/instrument-showcase.yaml",
+  "sheet": "5",
+  "rules": "3"
+ },
+ {
+  "score": "examples/advanced/parallel-research.yaml",
+  "sheet": "1",
+  "rules": "4"
+ },
+ {
+  "score": "examples/creative/dialectic.yaml",
+  "sheet": "1",
+  "rules": "1"
+ },
+ {
+  "score": "examples/creative/dialectic.yaml",
+  "sheet": "5",
+  "rules": "2"
+ },
+ {
+  "score": "examples/creative/dialectic.yaml",
+  "sheet": "6",
+  "rules": "1"
+ },
+ {
+  "score": "examples/creative/dinner-party.yaml",
+  "sheet": "1",
+  "rules": "1"
+ },
+ {
+  "score": "examples/creative/dinner-party.yaml",
+  "sheet": "6",
+  "rules": "2"
+ },
+ {
+  "score": "examples/creative/palimpsest.yaml",
+  "sheet": "1",
+  "rules": "2"
+ },
+ {
+  "score": "examples/creative/palimpsest.yaml",
+  "sheet": "7",
+  "rules": "3"
+ },
+ {
+  "score": "examples/creative/skill-builder.yaml",
+  "sheet": "1",
+  "rules": "2"
+ },
+ {
+  "score": "examples/creative/skill-builder.yaml",
+  "sheet": "2",
+  "rules": "2"
+ },
+ {
+  "score": "examples/creative/skill-builder.yaml",
+  "sheet": "3",
+  "rules": "2"
+ },
+ {
+  "score": "examples/creative/skill-builder.yaml",
+  "sheet": "4",
+  "rules": "2"
+ },
+ {
+  "score": "examples/creative/skill-builder.yaml",
+  "sheet": "5",
+  "rules": "2"
+ },
+ {
+  "score": "examples/creative/skill-builder.yaml",
+  "sheet": "6",
+  "rules": "2"
+ },
+ {
+  "score": "examples/creative/skill-builder.yaml",
+  "sheet": "7",
+  "rules": "2"
+ },
+ {
+  "score": "examples/creative/thinking-lab.yaml",
+  "sheet": "1",
+  "rules": "1"
+ },
+ {
+  "score": "examples/creative/thinking-lab.yaml",
+  "sheet": "7",
+  "rules": "2"
+ },
+ {
+  "score": "examples/creative/worldbuilder.yaml",
+  "sheet": "1",
+  "rules": "1"
+ },
+ {
+  "score": "examples/creative/worldbuilder.yaml",
+  "sheet": "7",
+  "rules": "1"
+ },
+ {
+  "score": "examples/creative/worldbuilder.yaml",
+  "sheet": "8",
+  "rules": "1"
+ },
+ {
+  "score": "examples/engineering/codebase-rewrite.yaml",
+  "sheet": "2",
+  "rules": "3"
+ },
+ {
+  "score": "examples/engineering/codebase-rewrite.yaml",
+  "sheet": "5",
+  "rules": "3"
+ },
+ {
+  "score": "examples/engineering/issue-triage.yaml",
+  "sheet": "1",
+  "rules": "3"
+ },
+ {
+  "score": "examples/engineering/lovable-generator.yaml",
+  "sheet": "1",
+  "rules": "2"
+ },
+ {
+  "score": "examples/engineering/project-roadmap.yaml",
+  "sheet": "22",
+  "rules": "2"
+ },
+ {
+  "score": "examples/engineering/project-roadmap.yaml",
+  "sheet": "23",
+  "rules": "5"
+ },
+ {
+  "score": "examples/engineering/quality-triage.yaml",
+  "sheet": "1",
+  "rules": "3"
+ },
+ {
+  "score": "examples/engineering/saas-app-builder.yaml",
+  "sheet": "1",
+  "rules": "3"
+ },
+ {
+  "score": "examples/engineering/saas-app-builder.yaml",
+  "sheet": "3",
+  "rules": "2"
+ },
+ {
+  "score": "examples/engineering/saas-app-builder.yaml",
+  "sheet": "4",
+  "rules": "2"
+ },
+ {
+  "score": "examples/engineering/saas-app-builder.yaml",
+  "sheet": "5",
+  "rules": "2"
+ },
+ {
+  "score": "examples/engineering/saas-app-builder.yaml",
+  "sheet": "7",
+  "rules": "3"
+ },
+ {
+  "score": "examples/engineering/score-composer.yaml",
+  "sheet": "1",
+  "rules": "4"
+ },
+ {
+  "score": "examples/engineering/score-composer.yaml",
+  "sheet": "2",
+  "rules": "4"
+ },
+ {
+  "score": "examples/engineering/score-composer.yaml",
+  "sheet": "4",
+  "rules": "3"
+ },
+ {
+  "score": "examples/finance/24x7-trader/midday.yaml",
+  "sheet": "3",
+  "rules": "1"
+ },
+ {
+  "score": "examples/finance/24x7-trader/weekly-review.yaml",
+  "sheet": "5",
+  "rules": "3"
+ },
+ {
+  "score": "examples/finance/24x7-trader/weekly-review.yaml",
+  "sheet": "6",
+  "rules": "3"
+ },
+ {
+  "score": "examples/finance/24x7-trader/weekly-review.yaml",
+  "sheet": "7",
+  "rules": "3"
+ },
+ {
+  "score": "examples/getting-started/cross-sheet-test.yaml",
+  "sheet": "1",
+  "rules": "5"
+ },
+ {
+  "score": "examples/getting-started/hello-local.yaml",
+  "sheet": "7",
+  "rules": "3"
+ },
+ {
+  "score": "examples/getting-started/hello.yaml",
+  "sheet": "7",
+  "rules": "3"
+ },
+ {
+  "score": "examples/getting-started/worktree-isolation.yaml",
+  "sheet": "2",
+  "rules": "3"
+ },
+ {
+  "score": "examples/getting-started/worktree-isolation.yaml",
+  "sheet": "3",
+  "rules": "3"
+ },
+ {
+  "score": "examples/getting-started/worktree-isolation.yaml",
+  "sheet": "4",
+  "rules": "3"
+ },
+ {
+  "score": "examples/patterns/convergence-loop.yaml",
+  "sheet": "1",
+  "rules": "1"
+ },
+ {
+  "score": "examples/patterns/dead-letter-quarantine.yaml",
+  "sheet": "2",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/dead-letter-quarantine.yaml",
+  "sheet": "3",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/dead-letter-quarantine.yaml",
+  "sheet": "4",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/dead-letter-quarantine.yaml",
+  "sheet": "5",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/dead-letter-quarantine.yaml",
+  "sheet": "6",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/dead-letter-quarantine.yaml",
+  "sheet": "7",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/dead-letter-quarantine.yaml",
+  "sheet": "8",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/dead-letter-quarantine.yaml",
+  "sheet": "9",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/dead-letter-quarantine.yaml",
+  "sheet": "10",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/dead-letter-quarantine.yaml",
+  "sheet": "11",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/dead-letter-quarantine.yaml",
+  "sheet": "14",
+  "rules": "3"
+ },
+ {
+  "score": "examples/patterns/design-review.yaml",
+  "sheet": "1",
+  "rules": "4"
+ },
+ {
+  "score": "examples/patterns/design-review.yaml",
+  "sheet": "2",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/design-review.yaml",
+  "sheet": "3",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/design-review.yaml",
+  "sheet": "4",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/design-review.yaml",
+  "sheet": "5",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/design-review.yaml",
+  "sheet": "6",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/design-review.yaml",
+  "sheet": "8",
+  "rules": "5"
+ },
+ {
+  "score": "examples/patterns/echelon-repair.yaml",
+  "sheet": "3",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/echelon-repair.yaml",
+  "sheet": "4",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/echelon-repair.yaml",
+  "sheet": "5",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/immune-cascade.yaml",
+  "sheet": "1",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/immune-cascade.yaml",
+  "sheet": "2",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/immune-cascade.yaml",
+  "sheet": "3",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/immune-cascade.yaml",
+  "sheet": "4",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/immune-cascade.yaml",
+  "sheet": "5",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/immune-cascade.yaml",
+  "sheet": "7",
+  "rules": "3"
+ },
+ {
+  "score": "examples/patterns/immune-cascade.yaml",
+  "sheet": "8",
+  "rules": "3"
+ },
+ {
+  "score": "examples/patterns/immune-cascade.yaml",
+  "sheet": "9",
+  "rules": "3"
+ },
+ {
+  "score": "examples/patterns/immune-cascade.yaml",
+  "sheet": "11",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/prefabrication.yaml",
+  "sheet": "2",
+  "rules": "1"
+ },
+ {
+  "score": "examples/patterns/prefabrication.yaml",
+  "sheet": "3",
+  "rules": "1"
+ },
+ {
+  "score": "examples/patterns/prefabrication.yaml",
+  "sheet": "5",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/prefabrication.yaml",
+  "sheet": "6",
+  "rules": "3"
+ },
+ {
+  "score": "examples/patterns/shipyard-sequence.yaml",
+  "sheet": "1",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/shipyard-sequence.yaml",
+  "sheet": "3",
+  "rules": "1"
+ },
+ {
+  "score": "examples/patterns/shipyard-sequence.yaml",
+  "sheet": "4",
+  "rules": "1"
+ },
+ {
+  "score": "examples/patterns/shipyard-sequence.yaml",
+  "sheet": "5",
+  "rules": "1"
+ },
+ {
+  "score": "examples/patterns/shipyard-sequence.yaml",
+  "sheet": "6",
+  "rules": "1"
+ },
+ {
+  "score": "examples/patterns/shipyard-sequence.yaml",
+  "sheet": "7",
+  "rules": "2"
+ },
+ {
+  "score": "examples/patterns/source-triangulation.yaml",
+  "sheet": "1",
+  "rules": "1"
+ },
+ {
+  "score": "examples/patterns/source-triangulation.yaml",
+  "sheet": "2",
+  "rules": "1"
+ },
+ {
+  "score": "examples/patterns/source-triangulation.yaml",
+  "sheet": "3",
+  "rules": "1"
+ },
+ {
+  "score": "examples/patterns/source-triangulation.yaml",
+  "sheet": "4",
+  "rules": "1"
+ },
+ {
+  "score": "examples/patterns/source-triangulation.yaml",
+  "sheet": "5",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/candidate-screening.yaml",
+  "sheet": "1",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/candidate-screening.yaml",
+  "sheet": "2",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/candidate-screening.yaml",
+  "sheet": "3",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/candidate-screening.yaml",
+  "sheet": "4",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/candidate-screening.yaml",
+  "sheet": "5",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/contract-generator.yaml",
+  "sheet": "1",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/contract-generator.yaml",
+  "sheet": "2",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/contract-generator.yaml",
+  "sheet": "3",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/contract-generator.yaml",
+  "sheet": "4",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/contract-generator.yaml",
+  "sheet": "5",
+  "rules": "3"
+ },
+ {
+  "score": "examples/product/invoice-analysis.yaml",
+  "sheet": "1",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/invoice-analysis.yaml",
+  "sheet": "2",
+  "rules": "1"
+ },
+ {
+  "score": "examples/product/invoice-analysis.yaml",
+  "sheet": "3",
+  "rules": "1"
+ },
+ {
+  "score": "examples/product/invoice-analysis.yaml",
+  "sheet": "4",
+  "rules": "1"
+ },
+ {
+  "score": "examples/product/invoice-analysis.yaml",
+  "sheet": "5",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/marketing-content.yaml",
+  "sheet": "1",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/marketing-content.yaml",
+  "sheet": "3",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/marketing-content.yaml",
+  "sheet": "4",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/marketing-content.yaml",
+  "sheet": "5",
+  "rules": "2"
+ },
+ {
+  "score": "examples/product/marketing-content.yaml",
+  "sheet": "6",
+  "rules": "2"
+ },
+ {
+  "score": "examples/research/context-engineering-lab.yaml",
+  "sheet": "12",
+  "rules": "2"
+ },
+ {
+  "score": "examples/research/context-engineering-lab.yaml",
+  "sheet": "14",
+  "rules": "2"
+ },
+ {
+  "score": "examples/research/context-engineering-lab.yaml",
+  "sheet": "16",
+  "rules": "2"
+ },
+ {
+  "score": "examples/research/nonfiction-book.yaml",
+  "sheet": "1",
+  "rules": "6"
+ },
+ {
+  "score": "examples/research/nonfiction-book.yaml",
+  "sheet": "2",
+  "rules": "11"
+ },
+ {
+  "score": "examples/research/parallel-research-fanout.yaml",
+  "sheet": "1",
+  "rules": "2"
+ },
+ {
+  "score": "examples/research/parallel-research-fanout.yaml",
+  "sheet": "2",
+  "rules": "2"
+ },
+ {
+  "score": "examples/research/parallel-research-fanout.yaml",
+  "sheet": "3",
+  "rules": "2"
+ },
+ {
+  "score": "examples/research/parallel-research-fanout.yaml",
+  "sheet": "4",
+  "rules": "2"
+ },
+ {
+  "score": "examples/research/parallel-research-fanout.yaml",
+  "sheet": "5",
+  "rules": "2"
+ },
+ {
+  "score": "examples/research/strategic-plan.yaml",
+  "sheet": "1",
+  "rules": "4"
+ },
+ {
+  "score": "examples/research/strategic-plan.yaml",
+  "sheet": "2",
+  "rules": "12"
+ },
+ {
+  "score": "examples/research/strategic-plan.yaml",
+  "sheet": "3",
+  "rules": "19"
+ },
+ {
+  "score": "examples/research/strategic-plan.yaml",
+  "sheet": "4",
+  "rules": "25"
+ },
+ {
+  "score": "examples/research/training-data-curation.yaml",
+  "sheet": "2",
+  "rules": "12"
+ },
+ {
+  "score": "examples/research/training-data-curation.yaml",
+  "sheet": "3",
+  "rules": "18"
+ },
+ {
+  "score": "examples/research/training-data-curation.yaml",
+  "sheet": "5",
+  "rules": "29"
+ },
+ {
+  "score": "examples/research/training-data-curation.yaml",
+  "sheet": "6",
+  "rules": "37"
+ }
+]
