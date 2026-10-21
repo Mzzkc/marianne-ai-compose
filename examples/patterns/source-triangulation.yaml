@@ -453,8 +453,8 @@ validations:
     path: "{workspace}/03-triangulation.md"
     sheet: 5
     description: "Triangulation report exists"
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/03-triangulation.md"
-    pattern: "CORROBORATED\\|UNCORROBORATED\\|CONTRADICTED"
+    pattern: "CORROBORATED|UNCORROBORATED|CONTRADICTED"
     sheet: 5
     description: "Report contains triangulation verdicts"

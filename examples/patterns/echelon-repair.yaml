@@ -547,8 +547,8 @@ validations:
       w = yaml.safe_load(open('{workspace}/work-orders.yaml'))
       assert 'findings' in w, 'Missing findings'
       assert 'diagnosis_summary' in w, 'Missing summary'
-      findings = w['findings']
-      assert len(findings) > 0, 'No findings classified'
+      findings = w['findings'] or []
+      # Zero findings is a valid audit outcome; every finding present is typed.
       for f in findings:
           assert f['echelon'] in ('E1', 'E2', 'E3'), f'Bad echelon: {f[\"echelon\"]}'
           assert f['severity'] in ('critical', 'high', 'medium', 'low'), f'Bad severity'
@@ -575,11 +575,11 @@ validations:
     condition: "stage == 4"
     description: "E2 sustained analysis results exist"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/sustained-results.md"
-    pattern: "CONFIRMED"
+    pattern: "CONFIRMED|FALSE POSITIVE|FALSE_POSITIVE|NO E2 FINDINGS|no E2 findings"
     condition: "stage == 4"
-    description: "Sustained results contain finding status classifications"
+    description: "Sustained results classify each E2 finding, or state there were none"
 
   # ── Stage 5: E3 depot analysis covers architecture ─────────────────────
   - type: file_exists

@@ -311,6 +311,16 @@ validations:
     path: "{workspace}/validation-report.md"
     sheet: 2
     description: "Validation gate report exists"
+  - type: content_regex
+    path: "{workspace}/validation-report.md"
+    pattern: "PASS"
+    sheet: 2
+    description: "Validation gate report records at least one passing check"
+  - type: command_succeeds
+    command: '! grep -qE "^\s*(-|\*|\|)?\s*.*\bFAIL\b" "{workspace}/validation-report.md"'
+    sheet: 2
+    timeout_seconds: 10
+    description: "Validation gate report records no failing check (the gate is real)"
   - type: file_exists
     path: "{workspace}/src/parser.py"
     sheet: 3

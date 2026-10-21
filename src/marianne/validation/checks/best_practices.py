@@ -29,11 +29,12 @@ _BUILTIN_NAMES: frozenset[str] = frozenset(
 
 
 class JinjaInValidationPathCheck:
-    """Check for Jinja syntax in validation paths (V201).
+    """Check for Jinja syntax in validation paths and commands (V201).
 
-    Validation paths use Python ``.format()`` syntax (``{workspace}``),
-    not Jinja (``{{ workspace }}``).  Using Jinja syntax causes paths to
-    render literally with braces intact.
+    Validation paths and commands use Python ``.format()`` syntax
+    (``{workspace}``), not Jinja (``{{ workspace }}``). Jinja syntax renders
+    literally with braces intact: a path never exists and a command runs
+    ``cd {{ workspace }}`` (examples QA 21 Oct, prefabrication F16).
     """
 
     @property
@@ -46,7 +47,7 @@ class JinjaInValidationPathCheck:
 
     @property
     def description(self) -> str:
-        return "Detects Jinja syntax in validation paths"
+        return "Detects Jinja syntax in validation paths and commands"
 
     def check(
         self,
@@ -54,23 +55,36 @@ class JinjaInValidationPathCheck:
         config_path: Path,
         raw_yaml: str,
     ) -> list[ValidationIssue]:
-        """Check validation paths for ``{{`` markers."""
+        """Check validation paths and commands for ``{{`` markers."""
         issues: list[ValidationIssue] = []
 
         for i, validation in enumerate(config.validations):
-            path_val = getattr(validation, "path", None)
-            if path_val and "{{" in str(path_val):
+            for field in ("path", "command"):
+                value = getattr(validation, field, None)
+                if not value or "{{" not in str(value):
+                    continue
+                text = str(value)
+                anchor = next(
+                    (ln for ln in text.splitlines() if "{{" in ln), text
+                ).strip()
                 issues.append(
                     ValidationIssue(
                         check_id=self.check_id,
                         severity=self.severity,
-                        message=(f"Validation rule {i + 1} uses Jinja syntax in path: {path_val}"),
-                        line=find_line_in_yaml(raw_yaml, str(path_val)),
-                        context=str(path_val),
-                        suggestion=("Use {workspace} not {{ workspace }} in validation paths"),
+                        message=(
+                            f"Validation rule {i + 1} uses Jinja syntax in {field}: "
+                            f"{anchor[:120]}"
+                        ),
+                        line=find_line_in_yaml(raw_yaml, anchor),
+                        context=anchor,
+                        suggestion=(
+                            "Use {workspace} not {{ workspace }} in validation "
+                            f"{field}s — they are format strings, not templates"
+                        ),
                         metadata={
                             "validation_index": str(i),
-                            "path": str(path_val),
+                            "field": field,
+                            field: text,
                         },
                     )
                 )

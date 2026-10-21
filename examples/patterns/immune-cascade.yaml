@@ -572,18 +572,14 @@ validations:
     condition: "stage == 3"
     stage: 2
     description: "Brief identifies investigation Target 1"
-  - type: content_contains
+  # Targets 2 and 3 are optional: a small or clean codebase may yield one
+  # coherent cluster, and the brief says so rather than inventing two more.
+  - type: content_regex
     path: "{workspace}/targeting-brief.md"
-    pattern: "Target 2"
+    pattern: "Target 2|only one target|one investigation target|fewer than three"
     condition: "stage == 3"
     stage: 2
-    description: "Brief identifies investigation Target 2"
-  - type: content_contains
-    path: "{workspace}/targeting-brief.md"
-    pattern: "Target 3"
-    condition: "stage == 3"
-    stage: 2
-    description: "Brief identifies investigation Target 3"
+    description: "Brief identifies Target 2 or states why there is only one target"
   - type: content_regex
     path: "{workspace}/targeting-brief.md"
     pattern: "(?i)hypothesis"

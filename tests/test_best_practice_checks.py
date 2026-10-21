@@ -51,6 +51,28 @@ class TestJinjaInValidationPathCheck:
 
         assert len(issues) == 0
 
+    def test_v201_jinja_in_command_triggers(self, tmp_path: Path) -> None:
+        """A command_succeeds command with Jinja syntax triggers V201 (prefabrication F16)."""
+        yaml_content = dedent("""
+            name: test-job
+            sheet:
+              size: 10
+              total_items: 100
+            prompt:
+              template: "Process sheet {{ sheet_num }}"
+            validations:
+              - type: command_succeeds
+                command: |
+                  cd {{ workspace }} && test -f out.md
+        """).strip()
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text(yaml_content)
+        config = JobConfig.from_yaml(config_path)
+        issues = JinjaInValidationPathCheck().check(config, config_path, yaml_content)
+        assert [i.check_id for i in issues] == ["V201"]
+        assert issues[0].metadata["field"] == "command"
+        assert "cd {{ workspace }}" in issues[0].message
+
     def test_v201_jinja_in_path_triggers(self, tmp_path: Path) -> None:
         """Validation path using Jinja syntax triggers V201."""
         yaml_content = dedent("""

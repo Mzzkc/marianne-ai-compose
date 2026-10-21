@@ -575,7 +575,7 @@ validations:
     command: |
       python3 -c "
       import yaml
-      c = yaml.safe_load(open('{{ workspace }}/contract.yaml'))
+      c = yaml.safe_load(open('{workspace}/contract.yaml'))
       required = ['models', 'endpoints', 'error_format', 'conventions']
       missing = [s for s in required if s not in c]
       assert not missing, f'Contract missing sections: {missing}'
@@ -598,8 +598,7 @@ validations:
 
   - type: command_succeeds
     command: |
-      bash -c 'cd {{ workspace }} && python3 -m pytest tests/ -v --tb=short 2>&1;
-      exit ${PIPESTATUS[0]}'
+      cd {workspace} && python3 -m pytest tests/ -v --tb=short 2>&1 | tail -20; exit ${PIPESTATUS[0]}
     condition: "stage == 3"
     description: "All integration tests pass"
 

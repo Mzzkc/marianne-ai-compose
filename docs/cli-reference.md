@@ -587,7 +587,7 @@ code-registry and corpus-sweep tests.
 | WARNING | V103 | Sheet or instrument timeout outside the reasonable range (V103/V104) |
 | WARNING | V106 | Empty pattern in a `content_contains`/`content_regex` validation |
 | WARNING | V109 | A cadenza reads a file a later sheet produces |
-| WARNING | V201 | Jinja `{{ }}` syntax inside a validation path (paths are not rendered) |
+| WARNING | V201 | Jinja `{{ }}` syntax inside a validation path or command (they are format strings, never rendered) |
 | WARNING | V202 | Python format-string (`%s`, `{x}`) syntax inside a Jinja template |
 | WARNING | V203 | No validation rules exist — nothing defines done |
 | WARNING | V206 | Fan-out declared without stage dependencies |
