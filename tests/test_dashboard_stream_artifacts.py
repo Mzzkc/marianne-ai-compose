@@ -664,3 +664,110 @@ class TestIsSafePath:
             pytest.skip("Cannot create symlinks")
 
         assert _is_safe_path("link.txt", workspace) is False
+
+
+# =============================================================================
+# GH #387: the artifact read is one verified descriptor, never a second open
+# =============================================================================
+
+
+class TestArtifactOpenNoFollow:
+    """``_is_safe_path`` checks the path; ``_open_regular_file_nofollow`` is the
+    open it guards. A symlink swapped in between the two must be refused at
+    the open, and the served bytes must come from the verified descriptor."""
+
+    def _state(self, workspace: Path) -> CheckpointState:
+        return CheckpointState(
+            job_id="test-123", job_name="Test Job", status=JobStatus.RUNNING,
+            total_sheets=3, worktree_path=str(workspace),
+            created_at=_FIXED_TIME, updated_at=_FIXED_TIME,
+        )
+
+    def test_open_refuses_a_symlink(self, tmp_path: Path) -> None:
+        from marianne.dashboard.routes.artifacts import _open_regular_file_nofollow
+
+        target = tmp_path / "secret.txt"
+        target.write_text("sensitive")
+        link = tmp_path / "link.txt"
+        try:
+            link.symlink_to(target)
+        except OSError:
+            pytest.skip("Cannot create symlinks")
+        with pytest.raises(OSError):
+            _open_regular_file_nofollow(link)
+
+    def test_open_refuses_a_directory(self, tmp_path: Path) -> None:
+        from marianne.dashboard.routes.artifacts import _open_regular_file_nofollow
+
+        with pytest.raises(OSError):
+            _open_regular_file_nofollow(tmp_path)
+
+    def test_open_returns_the_named_regular_file(self, tmp_path: Path) -> None:
+        import os
+
+        from marianne.dashboard.routes.artifacts import _open_regular_file_nofollow, _read_fd
+
+        f = tmp_path / "ok.txt"
+        f.write_bytes(b"hello " * 300_000)  # crosses the 1 MiB read chunk
+        fd = _open_regular_file_nofollow(f)
+        try:
+            assert _read_fd(fd) == f.read_bytes()
+        finally:
+            os.close(fd)
+
+    def test_swap_between_check_and_open_is_refused(
+        self, client, temp_state_dir, monkeypatch
+    ) -> None:
+        """The TOCTOU the issue names: the path passes ``_is_safe_path`` as a
+        regular file, then becomes a symlink to a file outside the workspace
+        before the open. The read must not serve the outside bytes."""
+        import marianne.dashboard.routes.artifacts as artifacts
+
+        workspace = temp_state_dir / "test-workspace"
+        workspace.mkdir()
+        victim = workspace / "report.txt"
+        victim.write_text("inside")
+        outside = temp_state_dir / "secret.txt"
+        outside.write_text("sensitive data")
+
+        real_is_safe = artifacts._is_safe_path
+
+        def swap_after_check(requested: str, root: Path) -> bool:
+            ok = real_is_safe(requested, root)
+            victim.unlink()
+            try:
+                victim.symlink_to(outside)
+            except OSError:
+                pytest.skip("Cannot create symlinks")
+            return ok
+
+        monkeypatch.setattr(artifacts, "_is_safe_path", swap_after_check)
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
+            mock_backend.load = AsyncMock(return_value=self._state(workspace))
+            response = client.get("/api/jobs/test-123/artifacts/report.txt")
+
+        assert response.status_code == 400
+        assert b"sensitive data" not in response.content
+
+    def test_text_download_and_binary_still_serve(self, client, temp_state_dir) -> None:
+        workspace = temp_state_dir / "test-workspace"
+        workspace.mkdir()
+        (workspace / "notes.md").write_text("# notes\n")
+        (workspace / "blob.bin").write_bytes(b"\x00\xff\x10")
+        (workspace / "fake.txt").write_bytes(b"\xff\xfe\x00bad utf8")
+
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
+            mock_backend.load = AsyncMock(return_value=self._state(workspace))
+            inline = client.get("/api/jobs/test-123/artifacts/notes.md")
+            download = client.get("/api/jobs/test-123/artifacts/notes.md?download=true")
+            binary = client.get("/api/jobs/test-123/artifacts/blob.bin")
+            fake = client.get("/api/jobs/test-123/artifacts/fake.txt")
+
+        assert inline.status_code == 200 and inline.text == "# notes\n"
+        assert "attachment" not in inline.headers.get("content-disposition", "")
+        assert download.status_code == 200 and download.text == "# notes\n"
+        assert 'attachment; filename="notes.md"' in download.headers["content-disposition"]
+        assert binary.status_code == 200 and binary.content == b"\x00\xff\x10"
+        assert binary.headers["content-type"].startswith("application/octet-stream")
+        assert fake.status_code == 200 and fake.content == b"\xff\xfe\x00bad utf8"
+        assert fake.headers["content-type"].startswith("application/octet-stream")

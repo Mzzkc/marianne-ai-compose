@@ -824,3 +824,145 @@ class TestSanitizeFilename:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestExposureWarning:
+    """GH #387: a non-loopback bind with auth at its localhost default is
+    named loudly at startup; a loopback bind never is."""
+
+    @pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1", "127.0.0.2", "[::1]"])
+    def test_loopback_bind_is_silent_in_every_mode(self, host: str) -> None:
+        from marianne.dashboard.auth import AuthMode, exposure_warning
+
+        for mode in AuthMode:
+            assert exposure_warning(host, AuthConfig(mode=mode)) is None
+
+    @pytest.mark.parametrize("host", ["0.0.0.0", "::", "10.0.0.5", "pallas.local", ""])
+    def test_localhost_only_on_a_network_bind_warns(self, host: str) -> None:
+        from marianne.dashboard.auth import AuthMode, exposure_warning
+
+        text = exposure_warning(host, AuthConfig(mode=AuthMode.LOCALHOST_ONLY))
+        assert text is not None
+        assert "403" in text and "MZT_AUTH_MODE=api_key" in text
+
+    def test_api_key_with_keys_and_no_bypass_is_silent(self) -> None:
+        from marianne.dashboard.auth import AuthMode, exposure_warning, hash_api_key
+
+        cfg = AuthConfig(
+            mode=AuthMode.API_KEY, api_keys=[hash_api_key("k")], localhost_bypass=False,
+        )
+        assert exposure_warning("0.0.0.0", cfg) is None
+
+    def test_api_key_without_keys_or_with_bypass_warns(self) -> None:
+        from marianne.dashboard.auth import AuthMode, exposure_warning, hash_api_key
+
+        no_keys = AuthConfig(mode=AuthMode.API_KEY, api_keys=[], localhost_bypass=False)
+        bypass = AuthConfig(
+            mode=AuthMode.API_KEY, api_keys=[hash_api_key("k")], localhost_bypass=True,
+        )
+        assert "MZT_API_KEYS is empty" in (exposure_warning("0.0.0.0", no_keys) or "")
+        assert "MZT_LOCALHOST_BYPASS is true" in (exposure_warning("0.0.0.0", bypass) or "")
+
+    def test_disabled_on_a_network_bind_is_named(self) -> None:
+        from marianne.dashboard.auth import AuthMode, exposure_warning
+
+        text = exposure_warning("0.0.0.0", AuthConfig(mode=AuthMode.DISABLED))
+        assert text is not None and "disabled" in text
+
+    def test_reads_the_environment_when_no_config_given(self, monkeypatch) -> None:
+        from marianne.dashboard.auth import exposure_warning
+
+        monkeypatch.setenv("MZT_AUTH_MODE", "api_key")
+        monkeypatch.setenv("MZT_API_KEYS", "k1")
+        monkeypatch.setenv("MZT_LOCALHOST_BYPASS", "false")
+        assert exposure_warning("0.0.0.0") is None
+        monkeypatch.setenv("MZT_LOCALHOST_BYPASS", "true")
+        assert exposure_warning("0.0.0.0") is not None
+
+
+class TestPublicOrchestra:
+    """GH #468/#387: MZT_PUBLIC_ORCHESTRA=true serves the orchestra surface to
+    every client; nothing else changes."""
+
+    @pytest.fixture
+    def app_factory(self):
+        def _make(config: AuthConfig) -> FastAPI:
+            app = FastAPI()
+
+            @app.get("/orchestra")
+            async def page():
+                return {"page": "orchestra"}
+
+            @app.get("/api/orchestra/snapshot")
+            async def snapshot():
+                return {"jobs": []}
+
+            @app.get("/api/orchestra/replay")
+            async def replay():
+                return {"events": []}
+
+            @app.get("/api/orchestra/stream")
+            async def stream():
+                return {"beat": 1}
+
+            @app.get("/static/js/app.js")
+            async def asset():
+                return {"js": True}
+
+            @app.get("/api/jobs")
+            async def jobs():
+                return {"data": "sensitive"}
+
+            @app.get("/orchestral")
+            async def near_miss():
+                return {"data": "sensitive"}
+
+            app.add_middleware(AuthMiddleware, config=config)
+            return app
+
+        return _make
+
+    def _remote(self, app: FastAPI) -> TestClient:
+        # A non-local peer: TestClient's own address counts as localhost.
+        return TestClient(app, client=("203.0.113.9", 51234))
+
+    def test_off_by_default_everything_refuses_remote(self, app_factory) -> None:
+        client = self._remote(app_factory(AuthConfig(mode=AuthMode.LOCALHOST_ONLY)))
+        for path in ("/orchestra", "/api/orchestra/snapshot", "/static/js/app.js", "/api/jobs"):
+            assert client.get(path).status_code == 403, path
+
+    def test_on_serves_only_the_orchestra_surface_to_remote(self, app_factory) -> None:
+        cfg = AuthConfig(mode=AuthMode.LOCALHOST_ONLY, public_orchestra=True)
+        client = self._remote(app_factory(cfg))
+        for path in (
+            "/orchestra", "/api/orchestra/snapshot", "/api/orchestra/replay",
+            "/api/orchestra/stream", "/static/js/app.js",
+        ):
+            assert client.get(path).status_code == 200, path
+        assert client.get("/api/jobs").status_code == 403
+        assert client.get("/orchestral").status_code == 403, "prefix must not leak"
+
+    def test_on_under_api_key_mode_needs_no_key_for_orchestra(self, app_factory) -> None:
+        cfg = AuthConfig(
+            mode=AuthMode.API_KEY, api_keys=[hash_api_key("k")],
+            localhost_bypass=False, public_orchestra=True,
+        )
+        client = self._remote(app_factory(cfg))
+        assert client.get("/orchestra").status_code == 200
+        assert client.get("/api/jobs").status_code == 401
+        assert client.get("/api/jobs", headers={"X-API-Key": "k"}).status_code == 200
+
+    def test_from_env_reads_the_flag(self, monkeypatch) -> None:
+        monkeypatch.delenv("MZT_PUBLIC_ORCHESTRA", raising=False)
+        assert AuthConfig.from_env().public_orchestra is False
+        monkeypatch.setenv("MZT_PUBLIC_ORCHESTRA", "TRUE")
+        assert AuthConfig.from_env().public_orchestra is True
+
+    def test_exposure_warning_names_the_public_shape(self) -> None:
+        from marianne.dashboard.auth import exposure_warning
+
+        cfg = AuthConfig(mode=AuthMode.LOCALHOST_ONLY, public_orchestra=True)
+        text = exposure_warning("0.0.0.0", cfg)
+        assert text is not None
+        assert "MZT_PUBLIC_ORCHESTRA=true" in text and "/orchestra" in text
+        assert "nothing else is exposed" in text

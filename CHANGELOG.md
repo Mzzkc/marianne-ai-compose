@@ -222,6 +222,17 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **Dashboard pre-exposure hardening (GH #387).** The artifact read opens
+  with `O_NOFOLLOW`, verifies the descriptor is the regular file the path
+  named (device and inode against a fresh `lstat`), and serves its bytes;
+  a symlink swapped in between the path check and the open is refused with
+  400 instead of followed. `mzt dashboard --host <non-loopback>` prints a
+  red **Exposed bind** panel before starting when `MZT_AUTH_MODE` is still
+  `localhost_only`, or `api_key` with no keys or the localhost bypass on.
+  `MZT_PUBLIC_ORCHESTRA=true` is the shape for mzt.dev: `/orchestra`, its
+  read-only API and `/static` are served to every client, every other path
+  keeps the auth mode's rule (the docs had promised a public orchestra page
+  that the middleware then refused with 403).
 - **An installed harness with no usable provider no longer stalls a deep
   chain (GH #389).** `cli.errors.unavailable_patterns` lets a profile name its
   harness's own startup refusal ("No provider configured", "Provider not

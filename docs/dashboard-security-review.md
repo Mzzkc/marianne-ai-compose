@@ -30,14 +30,23 @@ default).
 
 ## Minor / non-blocking notes (tracked, not launch-blocking)
 
-- `routes/artifacts.py` carries a documented symlink **TOCTOU** caveat (a path
-  could be swapped between the `is_relative_to` check and the open). Severity is
-  low under the localhost-only default; worth a hardening pass (open the file
-  with `O_NOFOLLOW` / re-validate post-open) before any non-localhost exposure.
+- `routes/artifacts.py` symlink **TOCTOU** — closed (GH #387). The read opens
+  with `O_NOFOLLOW`, checks the descriptor is a regular file whose device and
+  inode match a fresh `lstat` of the path, and serves the bytes from that
+  descriptor; `FileResponse` (a second open by path, which follows symlinks) is
+  no longer used on this route.
 - If the dashboard is ever bound to `0.0.0.0`, operators MUST set
-  `MZT_AUTH_MODE=api_key` with real keys — the localhost bypass should be off for
-  network exposure. This is documented behavior; consider a loud startup warning
-  when `--host` is non-loopback and auth is `localhost_only`.
+  `MZT_AUTH_MODE=api_key` with real keys and `MZT_LOCALHOST_BYPASS=false`.
+  `mzt dashboard` now prints a red **Exposed bind** panel at startup when the
+  host is non-loopback and auth is still `localhost_only`, or `api_key` with no
+  keys or the bypass on (GH #387); `disabled` on a network bind is named too.
+- **Public orchestra surface** (`MZT_PUBLIC_ORCHESTRA=true`, GH #468): the
+  middleware serves `/orchestra`, `/api/orchestra/{snapshot,replay,stream}` and
+  `/static` to every client regardless of mode. The surface is the conductor's
+  whitelisted projection (names, sheet numbers, instruments, outcomes, times;
+  `daemon/orchestra/recorder.project_event`), the API is read-only, `replay`
+  validates `day` as `YYYY-MM-DD`, and rate limiting still applies. The prefix
+  match is exact-segment (`/orchestral` is not public). Off by default.
 
 ## Conclusion
 

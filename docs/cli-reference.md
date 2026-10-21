@@ -1142,7 +1142,7 @@ page meant to be exposed on a public hostname.
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--port` | `-p` | 8000 | Port to run dashboard on |
-| `--host` | | `127.0.0.1` | Host to bind to |
+| `--host` | | `127.0.0.1` | Host to bind to. A non-loopback host with `MZT_AUTH_MODE` still `localhost_only` (or `api_key` with no keys / the localhost bypass on) prints a red **Exposed bind** panel before the server starts: the listener would answer every interface and refuse every non-local client, or let a proxy skip the key check. The bind still happens; the warning is the operator's cue (GH #387). |
 | `--workspace` | `-w` | `.` | Workspace directory for job state |
 | `--reload` | `-r` | false | Enable auto-reload for development |
 
@@ -1155,8 +1155,13 @@ mzt dashboard
 # Custom port
 mzt dashboard --port 3000
 
-# Allow external connections
-mzt dashboard --host 0.0.0.0
+# Allow external connections — only with real keys and the localhost bypass off
+MZT_AUTH_MODE=api_key MZT_API_KEYS=<keys> MZT_LOCALHOST_BYPASS=false \
+  mzt dashboard --host 0.0.0.0
+
+# Publish ONLY the orchestra view (the public fleet page); everything else
+# still refuses non-local clients
+MZT_PUBLIC_ORCHESTRA=true mzt dashboard --host 0.0.0.0
 
 # Development mode with auto-reload
 mzt dashboard --reload
@@ -2110,6 +2115,7 @@ execution time.
 | `MZT_AUTH_MODE` | Dashboard auth: `disabled`, `api_key`, `localhost_only` | `localhost_only` |
 | `MZT_API_KEYS` | Comma-separated API keys for dashboard auth | |
 | `MZT_LOCALHOST_BYPASS` | Allow localhost to bypass API key auth | `true` |
+| `MZT_PUBLIC_ORCHESTRA` | Serve `/orchestra`, `/api/orchestra/*` and `/static` to every client whatever the auth mode (the public fleet view, GH #468); every other path keeps the mode's rule | `false` |
 | `MZT_CORS_ORIGINS` | Comma-separated allowed CORS origins | `http://localhost:8080,http://127.0.0.1:8080` |
 | `MZT_CORS_CREDENTIALS` | Allow credentials in CORS requests | `true` |
 | `MZT_DEV` | Enable development mode (permissive CORS) | |

@@ -76,11 +76,25 @@ def dashboard(
         raise typer.Exit(1) from None
 
     from marianne.dashboard import create_app
+    from marianne.dashboard.auth import exposure_warning
 
     fastapi_app = create_app(
         title="Marianne Dashboard",
         version=__version__,
     )
+
+    # GH #387: a non-loopback bind with auth still at its localhost default
+    # is an exposed surface the operator did not mean to open. Say so, in
+    # red, before the listener exists; the bind itself is their call.
+    warning = exposure_warning(host)
+    if warning is not None:
+        console.print(
+            Panel(
+                f"[bold red]Exposed bind[/bold red]\n\n{warning}",
+                title="Dashboard security",
+                border_style="red",
+            )
+        )
 
     # Display startup info
     console.print(

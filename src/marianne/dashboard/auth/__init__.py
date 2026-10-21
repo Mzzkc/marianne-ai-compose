@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import os
 from dataclasses import dataclass, field
 from enum import Enum
@@ -36,6 +37,11 @@ class AuthConfig:
             at load time by from_env() so plaintext is never stored.
         localhost_bypass: Allow localhost to bypass auth when mode is api_key
         excluded_paths: Paths that don't require authentication
+        public_orchestra: Serve the orchestra view (``/orchestra``, its API
+            and the static assets the page loads) to every client, whatever
+            the mode (GH #468, #387). The orchestra projection carries only
+            score names, sheet numbers, instruments, outcomes and times; this
+            is the one surface meant for a public hostname. Off by default.
         header_name: Header name for API key
     """
 
@@ -50,6 +56,7 @@ class AuthConfig:
             "/redoc",
         ]
     )
+    public_orchestra: bool = False
     header_name: str = "X-API-Key"
 
     @classmethod
@@ -60,6 +67,7 @@ class AuthConfig:
             MZT_AUTH_MODE: disabled, api_key, or localhost_only
             MZT_API_KEYS: Comma-separated API keys
             MZT_LOCALHOST_BYPASS: true/false
+            MZT_PUBLIC_ORCHESTRA: true/false (default false)
         """
         mode_str = os.getenv("MZT_AUTH_MODE", "localhost_only")
         mode = AuthMode(mode_str.lower())
@@ -70,11 +78,13 @@ class AuthConfig:
         hashed_keys = [hash_api_key(k) for k in raw_keys]
 
         localhost_bypass = os.getenv("MZT_LOCALHOST_BYPASS", "true").lower() == "true"
+        public_orchestra = os.getenv("MZT_PUBLIC_ORCHESTRA", "false").lower() == "true"
 
         return cls(
             mode=mode,
             api_keys=hashed_keys,
             localhost_bypass=localhost_bypass,
+            public_orchestra=public_orchestra,
         )
 
 
@@ -104,6 +114,88 @@ def verify_api_key(key: str, hashed_keys: list[str]) -> bool:
     """
     key_hash = hash_api_key(key)
     return any(hmac.compare_digest(key_hash, stored_hash) for stored_hash in hashed_keys)
+
+
+# The orchestra surface (GH #468): the page, its three read-only API routes
+# and the static assets the page loads. Nothing here reads a workspace, a
+# prompt, a path or an error text; see daemon/orchestra/recorder.project_event.
+ORCHESTRA_PUBLIC_PATHS: tuple[str, ...] = (
+    "/orchestra",
+    "/api/orchestra/snapshot",
+    "/api/orchestra/replay",
+    "/api/orchestra/stream",
+    "/static",
+)
+
+
+def is_public_orchestra_path(path: str) -> bool:
+    """Whether ``path`` belongs to the orchestra surface a public hostname serves."""
+    return any(path == p or path.startswith(p + "/") for p in ORCHESTRA_PUBLIC_PATHS)
+
+
+def is_loopback_bind(host: str) -> bool:
+    """Whether binding ``host`` keeps the listener on this machine only."""
+    candidate = host.strip().strip("[]").lower()
+    if candidate in ("localhost", ""):
+        return candidate == "localhost"
+    try:
+        return ipaddress.ip_address(candidate).is_loopback
+    except ValueError:
+        return False
+
+
+def exposure_warning(host: str, config: AuthConfig | None = None) -> str | None:
+    """The startup warning a non-loopback bind deserves, or None (GH #387).
+
+    An operator who binds ``0.0.0.0`` with the default ``localhost_only``
+    mode gets a listener that answers every interface and then refuses
+    every non-local client with 403: exposed, and useless. ``api_key`` with
+    the localhost bypass still on, or with no keys loaded, is the same
+    surface. Only ``api_key`` with keys and the bypass off, or ``disabled``
+    chosen on purpose, is silent here; ``disabled`` is still named so the
+    choice is visible in the terminal.
+    """
+    if is_loopback_bind(host):
+        return None
+    cfg = config or AuthConfig.from_env()
+    mode = cfg.mode.value
+    if cfg.mode == AuthMode.LOCALHOST_ONLY:
+        if cfg.public_orchestra:
+            return (
+                f"Binding {host} with MZT_AUTH_MODE={mode} and "
+                "MZT_PUBLIC_ORCHESTRA=true: /orchestra, /api/orchestra/* and "
+                "/static are served to every client; every other path refuses "
+                "non-local clients with 403. This is the public-fleet shape; "
+                "nothing else is exposed."
+            )
+        return (
+            f"Binding {host} with MZT_AUTH_MODE={mode}: the dashboard will answer "
+            "on every interface and refuse every non-local client with 403. "
+            "For network exposure set MZT_AUTH_MODE=api_key, MZT_API_KEYS=<keys> "
+            "and MZT_LOCALHOST_BYPASS=false; to publish only the orchestra view "
+            "set MZT_PUBLIC_ORCHESTRA=true; otherwise bind 127.0.0.1."
+        )
+    if cfg.mode == AuthMode.API_KEY:
+        problems = []
+        if not cfg.api_keys:
+            problems.append("MZT_API_KEYS is empty, so no client can authenticate")
+        if cfg.localhost_bypass:
+            problems.append(
+                "MZT_LOCALHOST_BYPASS is true, so anything that reaches the "
+                "loopback interface (a reverse proxy, a tunnel) skips the key check"
+            )
+        if problems:
+            return (
+                f"Binding {host} with MZT_AUTH_MODE=api_key: "
+                + "; ".join(problems)
+                + ". Set MZT_API_KEYS and MZT_LOCALHOST_BYPASS=false before exposing it."
+            )
+        return None
+    return (
+        f"Binding {host} with MZT_AUTH_MODE=disabled: every client on the network "
+        "can read workspaces, logs and artifacts and control scores. Only do this "
+        "behind an authenticating proxy."
+    )
 
 
 def is_localhost(request: Request) -> bool:
@@ -163,6 +255,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Check if path is excluded from auth
         path = request.url.path
         if self._is_excluded_path(path):
+            return await call_next(request)
+        if self.config.public_orchestra and is_public_orchestra_path(path):
             return await call_next(request)
 
         # Check authentication based on mode
@@ -227,6 +321,10 @@ __all__ = [
     "AuthMiddleware",
     "AuthMode",
     "hash_api_key",
+    "ORCHESTRA_PUBLIC_PATHS",
+    "exposure_warning",
     "is_localhost",
+    "is_loopback_bind",
+    "is_public_orchestra_path",
     "verify_api_key",
 ]

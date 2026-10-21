@@ -423,7 +423,11 @@ What it shows is the conductor's **orchestra projection**: score name, sheet
 number, instrument, outcome, timestamp. The projection whitelists both the source
 events and the payload fields it reads, so no workspace path, prompt, error text
 or cost ever reaches the page. That is what makes it the one view safe to put
-behind a public hostname (mzt.dev). The projection comes from the EventBus, so it
+behind a public hostname (mzt.dev): start the dashboard with
+`MZT_PUBLIC_ORCHESTRA=true` and `/orchestra`, its three read-only API routes
+and `/static` are served to every client while every other path keeps the auth
+mode's rule (the default `localhost_only` refuses them with 403). Without the
+flag the page is as private as the rest. The projection comes from the EventBus, so it
 costs the conductor nothing it was not already doing; the one event the bus did
 not previously carry, `sheet.dispatched`, is published by the baton adapter now.
 

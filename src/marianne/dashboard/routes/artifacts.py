@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import stat
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from marianne.dashboard.app import get_state_backend
@@ -89,6 +90,48 @@ def _is_safe_path(requested_path: str, workspace_root: Path) -> bool:
         return not unresolved.is_symlink()
     except (ValueError, OSError):
         return False
+
+
+_READ_CHUNK = 1 << 20
+
+
+def _open_regular_file_nofollow(file_path: Path) -> int:
+    """Open ``file_path`` for reading without following a final symlink and
+    prove the descriptor is the regular file the path named (GH #387).
+
+    ``_is_safe_path`` checks the path; this is the open it guards. Between
+    the two a symlink can be swapped in (TOCTOU), so the open itself refuses
+    to follow one (``O_NOFOLLOW``, ``ELOOP``) and the opened descriptor is
+    then compared with a fresh ``lstat`` of the path: same device and inode,
+    and a regular file. Everything the route serves is read from this
+    descriptor, never re-opened by path.
+
+    Raises:
+        OSError: the open failed, or the path is not (or no longer) a
+            regular file; the caller maps it to an HTTP error.
+    """
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    fd = os.open(file_path, flags)
+    try:
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode):
+            raise OSError(f"not a regular file: {file_path}")
+        named = os.lstat(file_path)
+        if (named.st_dev, named.st_ino) != (opened.st_dev, opened.st_ino):
+            raise OSError(f"path changed between check and open: {file_path}")
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _read_fd(fd: int) -> bytes:
+    chunks: list[bytes] = []
+    while True:
+        chunk = os.read(fd, _READ_CHUNK)
+        if not chunk:
+            return b"".join(chunks)
+        chunks.append(chunk)
 
 
 # ============================================================================
@@ -270,41 +313,61 @@ async def get_artifact(
                 detail=f"Permission denied: {path}"
             )
 
+        # GH #387: the path check above and this open are two steps; the
+        # open refuses to follow a symlink swapped in between them and the
+        # bytes come from the verified descriptor, never from a second
+        # open by path (FileResponse would re-open and follow).
+        try:
+            fd = _open_regular_file_nofollow(file_path)
+        except PermissionError:
+            raise
+        except OSError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid path: {path}"
+            ) from e
+        try:
+            data = _read_fd(fd)
+        finally:
+            os.close(fd)
+
         # Get MIME type
         mime_type, _ = mimetypes.guess_type(str(file_path))
+        attachment = {
+            "Content-Disposition": f'attachment; filename="{file_path.name}"',
+        }
 
         # Determine if file should be served inline or as download
         if download:
             # Force download
-            return FileResponse(
-                path=file_path,
-                filename=file_path.name,
-                media_type=mime_type or "application/octet-stream"
+            return Response(
+                content=data,
+                media_type=mime_type or "application/octet-stream",
+                headers=attachment,
             )
 
         # Serve inline for text files, download for binary
         if mime_type and mime_type.startswith(('text/', 'application/json', 'application/xml')):
-            # Read text file content
+            # Serve text inline when it decodes; otherwise it only claimed
+            # to be text and goes out as a binary download.
             try:
-                content = file_path.read_text(encoding='utf-8')
-                return PlainTextResponse(
-                    content=content,
-                    media_type=mime_type or "text/plain"
-                )
+                content = data.decode("utf-8")
             except UnicodeDecodeError:
-                # File claimed to be text but isn't valid UTF-8, serve as binary
-                return FileResponse(
-                    path=file_path,
-                    filename=file_path.name,
-                    media_type="application/octet-stream"
+                return Response(
+                    content=data,
+                    media_type="application/octet-stream",
+                    headers=attachment,
                 )
-        else:
-            # Binary file - serve as download
-            return FileResponse(
-                path=file_path,
-                filename=file_path.name,
-                media_type=mime_type or "application/octet-stream"
+            return PlainTextResponse(
+                content=content,
+                media_type=mime_type or "text/plain"
             )
+        # Binary file - serve as download
+        return Response(
+            content=data,
+            media_type=mime_type or "application/octet-stream",
+            headers=attachment,
+        )
 
     except PermissionError as e:
         raise HTTPException(

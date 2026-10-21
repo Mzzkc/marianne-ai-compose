@@ -129,3 +129,32 @@ class TestDashboardCustomOptions:
         mock_uvicorn.run.assert_called_once()
         call_kwargs = mock_uvicorn.run.call_args
         assert call_kwargs.kwargs.get("port") == 9999 or call_kwargs[1].get("port") == 9999
+
+
+class TestExposedBindWarning:
+    """GH #387: `mzt dashboard --host 0.0.0.0` under the default auth mode
+    prints a red panel before the server starts; the loopback default does not."""
+
+    def _run(self, tmp_path: Path, host: str) -> str:
+        mock_uvicorn = MagicMock()
+        with (
+            patch.dict(sys.modules, {"uvicorn": mock_uvicorn}),
+            patch("marianne.dashboard.create_app", MagicMock(return_value=MagicMock())),
+            patch.dict("os.environ", {"MZT_AUTH_MODE": "localhost_only"}),
+        ):
+            result = runner.invoke(
+                _app, ["dashboard", "--host", host, "--workspace", str(tmp_path)],
+                env={"COLUMNS": "200"},
+            )
+        assert result.exit_code == 0, result.output
+        assert mock_uvicorn.run.call_args.kwargs["host"] == host
+        return result.output
+
+    def test_network_bind_prints_the_warning_before_starting(self, tmp_path: Path) -> None:
+        out = self._run(tmp_path, "0.0.0.0")
+        assert "Exposed bind" in out and "MZT_AUTH_MODE=api_key" in out
+        assert out.index("Exposed bind") < out.index("Starting Server")
+
+    def test_loopback_bind_prints_no_warning(self, tmp_path: Path) -> None:
+        out = self._run(tmp_path, "127.0.0.1")
+        assert "Exposed bind" not in out
