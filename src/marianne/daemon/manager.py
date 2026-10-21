@@ -2245,8 +2245,23 @@ class JobManager:
             refusal = _verify_required_lock(request.required_lock, lock_bytes, job_id)
             if refusal is not None:
                 return JobResponse(job_id=job_id, status="rejected", message=refusal)
-            # Parse only the bytes the lock admitted (same check-then-parse
-            # discipline as the pinned-schedule path above).
+            # The lock becomes the pin for the whole lifetime of this job:
+            # the digest it attests rides expected_source_digest, so the
+            # execution path (_run_job_task) re-reads and re-verifies the
+            # bytes before the first sheet and runs from them, exactly as a
+            # pinned schedule does. Without this the lock would guard only
+            # the admission-time parse (security review of c20dc6ee).
+            locked_digest = hashlib.sha256(lock_bytes).hexdigest()
+            if (request.expected_source_digest is not None
+                    and request.expected_source_digest != locked_digest):
+                return JobResponse(
+                    job_id=job_id, status="rejected",
+                    message=(
+                        f"Required composition lock {request.required_lock} and the "
+                        "daemon-pinned schedule digest disagree about the score bytes."
+                    ),
+                )
+            request = request.model_copy(update={"expected_source_digest": locked_digest})
             verified_source_bytes = lock_bytes
 
         # Fleet detection: route fleet configs to the fleet manager

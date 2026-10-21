@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import unicodedata
 from collections import deque
 from collections.abc import Callable
 
@@ -34,17 +35,25 @@ from marianne.utils.credential_scanner import redact_credentials
 # can be driven by what a musician printed (interactive transcripts are raw
 # pipe-pane bytes; GH #381 security review).
 _CONTROL_RE = re.compile(
-    r"\x1b\[[0-?]*[ -/]*[@-~]"          # CSI
-    r"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"  # OSC
-    r"|\x1b[ -/]+[0-~]"                # ESC + intermediate(s) + final (charset designators)
-    r"|\x1b[@-Z\\-_]"                  # two-byte ESC sequences
-    r"|[\x00-\x08\x0b-\x1f\x7f]"        # C0 (not \t, \n handled by split) + DEL
+    r"(?:\x1b\[|\x9b)[0-?]*[ -/]*[@-~]"              # CSI (7-bit and C1 form)
+    r"|(?:\x1b\]|\x9d)[^\x07\x1b\x9c]*(?:\x07|\x1b\\|\x9c)"  # OSC (both forms)
+    r"|(?:\x1b[PX^_]|[\x90\x98\x9e\x9f])[^\x1b\x9c]*(?:\x1b\\|\x9c)"  # DCS/SOS/PM/APC
+    r"|\x1b[ -/]+[0-~]"                          # ESC + intermediate(s) + final
+    r"|\x1b[@-Z\\-_]"                            # two-byte ESC sequences
 )
 
 
 def strip_terminal_controls(text: str) -> str:
-    """Remove escape sequences and control bytes; keep tabs and printable text."""
-    return _CONTROL_RE.sub("", text)
+    """Remove escape sequences and every control character except tab.
+
+    Sequence forms are stripped first (so their payload bytes go with them),
+    then an allowlist drops any remaining Unicode ``Cc`` character other than
+    ``\t``: C0, DEL and the C1 range a terminal may honour as introducers.
+    """
+    text = _CONTROL_RE.sub("", text)
+    return "".join(
+        ch for ch in text if ch == "\t" or unicodedata.category(ch) != "Cc"
+    )
 
 _logger = logging.getLogger("daemon.output_hub")
 

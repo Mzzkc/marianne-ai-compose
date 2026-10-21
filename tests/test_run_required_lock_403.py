@@ -131,3 +131,42 @@ def test_cli_passes_the_lock_through_and_hints_on_refusal(tmp_path: Path) -> Non
     assert result.exit_code == 1
     assert seen["required_lock"] == str(lock.resolve())
     assert "release gate" in result.output.lower() and "--require-lock" in result.output
+
+
+@pytest.mark.asyncio
+async def test_lock_pins_the_bytes_through_execution(tmp_path: Path) -> None:
+    """A swap between admission and execution must be refused, not run:
+    the lock's digest rides expected_source_digest into _run_job_task."""
+    from marianne.daemon.manager import DaemonJobStatus
+
+    score = tmp_path / "pinned.yaml"
+    score.write_text(SCORE.replace("echo hi", "sleep 30").replace("locked", "pinned"))
+    lock = tmp_path / "composition-lock.json"
+    _lock_for(score, lock)
+    manager = JobManager(
+        DaemonConfig(pid_file=tmp_path / "c.pid", state_db_path=tmp_path / "jobs.db")
+    )
+    await manager.start()
+    try:
+        # Hold the job at submission so we can swap the bytes before it runs.
+        original = manager._run_job_task
+
+        async def swapped(job_id: str, request: JobRequest) -> None:
+            score.write_text(score.read_text().replace("sleep 30", "echo swapped"))
+            await original(job_id, request)
+
+        manager._run_job_task = swapped  # type: ignore[method-assign]
+        accepted = await manager.submit_job(JobRequest(config_path=score, required_lock=lock))
+        assert accepted.status == "accepted", accepted.message
+        import asyncio
+
+        for _ in range(100):
+            await asyncio.sleep(0.05)
+            meta = manager._job_meta.get(accepted.job_id)
+            if meta is not None and meta.status == DaemonJobStatus.FAILED:
+                break
+        meta = manager._job_meta[accepted.job_id]
+        assert meta.status == DaemonJobStatus.FAILED, meta.status
+        assert "drift" in (meta.error_message or "").lower()
+    finally:
+        await manager.shutdown(graceful=False)

@@ -229,6 +229,19 @@ class TestTerminalControlsStripped:
         raw = "\x1b[31mred\x1b[0m \x1b]0;title\x07 \x1b(B\x07bell \x00nul\ttab"
         assert strip_terminal_controls(raw) == "red  bell nul\ttab"
 
+    def test_c1_controls_and_string_sequences_are_removed(self) -> None:
+        from marianne.daemon.output_hub import strip_terminal_controls
+
+        raw = (
+            "\x9b31mred\x9b0m"            # C1 CSI
+            " \x9d0;title\x9c"            # C1 OSC terminated by ST
+            " \x1bPpayload\x1b\\"         # DCS
+            " \x1b_apc\x9c"               # APC
+            " \x85\x8fok\u200b"           # bare C1 bytes; a Cf char stays
+        )
+        # Four separators survive: the spaces between the five pieces.
+        assert strip_terminal_controls(raw) == "red    ok\u200b"
+
     def test_subscriber_never_sees_escape_sequences(self) -> None:
         hub = OutputStreamHub()
         sub = hub.subscribe("job", 1)
