@@ -720,18 +720,23 @@ validations:
     condition: "sheet_num == 3"
     stage: 1
     description: "Triage results created"
-  - type: content_regex
-    path: "{workspace}/03-triage.yaml"
-    pattern: "verdict: (REAL|FALSE_POSITIVE)"
+  # Every triaged candidate carries a verdict and evidence; an empty triage
+  # (every candidate was SKIP) is legitimate and converges at stage 5.
+  - type: command_succeeds
+    command: |
+      python3 - "{workspace}/03-triage.yaml" <<'PY'
+      import sys, yaml
+      t = yaml.safe_load(open(sys.argv[1])) or {}
+      rows = t.get("triage_results") or []
+      assert all(r.get("verdict") in ("REAL", "FALSE_POSITIVE") for r in rows), "bad verdict"
+      assert all(r.get("evidence") for r in rows), "missing evidence"
+      s = t.get("summary") or {}
+      assert s.get("total_triaged", len(rows)) == len(rows), "summary disagrees with rows"
+      PY
     condition: "sheet_num == 3"
     stage: 2
-    description: "Triage contains REAL/FALSE_POSITIVE verdicts"
-  - type: content_contains
-    path: "{workspace}/03-triage.yaml"
-    pattern: "evidence:"
-    condition: "sheet_num == 3"
-    stage: 2
-    description: "Triage verdicts include supporting evidence"
+    timeout_seconds: 30
+    description: "Every triaged candidate has a REAL/FALSE_POSITIVE verdict with evidence (zero rows allowed)"
 
   # ── Sheet 4: Rewrite Planning ──────────────────────────────────────────
   - type: file_exists
@@ -806,15 +811,19 @@ validations:
     condition: "sheet_num == 7"
     stage: 2
     description: "Unit test results contain PASS/FAIL verdict"
-  # The report is the musician's account; the harness is the oracle. Run the
-  # bound command from project_root so a FAIL report (or a PASS report over a
-  # red suite) cannot pass this sheet — the fail-fast the header promises.
+  # The report is the musician's account; the harness is the oracle. The
+  # engine substitutes {test_command} as ONE shell-quoted word, which is
+  # exactly what `bash -c` takes, so the whole command runs with its
+  # arguments. Gate the sheet on the report's verdict matching the harness:
+  # a PASS report over a red suite fails here; a FAIL report over a red suite
+  # is an honest report and passes on to stage 9, which decides CONTINUE
+  # (the skip on stage 8 is the fail-fast the header promises).
   - type: command_succeeds
-    command: 'cd "{project_root}" && {test_command}'
+    command: 'if grep -qE "\*\*Results:\*\*\s*PASS" "{workspace}/07-unit-test-results.md"; then cd "{project_root}" && bash -c {test_command}; else cd "{project_root}" && ! bash -c {test_command}; fi'
     condition: "sheet_num == 7"
     stage: 3
     timeout_seconds: 1800
-    description: "Unit test command exits 0 in project_root (the header's fail-fast)"
+    description: "Unit report verdict matches the bound test command's exit in project_root"
 
   # ── Sheet 8: Integration Validation ────────────────────────────────────
   - type: file_exists
@@ -829,11 +838,11 @@ validations:
     stage: 2
     description: "Integration results contain PASS/FAIL verdict"
   - type: command_succeeds
-    command: 'cd "{project_root}" && {integration_test_command}'
+    command: 'if grep -qE "\*\*Results:\*\*\s*PASS" "{workspace}/08-integration-results.md"; then cd "{project_root}" && bash -c {integration_test_command}; else cd "{project_root}" && ! bash -c {integration_test_command}; fi'
     condition: "sheet_num == 8"
     stage: 3
     timeout_seconds: 1800
-    description: "Integration test command exits 0 in project_root"
+    description: "Integration report verdict matches the bound test command's exit in project_root"
 
   # ── Sheet 9: Quality Review ────────────────────────────────────────────
   - type: file_exists

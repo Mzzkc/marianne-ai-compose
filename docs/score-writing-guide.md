@@ -1462,6 +1462,12 @@ validations:
 | `command` | str | yes | Shell command to execute. |
 | `working_directory` | str | no | Working directory for the command (defaults to workspace). |
 
+Every `{placeholder}` is substituted shell-quoted as **one word** (`{workspace}`
+with a space in it stays one argument). A space-separated `prompt.variables`
+value therefore cannot be written as a bash array literal — `cats=({categories})`
+is one element; split it inside the shell instead:
+`read -r -a cats <<< {categories}` (GH #477).
+
 ### `path_in_scope`
 
 Checks that a path resolves inside an allowed root after canonical path
