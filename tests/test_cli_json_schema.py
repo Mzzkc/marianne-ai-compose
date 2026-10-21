@@ -190,6 +190,23 @@ def test_build_command_appends_flag_and_compact_schema() -> None:
     assert " " not in schema_arg
 
 
+def test_build_command_strips_schema_meta_keys() -> None:
+    """GH #479: top-level $schema/$id never reach the CLI's own validator."""
+    backend = _make_backend()
+    rf = json.loads(json.dumps(JSON_SCHEMA_RF))
+    rf["json_schema"]["schema"] = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://example.invalid/intake",
+        **rf["json_schema"]["schema"],
+        "properties": {"nested": {"$id": "keep", "type": "string"}},
+    }
+    cmd = backend._build_command("prompt", timeout_seconds=None, response_format=rf)
+    sent = json.loads(cmd[cmd.index("--json-schema") + 1])
+    assert "$schema" not in sent and "$id" not in sent
+    assert sent["properties"]["nested"]["$id"] == "keep"  # top level only
+    assert sent["type"] == rf["json_schema"]["schema"]["type"]
+
+
 def test_build_command_without_schema_is_byte_identical_to_legacy() -> None:
     """No schema request → the exact legacy command bytes."""
     backend = _make_backend()

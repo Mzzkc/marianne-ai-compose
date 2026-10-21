@@ -382,7 +382,11 @@ _LIVE_SCHEMA: dict[str, object] = {
     "type": "json_schema",
     "json_schema": {
         "name": "live_probe",
+        # Carries a `$schema` on purpose: a real score's schema usually does,
+        # and the probe must fail the way a sheet would if the backend ever
+        # stopped stripping it (GH #479).
         "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
             "type": "object",
             "properties": {"n": {"type": "integer"}},
             "required": ["n"],

@@ -286,6 +286,23 @@ def _terminal_json_object(data: Any) -> Any:
             return item
     return dicts[-1] if dicts else data
 
+_SCHEMA_META_KEYS = ("$schema", "$id")
+
+
+def _cli_schema(schema: Any) -> Any:
+    """The schema as a CLI's own validator accepts it (GH #479).
+
+    ``$schema`` and ``$id`` are meta-keys about the document, not its shape;
+    Claude Code's ``--json-schema`` validator tries to resolve the draft URL
+    and exits 1 ("no schema with key or ref ...") on a schema any JSON-Schema
+    tool would accept. Drop them at the top level only — a nested ``$id``
+    inside a definition is the author's business.
+    """
+    if not isinstance(schema, dict):
+        return schema
+    return {k: v for k, v in schema.items() if k not in _SCHEMA_META_KEYS}
+
+
 class PluginCliBackend(Backend):
     """Generic CLI backend driven by an InstrumentProfile.
 
@@ -788,7 +805,7 @@ class PluginCliBackend(Backend):
                 )
             schema_obj = response_format["json_schema"]["schema"]
             args.append(validated_schema_flag)
-            args.append(json.dumps(schema_obj, separators=(",", ":")))
+            args.append(json.dumps(_cli_schema(schema_obj), separators=(",", ":")))
 
         # Extra flags (always last)
         args.extend(cmd.extra_flags)

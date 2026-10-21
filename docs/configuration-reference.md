@@ -98,7 +98,9 @@ the returned content against the JSON Schema. Server support is required.
 
 For headless CLI profiles, schema mode requires `type: json_schema` and a
 profile-declared `cli.command.json_schema_flag`. Marianne passes the schema to
-that flag and validates the returned structured JSON against it. An unsupported
+that flag — with top-level `$schema` and `$id` removed, since Claude Code's
+validator rejects a draft URL it cannot resolve (GH #479) — and validates the
+returned structured JSON against it. An unsupported
 profile or format fails explicitly. Interactive CLI execution does not provide
 this schema contract, and score silence on `interactive` selects the profile's
 `cli.interactive.enabled_by_default` — true for `claude-code` and `antigravity` —
