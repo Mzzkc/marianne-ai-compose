@@ -623,6 +623,14 @@ class SheetState(BaseModel):
         "the conductor may start the sheet on the chain entry with the lowest "
         "live occupancy instead of the primary. Old checkpoints default to False.",
     )
+    primary_config: dict[str, Any] | None = Field(
+        default=None,
+        description="Config of the chain entry at position 0, index-aligned with "
+        "fallback_configs for the rest (#473). Populated from the sheet's merged "
+        "instrument_config at registration; `balance` rotates it with the chain "
+        "so the entry that runs is the entry whose config is read. None (old "
+        "checkpoints, states built without it) means the sheet's own config.",
+    )
     fallback_attempts: dict[str, int] = Field(
         default_factory=dict,
         description="Retry count per instrument in the chain.",

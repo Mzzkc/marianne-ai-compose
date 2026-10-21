@@ -365,6 +365,7 @@ def sheets_to_execution_states(
             fallback_chain=list(sheet.instrument_fallbacks),
             fallback_configs=[dict(c) for c in sheet.instrument_fallback_configs],
             balance_chain=bool(getattr(sheet, "balance_chain", False)),
+            primary_config=dict(sheet.instrument_config),
             sheet_timeout_seconds=sheet.timeout_seconds,
         )
         states[sheet.num].remember_primary_identity()
@@ -475,6 +476,28 @@ def extract_dependencies(config: Any) -> dict[int, list[int]]:
 # =============================================================================
 # BatonAdapter — the central wiring module
 # =============================================================================
+
+
+def _attempt_entry_config(
+    sheet_config: object, state: SheetExecutionState,
+) -> dict[str, Any]:
+    """The config of the chain entry this attempt runs on.
+
+    Position 0 is the state's ``primary_config`` when the chain carries one
+    (`balance` may have rotated a different entry to the front, #473) and
+    the sheet's merged instrument_config otherwise; a fallback position is
+    its index-aligned entry in ``fallback_configs`` (#342).
+    """
+    if state.current_instrument_index == 0:
+        if state.primary_config is not None:
+            return state.primary_config
+        return sheet_config if isinstance(sheet_config, dict) else {}
+    fallback_idx = state.current_instrument_index - 1
+    if fallback_idx < len(state.fallback_configs) and isinstance(
+        state.fallback_configs[fallback_idx], dict,
+    ):
+        return state.fallback_configs[fallback_idx]
+    return {}
 
 
 class BatonAdapter:
@@ -938,6 +961,7 @@ class BatonAdapter:
                     s.max_completion = max_completion
                     s.fallback_chain = list(sheet.instrument_fallbacks)
                     s.fallback_configs = [dict(c) for c in sheet.instrument_fallback_configs]
+                    s.primary_config = dict(sheet.instrument_config)
                     s.sheet_timeout_seconds = sheet.timeout_seconds
             states = live_sheets
         else:
@@ -1755,6 +1779,7 @@ class BatonAdapter:
             state.max_completion = max_completion
             state.fallback_chain = list(sheet.instrument_fallbacks)
             state.fallback_configs = [dict(c) for c in sheet.instrument_fallback_configs]
+            state.primary_config = dict(sheet.instrument_config)
             state.sheet_timeout_seconds = sheet.timeout_seconds
             state.status = baton_status
             state.normal_attempts = normal_attempts
@@ -2973,19 +2998,7 @@ class BatonAdapter:
         # wire-contract validator raises ValueError here — surfacing as a
         # structured dispatch failure with a real pool release, never a
         # silent drop.
-        if state.current_instrument_index == 0:
-            _icfg_rf = (
-                sheet.instrument_config
-                if isinstance(sheet.instrument_config, dict) else {}
-            )
-        else:
-            fallback_idx = state.current_instrument_index - 1
-            _icfg_rf = (
-                state.fallback_configs[fallback_idx]
-                if fallback_idx < len(state.fallback_configs)
-                and isinstance(state.fallback_configs[fallback_idx], dict)
-                else {}
-            )
+        _icfg_rf = _attempt_entry_config(sheet.instrument_config, state)
         sheet_response_format: ResponseFormatResolution = RESPONSE_FORMAT_UNSET
         if state.expected_route is not None:
             from marianne.execution.instruments.cli_backend import PluginCliBackend

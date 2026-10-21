@@ -74,7 +74,8 @@ an alias over an existing profile; archive what nothing names.
   `cycle` rotates per use, `spread` rotates per movement (a fan-out's voices
   get distinct models from one alias), `cheapest` and `widest` order by the
   profile's model table, and `balance` lets the conductor start on the
-  least-loaded entry at dispatch (recorded in the fallback history). Modifiers
+  least-loaded entry at dispatch (recorded in the fallback history; the
+  chosen entry's whole config travels with it). Modifiers
   compose in the order written. V330 warns when a modifier has nothing to
   choose between. Single-profile aliases are unchanged. The example scores
   bind instruments per role instead of one alias for the whole score:

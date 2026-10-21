@@ -376,6 +376,7 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
         # If the resolved name matches a key in config.instruments, replace
         # it with the profile name and merge the InstrumentDef config.
         alias_tail: list[AliasEntry] = []
+        alias_level_config: dict[str, Any] = {}
         balance_chain = False
         if resolved_instrument in config.instruments:
             instrument_def = config.instruments[resolved_instrument]
@@ -398,7 +399,8 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
                 head, alias_tail = ordered[0], ordered[1:]
                 resolved_instrument = head.profile
                 if instrument_def.config:
-                    instrument_config = {**instrument_config, **instrument_def.config}
+                    alias_level_config = dict(instrument_def.config)
+                    instrument_config = {**instrument_config, **alias_level_config}
                 if head.config:
                     instrument_config = {**instrument_config, **head.config}
                 balance_chain = "balance" in instrument_def.select
@@ -478,7 +480,8 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
         # own fallback order, ahead of any score-level fallbacks (#473).
         for alias_entry in alias_tail:
             resolved_fallbacks.append(alias_entry.profile)
-            fallback_configs.append(dict(alias_entry.config) if alias_entry.config else {})
+            merged_entry = {**alias_level_config, **dict(alias_entry.config)}
+            fallback_configs.append(merged_entry)
         for entry in class_tail:
             resolved_fallbacks.append(entry.profile)
             fallback_configs.append(

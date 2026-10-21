@@ -26,6 +26,7 @@ from marianne.core.config.instruments import (
 )
 from marianne.core.config.job import AliasEntry, InstrumentDef, JobConfig
 from marianne.core.sheet import build_sheets, order_alias_entries
+from marianne.daemon.baton.adapter import _attempt_entry_config
 from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.dispatch import DispatchConfig, dispatch_ready
 from marianne.daemon.baton.state import SheetExecutionState
@@ -209,6 +210,20 @@ class TestBuildTime:
         assert sheet.balance_chain is True
         assert sheet.instrument_name == "codex-cli"
 
+    def test_chain_tail_entries_inherit_the_alias_level_config(self, tmp_path: Path) -> None:
+        cfg = _config(
+            tmp_path, instrument="reviewer",
+            instruments={"reviewer": {
+                **REVIEWER,
+                "config": {"response_format": {"type": "json_object"}},
+            }},
+        )
+        sheet = build_sheets(cfg)[0]
+        assert sheet.instrument_config["response_format"] == {"type": "json_object"}
+        for fb_config in sheet.instrument_fallback_configs:
+            assert fb_config["response_format"] == {"type": "json_object"}
+        assert sheet.instrument_fallback_configs[0]["model"] == "claude-opus-5-5"
+
     def test_alias_chain_in_fallback_list_contributes_every_entry(self, tmp_path: Path) -> None:
         cfg = _config(
             tmp_path, instrument="claude-code", instrument_fallbacks=["reviewer"],
@@ -272,6 +287,46 @@ class TestBalanceAtDispatch:
         assert st.fallback_configs == [{"model": "gpt-6-astra"}, {"model": "claude-opus-5-5"}]
         assert st.instrument_fallback_history[-1]["reason"] == "balance"
         cb.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_balance_rotates_whole_entry_configs(self) -> None:
+        """The entry that runs is the entry whose config is read (#473 review)."""
+        baton = BatonCore()
+        for name in ("codex-cli", "claude-code", "opencode"):
+            baton.register_instrument(name, max_concurrent=4)
+        st = self._state()
+        st.primary_config = {"model": "gpt-6-astra", "response_format": {"type": "json_object"}}
+        st.fallback_configs = [{"model": "claude-opus-5-5", "timeout_seconds": 90}, {}]
+        baton.register_job("j", {1: st}, {})
+        # codex-cli 3/4 busy, claude-code 2/4 busy, opencode idle.
+        active = {("other", i): ("codex-cli", "gpt-6-astra") for i in range(3)}
+        active[("other", 3)] = ("claude-code", "claude-opus-5-5")
+        active[("other", 4)] = ("claude-code", "claude-opus-5-5")
+        cfg = DispatchConfig(
+            max_concurrent_sheets=10, active_executions=active,
+            instrument_concurrency={"codex-cli": 4, "claude-code": 4, "opencode": 4},
+        )
+        await dispatch_ready(baton, cfg, AsyncMock())
+        st = baton._jobs["j"].sheets[1]
+        assert st.instrument_name == "opencode"
+        assert st.primary_config == {}
+        assert _attempt_entry_config({"response_format": {"type": "json_object"}}, st) == {}
+        assert st.fallback_chain == ["codex-cli", "claude-code"]
+        assert st.fallback_configs == [
+            {"model": "gpt-6-astra", "response_format": {"type": "json_object"}},
+            {"model": "claude-opus-5-5", "timeout_seconds": 90},
+        ]
+        # A later advance to the displaced primary reads its whole config.
+        st.advance_fallback("test")
+        assert st.instrument_name == "codex-cli" and st.model == "gpt-6-astra"
+        assert _attempt_entry_config({}, st)["response_format"] == {"type": "json_object"}
+
+    def test_attempt_entry_config_without_primary_config_reads_the_sheet(self) -> None:
+        st = self._state()
+        assert st.primary_config is None
+        assert _attempt_entry_config({"response_format": None}, st) == {"response_format": None}
+        st.current_instrument_index = 1
+        assert _attempt_entry_config({"response_format": None}, st) == {"model": "claude-opus-5-5"}
 
     @pytest.mark.asyncio
     async def test_rate_limited_entry_is_never_chosen(self) -> None:

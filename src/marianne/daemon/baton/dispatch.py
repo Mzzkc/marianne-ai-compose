@@ -30,6 +30,7 @@ from __future__ import annotations
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
@@ -140,6 +141,12 @@ def _load_ratio(
     return running / cap
 
 
+def _entry_model(entry_config: dict[str, Any]) -> str | None:
+    """The model a chain entry's config names, or None for its profile default."""
+    raw = entry_config.get("model")
+    return str(raw) if raw is not None else None
+
+
 def _balance_chain(
     sheet: SheetExecutionState, config: DispatchConfig, model_running: dict[str, int],
 ) -> None:
@@ -150,38 +157,48 @@ def _balance_chain(
     ratio wins; ties keep the authored order, so an idle chain is unchanged.
     The rotation is a plain re-ordering of the chain (the displaced primary
     becomes a fallback), which keeps every later fallback advance correct.
+    Each entry's whole config travels with it: the chosen entry's config
+    becomes ``primary_config`` (what the adapter reads at position 0) and
+    the displaced primary's config becomes its fallback config, so the
+    entry that runs is always the entry whose config is read.
     """
-    primary = (sheet.instrument_name or "", sheet.model)
-    chain: list[tuple[str, str | None]] = [primary]
+    primary_name = sheet.instrument_name or ""
+    primary_config: dict[str, Any] = (
+        dict(sheet.primary_config) if sheet.primary_config is not None
+        else ({"model": sheet.model} if sheet.model else {})
+    )
+    chain: list[tuple[str, dict[str, Any]]] = [(primary_name, primary_config)]
     for idx, name in enumerate(sheet.fallback_chain):
-        has_config = idx < len(sheet.fallback_configs)
-        model = sheet.fallback_configs[idx].get("model") if has_config else None
-        chain.append((name, model))
+        entry_config = (
+            dict(sheet.fallback_configs[idx]) if idx < len(sheet.fallback_configs) else {}
+        )
+        chain.append((name, entry_config))
     usable = [
-        (i, inst, model) for i, (inst, model) in enumerate(chain)
+        (i, inst, cfg) for i, (inst, cfg) in enumerate(chain)
         if i == 0 or (
             inst not in config.rate_limited_instruments
             and inst not in config.open_circuit_breakers
         )
     ]
-    best_i, best_inst, best_model = min(
-        usable, key=lambda t: (_load_ratio(t[1], t[2], config, model_running), t[0]),
+    best_i, best_inst, best_config = min(
+        usable,
+        key=lambda t: (_load_ratio(t[1], _entry_model(t[2]), config, model_running), t[0]),
     )
     if best_i == 0:
         return
+    best_model = _entry_model(best_config)
     # Re-order: chosen entry first, then the rest in authored order.
     reordered = [chain[best_i]] + [c for i, c in enumerate(chain) if i != best_i]
     sheet.instrument_name = best_inst
     sheet.model = best_model
     sheet.instrument_model = best_model
+    sheet.primary_config = best_config
     sheet.fallback_chain = [inst for inst, _ in reordered[1:]]
-    sheet.fallback_configs = [
-        ({"model": model} if model else {}) for _, model in reordered[1:]
-    ]
+    sheet.fallback_configs = [cfg for _, cfg in reordered[1:]]
     import datetime as _dt
 
     sheet.instrument_fallback_history.append({
-        "from": primary[0],
+        "from": primary_name,
         "to": best_inst,
         "reason": "balance",
         "timestamp": _dt.datetime.now(tz=_dt.UTC).isoformat(),
@@ -190,7 +207,7 @@ def _balance_chain(
         "dispatch.balance",
         extra={
             "sheet_num": sheet.sheet_num,
-            "from": primary[0],
+            "from": primary_name,
             "to": best_inst,
             "model": best_model,
         },
