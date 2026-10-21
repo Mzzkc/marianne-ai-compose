@@ -2348,7 +2348,7 @@ prompt:
         "arms": [{% for a in arms.values() %}"{{ a.id }}"{% if not loop.last %}, {% endif %}{% endfor %}],
         "counties": [
             {% for c in counties.values() %}
-            {"name": "{{ c.name }}", "slug": "{{ c.slug }}", "lat": {{ c.lat }}, "lon": {{ c.lon }}, "target_peak": {{ c.target_peak }}, "replay": {{ "true" if c.replay else "false" }}}}{{ "," if not loop.last }}
+            {"name": "{{ c.name }}", "slug": "{{ c.slug }}", "lat": {{ c.lat }}, "lon": {{ c.lon }}, "target_peak": {{ c.target_peak }}, "replay": {{ "true" if c.replay else "false" }}{{ "}" }}{{ "," if not loop.last }}
             {% endfor %}
         ],
         "run_nonce": nonce,

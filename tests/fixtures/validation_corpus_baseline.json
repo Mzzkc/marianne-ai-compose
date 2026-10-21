@@ -981,7 +981,6 @@
     },
     "venue:examples/getting-started/simple-sheet.yaml": {
       "issues": {
-        "V101": 1,
         "V325": 1
       },
       "parse": "ok"

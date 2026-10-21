@@ -448,8 +448,10 @@ prompt:
     - `## Tier-1 Candidates` — issues you found no dependencies for
     - `## Notes` — anything the next stage should know (flagged issues you skipped, etc.)
 
-    If you find zero dependency edges AND zero tier-1 candidates, something is
-    wrong — you didn't actually analyze. Re-read the corpus.
+    If you find zero dependency edges AND zero tier-1 candidates while the
+    corpus has issues, something is wrong — you didn't actually analyze.
+    Re-read the corpus. An EMPTY corpus (`issues: []` from stage 3) is the one
+    honest zero: write the four sections with "no issues to analyze" and stop.
 
     {% elif stage == 5 %}
     ╔══════════════════════════════════════════════════════════════════════════════╗

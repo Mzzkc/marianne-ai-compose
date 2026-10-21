@@ -46,10 +46,7 @@ sheet:
   total_items: 10  # Total items = 2 sheets
 
 prompt:
-  variables:
-    _validation_trigger: "unused"
   template: |
-    {% set _trigger = _undefined_var | default("") %}
     Process sheet {{ sheet_num }} of {{ total_sheets }}.
     Items: {{ start_item }} to {{ end_item }}
 
