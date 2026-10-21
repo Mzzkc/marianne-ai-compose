@@ -24,6 +24,25 @@ class RetryConfig(BaseModel):
     max_delay_seconds: float = Field(default=3600.0, gt=0, description="Maximum delay (1 hour)")
     exponential_base: float = Field(default=2.0, gt=1, description="Exponential backoff multiplier")
     jitter: bool = Field(default=True, description="Add randomness to delays")
+    startup_failure_floor_seconds: float = Field(
+        default=120.0,
+        ge=0,
+        description="Minimum backoff after a STARTUP failure: an attempt that exits "
+        "non-zero within startup_failure_window_seconds did no work (the harness "
+        "could not boot: locked local store, session not found, provider "
+        "refused at launch). Retrying such a failure on the ordinary backoff "
+        "burns the whole budget inside one transient outage (Pallas, "
+        "2026-10-21: three attempts in 75 s against a locked opencode.db). The "
+        "floor applies to the computed backoff, so an exponential backoff "
+        "that is already longer is unchanged. 0 disables the floor.",
+    )
+    startup_failure_window_seconds: float = Field(
+        default=60.0,
+        gt=0,
+        description="An execution failure whose attempt lasted no longer than this "
+        "is a startup failure for startup_failure_floor_seconds. Timeouts, "
+        "signals and rate limits are never startup failures.",
+    )
 
     # Partial completion recovery settings
     max_completion_attempts: int = Field(

@@ -608,6 +608,8 @@ Controls retry behavior including partial completion recovery.
 | `max_delay_seconds` | `float` | `3600.0` | `> 0` | Maximum delay cap (1 hour) |
 | `exponential_base` | `float` | `2.0` | `> 1` | Exponential backoff multiplier |
 | `jitter` | `bool` | `true` | | Add randomness to delays |
+| `startup_failure_floor_seconds` | `float` | `120.0` | `>= 0` | Minimum backoff after a startup failure: an attempt that exited non-zero within `startup_failure_window_seconds` did no work (the harness could not boot: locked local store, session not found, provider refused at launch). Raises the computed backoff to at least this; a longer backoff is unchanged; `0` disables (GH #470) |
+| `startup_failure_window_seconds` | `float` | `60.0` | `> 0` | An execution failure whose attempt lasted no longer than this is a startup failure. Timeouts, signals and rate limits never are |
 | `max_completion_attempts` | `int` | `5` | `>= 0` | Maximum completion prompt attempts before full retry |
 | `completion_delay_seconds` | `float` | `5.0` | `>= 0` | Delay between completion attempts (seconds) |
 | `completion_threshold_percent` | `float` | `50.0` | `> 0`, `<= 100` | Minimum pass percentage to trigger completion mode |

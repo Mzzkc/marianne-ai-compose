@@ -215,6 +215,13 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **Startup failures wait before retrying (GH #470).** An attempt that exits
+  non-zero within `retry.startup_failure_window_seconds` (60) did no work;
+  its retry now waits at least `retry.startup_failure_floor_seconds` (120)
+  instead of the ordinary backoff. Two lanes burnt a three-attempt budget in
+  75 s against a transiently locked opencode store. Timeouts, signals and
+  rate limits are unaffected; a longer exponential backoff is unchanged.
+
 - **Judgment counter persists on resolution (GH #382).** `judgment_count` is
   the durable `max_judgments_per_sheet` cap; it is now written to the registry
   as soon as a judgment resolves instead of riding the next state-transition

@@ -751,6 +751,8 @@ class BatonAdapter:
         exponential_base: float | None = None,
         max_delay: float | None = None,
         jitter: bool | None = None,
+        startup_failure_floor: float | None = None,
+        startup_failure_window: float | None = None,
     ) -> None:
         """Thread the score's RetryConfig backoff settings to the baton (#196).
 
@@ -763,6 +765,8 @@ class BatonAdapter:
             exponential_base=exponential_base,
             max_delay=max_delay,
             jitter=jitter,
+            startup_failure_floor=startup_failure_floor,
+            startup_failure_window=startup_failure_window,
         )
 
     # =========================================================================

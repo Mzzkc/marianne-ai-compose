@@ -16,6 +16,7 @@ The retry state machine is the conductor's decision engine. It determines:
 from __future__ import annotations
 
 import asyncio
+import time
 
 import pytest
 
@@ -227,6 +228,85 @@ class TestBackoffCalculation:
         baton, _ = _make_baton()
         delay = baton.calculate_retry_delay(attempt=0)
         assert delay == pytest.approx(baton._base_retry_delay)
+
+
+# ============================================================================
+# Startup-failure floor (GH #470)
+# ============================================================================
+
+
+class TestStartupFailureFloor:
+    """A fast non-zero exit did no work; its retry waits at least the floor."""
+
+    @staticmethod
+    def _history(**entry: object) -> list[dict[str, object]]:
+        base: dict[str, object] = {
+            "attempt": 1, "instrument": "opencode", "model": None,
+            "duration_seconds": 8.0, "success": False, "exit_reason": "error",
+            "error_classification": "TRANSIENT", "error_code": "E009",
+            "timestamp": "2026-10-21T04:13:41+00:00",
+        }
+        base.update(entry)
+        return [base]
+
+    def test_boot_failure_is_floored(self) -> None:
+        baton, _ = _make_baton()
+        baton.configure_retry(base_delay=30.0, startup_failure_floor=120.0)
+        state = _register_simple_job(baton)
+        state.normal_attempts = 1
+        state.attempt_history = self._history()
+        baton._schedule_retry("j1", 1, state)
+        assert state.next_retry_at is not None
+        assert state.next_retry_at - time.monotonic() >= 119.0
+
+    def test_real_failure_keeps_the_ordinary_schedule(self) -> None:
+        baton, _ = _make_baton()
+        baton.configure_retry(base_delay=30.0, startup_failure_floor=120.0)
+        state = _register_simple_job(baton)
+        state.normal_attempts = 1
+        state.attempt_history = self._history(duration_seconds=1800.0, exit_reason="timeout")
+        baton._schedule_retry("j1", 1, state)
+        assert state.next_retry_at is not None
+        assert state.next_retry_at - time.monotonic() <= 31.0
+
+    @pytest.mark.parametrize(
+        "entry",
+        [
+            {"exit_reason": "signal", "duration_seconds": 2.0},
+            {"error_classification": "RATE_LIMITED", "duration_seconds": 2.0},
+            {"error_classification": "INSTRUMENT_UNAVAILABLE", "duration_seconds": 2.0},
+            {"success": True, "duration_seconds": 2.0},
+        ],
+    )
+    def test_signals_rate_limits_and_unavailability_are_not_startup_failures(
+        self, entry: dict[str, object]
+    ) -> None:
+        baton, _ = _make_baton()
+        baton.configure_retry(base_delay=30.0, startup_failure_floor=120.0)
+        state = _register_simple_job(baton)
+        state.normal_attempts = 1
+        state.attempt_history = self._history(**entry)
+        assert baton._last_attempt_was_startup_failure(state) is False
+
+    def test_floor_never_shortens_a_longer_backoff(self) -> None:
+        baton, _ = _make_baton()
+        baton.configure_retry(base_delay=300.0, startup_failure_floor=120.0)
+        state = _register_simple_job(baton)
+        state.normal_attempts = 1
+        state.attempt_history = self._history()
+        baton._schedule_retry("j1", 1, state)
+        assert state.next_retry_at is not None
+        assert state.next_retry_at - time.monotonic() >= 299.0
+
+    def test_zero_floor_disables(self) -> None:
+        baton, _ = _make_baton()
+        baton.configure_retry(base_delay=30.0, startup_failure_floor=0.0)
+        state = _register_simple_job(baton)
+        state.normal_attempts = 1
+        state.attempt_history = self._history()
+        baton._schedule_retry("j1", 1, state)
+        assert state.next_retry_at is not None
+        assert state.next_retry_at - time.monotonic() <= 31.0
 
 
 # ============================================================================

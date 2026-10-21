@@ -228,6 +228,9 @@ class BatonCore:
         self._max_retry_delay: float = 3600.0
         self._jitter: bool = False
         self._jitter_fn: Callable[[float, float], float] = random.uniform
+        # Startup-failure floor (GH #470): a fast non-zero exit did no work.
+        self._startup_failure_floor: float = 120.0
+        self._startup_failure_window: float = 60.0
 
         # DispatchRetry coalescing (#222). DispatchRetry is a pure wake signal:
         # the loop runs dispatch_ready + completion checks after EVERY event, so
@@ -793,6 +796,8 @@ class BatonCore:
         max_delay: float | None = None,
         jitter: bool | None = None,
         jitter_fn: Callable[[float, float], float] | None = None,
+        startup_failure_floor: float | None = None,
+        startup_failure_window: float | None = None,
     ) -> None:
         """Configure per-job retry backoff (#196).
 
@@ -814,6 +819,35 @@ class BatonCore:
             self._jitter = jitter
         if jitter_fn is not None:
             self._jitter_fn = jitter_fn
+        if startup_failure_floor is not None:
+            self._startup_failure_floor = startup_failure_floor
+        if startup_failure_window is not None:
+            self._startup_failure_window = startup_failure_window
+
+    def _last_attempt_was_startup_failure(self, sheet: SheetExecutionState) -> bool:
+        """Did the most recent attempt exit non-zero without doing any work?
+
+        True when the last recorded attempt failed, was not a timeout, signal
+        kill or rate limit, and lasted no longer than the startup window. A
+        harness that cannot boot (locked local store, session not found,
+        provider refused at launch) looks exactly like this, and retrying it
+        every thirty seconds only burns the budget inside the outage.
+        """
+        history = getattr(sheet, "attempt_history", None) or []
+        if not history:
+            return False
+        last = history[-1]
+        if last.get("success"):
+            return False
+        if last.get("exit_reason") in ("timeout", "signal"):
+            return False
+        if last.get("error_classification") in ("RATE_LIMITED", "INSTRUMENT_UNAVAILABLE"):
+            return False
+        try:
+            duration = float(last.get("duration_seconds") or 0.0)
+        except (TypeError, ValueError):
+            return False
+        return duration <= self._startup_failure_window
 
     def calculate_retry_delay(self, attempt: int) -> float:
         """Calculate retry delay using exponential backoff (#196: optional jitter).
@@ -852,6 +886,9 @@ class BatonCore:
 
         attempt_index = max(0, sheet.normal_attempts - 1)
         delay = self.calculate_retry_delay(attempt_index)
+        startup_failure = self._last_attempt_was_startup_failure(sheet)
+        if startup_failure and delay < self._startup_failure_floor:
+            delay = self._startup_failure_floor
 
         if self._timer is not None:
             job = self._jobs.get(job_id)
@@ -872,6 +909,7 @@ class BatonCore:
                     SHEET_NUM_KEY: sheet_num,
                     "delay_seconds": delay,
                     "attempt": sheet.normal_attempts,
+                    "startup_failure": startup_failure,
                 },
             )
 

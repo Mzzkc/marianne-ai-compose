@@ -6516,6 +6516,8 @@ class JobManager:
             exponential_base=config.retry.exponential_base,
             max_delay=config.retry.max_delay_seconds,
             jitter=config.retry.jitter,
+            startup_failure_floor=config.retry.startup_failure_floor_seconds,
+            startup_failure_window=config.retry.startup_failure_window_seconds,
         )
 
         job_succeeded = False
@@ -6872,6 +6874,8 @@ class JobManager:
             exponential_base=config.retry.exponential_base,
             max_delay=config.retry.max_delay_seconds,
             jitter=config.retry.jitter,
+            startup_failure_floor=config.retry.startup_failure_floor_seconds,
+            startup_failure_window=config.retry.startup_failure_window_seconds,
         )
 
         # Reconcile live state with baton's view: recover_job resets
