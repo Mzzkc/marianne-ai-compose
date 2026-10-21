@@ -21,6 +21,7 @@ from marianne.validation.checks import (
     ClassModelConfigCheck,
     ClassNameResolutionCheck,
     CliRawPromptBashCheck,
+    CliSchemaShapeCheck,
     CodeExecutionSandboxCheck,
     DeprecatedSpellingCheck,
     EmptyPatternCheck,
@@ -245,6 +246,7 @@ def create_default_checks() -> list[ValidationCheck]:
         ClassModelConfigCheck(),
         AliasSelectCheck(),
         SchemaSheetInteractiveCheck(),
+        CliSchemaShapeCheck(),
         ClassesFileValidCheck(),
         ClassChainSummaryCheck(),
         # Best-practice checks

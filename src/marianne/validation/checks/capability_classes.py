@@ -739,6 +739,106 @@ class SchemaSheetInteractiveCheck:
         return issues
 
 
+_CLI_SCHEMA_TOP_LEVEL_COMBINATORS = ("oneOf", "allOf", "anyOf")
+
+
+def _cli_schema_refusal(schema: Any) -> str | None:
+    """Why a CLI's tool ``input_schema`` would refuse this schema (GH #486).
+
+    Claude Code forwards ``--json-schema`` to the API as a tool input_schema,
+    which rejects a top-level ``oneOf``/``allOf``/``anyOf`` and a top level
+    without ``type`` (400, after a two-second round trip). Nested combinators
+    and a discriminated union wrapped under one required property are fine.
+    """
+    if not isinstance(schema, dict):
+        return None
+    present = [k for k in _CLI_SCHEMA_TOP_LEVEL_COMBINATORS if k in schema]
+    if present:
+        return f"top-level {'/'.join(present)} (wrap the branches under one required property)"
+    if "type" not in schema:
+        return "no top-level `type` (the API requires one; `object` for a tool schema)"
+    return None
+
+
+class CliSchemaShapeCheck:
+    """V332 (WARNING): a CLI schema sheet carries a shape the API refuses (GH #486).
+
+    V311 proves the profile CAN enforce a schema; V331 proves the sheet runs
+    headless; this proves the schema's top level is one the CLI's tool
+    input_schema accepts. All three must hold or the sheet fails at its
+    first attempt with a 400 the job could not previously even quote.
+    """
+
+    @property
+    def check_id(self) -> str:
+        return "V332"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return "Warns when a CLI schema sheet's top level is one the API refuses"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,  # noqa: ARG002 (protocol shape)
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        ctx = _load_context()
+        if ctx is None:
+            return []
+        try:
+            from marianne.core.sheet import build_sheets
+
+            used = ctx.used_classes(config)
+            snapshot = ctx.class_map.snapshot(set(used)) if used else None
+            sheets = build_sheets(config, classes=snapshot)
+        except Exception:  # noqa: BLE001 — an unbuildable score is another check's finding
+            return []
+        issues: list[ValidationIssue] = []
+        seen: set[str] = set()
+        for sheet in sheets:
+            request = sheet.instrument_config.get("response_format")
+            if not isinstance(request, dict) or request.get("type") != "json_schema":
+                continue
+            schema = (request.get("json_schema") or {}).get("schema")
+            profile = ctx.profiles.get(sheet.instrument_name)
+            if profile is None or profile.kind != "cli":
+                continue
+            reason = _cli_schema_refusal(schema)
+            if reason is None:
+                continue
+            key = f"{sheet.instrument_name}:{sheet.movement}"
+            if key in seen:
+                continue
+            seen.add(key)
+            issues.append(
+                ValidationIssue(
+                    check_id=self.check_id,
+                    severity=self.severity,
+                    message=(
+                        f"sheet {sheet.num} (movement {sheet.movement}) sends a "
+                        f"response_format schema to '{sheet.instrument_name}' with "
+                        f"{reason}; the API refuses it as a tool input_schema"
+                    ),
+                    line=find_line_in_yaml(raw_yaml, "response_format:"),
+                    context=sheet.instrument_name,
+                    suggestion=(
+                        "give the schema a top-level `type: object` and move any "
+                        "oneOf/allOf/anyOf under a property"
+                    ),
+                    metadata={
+                        "sheet_num": str(sheet.num),
+                        "instrument": sheet.instrument_name,
+                    },
+                ),
+            )
+        return issues
+
+
 class ClassModelConfigCheck:
     """V323 (ERROR): a model set in instrument_config against a class primary (V-CLS-06).
 

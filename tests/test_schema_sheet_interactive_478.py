@@ -17,6 +17,7 @@ from marianne.core.config.instruments import (
 )
 from marianne.instruments.classes import load_class_map
 from marianne.validation.checks.capability_classes import (
+    CliSchemaShapeCheck,
     SchemaSheetInteractiveCheck,
     _ClassContext,
 )
@@ -105,3 +106,45 @@ def test_per_movement_scope_is_seen(tmp_path: Path) -> None:
     ):
         found = issues.check(cfg, Path("s.yaml"), "")
     assert [i.metadata["sheet_num"] for i in found] == ["2"]
+
+
+def _rf(schema: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "json_schema", "json_schema": {"name": "x", "schema": schema}}
+
+
+ONEOF = _rf({
+    "type": "object",
+    "oneOf": [{"properties": {"kind": {"const": "a"}}}, {"properties": {"kind": {"const": "b"}}}],
+})
+NO_TYPE = _rf({"properties": {"n": {"type": "integer"}}})
+WRAPPED = _rf({
+    "type": "object",
+    "properties": {"intake": {"oneOf": [{"type": "object"}, {"type": "object"}]}},
+    "required": ["intake"],
+})
+
+
+def _shape(cfg: JobConfig, ctx: _ClassContext) -> list[str]:
+    with patch(
+        "marianne.validation.checks.capability_classes._load_context", return_value=ctx,
+    ):
+        return [i.check_id for i in CliSchemaShapeCheck().check(cfg, Path("s.yaml"), "")]
+
+
+def test_top_level_oneof_on_cli_profile_warns_v332(tmp_path: Path) -> None:
+    """GH #486: the API refuses a tool input_schema with a top-level oneOf."""
+    ctx = _ctx(tmp_path, **{"claude-code": _profile("claude-code", interactive_default=False)})
+    cfg = _config(tmp_path, instrument_config={"response_format": ONEOF, "interactive": False})
+    assert _shape(cfg, ctx) == ["V332", "V332"]  # one per instrument+movement
+
+
+def test_missing_top_level_type_warns_v332(tmp_path: Path) -> None:
+    ctx = _ctx(tmp_path, **{"claude-code": _profile("claude-code", interactive_default=False)})
+    cfg = _config(tmp_path, instrument_config={"response_format": NO_TYPE, "interactive": False})
+    assert _shape(cfg, ctx) == ["V332", "V332"]
+
+
+def test_wrapped_union_and_flat_object_are_clean(tmp_path: Path) -> None:
+    ctx = _ctx(tmp_path, **{"claude-code": _profile("claude-code", interactive_default=False)})
+    assert _shape(_config(tmp_path, instrument_config={"response_format": WRAPPED}), ctx) == []
+    assert _shape(_config(tmp_path, instrument_config={"response_format": SCHEMA}), ctx) == []
