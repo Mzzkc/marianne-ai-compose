@@ -67,15 +67,21 @@ instrument_fallbacks: [opencode]
 instrument_config:
   timeout_seconds: 2400   # scanner installs, persona reviews, synthesis stages all fit
 
-# Only named instrument: the newcomer persona rides on opencode for
-# cross-instrument-family cognitive diversity (a different model family
-# reviewing the same code). All other stages inherit the claude-code default.
-# Opencode is slower → longer timeout.
+# Stage 4's personas review the same code, so they must not share one model:
+# the `reviewer` chain spreads them over three heads (spread) and starts each
+# on the least-loaded one (balance). The newcomer persona is pinned to opencode
+# below for a fourth model family. Opencode is slower → longer timeout.
 instruments:
   newcomer:
     profile: opencode
     config:
       timeout_seconds: 3600
+  # The other three review personas are one alias: `spread` gives field-engineer,
+  # architect and steward different head models so their findings do not share
+  # one model's blind spot; `balance` starts each on the least-loaded entry.
+  reviewer:
+    chain: [codex-cli, claude-code, antigravity]
+    select: [spread, balance]
 
 stale_detection:
   enabled: true
@@ -98,7 +104,7 @@ movements:
   1:  {name: "Project Discovery"}
   2:  {name: "Harness + Shipyard Gate"}
   3:  {name: "Issue Fetch + Safe Triage"}
-  4:  {name: "Local Review (4 personas)"}
+  4:  {name: "Local Review (4 personas)", instrument: reviewer}
   5:  {name: "Local Synthesis"}
   6:  {name: "File Local Findings"}
   7:  {name: "Dependency Investigation"}

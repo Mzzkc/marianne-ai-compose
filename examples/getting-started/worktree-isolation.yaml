@@ -58,6 +58,14 @@ workspace: ../../workspaces/review-workspace
 
 # `strong` keeps multi-step judgment on a frontier-capable chain; prefer yours in classes.yaml.
 instrument: strong
+
+# Review voices are one alias with a chain: `spread` gives each fan-out voice
+# a different head model (independence by construction, not by persona), and
+# `balance` starts each voice on the least-loaded entry.
+instruments:
+  reviewer:
+    chain: [codex-cli, claude-code, antigravity]
+    select: [spread, balance]
 instrument_config:
   timeout_seconds: 600
 
@@ -96,6 +104,7 @@ movements:
     name: "Codebase Survey"
   2:
     name: "Expert Reviews"
+    instrument: reviewer       # three reviewers, three models (spread)
   3:
     name: "Unified Report"
 

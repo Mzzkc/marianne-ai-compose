@@ -76,7 +76,10 @@ instruments:
     config:
       timeout_seconds: 300
   investigator:
-    profile: claude-code
+    # Three independent investigation tracks: `spread` gives each a different
+    # head model, so triangulation compares models, not reruns of one.
+    chain: [claude-code, codex-cli, antigravity]
+    select: [spread, balance]
     config:
       timeout_seconds: 600
   synthesizer:

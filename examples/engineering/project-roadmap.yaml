@@ -108,14 +108,13 @@ instruments:
     profile: claude-code
     config:
       timeout_seconds: 3600
-  gemini-reviewer:
-    profile: gemini-cli
+  # Adversarial review voices: one alias, three vendor families, `spread`
+  # hands each voice a different head; the rest of the chain is its fallback.
+  reviewer:
+    chain: [codex-cli, claude-code, antigravity]
+    select: [spread, balance]
     config:
       timeout_seconds: 2400
-  glm-reviewer:
-    profile: opencode
-    config:
-      timeout_seconds: 3600
   finalizer:
     profile: claude-code
     config:
@@ -139,6 +138,7 @@ movements:
     instrument: synthesizer
   6:
     name: "Review"
+    instrument: reviewer       # three voices, three models (spread)
   7:
     name: "Final"
     instrument: finalizer
@@ -165,9 +165,6 @@ sheet:
   instrument_map:
     # Competitive landscape sweep needs web access (sheet 6 after expansion)
     web-sweeper: [6]
-    # Diverse instruments for review stage (sheets 17-19 after expansion)
-    gemini-reviewer: [18]
-    glm-reviewer: [19]
 
 parallel:
   enabled: true

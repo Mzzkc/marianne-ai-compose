@@ -45,6 +45,14 @@ workspace: ../../workspaces/candidate-screen
 
 # `strong` keeps multi-step judgment on a frontier-capable chain; prefer yours in classes.yaml.
 instrument: strong
+
+# Evaluation voices are one alias with a chain: `spread` gives each fan-out voice
+# a different head model (independence by construction, not by persona), and
+# `balance` starts each voice on the least-loaded entry.
+instruments:
+  evaluator:
+    chain: [codex-cli, claude-code, antigravity]
+    select: [spread, balance]
 instrument_config:
   timeout_seconds: 600
 
@@ -53,6 +61,7 @@ movements:
     name: "Criteria Extraction"
   2:
     name: "Candidate Evaluation"
+    instrument: evaluator      # three candidates, three models (spread)
   3:
     name: "Comparative Ranking"
 

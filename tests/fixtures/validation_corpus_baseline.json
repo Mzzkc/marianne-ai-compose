@@ -886,7 +886,7 @@
     },
     "venue:examples/engineering/project-roadmap.yaml": {
       "issues": {
-        "V308": 2
+        "V308": 1
       },
       "parse": "ok"
     },
