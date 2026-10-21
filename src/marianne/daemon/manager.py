@@ -5628,8 +5628,10 @@ class JobManager:
         try:
             checkpoint_json = state.model_dump_json()
             self._persist_checkpoint(state.job_id, checkpoint_json)
-        except Exception:
-            _logger.debug(
+        except Exception:  # noqa: BLE001 — the runner must not block; the lost save is named
+            # WARNING: a checkpoint that fails to serialize is never persisted,
+            # so a restart would resume from the previous save (GH #308).
+            _logger.warning(
                 "state_published.checkpoint_serialize_failed",
                 job_id=state.job_id,
                 exc_info=True,

@@ -585,8 +585,10 @@ class InteractiveSupportCheck:
             from marianne.instruments.loader import load_all_profiles
 
             profiles = load_all_profiles()
-        except Exception:
-            _logger.debug("validation.profiles_unavailable_skip", check="V211")
+        except Exception:  # noqa: BLE001 — a profile load failure skips this check, loudly
+            _logger.warning(
+                "validation.profiles_unavailable_skip", check="V211", exc_info=True,
+            )
             return issues
 
         for location, name in opt_ins:
@@ -668,8 +670,10 @@ class InstrumentNameCheck:
             known = set(load_all_profiles().keys())
             class_map = load_class_map(profile_names=known)
             class_names = set(class_map.classes)
-        except Exception:
-            _logger.debug("validation.profiles_unavailable_skip", check="V210")
+        except Exception:  # noqa: BLE001 — a profile load failure skips this check, loudly
+            _logger.warning(
+                "validation.profiles_unavailable_skip", check="V210", exc_info=True,
+            )
             return []
 
         if not known:
@@ -823,8 +827,10 @@ class InstrumentFallbackCheck:
             known = set(load_all_profiles().keys())
             class_map = load_class_map(profile_names=known)
             class_names = set(class_map.classes)
-        except Exception:
-            _logger.debug("validation.profiles_unavailable_skip", check="V211")
+        except Exception:  # noqa: BLE001 — a profile load failure skips this check, loudly
+            _logger.warning(
+                "validation.profiles_unavailable_skip", check="V211", exc_info=True,
+            )
             return []
 
         if not known:
@@ -1087,8 +1093,10 @@ class NoUsableInstrumentCheck:
 
             profiles = load_all_profiles()
             class_map = load_class_map(profile_names=set(profiles))
-        except Exception:
-            _logger.debug("validation.profiles_unavailable_skip", check="V212")
+        except Exception:  # noqa: BLE001 — a profile load failure skips this check, loudly
+            _logger.warning(
+                "validation.profiles_unavailable_skip", check="V212", exc_info=True,
+            )
             return []
         if not profiles:
             return []

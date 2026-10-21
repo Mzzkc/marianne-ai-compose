@@ -185,8 +185,13 @@ class OutputStreamHub:
                     self._buffers[key] = buffer
                 for line in buffer.feed(stream, chunk):
                     self._fan_out(key, line)
-            except Exception:
-                _logger.debug("output_hub.write_failed", exc_info=True)
+            except Exception:  # noqa: BLE001 — fail-open: a watcher must never break a sheet
+                # WARNING: watchers lose this chunk (GH #308).
+                _logger.warning(
+                    "output_hub.write_failed",
+                extra={"job_id": job_id, "sheet_num": sheet_num},
+                exc_info=True,
+                )
 
         return write
 
@@ -198,8 +203,13 @@ class OutputStreamHub:
                 return
             for line in buffer.flush():
                 self._fan_out((job_id, sheet_num), line)
-        except Exception:
-            _logger.debug("output_hub.flush_failed", exc_info=True)
+        except Exception:  # noqa: BLE001 — fail-open: a watcher must never break a sheet
+            # WARNING: watchers lose the final partial line (GH #308).
+            _logger.warning(
+                "output_hub.flush_failed",
+                extra={"job_id": job_id, "sheet_num": sheet_num},
+                exc_info=True,
+            )
 
     def _fan_out(self, key: tuple[str, int], line: str) -> None:
         for sub in self._subscribers.get(key, ()):  # copy not needed: no await
