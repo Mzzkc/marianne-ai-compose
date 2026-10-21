@@ -25,6 +25,21 @@ default_timeout_seconds: 1800
 cli:
   command:
     executable: goose
+    # GH #335: pass only the variables goose's providers read, not the
+    # conductor's whole environment. Goose's provider is chosen in
+    # ~/.config/goose/config.yaml (GOOSE_PROVIDER) and its key comes from the
+    # matching *_API_KEY variable (verified 2026-10-21 with the openai
+    # provider: [] fails "Authentication", this list answers). Add your
+    # provider's key name if it is not here.
+    required_env:
+      - GOOSE_PROVIDER
+      - GOOSE_MODEL
+      - OPENAI_API_KEY
+      - OPENAI_HOST
+      - OPENAI_BASE_PATH
+      - ANTHROPIC_API_KEY
+      - GOOGLE_API_KEY
+      - OPENROUTER_API_KEY
     subcommand: "run"
     # goose requires an explicit input-source flag: one of -i, -t, or --recipe.
     # We deliver the prompt via stdin (consistent with the >32KB auto-stdin

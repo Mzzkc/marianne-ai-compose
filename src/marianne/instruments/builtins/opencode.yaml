@@ -228,6 +228,11 @@ cli:
     # Auth handled by opencode's credential store (opencode providers login).
     # Run `opencode providers login` to configure providers.
     # Keys stored in ~/.local/share/opencode/auth.json
+    # GH #335: opencode reads its own store, so it needs none of the
+    # conductor's credential variables (verified 2026-10-21: a GLM-5.3 run
+    # with required_env [] answered). Only PATH/HOME/XDG/... pass through.
+    # A provider you authenticate by environment variable instead goes here.
+    required_env: []
   # Interactive mode — drive the opencode TUI in a tmux session.
   # Patterns spike-verified 2026-06-11 against OpenCode 1.4.6.
   # The headless permission flag is run-subcommand-only; the TUI's default

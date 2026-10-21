@@ -268,6 +268,14 @@ and used by the conductor for instrument selection in future versions.
 
 #### Environment the musician receives
 
+Without `required_env` a CLI instrument inherits the conductor's whole
+environment, every API key and token in it included. Declare the variables the
+harness actually reads (`[]` when it keeps its own credential store, as
+opencode does); `mzt doctor` lists every ready profile that still inherits
+everything while a credential-shaped variable is set (GH #335). The shipped
+`claude-code`, `codex-cli`, `gemini-cli`, `antigravity`, `opencode` and
+`goose` profiles are scoped.
+
 Besides the profile's `env` and (when `required_env` filters) the system
 essentials, every CLI and interactive instrument is started with
 `MARIANNE_SCRATCH` set to the job's scratch root `<workspace>/.marianne-scratch`

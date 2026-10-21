@@ -773,3 +773,66 @@ class TestDoctorLive:
         assert names["broken"]["status"] == "warning"
         assert "live plain probe failed: TRANSIENT" in names["broken"]["detail"]
         assert report["warnings_count"] >= 1
+
+
+class TestCredentialExposure:
+    """GH #335: doctor names ready CLI profiles that hand the instrument the
+    whole environment, but only when a credential-shaped variable is set."""
+
+    def _profiles(self):
+        from marianne.core.config.instruments import (
+            CliCommand,
+            CliOutputConfig,
+            CliProfile,
+            InstrumentProfile,
+        )
+
+        def _p(name: str, required_env, raw: bool = False) -> InstrumentProfile:
+            return InstrumentProfile(
+                name=name, display_name=name, kind="cli", raw_prompt=raw,
+                cli=CliProfile(
+                    command=CliCommand(executable="sh", required_env=required_env),
+                    output=CliOutputConfig(format="text"),
+                ),
+            )
+
+        return {
+            "open": _p("open", None),
+            "scoped": _p("scoped", ["OPENAI_API_KEY"]),
+            "shell": _p("shell", None, raw=True),
+            "missing": _p("missing", None),
+        }
+
+    def _results(self):
+        return [
+            {"name": "open", "probe": "ready"},
+            {"name": "scoped", "probe": "ready"},
+            {"name": "shell", "probe": "ready"},
+            {"name": "missing", "probe": "unavailable"},
+        ]
+
+    def test_names_only_ready_unscoped_agent_profiles(self, monkeypatch) -> None:
+        import importlib
+
+        doctor_mod = importlib.import_module("marianne.cli.commands.doctor")
+        monkeypatch.setenv("SOME_SERVICE_API_KEY", "x")
+        assert doctor_mod._credential_exposure(self._profiles(), self._results()) == ["open"]
+
+    def test_silent_when_no_credential_is_set(self, monkeypatch) -> None:
+        import importlib
+        import os
+
+        doctor_mod = importlib.import_module("marianne.cli.commands.doctor")
+        for name in list(os.environ):
+            if doctor_mod._CREDENTIAL_NAME.search(name):
+                monkeypatch.delenv(name, raising=False)
+        assert doctor_mod._credential_exposure(self._profiles(), self._results()) == []
+
+    def test_names_never_values(self, monkeypatch) -> None:
+        import importlib
+
+        doctor_mod = importlib.import_module("marianne.cli.commands.doctor")
+        monkeypatch.setenv("ZZ_TEST_TOKEN", "super-secret-value")
+        names = doctor_mod._credential_env_names()
+        assert "ZZ_TEST_TOKEN" in names
+        assert all("super-secret-value" not in n for n in names)

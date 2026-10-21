@@ -13,6 +13,7 @@ from __future__ import annotations
 import json as json_mod
 import os
 import platform
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -76,6 +77,39 @@ def _check_conductor_status() -> tuple[str, int | None]:
             pass
 
     return ("not running", None)
+
+
+_CREDENTIAL_NAME = re.compile(
+    r"(API_?KEY|_TOKEN|SECRET|PASSWORD|CREDENTIAL|_AUTH\b|SERVICE_ROLE_KEY)", re.IGNORECASE,
+)
+
+
+def _credential_env_names() -> list[str]:
+    """Names (never values) of credential-shaped variables in this environment."""
+    return sorted(k for k in os.environ if _CREDENTIAL_NAME.search(k))
+
+
+def _credential_exposure(
+    profiles: dict[str, InstrumentProfile], results: list[dict[str, Any]],
+) -> list[str]:
+    """Ready CLI profiles that inherit the full parent environment (GH #335).
+
+    The raw shell `cli` profile is skipped: it is the operator's own shell.
+    Reported only when at least one credential-shaped variable is set, so a
+    clean environment produces no warning.
+    """
+    if not _credential_env_names():
+        return []
+    ready = {r["name"] for r in results if r.get("probe") == "ready"}
+    out: list[str] = []
+    for name, profile in profiles.items():
+        if name not in ready or profile.kind != "cli" or profile.cli is None:
+            continue
+        if profile.raw_prompt:
+            continue
+        if profile.cli.command.required_env is None:
+            out.append(name)
+    return out
 
 
 def _last_conductor_reload() -> dict[str, Any] | None:
@@ -674,6 +708,20 @@ def doctor(
     # Check for cost limits configuration
     # The default CostLimitConfig has enabled=False
     safety_warnings.append("No cost limits configured. Recommend: cost_limits.max_cost_per_job")
+
+    # GH #335: a CLI profile without `cli.command.required_env` hands the
+    # instrument the conductor's whole environment, every credential included.
+    # Name each ready one together with how many credential-shaped variables
+    # are set right now, so the exposure is visible where the operator looks.
+    exposed = _credential_exposure(all_profiles, instrument_results)
+    if exposed:
+        names = ", ".join(sorted(exposed))
+        count = len(_credential_env_names())
+        safety_warnings.append(
+            f"{len(exposed)} ready CLI instrument(s) inherit the full environment "
+            f"({count} credential-shaped variable(s) set): {names}. Declare "
+            "cli.command.required_env in the profile to pass only what it needs (GH #335)."
+        )
 
     # --- Storage hygiene (#352) ---
     storage_findings = _scan_storage_findings()

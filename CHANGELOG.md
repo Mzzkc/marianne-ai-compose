@@ -255,6 +255,13 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **Fewer instruments see every credential (GH #335).** The `opencode` builtin
+  now passes no credential variables (it reads its own store) and `goose` only
+  its providers' variables; both verified live. `mzt doctor` warns, by name,
+  about each ready CLI profile that still inherits the full environment while
+  a credential-shaped variable is set (variable names are counted, never
+  printed with values).
+
 - **Pausing then stopping no longer costs five minutes.** Graceful shutdown
   waited on every job task, and a PAUSED job's task waits for a resume that
   cannot come during shutdown, so `mzt stop` after `mzt pause` always ran the
