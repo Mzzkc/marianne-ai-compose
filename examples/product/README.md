@@ -78,12 +78,12 @@ You'll see three candidates evaluated against consistent criteria with comparati
 
 These scores demonstrate several Rosetta orchestration patterns:
 
-- **[Fan-out + Synthesis](../../docs/rosetta/fan-out-synthesis.md)**: All four scores use this foundational pattern — parallel independent work followed by integrative synthesis. Candidate screening fans out evaluation across candidates, contract generation fans out section drafting, invoice analysis fans out expert perspectives, marketing content fans out channels.
+- **[Fan-out + Synthesis](../../scores/rosetta-corpus/patterns/fan-out-synthesis.md)**: All four scores use this foundational pattern — parallel independent work followed by integrative synthesis. Candidate screening fans out evaluation across candidates, contract generation fans out section drafting, invoice analysis fans out expert perspectives, marketing content fans out channels.
 
-- **[Prefabrication](../../docs/rosetta/prefabrication.md)**: contract-generator uses this to establish shared contracts before parallel work. Movement 1's term analysis becomes the interface contract that guides all three drafting teams in Movement 2.
+- **[Prefabrication](../../scores/rosetta-corpus/patterns/prefabrication.md)**: contract-generator uses this to establish shared contracts before parallel work. Movement 1's term analysis becomes the interface contract that guides all three drafting teams in Movement 2.
 
-- **[Barn Raising](../../docs/rosetta/barn-raising.md)**: contract-generator and marketing-content use this to maintain consistency across parallel work. Drafting standards ensure contract sections integrate cleanly; content strategy and brand voice prevent channel drift.
+- **[Barn Raising](../../scores/rosetta-corpus/patterns/barn-raising.md)**: contract-generator and marketing-content use this to maintain consistency across parallel work. Drafting standards ensure contract sections integrate cleanly; content strategy and brand voice prevent channel drift.
 
-- **[Mission Command](../../docs/rosetta/mission-command.md)**: invoice-analysis demonstrates intent-based autonomy. Each expert analyst in Movement 2 receives outcome goals (verify accuracy, check compliance, find anomalies) rather than prescriptive procedures, allowing each to bring domain expertise without rigid coordination.
+- **[Mission Command](../../scores/rosetta-corpus/patterns/mission-command.md)**: invoice-analysis demonstrates intent-based autonomy. Each expert analyst in Movement 2 receives outcome goals (verify accuracy, check compliance, find anomalies) rather than prescriptive procedures, allowing each to bring domain expertise without rigid coordination.
 
-Full pattern catalog: [Rosetta Corpus Pattern Index](../../docs/rosetta/INDEX.md)
+Full pattern catalog: [Rosetta Corpus Pattern Index](../../scores/rosetta-corpus/INDEX.md)

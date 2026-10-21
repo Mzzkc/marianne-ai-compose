@@ -57,4 +57,4 @@ All creative scores use **Fan-out + Synthesis** — the foundational pattern for
 
 **palimpsest.yaml** demonstrates **Source Triangulation** (multiple independent perspectives verify what persists) and **Succession Pipeline** (sequential substrate transformations where each stage requires previous outputs).
 
-For pattern definitions and composition guidance, see the [Rosetta corpus](../../.marianne/spec/rosetta/).
+For pattern definitions and composition guidance, see the [Rosetta corpus](../../scores/rosetta-corpus/INDEX.md).

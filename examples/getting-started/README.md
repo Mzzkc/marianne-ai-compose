@@ -91,15 +91,15 @@ All scores use `prompt.variables` for customization. The patterns:
 
 These scores demonstrate three foundational Rosetta patterns:
 
-- **[Fan-out + Synthesis](../../.marianne/spec/rosetta/fan-out-synthesis.md)** — Parallel work that decomposes into independent sub-problems and synthesizes diverse outputs (`hello.yaml`, `worktree-isolation.yaml`)
+- **[Fan-out + Synthesis](../../scores/rosetta-corpus/patterns/fan-out-synthesis.md)** — Parallel work that decomposes into independent sub-problems and synthesizes diverse outputs (`hello.yaml`, `worktree-isolation.yaml`)
 
-- **[Succession Pipeline](../../.marianne/spec/rosetta/succession-pipeline.md)** — Sequential substrate transformations where each stage's output becomes the next stage's input (`cross-sheet-test.yaml`, `api-backend.yaml`, `prelude-cadenza-example.yaml`)
+- **[Succession Pipeline](../../scores/rosetta-corpus/patterns/succession-pipeline.md)** — Sequential substrate transformations where each stage's output becomes the next stage's input (`cross-sheet-test.yaml`, `api-backend.yaml`, `prelude-cadenza-example.yaml`)
 
-- **[Stigmergic Workspace](../../.marianne/spec/rosetta/stigmergic-workspace.md)** — Parallel agents coordinate by reading and writing workspace files without direct messaging (`hello.yaml`)
+- **[Stigmergic Workspace](../../scores/rosetta-corpus/patterns/stigmergic-workspace.md)** — Parallel agents coordinate by reading and writing workspace files without direct messaging (`hello.yaml`)
 
-- **[Mission Command](../../.marianne/spec/rosetta/mission-command.md)** — Agents receive outcome goals rather than step-by-step instructions, allowing judgment based on runtime conditions (`hello.yaml`)
+- **[Mission Command](../../scores/rosetta-corpus/patterns/mission-command.md)** — Agents receive outcome goals rather than step-by-step instructions, allowing judgment based on runtime conditions (`hello.yaml`)
 
-See the [full Rosetta corpus](../../.marianne/spec/rosetta/) for all available patterns and when to use them.
+See the [full Rosetta corpus](../../scores/rosetta-corpus/INDEX.md) for all available patterns and when to use them.
 
 ## Next Steps
 

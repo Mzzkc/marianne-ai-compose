@@ -41,7 +41,7 @@ Watch as sheets 2-4 execute simultaneously (academic, industry, patent searches)
 
 Compare with `research/parallel-research-fanout.yaml` to see both approaches producing the same outcome with different orchestration mechanisms. Use fan-out when parallel sheets do the same task on different data; use explicit dependencies when each parallel sheet needs specialized, hand-crafted instructions.
 
-See the [Rosetta pattern corpus](../../.marianne/spec/rosetta/) for detailed pattern documentation.
+See the [Rosetta pattern corpus](../../scores/rosetta-corpus/INDEX.md) for detailed pattern documentation.
 
 ## When to Use Advanced Patterns
 

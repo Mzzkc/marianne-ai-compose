@@ -12,7 +12,7 @@ These scores orchestrate complex research, analysis, and knowledge synthesis wor
 | [training-data-curation](training-data-curation.yaml) | ML training dataset curation from schema design through annotation, adjudication, and documentation | 7 | Succession Pipeline | 3-6h | ~$4-$10 |
 | [nonfiction-book](nonfiction-book.yaml) | Non-fiction book authoring using the Snowflake Method, from one-sentence premise to polished manuscript | 8 | Succession Pipeline | 6-12h | ~$8-$20 |
 | [context-engineering-lab](context-engineering-lab.yaml) | Meta-investigation of information architecture using five analytical lenses with dual-LLM preprocessing | 22 | Fan-out + Synthesis | 4-8h | ~$6-$18 |
-| [research-agent](research-agent.yaml) | Multi-source deep research pipeline investigating any topic through independent source investigation | 7 | Source Triangulation + Immune Cascade + Relay Zone | ~20-40m | ~$1-$4 |
+| [research-agent](research-agent.yaml) | Multi-source deep research pipeline investigating any topic through independent source investigation | 9 | Source Triangulation + Immune Cascade + Relay Zone | ~20-40m | ~$1-$4 |
 
 ### parallel-research-fanout
 
@@ -130,7 +130,7 @@ No prerequisites. Runs immediately with defaults.
 
 ## Patterns Demonstrated
 
-These scores demonstrate key orchestration patterns from the [Rosetta corpus](../../docs/rosetta/):
+These scores demonstrate key orchestration patterns from the [Rosetta corpus](../../scores/rosetta-corpus/INDEX.md):
 
 - **Fan-out + Synthesis**: Parallel independent work followed by cross-perspective integration (parallel-research-fanout, context-engineering-lab)
 - **Succession Pipeline**: Each phase produces a categorically different artifact that becomes the next phase's input substrate (systematic-literature-review, strategic-plan, training-data-curation, nonfiction-book)

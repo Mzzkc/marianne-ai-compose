@@ -68,6 +68,8 @@ an alias over an existing profile; archive what nothing names.
 
 ### Added
 
+- **Example READMEs are checked against their scores (GH #481).** `tests/scripts/check_examples_readme.py` (and its test, run in CI) fails on any relative link in an examples README that does not resolve and on any score row whose Sheets column differs from the score's concrete sheet count. First run: 13 dead Rosetta links (repointed at `scores/rosetta-corpus/`) and 5 wrong sheet counts (quality-triage 15, issue-solver 13, saas-app-builder 8, lovable-generator 11, research-agent 9), all fixed. A gate that reads the score file beats a rule in prose.
+
 - **V331: a schema sheet that would run interactively is named before the run (GH #478).** `response_format` on a profile that is interactive by default (claude-code, antigravity) with no `interactive: false` passed `mzt validate` (V311 judges the profile's `json_schema_flag`) and was refused at sheet 1 ("cannot enforce instrument_config.response_format"). V331 builds the sheets, resolves each one's instrument, and warns per instrument and movement with the fix. Docs and the score-authoring skill state the rule.
 
 - **A sheet that writes another sheet's declared artifact is named (GH #386).**
