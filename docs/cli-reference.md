@@ -673,7 +673,8 @@ Usage: mzt init [OPTIONS] [SCORE_NAME]
 
 Creates a starter score YAML and `.marianne/` project directory. The generated
 score includes comments explaining every field — edit it with your task, then
-run it.
+run it. This is the first-run path for an install with no repository checkout:
+`examples/` is not in the wheel, `mzt init` needs nothing but the package.
 
 #### Arguments
 

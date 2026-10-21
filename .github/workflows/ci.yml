@@ -72,13 +72,14 @@ jobs:
         # COLUMNS=200: keep Rich-rendered CLI --help wide enough that the options
         # table doesn't collapse on a non-TTY runner. (The CLI help tests strip
         # ANSI via click.unstyle, so forced-color environments are handled too.)
-        # -p no:randomly: deterministic order in CI (pytest-randomly stays active
-        # for local dev; known order-dependent failures tracked in #367 / M9).
+        # Random order is ON (pytest-randomly): the order-dependent leaks #367
+        # tracked are fixed (two seeded whole-suite runs green on 2026-10-21,
+        # seeds 724247959 and 20261021). The seed prints in the run header;
+        # reproduce a red run locally with `-p randomly --randomly-seed=<seed>`.
         env:
           COLUMNS: "200"
         run: >-
           uv run pytest
-          -p no:randomly
           --cov=marianne
           --cov-report=term-missing:skip-covered
           --cov-report=xml:coverage.xml

@@ -1769,5 +1769,5 @@ rather than the parent's own id, and `concert.max_chain_depth` (root
 `concert:` block, `enabled: true`) is the only bound on the chain (GH #454).
 Loop and trigger state is saved in the same checkpoint as sheet state.
 
-See [convergence-loop](../examples/patterns/convergence-loop.yaml) for a
+See [convergence-loop](https://github.com/Mzzkc/marianne-ai-compose/blob/main/examples/patterns/convergence-loop.yaml) for a
 CLI-only score with a file expression and failure escalation.

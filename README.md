@@ -5,12 +5,17 @@
 Marianne is a universal asynchronous orchestrator. A composer writes a declarative YAML score describing what should be built, analyzed, or created. Marianne decomposes it into sheets, executes them through any combination of AI instruments, validates every output against acceptance criteria, and feeds learned patterns forward. The conductor owns execution state; the composer directs the work.
 
 ```bash
+git clone https://github.com/Mzzkc/marianne-ai-compose.git && cd marianne-ai-compose
 pip install -e ".[daemon]"
 mzt start
 mzt run examples/getting-started/hello-setup.yaml
 ```
 
-Three commands. `hello-setup` discovers what's on your machine, then chains to the `hello` orchestration: parallel agents write a story, one composes a soundtrack, one writes the synthesis finale, and a deterministic tool builds a self-contained website that opens in your browser. That's Marianne working across multiple domains within a single run.
+Four commands, and the clone matters: `examples/` ships with the repository, not
+the wheel. Installed Marianne some other way, with no checkout? `mzt init` writes
+a starter score where you stand; edit it and `mzt run` it.
+
+ `hello-setup` discovers what's on your machine, then chains to the `hello` orchestration: parallel agents write a story, one composes a soundtrack, one writes the synthesis finale, and a deterministic tool builds a self-contained website that opens in your browser. That's Marianne working across multiple domains within a single run.
 
 It should be noted that Marianne's developer abhors the notion of using AI to replace artists and creatives. Creative-like examples are provided on an experimental basis and for demonstration purposes only. Just because Marianne and AI *can* do something, doesn't mean you should. It's far better to use Marianne to remove common administrative barriers and replace outmoded ways of managing a business. Marianne exists to give its users more time to work on the things they care about. Let it handle the boring, repetitive stuff. That's what it's good at.  
 

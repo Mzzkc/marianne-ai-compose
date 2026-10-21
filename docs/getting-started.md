@@ -24,6 +24,11 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -e ".[daemon]"
 ```
 
+The clone is the onboarding path, not a formality: the wheel packages only
+`src/marianne`, so `examples/` and the hello assembler come with the checkout.
+If Marianne was installed without one, start from `mzt init` instead of an
+example (GH #388).
+
 ### With Development Dependencies
 
 ```bash
@@ -51,7 +56,8 @@ ready. `claude-code` is a common example, not a requirement.
 
 ## Quick Start: Run hello
 
-The fastest way to see Marianne in action:
+The fastest way to see Marianne in action (from a checkout; without one, skip
+to [Your First Custom Score](#your-first-custom-score) and `mzt init`):
 
 ```bash
 # 1. Start the conductor (required for execution)

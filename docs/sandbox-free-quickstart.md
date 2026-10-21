@@ -130,5 +130,5 @@ mzt validate examples/getting-started/hello-local.yaml
 | `claude-code` as the default | Requires a configured Claude Code installation; not a guaranteed free tier. |
 | Restarting the conductor mid-run | Recovery of interrupted in-flight work is not fully reliable (KNOWN-ISSUES §3). |
 
-See [KNOWN-ISSUES.md](../KNOWN-ISSUES.md) for the full list of alpha
+See [KNOWN-ISSUES.md](https://github.com/Mzzkc/marianne-ai-compose/blob/main/KNOWN-ISSUES.md) for the full list of alpha
 limitations.

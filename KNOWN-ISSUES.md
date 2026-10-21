@@ -1,7 +1,7 @@
 # Known Issues — Marianne AI Compose
 
 **Applies to:** `v0.1.0-alpha`
-**Last updated:** 2026-07-08
+**Last updated:** 2026-10-21
 
 This is an **alpha** release. The core orchestration engine is well-tested
 (10,000+ passing tests, `mypy --strict` clean, automated CI), but several
@@ -25,7 +25,13 @@ still needs current security review for the environment where it will run.
 - **Do not** expose the dashboard to the public internet.
 - **Do not** rely on its auth as a security boundary.
 - Bind it to `localhost` and put it behind your own authenticating proxy if you
-  need remote access.
+  need remote access. `mzt dashboard --host <non-loopback>` prints a red
+  **Exposed bind** panel when auth is still at its localhost default.
+- The one surface meant for a public hostname is the orchestra view: with
+  `MZT_PUBLIC_ORCHESTRA=true` the middleware serves `/orchestra`, its
+  read-only API and `/static` to every client and nothing else (GH #387,
+  #468). The projection carries score names, sheet numbers, instruments,
+  outcomes and times only.
 
 Tracking: [#292](https://github.com/Mzzkc/marianne-ai-compose/issues/292)
 (minimal dashboard security review; historical alpha blocker).
@@ -58,15 +64,13 @@ Tracking: [#210](https://github.com/Mzzkc/marianne-ai-compose/issues/210)
 ## 3. Conductor restart / recovery limitations
 
 The conductor (daemon) is designed to run for days, and `mzt recover` +
-`mzt resume` reset failed/cascaded sheets and continue interrupted work. Two
-constraints remain:
+`mzt resume` reset failed/cascaded sheets and continue interrupted work. One
+constraint remains:
 
-- **Do not stop, restart, or kill the conductor while jobs are running.**
-  Pause or cancel active jobs first, then `mzt stop`. Recovery from a hard
-  interruption of in-flight work is not fully reliable.
-- After an **auto-recovery on conductor restart**, `pause`/`cancel` on the
-  recovered job can fail
-  ([#162](https://github.com/Mzzkc/marianne-ai-compose/issues/162)).
+- **Prefer pausing active jobs before `mzt stop`.** The conductor resumes
+  interrupted work on restart, and interrupted attempts are retried rather
+  than lost, but a hard kill (`SIGKILL`) mid-attempt still leaves that
+  attempt's partial output to the next one; `mzt stop` is graceful.
 
 Fixed in this release: the specific bug where `mzt recover` followed by
 `mzt resume` re-FAILed a job immediately (the baton held stale sheet state and

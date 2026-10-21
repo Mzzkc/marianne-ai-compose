@@ -228,7 +228,7 @@ dispatch. The TechniqueWirer module generates:
 Compiler-generated scores should not also add the same skill documents as
 static sheet cadenzas; that duplicates the runtime technique injection path.
 
-See the [Compile Reference](compile-reference.md) for compiler usage.
+See the [Compile Reference](../compile-reference.md) for compiler usage.
 
 ## Implementation Status
 

@@ -112,7 +112,7 @@ is independent but contributes to shared tracking files.
 **Pattern:** A setup stage fans out into parallel instances, which fan back
 into a synthesis stage.
 
-**Example:** `examples/parallel-research-fanout.yaml` — Searches 3 domains
+**Example:** `examples/research/parallel-research-fanout.yaml` — Searches 3 domains
 in parallel, then synthesizes findings.
 
 ```
@@ -144,7 +144,7 @@ or searches that can run simultaneously.
 **Pattern:** Expert reviews (parallel) → Issue discovery → Batched fixes →
 Verification → Commit. Self-chains for continuous improvement.
 
-**Example:** `examples/quality-continuous.yaml` — 14 stages, 18 concrete
+**Example:** `examples/engineering/quality-continuous.yaml` — 14 stages, 18 concrete
 sheets after fan-out. Five expert reviews run in parallel, issues are
 discovered and batched into 3 remediation groups, then committed.
 
@@ -162,7 +162,7 @@ sheet:
 
 on_success:
   - type: run_job
-    job_path: "examples/quality-continuous.yaml"
+    job_path: "examples/engineering/quality-continuous.yaml"
     detached: true
     fresh: true         # Clear state for next iteration
 
@@ -1099,12 +1099,12 @@ emerged from real scores:
 
 | Pattern | What It Does | Example Scores |
 |---------|-------------|----------------|
-| **Adversarial** | Independent critiques of the same position | [dialectic.yaml](https://github.com/Mzzkc/marianne-score-playspace/blob/main/scores/dialectic.yaml), [parallel-research.yaml](examples/parallel-research-fanout.yaml) |
+| **Adversarial** | Independent critiques of the same position | [dialectic.yaml](https://github.com/Mzzkc/marianne-score-playspace/blob/main/scores/dialectic.yaml), [parallel-research-fanout.yaml](https://github.com/Mzzkc/marianne-ai-compose/blob/main/examples/research/parallel-research-fanout.yaml) |
 | **Perspectival** | Same question, different analytical frameworks | [thinking-lab.yaml](https://github.com/Mzzkc/marianne-score-playspace/blob/main/scores/thinking-lab.yaml) |
 | **Functional** | Same goal, different planning domains | [dinner-party.yaml](https://github.com/Mzzkc/marianne-score-playspace/blob/main/scores/dinner-party.yaml) |
 | **Graduated** | Same content, different difficulty levels | [skill-builder.yaml](https://github.com/Mzzkc/marianne-score-playspace/blob/main/scores/skill-builder.yaml) |
 | **Generative** | Same seed, different creative lenses | [worldbuilder.yaml](https://github.com/Mzzkc/marianne-score-playspace/blob/main/scores/worldbuilder.yaml) |
-| **Expert** | Same codebase, different review specializations | [quality-continuous.yaml](examples/quality-continuous.yaml) |
+| **Expert** | Same codebase, different review specializations | [quality-continuous.yaml](https://github.com/Mzzkc/marianne-ai-compose/blob/main/examples/engineering/quality-continuous.yaml) |
 
 The synthesis stage that follows fan-out is where emergence happens. Independent
 outputs produce tensions, convergences, and combinations that no single perspective
@@ -1963,7 +1963,7 @@ The `on_success` field defines hooks that run after all sheets pass validation:
 on_success:
   # Chain to another score
   - type: run_job
-    job_path: "examples/quality-continuous.yaml"
+    job_path: "examples/engineering/quality-continuous.yaml"
     description: "Chain to next quality iteration"
     detached: true          # Don't wait for completion
     fresh: true             # Clear previous state
@@ -2011,12 +2011,12 @@ concert:
   abort_concert_on_hook_failure: false
 ```
 
-**Self-chaining pattern** (from `examples/quality-continuous.yaml`):
+**Self-chaining pattern** (from `examples/engineering/quality-continuous.yaml`):
 
 ```yaml
 on_success:
   - type: run_job
-    job_path: "examples/quality-continuous.yaml"   # Chain to itself
+    job_path: "examples/engineering/quality-continuous.yaml"   # Chain to itself
     detached: true
     fresh: true        # CRITICAL: prevents infinite empty-run loop
 
