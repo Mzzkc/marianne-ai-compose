@@ -149,7 +149,7 @@ git log --oneline | head -20
 mzt pause quality-continuous
 ```
 
-`quality-continuous.yaml` uses concert chaining (`on_success: run_job`) to restart itself after each iteration. The `concert.max_chain_depth` setting prevents infinite loops. Each iteration finds issues, fixes them, commits, and chains to the next iteration.
+`quality-continuous.yaml` chains itself with a sheet trigger (`sheet.triggers.14.on_success: concert`) that names the score relative to its own file, so it needs no staged copy and no absolute path. `concert.max_chain_depth` bounds the chain. Each iteration finds issues, fixes them, commits, and chains to the next iteration; a failed or skipped final sheet fires no trigger, which is how a chain stops early.
 
 ### Runbook 2: Checkpoint-Based Debugging
 

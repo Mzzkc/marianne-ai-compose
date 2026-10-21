@@ -49,7 +49,7 @@
 # ║         |                                                                   ║
 # ║    Stage 9: Quality Review   → CONTINUE or COMPLETE (Cathedral gate +       ║
 # ║         |                      Commissioning acceptance)                    ║
-# ║    (on_success: self-chain if CONTINUE — Cathedral Construction loop)       ║
+# ║    (sheet-9 trigger self-chains; next sheet 1 skips on COMPLETE)            ║
 # ║                                                                             ║
 # ║  Instruments (6 named definitions, matched to task grain):                  ║
 # ║    planner  (600s)  — Reasoning-focused planning: stages 1, 4              ║
@@ -62,9 +62,11 @@
 # ║  Usage:                                                                     ║
 # ║    1. Copy this score to your project directory                             ║
 # ║    2. Edit prompt.variables for your migration (search [CHANGE THIS])       ║
-# ║    3. Set on_success[0].job_path to this score's ABSOLUTE path              ║
-# ║    4. mzt start && mzt run codebase-rewrite.yaml                            ║
-# ║    5. mzt status codebase-rewrite --watch                                   ║
+# ║    3. mzt start && mzt run codebase-rewrite.yaml                            ║
+# ║    4. mzt status codebase-rewrite --watch                                   ║
+# ║    The sheet-9 trigger chains the next iteration by itself (the score      ║
+# ║    names itself relative to its own path); the chain stops when the       ║
+# ║    review writes COMPLETE, or at concert.max_chain_depth.                  ║
 # ║                                                                             ║
 # ║  Output (per iteration):                                                    ║
 # ║    workspace/                                                               ║
@@ -192,7 +194,22 @@ sheet:
 
   # CEGAR check-termination: skip expensive stages when no REAL candidates.
   # Exit 0 from grep = pattern found = skip the stage.
+  # Chain terminator: a COMPLETE decision from the previous iteration ends the
+  # Cathedral loop at the next job's first sheet (zero prompt cost). Every
+  # later sheet depends on sheet 1, so one skip settles the whole job.
+  triggers:
+    9:
+      on_success:
+        - concert:
+            score: "codebase-rewrite.yaml"
+            inherit_workspace: true
+            fresh: true
+
   skip_when:
+    1:
+      command: 'test -f "{workspace}/.rewrite-complete"'
+      description: "Chain complete — the previous iteration's review decided COMPLETE"
+      timeout_seconds: 10
     6:
       command: 'grep -q "status: CONVERGED" "{workspace}/05-gate-status.yaml"'
       description: "Skip rewrite if no REAL candidates remain"
@@ -233,16 +250,27 @@ cross_sheet:
 workspace_lifecycle:
   archive_on_fresh: true
   max_archives: 10
+  # The COMPLETE marker must outlive the fresh archive, or the next iteration
+  # could never see it and the chain would only stop at max_chain_depth.
+  preserve_patterns:
+    - ".iteration"
+    - ".marianne-*"
+    - ".coverage"
+    - "archive/**"
+    - ".worktrees/**"
+    - ".rewrite-complete"
 
 concert:
   enabled: true
   max_chain_depth: 10
 
-on_success:
-  - type: run_job
-    job_path: "[CHANGE THIS: /absolute/path/to/codebase-rewrite.yaml]"
-    description: "Cathedral Construction: self-chain for next iteration"
-    fresh: true
+# Cathedral Construction loop, as a sheet trigger (see sheet.triggers below):
+# the sheet-9 trigger submits this same score as the next iteration, named
+# relative to this file, so nothing absolute has to be edited in (the old
+# `on_success: run_job` needed an absolute job_path). The chain ends
+# structurally: when the review writes COMPLETE, the next iteration's sheet 1
+# skips at dispatch (sheet.skip_when below), a skipped sheet carries no
+# success, so no further trigger fires and that job completes green.
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # RETRY AND STALE DETECTION
@@ -569,6 +597,11 @@ prompt:
     {{ write_to("09-quality-review.md") }}
     Include: progress summary table, quality assessment, test result summary,
     blockers (if any), and the CONTINUE or COMPLETE decision with justification.
+
+    If and only if the decision is COMPLETE, also create the chain stop
+    marker: `touch "{{ workspace }}/.rewrite-complete"`. The next iteration's
+    first sheet reads that file and skips, which ends the chain. Do NOT
+    create it on CONTINUE.
 
     {% endif %}
 

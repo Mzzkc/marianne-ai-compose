@@ -68,8 +68,7 @@
 # How to Adapt:
 #   1. Set workspace to your preferred output directory
 #   2. Customize github_label for your project's issue tracking
-#   3. Run from the project root so score_relpath resolves for the self-copy
-#   4. Adjust instrument_config.timeout_seconds if your test suite is slow
+#   3. Adjust instrument_config.timeout_seconds if your test suite is slow
 #
 # Output:
 #   workspaces/quality-generic-workspace/
@@ -109,7 +108,7 @@
 #   signal. Sequential reviews would anchor on earlier findings.
 
 name: "quality-continuous-generic"
-description: "Language-agnostic expert reviews + batched fixes + commits, with parallel reviews and self-chaining"
+description: "Language-agnostic expert reviews + batched fixes + commits, with parallel reviews and a sheet-trigger self-chain"
 
 workspace: "../../workspaces/quality-generic-workspace"
 
@@ -174,6 +173,17 @@ sheet:
     2: 3
 
   # Dependency DAG (stage-level, auto-expanded for fan-out)
+  # Cathedral loop: sheet 14 (the last) chains the next iteration. The
+  # trigger fires only on a successful sheet 14, so a failed or skipped final
+  # sheet ends the chain by itself.
+  triggers:
+    14:
+      on_success:
+        - concert:
+            score: "quality-continuous.yaml"
+            inherit_workspace: false
+            fresh: true
+
   dependencies:
     2: [1]     # Expert reviews depend on setup
     3: [2]     # Category discovery depends on all reviews (fan-in)
@@ -218,11 +228,6 @@ prompt:
     fi
     echo $ITER > {{ workspace }}/.iteration
     echo "=== QUALITY ITERATION $ITER ==="
-    ```
-
-    **Step 1.5: Stage the next iteration's score**
-    ```bash
-    cp "{{ score_relpath }}" "{{ workspace }}/self-chain.yaml" || { echo "FATAL: cannot stage {{ score_relpath }} — run from the project root or set score_relpath"; exit 1; }
     ```
 
     **Step 2: Survey open GitHub issues**
@@ -1514,7 +1519,6 @@ prompt:
     {% endif %}
 
   variables:
-    score_relpath: "examples/engineering/quality-continuous.yaml"
     preamble: |
       ╔══════════════════════════════════════════════════════════════════════════╗
       ║              CONTINUOUS QUALITY IMPROVEMENT (GENERIC)                    ║
@@ -1563,12 +1567,6 @@ prompt:
 
 validations:
   # ── Stage 1: Setup ──────────────────────────────────────────────────────────
-  - type: file_exists
-    path: "{workspace}/self-chain.yaml"
-    description: "The next iteration's score copy was staged before chaining"
-    stage: 1
-    condition: "stage == 1"
-
 
   - type: file_exists
     path: "{workspace}/00-known-issues.md"
@@ -1997,14 +1995,10 @@ validations:
     stage: 2
     condition: "stage >= 14"
 
-# Self-chain for continuous improvement. Sheet 1 stages this score in the
-# workspace; {workspace} resolves to an absolute path when the hook runs.
-on_success:
-  - type: run_job
-    job_path: "{workspace}/self-chain.yaml"
-    description: "Chain to next quality iteration"
-    fresh: true
-
+# Self-chain for continuous improvement: the sheet-14 trigger (sheet.triggers)
+# submits this score again, named relative to this file, so no copy of the
+# score has to be staged and no absolute path edited in. The chain is bounded
+# by concert.max_chain_depth; a skipped or failed sheet 14 fires no trigger.
 concert:
   enabled: true
   max_chain_depth: 10

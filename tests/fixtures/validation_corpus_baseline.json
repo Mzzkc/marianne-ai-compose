@@ -869,9 +869,7 @@
       "parse": "ok"
     },
     "venue:examples/engineering/codebase-rewrite.yaml": {
-      "issues": {
-        "V217": 1
-      },
+      "issues": {},
       "parse": "ok"
     },
     "venue:examples/engineering/issue-solver.yaml": {
