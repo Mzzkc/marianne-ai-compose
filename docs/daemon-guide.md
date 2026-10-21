@@ -220,7 +220,7 @@ The conductor is configured via a YAML file passed to `mzt start --config <path>
 | `socket.permissions` | `int` | `0o660` | Socket file permissions (octal) |
 | `socket.backlog` | `int` | `128` | Max pending connections (kernel caps at `net.core.somaxconn`); drains only on the event loop, so keep it well above the number of concurrent readers |
 | `pid_file` | `Path` | `~/.config/mzt/mzt.pid` | PID file path |
-| `shutdown_timeout_seconds` | `float` | `300.0` | Max wait for graceful shutdown (5 min) |
+| `shutdown_timeout_seconds` | `float` | `300.0` | Max wait for graceful shutdown (5 min). Only jobs with work in flight hold it: a PAUSED job with no musician running is at rest and does not wait (it stays paused and resumes after restart) |
 | `monitor_interval_seconds` | `float` | `15.0` | Resource check interval |
 | `max_job_history` | `int` | `1000` | Terminal jobs kept in memory before eviction |
 | `logging.root` | `Path` | `~/.marianne/logs` | Conductor-owned logging root |

@@ -5134,6 +5134,19 @@ class JobManager:
 
     # ─── Shutdown ─────────────────────────────────────────────────────
 
+    def _is_settled_pause(self, job_id: str) -> bool:
+        """A PAUSED job with no musician still in flight on the adapter."""
+        meta = self._job_meta.get(job_id)
+        if meta is None or meta.status != DaemonJobStatus.PAUSED:
+            return False
+        adapter = self._baton_adapter
+        if adapter is None:
+            return True
+        return not any(
+            key[0] == job_id and not task.done()
+            for key, task in adapter._active_tasks.items()
+        )
+
     async def shutdown(self, graceful: bool = True) -> None:
         """Cancel all running jobs, optionally waiting for sheets.
 
@@ -5164,8 +5177,16 @@ class JobManager:
                 running_jobs=self.running_count,
             )
 
-            # Wait for running tasks to complete (up to timeout)
-            running = [t for t in self._jobs.values() if not t.done()]
+            # Wait for running tasks to complete (up to timeout). A PAUSED
+            # job whose musicians have all settled is already at rest: its
+            # task waits for a resume that cannot arrive during shutdown, so
+            # waiting on it only burns the whole timeout (Pallas 2026-10-21:
+            # two restarts each took exactly 300 s with running_jobs=0). It
+            # is cancelled below with the rest and stays PAUSED on disk.
+            running = [
+                t for job_id, t in self._jobs.items()
+                if not t.done() and not self._is_settled_pause(job_id)
+            ]
             if running:
                 _, pending = await asyncio.wait(
                     running,
@@ -5182,6 +5203,15 @@ class JobManager:
                                 error=str(result),
                                 error_type=type(result).__name__,
                             )
+            settled = [
+                t for job_id, t in self._jobs.items()
+                if not t.done() and self._is_settled_pause(job_id)
+            ]
+            for task in settled:
+                task.cancel(msg="graceful shutdown: paused job at rest")
+            if settled:
+                await asyncio.gather(*settled, return_exceptions=True)
+                _logger.info("manager.shutdown_settled_pauses", count=len(settled))
         else:
             _logger.info("manager.shutting_down", graceful=False)
             for task in self._jobs.values():

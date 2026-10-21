@@ -222,6 +222,13 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **Pausing then stopping no longer costs five minutes.** Graceful shutdown
+  waited on every job task, and a PAUSED job's task waits for a resume that
+  cannot come during shutdown, so `mzt stop` after `mzt pause` always ran the
+  full `shutdown_timeout_seconds` (300 s) with `running_jobs: 0` and
+  `mzt stop --wait=300` reported a timeout. A paused job with no musician in
+  flight is now cancelled at once and stays PAUSED; one with a musician still
+  running is waited on as before.
 - **Structured output through Claude Code works, and validate catches the
   case that cannot.** The `claude-code` builtin declares
   `json_schema_flag: --json-schema` (verified on Claude Code 2.1.306: the

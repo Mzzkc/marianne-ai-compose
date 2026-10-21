@@ -3315,3 +3315,75 @@ class TestStartObserverCreatesWorkspace:
             assert ws.is_dir()  # created before the observer watches it
         finally:
             await manager._stop_observer("j-obs")
+
+
+class TestShutdownSettledPause:
+    """A PAUSED job with no musician in flight must not hold graceful shutdown
+    for the whole timeout (Pallas 2026-10-21: two restarts took exactly 300 s
+    with running_jobs=0, each blocked on a paused job's task)."""
+
+    @pytest.mark.asyncio
+    async def test_settled_pause_is_cancelled_without_waiting(
+        self, daemon_config: DaemonConfig
+    ) -> None:
+        import time
+
+        daemon_config.shutdown_timeout_seconds = 30.0
+        mgr = JobManager(daemon_config)
+        await mgr._registry.open()
+        mgr._service = MagicMock()
+
+        async def waiting_for_resume():
+            await asyncio.sleep(100)
+
+        task = asyncio.create_task(waiting_for_resume())
+        mgr._jobs["paused-job"] = task
+        mgr._job_meta["paused-job"] = JobMeta(
+            job_id="paused-job",
+            config_path=Path("/tmp/test.yaml"),
+            workspace=Path("/tmp/workspace"),
+            status=DaemonJobStatus.PAUSED,
+        )
+
+        started = time.monotonic()
+        await mgr.shutdown(graceful=True)
+        assert time.monotonic() - started < 5.0
+        assert task.cancelled() or task.done()
+        assert mgr._job_meta["paused-job"].status == DaemonJobStatus.PAUSED
+
+    @pytest.mark.asyncio
+    async def test_pause_with_a_musician_in_flight_is_still_waited_on(
+        self, daemon_config: DaemonConfig
+    ) -> None:
+        daemon_config.shutdown_timeout_seconds = 0.2
+        mgr = JobManager(daemon_config)
+        await mgr._registry.open()
+        mgr._service = MagicMock()
+
+        async def waiting_for_resume():
+            await asyncio.sleep(100)
+
+        async def musician():
+            await asyncio.sleep(100)
+
+        musician_task = asyncio.create_task(musician())
+        adapter = MagicMock()
+        adapter._active_tasks = {("paused-job", 3): musician_task}
+        mgr._baton_adapter = adapter
+        assert mgr._is_settled_pause("paused-job") is False  # no meta yet
+
+        task = asyncio.create_task(waiting_for_resume())
+        mgr._jobs["paused-job"] = task
+        mgr._job_meta["paused-job"] = JobMeta(
+            job_id="paused-job",
+            config_path=Path("/tmp/test.yaml"),
+            workspace=Path("/tmp/workspace"),
+            status=DaemonJobStatus.PAUSED,
+        )
+        assert mgr._is_settled_pause("paused-job") is False
+        musician_task.cancel()
+        await asyncio.gather(musician_task, return_exceptions=True)
+        assert mgr._is_settled_pause("paused-job") is True
+        mgr._baton_adapter = None
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
