@@ -215,6 +215,19 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **An installed harness with no usable provider no longer stalls a deep
+  chain (GH #389).** `cli.errors.unavailable_patterns` lets a profile name its
+  harness's own startup refusal ("No provider configured", "Provider not
+  found"); a match is typed `INSTRUMENT_UNAVAILABLE`, so the sheet advances
+  its fallback chain on the first attempt without charging a retry, the same
+  path a missing binary takes since #418. The shipped `goose`, `crush` and
+  `opencode` profiles carry their measured refusal text. Every
+  `cli.errors.*_patterns` regex is now compiled when the profile loads, so a
+  bad pattern is refused there rather than mid-attempt.
+- **The `crush` profile no longer sends `--yolo` (GH #471).** crush v0.98.1
+  rejects the flag in every position, so every dispatch exited 1 in 60 ms
+  before reaching a provider and was retried as transient. `crush run` is
+  unattended on its own; the profile now sends only model, cwd and quiet.
 - **Startup failures wait before retrying (GH #470).** An attempt that exits
   non-zero within `retry.startup_failure_window_seconds` (60) did no work;
   its retry now waits at least `retry.startup_failure_floor_seconds` (120)

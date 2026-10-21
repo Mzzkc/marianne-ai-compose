@@ -160,11 +160,13 @@ async def test_lock_pins_the_bytes_through_execution(tmp_path: Path) -> None:
         assert accepted.status == "accepted", accepted.message
         import asyncio
 
-        for _ in range(100):
+        deadline = asyncio.get_running_loop().time() + 5.0
+        meta = manager._job_meta.get(accepted.job_id)
+        while (
+            meta is None or meta.status != DaemonJobStatus.FAILED
+        ) and asyncio.get_running_loop().time() < deadline:
             await asyncio.sleep(0.05)
             meta = manager._job_meta.get(accepted.job_id)
-            if meta is not None and meta.status == DaemonJobStatus.FAILED:
-                break
         meta = manager._job_meta[accepted.job_id]
         assert meta.status == DaemonJobStatus.FAILED, meta.status
         assert "drift" in (meta.error_message or "").lower()

@@ -68,3 +68,8 @@ cli:
     auth_error_patterns:
       - "authenticat"
       - "unauthorized"
+    # goose 1.30 with no provider: exit 1 in 0.3 s, "error: No provider
+    # configured. Run 'goose configure' first." — a route fact, so the
+    # sheet advances its chain on the first attempt (GH #389).
+    unavailable_patterns:
+      - "No provider configured"

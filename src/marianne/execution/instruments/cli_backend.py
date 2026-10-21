@@ -1269,13 +1269,17 @@ class PluginCliBackend(Backend):
 
         Pattern priority (first match wins):
         1. auth_error_patterns → "auth"
-        2. crash_patterns → "crash"
-        3. stale_patterns → "stale"
-        4. timeout_patterns → "timeout"
-        5. capacity_patterns → "capacity"
+        2. unavailable_patterns → "unavailable" (GH #389: the harness
+           refused to start — no provider configured, provider not found)
+        3. crash_patterns → "crash"
+        4. stale_patterns → "stale"
+        5. timeout_patterns → "timeout"
+        6. capacity_patterns → "capacity"
 
-        Auth and crash are checked first because they are non-retriable
-        and should not be masked by retriable patterns.
+        Auth, unavailable and crash are checked first because they are
+        non-retriable on this entry and should not be masked by retriable
+        patterns. ``auth`` and ``unavailable`` both leave the entry; auth
+        stays first so a credential rejection keeps its own diagnosis.
 
         Args:
             stdout: Standard output text.
@@ -1294,6 +1298,7 @@ class PluginCliBackend(Backend):
         # Priority order: non-retriable first, then retriable
         pattern_groups: list[tuple[list[str], str]] = [
             (errors.auth_error_patterns, "auth"),
+            (errors.unavailable_patterns, "unavailable"),
             (errors.crash_patterns, "crash"),
             (errors.stale_patterns, "stale"),
             (errors.timeout_patterns, "timeout"),

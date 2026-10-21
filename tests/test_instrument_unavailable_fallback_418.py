@@ -172,3 +172,143 @@ class TestBatonFallsBackImmediately:
                 break
         assert st.status is BatonSheetStatus.FAILED
         assert st.instrument_name == "primary"
+
+
+# ---------------------------------------------------------------------------
+# GH #389: an INSTALLED harness whose backend is not usable refuses in its own
+# voice ("No provider configured", "Provider not found"). The profile's
+# ``errors.unavailable_patterns`` types that refusal ``unavailable``, which the
+# baton reads as INSTRUMENT_UNAVAILABLE — the chain advances on the first
+# attempt instead of the sheet running to its timeout per misconfigured entry.
+# ---------------------------------------------------------------------------
+
+from marianne.core.config.instruments import (  # noqa: E402
+    CliCommand,
+    CliErrorConfig,
+    CliOutputConfig,
+    CliProfile,
+    InstrumentProfile,
+)
+from marianne.execution.instruments.cli_backend import PluginCliBackend  # noqa: E402
+from marianne.instruments.loader import InstrumentProfileLoader, profile_source_dirs  # noqa: E402
+
+
+def _backend_with(errors: CliErrorConfig) -> PluginCliBackend:
+    return PluginCliBackend(InstrumentProfile(
+        name="harness", display_name="Harness", kind="cli",
+        cli=CliProfile(
+            command=CliCommand(executable="harness", prompt_flag="-p"),
+            output=CliOutputConfig(format="text"),
+            errors=errors,
+        ),
+    ))
+
+
+class TestUnavailablePatterns:
+    def test_profile_refusal_is_typed_unavailable(self) -> None:
+        backend = _backend_with(CliErrorConfig(
+            unavailable_patterns=["No provider configured"],
+        ))
+        typed = backend._classify_output_errors(
+            "", "error: No provider configured. Run 'goose configure' first.",
+            is_success=False,
+        )
+        assert typed == "unavailable"
+
+    def test_auth_still_wins_over_unavailable(self) -> None:
+        """A credential rejection keeps its own diagnosis (E502) even when the
+        same output also matches an unavailable pattern."""
+        backend = _backend_with(CliErrorConfig(
+            auth_error_patterns=["unauthorized"],
+            unavailable_patterns=["provider"],
+        ))
+        assert backend._classify_output_errors(
+            "", "provider replied: unauthorized", is_success=False,
+        ) == "auth"
+
+    def test_unavailable_wins_over_retriable_patterns(self) -> None:
+        backend = _backend_with(CliErrorConfig(
+            unavailable_patterns=["Provider not found"],
+            timeout_patterns=["timeout"],
+        ))
+        assert backend._classify_output_errors(
+            "", "Provider not found: zai (request timeout)", is_success=False,
+        ) == "unavailable"
+
+    def test_no_pattern_means_no_typing(self) -> None:
+        """Without the key the refusal stays an ordinary error on the same entry."""
+        backend = _backend_with(CliErrorConfig())
+        assert backend._classify_output_errors(
+            "", "No provider configured", is_success=False,
+        ) is None
+
+    def test_success_is_never_typed(self) -> None:
+        backend = _backend_with(CliErrorConfig(unavailable_patterns=["provider"]))
+        assert backend._classify_output_errors(
+            "no provider configured in this repo's README", "", is_success=True,
+        ) is None
+
+    def test_invalid_regex_is_refused_at_load(self) -> None:
+        with pytest.raises(ValueError, match="Invalid error pattern regex"):
+            CliErrorConfig(unavailable_patterns=["("])
+        with pytest.raises(ValueError, match="Invalid error pattern regex"):
+            CliErrorConfig(auth_error_patterns=["(unclosed"])
+
+    def test_typed_unavailable_is_instrument_unavailable(self) -> None:
+        cls = _classify_error(ExecutionResult(
+            success=False, stdout="",
+            stderr="error: No provider configured. Run 'goose configure' first.",
+            exit_code=1, exit_reason="completed", error_type="unavailable",
+            error_message="No provider configured", duration_seconds=0.3,
+        ))
+        assert cls.classification == "INSTRUMENT_UNAVAILABLE"
+        assert cls.error_code == "E505"
+        assert cls.message == "No provider configured"
+
+    def test_refusal_advances_chain_on_first_attempt(self, tmp_path: Path) -> None:
+        core = _core_with_chain(tmp_path, max_retries=3)
+        dispatches = _run_until_moved(core, ExecutionResult(
+            success=False, stdout="", stderr="No providers configured - please run 'crush'",
+            exit_code=1, exit_reason="completed", error_type="unavailable",
+            duration_seconds=1.8,
+        ))
+        st = core._jobs["j"].sheets[1]
+        assert dispatches == 1
+        assert st.instrument_name == "secondary"
+        assert st.normal_attempts == 0, "the refusal must not consume a retry"
+
+
+class TestBuiltinRefusalTexts:
+    """The shipped patterns match the harness refusals measured on 21 Oct 2026
+    (each harness run with an empty HOME): the profile's word is the real text."""
+
+    @pytest.fixture(scope="class")
+    def builtins(self) -> dict[str, InstrumentProfile]:
+        return InstrumentProfileLoader.load_directory(profile_source_dirs()[0])
+
+    @pytest.mark.parametrize(("name", "refusal"), [
+        ("goose", "  error: No provider configured. Run 'goose configure' first.\n"),
+        ("crush", "   ERROR  \n  No providers configured - please run 'crush' to set up "
+                  "a provider interactively.\n"),
+        ("opencode", '[04:39:49.994] ERROR (#10937): failed {\n  ref: "err_1075d3fe",\n'
+                     '  error: {\n    providerID: "zai-coding-plan",\n'
+                     '    _tag: "ProviderModelNotFoundError",\n  },\n}'),
+        ("opencode", "Error: Provider not found: zai-coding-plan/glm-5.3-flash\n"),
+    ])
+    def test_builtin_matches_measured_refusal(
+        self, builtins: dict[str, InstrumentProfile], name: str, refusal: str,
+    ) -> None:
+        profile = builtins[name]
+        assert profile.cli is not None and profile.cli.errors.unavailable_patterns
+        backend = PluginCliBackend(profile)
+        assert backend._classify_output_errors(refusal, "", is_success=False) == "unavailable"
+        assert backend._classify_output_errors("", refusal, is_success=False) == "unavailable"
+
+    @pytest.mark.parametrize("name", ["goose", "crush", "opencode"])
+    def test_builtin_does_not_type_an_agents_ordinary_failure(
+        self, builtins: dict[str, InstrumentProfile], name: str,
+    ) -> None:
+        """An agent that ran and failed on its work is retried on the same entry."""
+        backend = PluginCliBackend(builtins[name])
+        out = "Traceback (most recent call last):\n  File 'x.py'\nKeyError: 'provider'\n"
+        assert backend._classify_output_errors(out, "", is_success=False) != "unavailable"

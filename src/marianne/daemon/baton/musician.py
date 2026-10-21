@@ -1196,8 +1196,12 @@ _classifier = ErrorClassifier()
 # precise category travels in the structured error_code instead.
 # Backend-typed causes meaning "the route itself could not be reached" (GH #418,
 # capability-classes design §5.2). The ONE predicate behind INSTRUMENT_UNAVAILABLE.
+# ``unavailable`` (GH #389) is the CLI backend's word for a harness that STARTED
+# and refused in its own voice — the profile's ``errors.unavailable_patterns``
+# matched ("No provider configured", "Provider not found") — which is the same
+# route-level fact as a missing binary, learned a second later.
 _ROUTE_UNAVAILABLE_TYPES: frozenset[str] = frozenset(
-    {"executable_not_found", "spawn_failed", "connection"}
+    {"executable_not_found", "spawn_failed", "connection", "unavailable"}
 )
 
 # Backend-typed causes meaning "this route rejected our credentials". The ONE
@@ -1245,8 +1249,10 @@ def _classify_error(exec_result: ExecutionResult) -> _ErrorClassification:
         AUTH_FAILURE — the backend typed a credential rejection for this route
             (drives immediate fallback); auth-looking text in an agent's own
             stderr is an EXECUTION_ERROR carrying E502 as diagnosis only
-        INSTRUMENT_UNAVAILABLE — binary absent / endpoint unreachable (drives
-            immediate fallback without consuming a retry, GH #418)
+        INSTRUMENT_UNAVAILABLE — binary absent / endpoint unreachable / the
+            harness's own startup refusal matched ``unavailable_patterns``
+            (drives immediate fallback without consuming a retry, GH #418,
+            GH #389)
         TRANSIENT — retriable: timeout, signal kill, network, generic-unknown
         EXECUTION_ERROR — validation / fatal / configuration / preflight / etc.
     """

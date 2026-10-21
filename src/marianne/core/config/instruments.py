@@ -474,6 +474,17 @@ class CliErrorConfig(BaseModel):
         default_factory=list,
         description="Regex patterns indicating authentication failures",
     )
+    unavailable_patterns: list[str] = Field(
+        default_factory=list,
+        description="Regex patterns in the instrument's own startup refusal "
+        "meaning it cannot run on this machine at all: no provider configured, "
+        "provider not found, backend not reachable (GH #389). A match types the "
+        "attempt INSTRUMENT_UNAVAILABLE, so the sheet advances its fallback chain "
+        "on the first attempt without charging a retry, exactly as a missing "
+        "binary does. Anchor each pattern to the harness's real refusal text; an "
+        "agent that merely prints similar words after it has started is retried "
+        "on the same entry only if no pattern here matches.",
+    )
     capacity_patterns: list[str] = Field(
         default_factory=list,
         description="Regex patterns indicating capacity/overload errors (retriable)",
@@ -502,6 +513,32 @@ class CliErrorConfig(BaseModel):
         default=None,
         description="Key-value filter for rate limit event matching",
     )
+
+    @field_validator(
+        "rate_limit_patterns",
+        "auth_error_patterns",
+        "unavailable_patterns",
+        "capacity_patterns",
+        "timeout_patterns",
+        "crash_patterns",
+        "stale_patterns",
+    )
+    @classmethod
+    def _validate_error_regexes(cls, v: list[str]) -> list[str]:
+        """Reject an invalid regex at profile-load time, not mid-attempt.
+
+        ``_classify_output_errors`` runs every pattern against a failed
+        attempt's output; an invalid one would raise there, turning a
+        classifiable failure into an unclassified crash.
+        """
+        import re
+
+        for pattern in v:
+            try:
+                re.compile(pattern)
+            except re.error as e:
+                raise ValueError(f"Invalid error pattern regex {pattern!r}: {e}") from e
+        return v
 
 
 class InteractiveGate(BaseModel):

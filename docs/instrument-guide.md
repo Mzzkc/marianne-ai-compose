@@ -323,12 +323,22 @@ ppid 1 for hours and saturated the disk; the supervisor is the fix, and the
 | `success_exit_codes` | `[0]` | Exit codes that indicate success |
 | `rate_limit_patterns` | `[]` | Regex patterns in stderr/stdout indicating rate limiting |
 | `auth_error_patterns` | `[]` | Regex patterns indicating auth failures |
+| `unavailable_patterns` | `[]` | Regex patterns in the harness's own startup refusal meaning it cannot run here at all: no provider configured, provider not found, backend not reachable (GH #389). A match types the attempt `INSTRUMENT_UNAVAILABLE`: the sheet advances its fallback chain on the first attempt without charging a retry, exactly as a missing binary does, instead of running to its timeout per misconfigured entry. The shipped `goose`, `crush` and `opencode` profiles carry their measured refusals (`No provider configured`, `No providers configured`, `Provider not found` / `ProviderModelNotFoundError`). |
+| `capacity_patterns` | `[]` | Regex patterns indicating capacity/overload errors (retried) |
+| `timeout_patterns` | `[]` | Regex patterns indicating timeout errors (retried) |
+| `crash_patterns` | `[]` | Regex patterns indicating a process crash or fatal error |
+| `stale_patterns` | `[]` | Regex patterns indicating a stale execution |
 
 These patterns are the instrument's own word on its failures. A
 `rate_limit_patterns` match pauses the instrument; an `auth_error_patterns`
 match types the result as a credential rejection, which is the only way text
 can produce `AUTH_FAILURE` (the built-in classifier's generic auth words are
-diagnosis only). Keep them anchored to the instrument's real messages.
+diagnosis only); an `unavailable_patterns` match types it as the route being
+unusable on this machine, the only way text can produce `INSTRUMENT_UNAVAILABLE`.
+First match wins in the order auth, unavailable, crash, stale, timeout,
+capacity, and every pattern is compiled when the profile loads, so a bad regex
+is refused there rather than mid-attempt. Keep them anchored to the
+instrument's real messages.
 
 #### `models` — Available Models
 
@@ -550,6 +560,13 @@ Marianne classifies execution errors into categories:
   traceback's "line 403") are not a credential failure: that attempt is an
   ordinary execution error retried on the same instrument, with E502 kept as
   the diagnosis.
+- **INSTRUMENT_UNAVAILABLE** — The route cannot be used on this machine: the
+  binary is not on PATH, the HTTP endpoint refuses the connection, or the
+  harness started and refused in its own voice (a CLI profile's
+  `unavailable_patterns` matched: `No provider configured`, `Provider not
+  found`). The sheet advances its fallback chain on the first attempt without
+  charging a retry (GH #418, #389); with no chain left it takes the ordinary
+  bounded retry path. The circuit breaker still counts the failure.
 - **TRANSIENT** — Timeouts, killed processes, temporary failures. The conductor
   retries with exponential backoff.
 - **EXECUTION_ERROR** — Other non-zero exit codes. Retried up to `max_retries`.

@@ -80,7 +80,11 @@ cli:
     subcommand: "run"
     # prompt_flag omitted — crush run takes prompt as positional arg
     model_flag: "--model"
-    auto_approve_flag: "--yolo"
+    # No auto-approve flag: crush v0.98.1 (verified 21 Oct 2026) rejects
+    # "--yolo" / "-y" in every position with "Unknown flag" and exits 1 in
+    # 60 ms, so every dispatch died before reaching a provider (GH #471).
+    # `crush run` is unattended on its own: quiet, cwd, model and session
+    # flags only.
     working_dir_flag: "--cwd"
     extra_flags:
       - "--quiet"
@@ -96,6 +100,10 @@ cli:
       - "unauthorized"
       - "invalid.*api.*key"
       - "authentication.*failed"
+    # crush with no provider: exit 1 in 2 s, "No providers configured -
+    # please run 'crush' to set up a provider interactively." (GH #389).
+    unavailable_patterns:
+      - "No providers? configured"
     capacity_patterns:
       - "overloaded"
       - "503"

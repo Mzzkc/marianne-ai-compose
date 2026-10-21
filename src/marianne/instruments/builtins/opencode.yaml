@@ -265,6 +265,12 @@ cli:
       - "unauthorized"
       - "invalid.*api.*key"
       - "authentication.*failed"
+    # opencode with the requested provider unconfigured: exit 1 in ~12 s,
+    # a ProviderModelNotFoundError log line (run) or "Error: Provider not
+    # found: <id>" (models). Route facts, not work failures (GH #389).
+    unavailable_patterns:
+      - "ProviderModelNotFoundError"
+      - "Provider not found"
     capacity_patterns:
       - "overloaded"
       - "503"

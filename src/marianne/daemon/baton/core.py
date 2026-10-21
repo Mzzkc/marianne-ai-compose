@@ -2100,7 +2100,8 @@ class BatonCore:
 
             if event.error_classification == "INSTRUMENT_UNAVAILABLE":
                 # GH #418: the instrument cannot be reached at all (binary not
-                # on PATH, endpoint refusing connections). Retrying it is
+                # on PATH, endpoint refusing connections, or the harness's own
+                # "no provider configured" refusal, GH #389). Retrying it is
                 # waste; advance the chain NOW without charging a retry. With
                 # no chain left, fall through to the ordinary retry/exhaustion
                 # path so the failure is still recorded and bounded.
