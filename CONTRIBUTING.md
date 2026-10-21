@@ -43,6 +43,25 @@ known when the gate landed; it may only shrink. Close a gap by changing the
 language (schema description, doc line and skill line in the same commit), never
 by adding to the fixture.
 
+**Prove instruments against the CLIs actually installed.** CI cannot run the
+agent CLIs, so a change to an instrument profile, a backend parser or anything
+that builds a CLI command needs a live run on a machine that has them:
+
+```bash
+mzt instruments check NAME --live              # one real prompt (+ schema mode if declared)
+mzt instruments check NAME --live --record tests/fixtures/cli_captures
+                                               # refresh the captured parser fixtures
+mzt doctor --live                              # every ready instrument, before a release
+```
+
+Parser tests replay `tests/fixtures/cli_captures/` (bytes the CLI really
+printed), not output written from documentation. Every defect census in
+GH #472 had the same shape: a test and the code shared one wrong belief about
+an external tool, and nothing ever asked the tool. Paste the `--live` result in
+the PR, and re-record captures when a CLI upgrade moves its output. A release
+is not cut until `mzt doctor --live` passes on the reference host for every
+shipped builtin that is installed there.
+
 A few non-negotiables (see `.marianne/spec/` for the full set):
 
 - **Only the full suite is green.** Subsets, stale mocks, and polluted venvs lie.
@@ -50,7 +69,9 @@ A few non-negotiables (see `.marianne/spec/` for the full set):
 - **Async throughout.** I/O uses `asyncio`; avoid `subprocess.run` in production paths.
 - **Pydantic v2** for all config/state models (`@field_validator`/`@model_validator`).
 - **No silent failures.** Don't swallow errors into a misleading success; degrade
-  loudly and diagnosably.
+  loudly and diagnosably. A broad `except Exception` states why on its own line
+  (`# noqa: BLE001 — <reason>`) and logs at the level that matches what is
+  lost: WARNING when state, output or a check is dropped (GH #308).
 - **Tests over mocks for infrastructure code** — prefer real integration.
 
 ## How the project is specified
