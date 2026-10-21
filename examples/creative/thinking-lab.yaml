@@ -45,12 +45,21 @@ instrument: strong
 instrument_config:
   timeout_seconds: 1800
 
+# Perspectives are one alias with a chain: `spread` gives each voice a
+# different head model so the dialectic is not five runs of one model's
+# priors; `balance` starts each voice on the least-loaded entry.
+instruments:
+  perspective:
+    chain: [claude-code, codex-cli, antigravity]
+    select: [spread, balance]
+
 # Movement declarations — names appear in `mzt status` output
 movements:
   1:
     name: "Framing"
   2:
     name: "Perspectives"
+    instrument: perspective    # five voices rotate across three models
   3:
     name: "Dialectic Synthesis"
 

@@ -17,6 +17,7 @@ from marianne.validation.checks.best_practices import (
     VariableShadowingCheck,
 )
 from marianne.validation.checks.capability_classes import (
+    AliasSelectCheck,
     AliasShadowsClassCheck,
     ClassAliasProfileCheck,
     ClassChainAvailabilityCheck,
@@ -102,6 +103,7 @@ __all__ = [
     "ClassChainAvailabilityCheck",
     "ClassAliasProfileCheck",
     "AliasShadowsClassCheck",
+    "AliasSelectCheck",
     "ClassModelConfigCheck",
     "ClassesFileValidCheck",
     "ClassChainSummaryCheck",

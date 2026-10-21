@@ -68,6 +68,23 @@ an alias over an existing profile; archive what nothing names.
 
 ### Added
 
+- **Alias chains with `select` modifiers (GH #473).** A score alias may bind
+  an ordered `chain` of entries instead of one profile; `select` decides which
+  entry each sheet starts on and the rest follow as that sheet's fallbacks.
+  `cycle` rotates per use, `spread` rotates per movement (a fan-out's voices
+  get distinct models from one alias), `cheapest` and `widest` order by the
+  profile's model table, and `balance` lets the conductor start on the
+  least-loaded entry at dispatch (recorded in the fallback history). Modifiers
+  compose in the order written. V330 warns when a modifier has nothing to
+  choose between. Single-profile aliases are unchanged. The example scores
+  bind instruments per role instead of one alias for the whole score:
+  issue-solver and quality-continuous put `fast`/`strong`/`workhorse`/
+  `writing` on the movements that play those roles and a `reviewer` chain
+  with `[spread, balance]` on their review fan-outs; design-review,
+  thinking-lab and research-agent spread their review, perspective and
+  investigation voices across distinct models the same way; the rosetta
+  discover/prove scores collapse three reviewer aliases into one.
+
 - **`mzt instruments check NAME --live --record DIR` and captured CLI
   fixtures.** `--record` writes each live call's raw bytes, exit code and CLI
   version, so parser tests replay what the installed CLI prints instead of a

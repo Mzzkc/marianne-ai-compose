@@ -555,7 +555,8 @@ class InteractiveSupportCheck:
                     )
         for alias, instr_def in config.instruments.items():
             if instr_def.config.get("interactive"):
-                opt_ins.append((f"instrument alias '{alias}'", instr_def.profile))
+                for entry in instr_def.entries:
+                    opt_ins.append((f"instrument alias '{alias}'", entry.profile))
 
         if not opt_ins:
             return []
@@ -595,7 +596,7 @@ class InteractiveSupportCheck:
             # Resolve score-local aliases to their profile name.
             resolved = name
             if resolved in config.instruments:
-                resolved = config.instruments[resolved].profile
+                resolved = config.instruments[resolved].profile or resolved
             if resolved is None or resolved not in profiles:
                 continue  # unknown name — V210's domain
             profile = profiles[resolved]
@@ -1116,7 +1117,7 @@ class NoUsableInstrumentCheck:
         unresolved = 0
         for name in chain:
             alias = config.instruments.get(name)
-            profile_name = alias.profile if alias is not None else name
+            profile_name = (alias.profile or name) if alias is not None else name
             resolved_names = (
                 [entry.profile for entry in class_map.classes[profile_name].chain]
                 if profile_name in class_map.classes and profile_name not in profiles

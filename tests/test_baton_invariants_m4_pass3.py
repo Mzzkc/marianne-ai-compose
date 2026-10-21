@@ -71,6 +71,7 @@ from marianne.core.config.instruments import (
     ModelCapacity,
 )
 from marianne.core.config.job import (
+    AliasEntry,
     InjectionItem,
     InstrumentDef,
     JobConfig,
@@ -187,6 +188,7 @@ ALL_CONFIG_MODELS: list[type[BaseModel]] = [
     ValidationRule,
     SkipWhenCommand,
     # job.py
+    AliasEntry,
     InjectionItem,
     InstrumentDef,
     MovementDef,
@@ -240,7 +242,8 @@ ALL_CONFIG_MODELS: list[type[BaseModel]] = [
 # ScheduleConfig has defaults for individual fields but requires one timing
 # declaration. Its valid construction and round-trip properties are covered by
 # the dedicated schedule tests.
-_MODELS_REQUIRING_DECLARATION: set[type[BaseModel]] = {ScheduleConfig}
+# InstrumentDef: an alias must name a `profile` or a `chain` (GH #473).
+_MODELS_REQUIRING_DECLARATION: set[type[BaseModel]] = {ScheduleConfig, InstrumentDef}
 
 
 # =============================================================================

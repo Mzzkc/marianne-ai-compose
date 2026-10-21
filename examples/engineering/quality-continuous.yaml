@@ -116,45 +116,72 @@ workspace_lifecycle:
   archive_on_fresh: true
   max_archives: 10
 
-instrument: strong
+# Score default; every movement below binds its own role (see `movements`).
+instrument: workhorse
 instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 2400  # 40 min per sheet for thorough analysis
+
+# Review voices are one alias with a chain: `spread` gives each fan-out voice
+# a different head model (no agreement by shared blind spot), `balance` lets
+# the conductor start each voice on the least-loaded entry, and the chain's
+# other entries are that voice's fallbacks.
+instruments:
+  reviewer:
+    chain: [codex-cli, antigravity, claude-code]
+    select: [spread, balance]
 
 stale_detection:
   enabled: true
   idle_timeout_seconds: 1800  # 30 min — safe for heavy test suites
 
 # Movement declarations — names appear in `mzt status` output
+# Instruments are bound per role: setup and filing are light, reviews want
+# distinct models, synthesis and merge resolution want the strongest reasoner,
+# and the fix batches are long tool-driven edit/test cycles.
 movements:
   1:
     name: "Setup"
+    instrument: fast
   2:
     name: "Expert Reviews"
+    instrument: reviewer       # three voices, three models (spread)
   3:
     name: "Category Discovery"
+    instrument: strong
   4:
     name: "Synthesis"
+    instrument: strong
   5:
     name: "Batch 1 — Quick Wins"
+    instrument: workhorse
   6:
     name: "Batch 1 Completion"
+    instrument: workhorse
   7:
     name: "Batch 2 — Medium Effort"
+    instrument: workhorse
   8:
     name: "Batch 2 Completion"
+    instrument: workhorse
   9:
     name: "Batch 3 — Significant"
+    instrument: workhorse
   10:
     name: "Batch 3 Completion"
+    instrument: workhorse
   11:
     name: "Verification"
+    instrument: workhorse
   12:
     name: "Commit & Push"
+    instrument: workhorse
   13:
     name: "Merge Resolution"
+    instrument: strong
   14:
     name: "File Issues"
+    instrument: writing
 
 cross_sheet:
   auto_capture_stdout: true

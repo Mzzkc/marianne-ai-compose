@@ -119,6 +119,84 @@ class DispatchResult:
             self.blocked_sheets.append((job_id, sheet_num))
 
 
+def _load_ratio(
+    instrument: str,
+    model: str | None,
+    config: DispatchConfig,
+    model_running: dict[str, int],
+) -> float:
+    """Live occupancy of one route as a fraction of its cap (0.0 = idle).
+
+    Unknown cap reads as the per-instrument default the baton registers (4),
+    so an entry with no profile-declared cap is still comparable.
+    """
+    key = f"{instrument}:{model}" if model else instrument
+    running = model_running.get(key, 0)
+    cap = config.model_concurrency.get(key)
+    if cap is None:
+        cap = config.instrument_concurrency.get(instrument)
+    if cap is None or cap <= 0:
+        cap = 4
+    return running / cap
+
+
+def _balance_chain(
+    sheet: SheetExecutionState, config: DispatchConfig, model_running: dict[str, int],
+) -> None:
+    """Rotate the sheet's chain so the least-loaded entry is its primary.
+
+    Candidates are the current primary plus every fallback entry that is
+    registered and neither rate-limited nor circuit-open. The lowest load
+    ratio wins; ties keep the authored order, so an idle chain is unchanged.
+    The rotation is a plain re-ordering of the chain (the displaced primary
+    becomes a fallback), which keeps every later fallback advance correct.
+    """
+    primary = (sheet.instrument_name or "", sheet.model)
+    chain: list[tuple[str, str | None]] = [primary]
+    for idx, name in enumerate(sheet.fallback_chain):
+        has_config = idx < len(sheet.fallback_configs)
+        model = sheet.fallback_configs[idx].get("model") if has_config else None
+        chain.append((name, model))
+    usable = [
+        (i, inst, model) for i, (inst, model) in enumerate(chain)
+        if i == 0 or (
+            inst not in config.rate_limited_instruments
+            and inst not in config.open_circuit_breakers
+        )
+    ]
+    best_i, best_inst, best_model = min(
+        usable, key=lambda t: (_load_ratio(t[1], t[2], config, model_running), t[0]),
+    )
+    if best_i == 0:
+        return
+    # Re-order: chosen entry first, then the rest in authored order.
+    reordered = [chain[best_i]] + [c for i, c in enumerate(chain) if i != best_i]
+    sheet.instrument_name = best_inst
+    sheet.model = best_model
+    sheet.instrument_model = best_model
+    sheet.fallback_chain = [inst for inst, _ in reordered[1:]]
+    sheet.fallback_configs = [
+        ({"model": model} if model else {}) for _, model in reordered[1:]
+    ]
+    import datetime as _dt
+
+    sheet.instrument_fallback_history.append({
+        "from": primary[0],
+        "to": best_inst,
+        "reason": "balance",
+        "timestamp": _dt.datetime.now(tz=_dt.UTC).isoformat(),
+    })
+    _logger.info(
+        "dispatch.balance",
+        extra={
+            "sheet_num": sheet.sheet_num,
+            "from": primary[0],
+            "to": best_inst,
+            "model": best_model,
+        },
+    )
+
+
 def _record_dispatch_block(
     result: DispatchResult,
     *,
@@ -254,6 +332,20 @@ async def dispatch_ready(
                     },
                 )
                 continue
+
+            # `balance` alias modifier (#473): before the capacity checks, start
+            # this sheet on whichever chain entry carries the least live load,
+            # measured as occupied slots over that entry's cap. Only a sheet
+            # still on its primary with no attempt yet is rebalanced, so a
+            # sheet that already ran (or fell back) keeps its route; the
+            # choice is recorded in the fallback history as "balance".
+            if (
+                sheet.balance_chain
+                and sheet.current_instrument_index == 0
+                and not sheet.attempt_history
+                and sheet.fallback_chain
+            ):
+                _balance_chain(sheet, config, model_running)
 
             # Check per-model concurrency (falls back to per-instrument)
             instrument = sheet.instrument_name or ""

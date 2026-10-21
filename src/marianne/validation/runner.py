@@ -10,6 +10,7 @@ from marianne.core.config import JobConfig
 from marianne.validation.base import ValidationCheck, ValidationIssue, ValidationSeverity
 from marianne.validation.checks import (
     AbsoluteHomePathCheck,
+    AliasSelectCheck,
     AliasShadowsClassCheck,
     BashArrayLengthCheck,
     CadenzaOrderingCheck,
@@ -241,6 +242,7 @@ def create_default_checks() -> list[ValidationCheck]:
         ClassAliasProfileCheck(),
         AliasShadowsClassCheck(),
         ClassModelConfigCheck(),
+        AliasSelectCheck(),
         ClassesFileValidCheck(),
         ClassChainSummaryCheck(),
         # Best-practice checks

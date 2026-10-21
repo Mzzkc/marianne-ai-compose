@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 
 from marianne.core.config.classes import ClassEntry, ClassSnapshot, InstrumentResolution
 from marianne.core.config.execution import ValidationRule
-from marianne.core.config.job import InjectionItem
+from marianne.core.config.job import AliasEntry, InjectionItem, InstrumentDef
 from marianne.core.constants import SHEET_NUM_KEY, positional_template_variables
 
 if TYPE_CHECKING:
@@ -109,6 +109,12 @@ class Sheet(BaseModel):
         "(e.g. {'model': ...}); empty dict for a bare-profile fallback (#342).",
     )
     instrument_resolution: InstrumentResolution | None = None
+    balance_chain: bool = Field(
+        default=False,
+        description="The sheet's alias carries the `balance` select modifier: "
+        "the conductor may start the sheet on whichever chain entry (primary "
+        "or fallback) has the lowest live occupancy at dispatch.",
+    )
 
     # --- Prompt ---
     prompt_template: str | None = Field(
@@ -207,6 +213,83 @@ def _entry_label(profile: str, model: str | None) -> str:
     return f"{profile}/{model}" if model else profile
 
 
+def _alias_profiles() -> dict[str, Any]:
+    """Registered profiles for cost/context ordering; empty when unavailable.
+
+    Loaded lazily and once per build so `cheapest`/`widest` can read a
+    profile's model table without making core depend on the loader at import.
+    """
+    try:
+        from marianne.instruments.loader import load_all_profiles
+
+        return dict(load_all_profiles())
+    except Exception:  # noqa: BLE001 — ordering degrades to authored order, loudly
+        import logging
+
+        logging.getLogger("marianne.core.sheet").warning(
+            "alias_select.profiles_unavailable", exc_info=True,
+        )
+        return {}
+
+
+def _entry_metric(
+    entry: AliasEntry, profiles: dict[str, Any], field: str,
+) -> float | None:
+    """A model-table metric for the entry's effective model, or None."""
+    profile = profiles.get(entry.profile)
+    if profile is None:
+        return None
+    model = entry.config.get("model") or getattr(profile, "default_model", None)
+    for cap in getattr(profile, "models", []) or []:
+        if getattr(cap, "name", None) == model:
+            value = getattr(cap, field, None)
+            return float(value) if value is not None else None
+    return None
+
+
+def order_alias_entries(
+    definition: InstrumentDef,
+    *,
+    use_index: int,
+    movement_use_index: int,
+    profiles: dict[str, Any] | None = None,
+) -> list[AliasEntry]:
+    """The alias's entries in the order this use of the alias should try them.
+
+    ``use_index`` counts every sheet that binds the alias (score order);
+    ``movement_use_index`` counts uses within the sheet's movement. Modifiers
+    compose in the order written: ``cheapest``/``widest`` sort, ``cycle``/
+    ``spread`` rotate the sorted order by the matching index, ``balance`` is
+    left to dispatch. Entries whose metric is unknown keep their authored
+    position after the known ones (a missing profile never reorders silently
+    into first place).
+    """
+    entries = list(definition.entries)
+    if len(entries) < 2 or not definition.select:
+        return entries
+    profiles = profiles if profiles is not None else _alias_profiles()
+    def _by_metric(field: str, *, descending: bool) -> list[AliasEntry]:
+        scored = [(_entry_metric(e, profiles, field), e) for e in entries]
+        known = [(m, e) for m, e in scored if m is not None]
+        unknown = [e for m, e in scored if m is None]
+        known.sort(key=lambda t: -t[0] if descending else t[0])
+        return [e for _, e in known] + unknown
+
+    for modifier in definition.select:
+        if modifier == "cheapest":
+            entries = _by_metric("cost_per_1k_input", descending=False)
+        elif modifier == "widest":
+            entries = _by_metric("context_window", descending=True)
+        elif modifier == "cycle":
+            k = use_index % len(entries)
+            entries = entries[k:] + entries[:k]
+        elif modifier == "spread":
+            k = movement_use_index % len(entries)
+            entries = entries[k:] + entries[:k]
+        # "balance" is a dispatch-time choice; the order is left as built.
+    return entries
+
+
 def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> list[Sheet]:
     """Construct Sheet entities from a JobConfig.
 
@@ -227,6 +310,13 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
     """
     sheets: list[Sheet] = []
     total_sheets = config.sheet.total_sheets
+
+    # Alias select modifiers (#473): each alias use is counted in sheet order
+    # (`cycle`) and per movement (`spread`), so rotation is deterministic for
+    # a given score and survives resume (build_sheets is replayed, not saved).
+    alias_uses: dict[str, int] = {}
+    alias_movement_uses: dict[tuple[str, int], int] = {}
+    alias_profiles: dict[str, Any] | None = None
 
     # Pre-build reverse lookup for instrument_map: sheet_num -> instrument_name
     instrument_map_lookup: dict[int, str] = {}
@@ -285,11 +375,37 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
         # Resolve score-level instrument aliases to profile names.
         # If the resolved name matches a key in config.instruments, replace
         # it with the profile name and merge the InstrumentDef config.
+        alias_tail: list[AliasEntry] = []
+        balance_chain = False
         if resolved_instrument in config.instruments:
             instrument_def = config.instruments[resolved_instrument]
-            resolved_instrument = instrument_def.profile
-            if instrument_def.config:
-                instrument_config = {**instrument_config, **instrument_def.config}
+            alias_name = resolved_instrument
+            if instrument_def.chain is not None:
+                if instrument_def.select and any(
+                    m in ("cheapest", "widest") for m in instrument_def.select
+                ) and alias_profiles is None:
+                    alias_profiles = _alias_profiles()
+                use_index = alias_uses.get(alias_name, 0)
+                movement_use_index = alias_movement_uses.get((alias_name, movement), 0)
+                alias_uses[alias_name] = use_index + 1
+                alias_movement_uses[(alias_name, movement)] = movement_use_index + 1
+                ordered = order_alias_entries(
+                    instrument_def,
+                    use_index=use_index,
+                    movement_use_index=movement_use_index,
+                    profiles=alias_profiles,
+                )
+                head, alias_tail = ordered[0], ordered[1:]
+                resolved_instrument = head.profile
+                if instrument_def.config:
+                    instrument_config = {**instrument_config, **instrument_def.config}
+                if head.config:
+                    instrument_config = {**instrument_config, **head.config}
+                balance_chain = "balance" in instrument_def.select
+            else:
+                resolved_instrument = instrument_def.profile or resolved_instrument
+                if instrument_def.config:
+                    instrument_config = {**instrument_config, **instrument_def.config}
         elif classes is not None and resolved_instrument in classes.classes:
             class_primary = True
             chain = classes.classes[resolved_instrument].chain
@@ -358,6 +474,11 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
         resolved_fallbacks: list[str] = []
         fallback_configs: list[dict[str, Any]] = []
         used_class = class_primary
+        # The rest of a multi-entry alias chain comes first: it is the alias's
+        # own fallback order, ahead of any score-level fallbacks (#473).
+        for alias_entry in alias_tail:
+            resolved_fallbacks.append(alias_entry.profile)
+            fallback_configs.append(dict(alias_entry.config) if alias_entry.config else {})
         for entry in class_tail:
             resolved_fallbacks.append(entry.profile)
             fallback_configs.append(
@@ -366,8 +487,15 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
         for fb_name in fallbacks:
             fb_def = config.instruments.get(fb_name)
             if fb_def is not None:
-                resolved_fallbacks.append(fb_def.profile)
-                fallback_configs.append(dict(fb_def.config) if fb_def.config else {})
+                # An alias in a fallback list contributes every entry, in its
+                # authored order (modifiers rotate primaries, not fallbacks).
+                for fb_entry in fb_def.entries:
+                    resolved_fallbacks.append(fb_entry.profile)
+                    merged = (
+                        {**dict(fb_def.config), **dict(fb_entry.config)}
+                        if fb_def.chain else dict(fb_entry.config)
+                    )
+                    fallback_configs.append(merged if merged else {})
             elif classes is not None and fb_name in classes.classes:
                 used_class = True
                 for entry in classes.classes[fb_name].chain:
@@ -427,6 +555,7 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
                 instrument_fallbacks=resolved_fallbacks,
                 instrument_fallback_configs=fallback_configs,
                 instrument_resolution=resolution,
+                balance_chain=balance_chain,
                 prompt_template=prompt_template,
                 template_file=template_file,
                 variables=variables,

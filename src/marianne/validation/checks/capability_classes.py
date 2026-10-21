@@ -498,26 +498,27 @@ class ClassAliasProfileCheck:
             return []
         issues: list[ValidationIssue] = []
         for alias, definition in config.instruments.items():
-            if definition.profile not in ctx.class_shaped_names():
-                continue
-            issues.append(
-                ValidationIssue(
-                    check_id=self.check_id,
-                    severity=ValidationSeverity.ERROR,
-                    message=(
-                        f"instrument alias '{alias}' names class '{definition.profile}' "
-                        "as its profile; an alias must name a profile "
-                        "(use the class directly in instrument:)"
+            for entry in definition.entries:
+                if entry.profile not in ctx.class_shaped_names():
+                    continue
+                issues.append(
+                    ValidationIssue(
+                        check_id=self.check_id,
+                        severity=ValidationSeverity.ERROR,
+                        message=(
+                            f"instrument alias '{alias}' names class '{entry.profile}' "
+                            "as a profile; an alias entry must name a profile "
+                            "(use the class directly in instrument:)"
+                        ),
+                        line=find_line_in_yaml(raw_yaml, f"{alias}:"),
+                        context=entry.profile,
+                        suggestion=(
+                            f"set instruments.{alias} to a profile name, or name "
+                            f"the class '{entry.profile}' in instrument: directly"
+                        ),
+                        metadata={"alias": alias, "class_name": entry.profile},
                     ),
-                    line=find_line_in_yaml(raw_yaml, f"{alias}:"),
-                    context=definition.profile,
-                    suggestion=(
-                        f"set instruments.{alias}.profile to a profile name, or name "
-                        f"the class '{definition.profile}' in instrument: directly"
-                    ),
-                    metadata={"alias": alias, "class_name": definition.profile},
-                ),
-            )
+                )
         return issues
 
 
@@ -571,6 +572,83 @@ class AliasShadowsClassCheck:
                     metadata={"alias": alias},
                 ),
             )
+        return issues
+
+
+class AliasSelectCheck:
+    """V330 (WARNING): an alias `select` modifier that cannot act (#473).
+
+    `cycle`/`spread` rotate across an alias's entries; with one entry there
+    is nothing to rotate. `cheapest`/`widest` order by the profile's model
+    table; an entry whose profile has no row for its model keeps its authored
+    place, so an alias where NO entry has a known metric is unordered. In
+    both cases the score runs, on the authored order, and this says so.
+    """
+
+    @property
+    def check_id(self) -> str:
+        return "V330"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return "Warns when an alias select modifier has nothing to choose between"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,  # noqa: ARG002 (protocol shape)
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        if not config.instruments:
+            return []
+        from marianne.core.sheet import _entry_metric
+
+        try:
+            from marianne.instruments.loader import load_all_profiles
+
+            profiles = dict(load_all_profiles())
+        except Exception:  # noqa: BLE001 — without profiles only the arity arm can judge
+            profiles = {}
+        issues: list[ValidationIssue] = []
+        for alias, definition in config.instruments.items():
+            if not definition.select:
+                continue
+            entries = definition.entries
+            problems: list[str] = []
+            if len(entries) < 2:
+                problems.append(
+                    f"{', '.join(definition.select)} need at least two chain entries; "
+                    f"this alias has {len(entries)}"
+                )
+            metrics = (("cheapest", "cost_per_1k_input"), ("widest", "context_window"))
+            for metric, field in metrics:
+                if metric in definition.select and profiles and not any(
+                    _entry_metric(e, profiles, field) is not None for e in entries
+                ):
+                    problems.append(
+                        f"`{metric}` found no {field} for any entry's model in the "
+                        "registered profiles, so the authored order stands"
+                    )
+            for problem in problems:
+                issues.append(
+                    ValidationIssue(
+                        check_id=self.check_id,
+                        severity=ValidationSeverity.WARNING,
+                        message=f"alias '{alias}' select: {problem}",
+                        line=find_line_in_yaml(raw_yaml, f"{alias}:"),
+                        context=alias,
+                        suggestion=(
+                            "add chain entries the modifier can choose between, give each "
+                            "entry a model the profile's `models:` table lists, or drop the "
+                            "modifier"
+                        ),
+                        metadata={"alias": alias, "select": ",".join(definition.select)},
+                    ),
+                )
         return issues
 
 

@@ -203,11 +203,12 @@ def resolve_job_classes(
     in the frozen chain for the baton's existing fallback path.
     """
     for alias, definition in config.instruments.items():
-        if definition.profile in class_map.classes or definition.profile in CLASS_VOCABULARY:
-            raise ValueError(
-                f"instrument alias '{alias}' names class '{definition.profile}' as its profile; "
-                "an alias must name a profile",
-            )
+        for alias_entry in definition.entries:
+            if alias_entry.profile in class_map.classes or alias_entry.profile in CLASS_VOCABULARY:
+                raise ValueError(
+                    f"instrument alias '{alias}' names class '{alias_entry.profile}' as a "
+                    "profile; an alias entry must name a profile",
+                )
         # An alias naming a profile this machine lacks is not a class state
         # either (D-I1): main admitted it and V210 rates it; hello.yaml's
         # local-only aliases are exactly this on a fresh install.

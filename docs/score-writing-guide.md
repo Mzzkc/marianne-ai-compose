@@ -1207,6 +1207,28 @@ movements:
 Each alias has a `profile:` (the registered instrument name from `mzt instruments list`)
 and an optional `config:` (overrides merged with the profile's defaults).
 
+An alias may instead carry a `chain` of entries with `select` modifiers (GH #473):
+`spread` gives a fan-out's voices distinct models from one alias, `cycle` rotates
+across sheets, `cheapest`/`widest` order by the profile's model table, and
+`balance` starts each sheet on the least-loaded entry at dispatch. The chain's
+other entries are that sheet's fallbacks, so one alias states the route and its
+recovery together. See the
+[configuration reference](configuration-reference.md#instruments) for the
+exact semantics and composition order.
+
+```yaml
+instruments:
+  reviewer:
+    chain: [codex-cli, antigravity, claude-code]
+    select: [spread, balance]
+
+movements:
+  2:
+    name: Reviews
+    voices: 3
+    instrument: reviewer           # three voices, three different models
+```
+
 ### Per-Sheet Instrument Assignment
 
 For fine-grained control, assign instruments to individual sheets:
@@ -1243,8 +1265,11 @@ Use different instruments when the task demands different capabilities:
 - **Cost optimization**: Expensive models for critical sheets, cheaper models for routine work
 - **Capability matching**: Tools that support MCP for integration sheets, simple models for text generation
 
-A single-instrument score is always simpler. Add instruments when the quality or cost
-difference justifies the complexity.
+Bind per role, not one alias for the whole score: `instrument: strong` on every
+sheet is the wrong pattern. Recon, build, review and synthesis want different
+models, and the score is where that is said — give each role its own alias or
+class and bind it on the movements that play that role. A single-role score can
+stay single-instrument.
 
 ### Instrument Fallbacks
 

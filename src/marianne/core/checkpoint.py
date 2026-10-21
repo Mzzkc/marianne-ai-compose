@@ -617,6 +617,12 @@ class SheetState(BaseModel):
         default=0,
         description="Position in the instrument chain. 0 = primary instrument.",
     )
+    balance_chain: bool = Field(
+        default=False,
+        description="The sheet's alias asked for `balance` (#473): at dispatch "
+        "the conductor may start the sheet on the chain entry with the lowest "
+        "live occupancy instead of the primary. Old checkpoints default to False.",
+    )
     fallback_attempts: dict[str, int] = Field(
         default_factory=dict,
         description="Retry count per instrument in the chain.",

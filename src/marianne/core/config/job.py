@@ -142,6 +142,30 @@ class InjectionItem(BaseModel):
         return self
 
 
+AliasSelect = Literal["cycle", "spread", "cheapest", "widest", "balance"]
+
+
+class AliasEntry(BaseModel):
+    """One entry of a multi-entry alias chain: a profile and its settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    profile: str = Field(
+        min_length=1,
+        description="Name of the registered instrument profile this entry binds",
+    )
+    config: InstrumentSettings = Field(
+        default_factory=InstrumentSettings,
+        description="Settings for this entry (model, timeout_seconds, ...), merged "
+        "over the profile's defaults when the entry is the one dispatched.",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_bare_profile(cls, value: object) -> object:
+        return {"profile": value} if isinstance(value, str) else value
+
+
 class InstrumentDef(BaseModel):
     """A named instrument definition within a score.
 
@@ -149,6 +173,12 @@ class InstrumentDef(BaseModel):
     registered instrument profiles with optional configuration overrides.
     These aliases can then be referenced by name in per-sheet or per-movement
     instrument assignments.
+
+    An alias binds ONE profile (``profile`` + ``config``) or an ordered
+    ``chain`` of entries with ``select`` modifiers that decide which entry a
+    given sheet starts on; the rest of the chain follows as that sheet's
+    fallbacks. Build-time modifiers order the chain per sheet; ``balance`` is
+    applied by the conductor at dispatch.
 
     Example YAML::
 
@@ -158,24 +188,98 @@ class InstrumentDef(BaseModel):
             config:
               model: gemini-2.5-flash
               timeout_seconds: 300
-          deep-thinker:
-            profile: claude-code
-            config:
-              timeout_seconds: 3600
+          reviewer:
+            chain:
+              - {profile: codex-cli, config: {model: gpt-6-astra}}
+              - {profile: claude-code, config: {model: claude-opus-5-5}}
+              - {profile: opencode, config: {model: zai-coding-plan/glm-5.3-flash}}
+            select: [spread, balance]
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    profile: str = Field(
+    profile: str | None = Field(
+        default=None,
         min_length=1,
-        description="Name of the registered instrument profile, e.g. 'gemini-cli'",
+        description="Name of the registered instrument profile, e.g. 'gemini-cli'. "
+        "Required unless `chain` is given, in which case it is derived from the "
+        "chain's first entry and is read-only.",
     )
     config: InstrumentSettings = Field(
         default_factory=InstrumentSettings,
         description="Configuration overrides for this instrument definition. "
         "Typed instrument settings merged with the profile's defaults; "
-        "unknown keys warn as V010/V011.",
+        "unknown keys warn as V010/V011. With `chain`, these settings apply to "
+        "every entry beneath that entry's own `config`.",
     )
+    chain: list[AliasEntry] | None = Field(
+        default=None,
+        min_length=1,
+        description="Ordered entries this alias can bind, each a profile with its "
+        "own settings (a bare string is a profile with none). Without `select` "
+        "the first entry is every sheet's primary and the rest are its "
+        "fallbacks, exactly like instrument_fallbacks. Two entries with the "
+        "same profile and model are refused. Mutually exclusive with `profile`.",
+    )
+    select: list[AliasSelect] = Field(
+        default_factory=list,
+        description="Modifiers that decide which chain entry a sheet starts on; "
+        "the remaining entries follow as that sheet's fallbacks. `cycle`: each "
+        "use of the alias, in sheet order, starts one entry further along "
+        "(wrapping), so consecutive sheets rotate through the chain. `spread`: "
+        "like cycle but the rotation restarts at each movement, so the voices "
+        "of one fan-out get distinct entries while the next movement starts "
+        "again at the top. `cheapest`: order entries by the profile's "
+        "cost_per_1k_input for the entry's model, ascending. `widest`: order by "
+        "context_window, descending. `balance`: at dispatch the conductor "
+        "starts the sheet on the chain entry with the lowest live occupancy "
+        "(running sheets over its concurrency cap), ties kept in order; the "
+        "conductor records the choice in the sheet's fallback history. "
+        "Modifiers compose in the order written: cheapest/widest sort first, "
+        "cycle/spread rotate that order, balance chooses among the result at "
+        "dispatch. Requires `chain` with at least two entries (V330 warns "
+        "otherwise).",
+    )
+
+    @model_validator(mode="after")
+    def _profile_or_chain(self) -> InstrumentDef:
+        if self.chain is None:
+            if self.profile is None:
+                raise ValueError("instrument alias needs `profile` or `chain`")
+            if self.select:
+                raise ValueError(
+                    "`select` modifiers need a `chain` of at least two entries; "
+                    "a single `profile` has nothing to choose between"
+                )
+            return self
+        if self.profile is not None and self.profile != self.chain[0].profile:
+            raise ValueError(
+                "instrument alias sets both `profile` and `chain`; keep the chain "
+                "(its first entry is the profile) or the single profile"
+            )
+        seen: set[tuple[str, str | None]] = set()
+        for entry in self.chain:
+            key = (entry.profile, entry.config.get("model"))
+            if key in seen:
+                raise ValueError(
+                    f"alias chain lists the same entry twice: {entry.profile}"
+                    + (f"/{key[1]}" if key[1] else "")
+                )
+            seen.add(key)
+        if "cycle" in self.select and "spread" in self.select:
+            raise ValueError("`select` cannot combine cycle and spread; choose one rotation")
+        if "cheapest" in self.select and "widest" in self.select:
+            raise ValueError("`select` cannot combine cheapest and widest; choose one order")
+        object.__setattr__(self, "profile", self.chain[0].profile)
+        return self
+
+    @property
+    def entries(self) -> list[AliasEntry]:
+        """The alias's ordered entries: the chain, or the single profile."""
+        if self.chain is not None:
+            return list(self.chain)
+        assert self.profile is not None
+        return [AliasEntry(profile=self.profile, config=self.config)]
 
 
 class MovementDef(BaseModel):

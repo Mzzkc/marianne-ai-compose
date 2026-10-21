@@ -364,6 +364,7 @@ def sheets_to_execution_states(
             max_completion=max_completion,
             fallback_chain=list(sheet.instrument_fallbacks),
             fallback_configs=[dict(c) for c in sheet.instrument_fallback_configs],
+            balance_chain=bool(getattr(sheet, "balance_chain", False)),
             sheet_timeout_seconds=sheet.timeout_seconds,
         )
         states[sheet.num].remember_primary_identity()

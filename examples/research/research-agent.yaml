@@ -73,11 +73,17 @@ instrument_config:
 #   synthesizer: strong reasoning for triangulation and editorial synthesis (opus-tier guidance)
 instruments:
   scanner:
-    profile: claude-code
+    # Broad sweeps: the cheapest entry by the profile's model table goes
+    # first; the rest are fallbacks.
+    chain: [antigravity, opencode, claude-code]
+    select: [cheapest]
     config:
       timeout_seconds: 600
   analyst:
-    profile: claude-code
+    # Deep Investigation fans out three tracks: `spread` gives each track a
+    # different head model, so triangulation compares models, not reruns.
+    chain: [claude-code, codex-cli, antigravity]
+    select: [spread, balance]
     config:
       timeout_seconds: 900
   synthesizer:

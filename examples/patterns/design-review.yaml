@@ -61,12 +61,22 @@ instrument: strong
 instrument_config:
   timeout_seconds: 1200
 
+# Review voices are one alias with a chain: `spread` gives each fan-out voice
+# a different head model (no agreement by shared blind spot), `balance` lets
+# the conductor start each voice on the least-loaded entry, and the chain's
+# other entries are that voice's fallbacks.
+instruments:
+  reviewer:
+    chain: [codex-cli, antigravity, claude-code]
+    select: [spread, balance]
+
 # Movement declarations — names appear in `mzt status` output
 movements:
   1:
     name: "Comprehension"
   2:
     name: "TDF Reviews"
+    instrument: reviewer       # five voices rotate across three models (spread)
   3:
     name: "Gap Synthesis"
   4:

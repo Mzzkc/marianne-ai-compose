@@ -601,6 +601,7 @@ code-registry and corpus-sweep tests.
 | WARNING | V304 | Code execution would run unsandboxed (bwrap unavailable and `require_sandbox` false) |
 | WARNING | V308 | Partial concrete instrument coverage inside fan-out movements |
 | WARNING | V309 | An exact section-label validation the prompt never teaches the agent |
+| WARNING | V330 | An alias `select` modifier has nothing to choose between: fewer than two chain entries, or `cheapest`/`widest` found no model-table row for any entry; the score runs on the authored order |
 | WARNING | V311, V322 | Capability classes: part of a used class's chain cannot run here (binary missing, unsupported, local server not serving the profile's model, or unable to enforce the sheet's `response_format`). V311 also warns when a sheet bound straight to a CLI profile (no class) asks for a `json_schema` `response_format` the profile cannot enforce (no `cli.command.json_schema_flag`): every dispatch of those sheets would be refused, and the warning names them — the job starts at the first available entry; when no entry can run here the warning says so and names the install (availability is a fact about this machine, so the score is still admitted); a default-layer class shadowed by a same-named profile; a score alias shadowing a class name |
 | INFO | V011, V104, V110, V218, V225 | Distant unknown field; timeout above 7200 seconds (2 hours); unused variable; ambiguous file reference; mixed fan-out keying |
 | INFO | V205 | All validations are `file_exists` only — nothing checks content |

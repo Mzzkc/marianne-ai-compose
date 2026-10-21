@@ -282,7 +282,7 @@ class TestAliasChecks:
         issues = _run(ClassAliasProfileCheck(), config)
         assert [i.check_id for i in issues] == ["V321"]
         assert issues[0].severity == ValidationSeverity.ERROR
-        assert "an alias must name a profile" in issues[0].message
+        assert "must name a profile" in issues[0].message
 
     def test_alias_shadowing_class_name_warns(self, monkeypatch, tmp_path) -> None:
         _Layers(monkeypatch, tmp_path)

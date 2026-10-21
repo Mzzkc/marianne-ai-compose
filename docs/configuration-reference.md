@@ -124,7 +124,26 @@ instruments:
     profile: claude-code
     config:
       timeout_seconds: 3600
+  reviewer:
+    chain:
+      - {profile: codex-cli, config: {model: gpt-6-astra}}
+      - {profile: claude-code, config: {model: claude-opus-5-5}}
+      - opencode
+    select: [spread, balance]
 ```
+
+An alias binds one profile, or an ordered `chain` of entries with `select`
+modifiers that decide which entry each sheet starts on; the rest of the chain
+follows as that sheet's fallbacks, ahead of any `instrument_fallbacks`. Without
+`select`, the first entry is every sheet's primary (the same as an
+`instrument_fallbacks` list, written once). Modifiers compose in the order
+written (sort first, then rotate, then `balance` at dispatch): `[cheapest,
+cycle]` rotates the cheapest-first order; `[cycle, cheapest]` re-sorts after
+rotating and so never rotates. A fan-out of three reviewers bound to the alias
+above gets three different models in one movement (`spread`) and, when two of
+them are busy at dispatch, starts on the idle one (`balance`). The authored
+order is the order on an idle machine, so an alias is never surprising when
+nothing else is running.
 
 ### InstrumentDef Sub-Config
 
@@ -132,8 +151,10 @@ instruments:
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| `profile` | `str` | **required** | min_length=1 | Name of the registered instrument profile (e.g., `gemini-cli`, `claude-code`). Must match a profile loaded by `mzt instruments list`. |
-| `config` | `dict` | `{}` | | Configuration overrides merged with the profile's defaults. Flat key-value pairs. |
+| `profile` | `str` | required unless `chain` | min_length=1 | Name of the registered instrument profile (e.g., `gemini-cli`, `claude-code`). Must match a profile loaded by `mzt instruments list`. With `chain`, derived from the first entry. |
+| `config` | `dict` | `{}` | | Configuration overrides merged with the profile's defaults. Flat key-value pairs. With `chain`, applied to every entry beneath that entry's own `config`. |
+| `chain` | `list` | | min 1 entry | Ordered entries the alias can bind: `{profile, config}` objects or bare profile names. Two entries with the same profile and model are refused. Mutually exclusive with `profile`. |
+| `select` | `list` | `[]` | needs `chain` of ≥2 | Modifiers, applied in the order written. `cycle`: each use of the alias, in sheet order, starts one entry further along (wrapping). `spread`: like `cycle`, restarting at each movement, so a fan-out's voices get distinct entries. `cheapest`: order entries by the profile's `cost_per_1k_input` for the entry's model, ascending. `widest`: order by `context_window`, descending. `balance`: at dispatch the conductor starts the sheet on the chain entry with the lowest live occupancy (running sheets over that route's cap; rate-limited and circuit-open entries excluded; ties keep order) and records the choice in the sheet's fallback history as `balance`. `cycle`+`spread` and `cheapest`+`widest` are refused; a modifier with nothing to choose between warns V330. |
 
 ---
 

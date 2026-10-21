@@ -88,10 +88,20 @@ workspace_lifecycle:
   archive_on_fresh: true
   max_archives: 30
 
-instrument: strong
+# Score default; every movement below binds its own role (see `movements`).
+instrument: workhorse
 instrument_fallbacks: [goose]
 instrument_config:
   timeout_seconds: 2400  # 40 min default
+
+# Review voices are one alias with a chain: `spread` gives each fan-out voice
+# a different head model (no agreement by shared blind spot), `balance` lets
+# the conductor start each voice on the least-loaded entry, and the chain's
+# other entries are that voice's fallbacks.
+instruments:
+  reviewer:
+    chain: [codex-cli, antigravity, claude-code]
+    select: [spread, balance]
 
 stale_detection:
   enabled: true
@@ -105,29 +115,42 @@ cross_sheet:
     - "{{ workspace }}/*.md"
     - "{{ workspace }}/*.sh"
 
+# Instruments are bound per role: reading a DAG, investigating, reviewing and
+# documenting want different models, and the score is where that is said.
 movements:
   1:
     name: "Issue Selection (DAG)"
+    instrument: fast           # reads a ledger and picks the next ready issue
   2:
     name: "Investigation"
+    instrument: strong         # root-causing is the reasoning-heavy stage
   3:
     name: "Planning + verify.sh"
+    instrument: strong
   4:
     name: "Implementation Loop"
+    instrument: workhorse      # long tool-driven edit/test cycles
   5:
     name: "Quality Review"
+    instrument: reviewer       # three voices, three models (spread)
   6:
     name: "Review Synthesis"
+    instrument: strong
   7:
     name: "Documentation"
+    instrument: writing
   8:
     name: "Final Verification"
+    instrument: workhorse      # runs the harness; judgment is in verify.sh
   9:
     name: "Commit & Push"
+    instrument: workhorse
   10:
     name: "Close + DAG"
+    instrument: fast           # ledger edits and a gh comment
   11:
     name: "Archive + Chain"
+    instrument: fast
 
 sheet:
   size: 1
