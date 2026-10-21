@@ -68,6 +68,16 @@ an alias over an existing profile; archive what nothing names.
 
 ### Added
 
+- **`mzt instruments check NAME --live --record DIR` and captured CLI
+  fixtures.** `--record` writes each live call's raw bytes, exit code and CLI
+  version, so parser tests replay what the installed CLI prints instead of a
+  fixture written from its docs (GH #472). `tests/fixtures/cli_captures/`
+  holds Claude Code 2.1.306 output (Claude model and GLM-5.3 route, plain and
+  schema mode), reduced to the events the parser reads. The first recording
+  caught a real case: on the GLM-5.3 route Claude Code sometimes fails to call
+  its StructuredOutput tool (1 of 3 runs), and the parser correctly refuses
+  the prose answer.
+
 - **Language gate L13 `reserved-taught`.** A doc, skill or shipped example
   score that sets a key the schema marks Reserved or Deprecated now fails the
   score-language gate (GH #472). It found 31 such settings across the

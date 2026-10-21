@@ -12,6 +12,7 @@ plays a test note.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, TypedDict
 
 import typer
@@ -292,6 +293,15 @@ def check_instrument(
     timeout: float = typer.Option(
         180.0, "--timeout", help="Seconds per --live call", min=5.0,
     ),
+    record: Path | None = typer.Option(
+        None,
+        "--record",
+        help=(
+            "With --live: write each call's raw stdout, stderr and exit code "
+            "plus the CLI version to DIR/<instrument>/ as a parser fixture "
+            "(GH #472: tests should read what the CLI actually prints)"
+        ),
+    ),
 ) -> None:
     """Check readiness and configuration of a specific instrument."""
     profiles = _load_all_profiles()
@@ -313,7 +323,7 @@ def check_instrument(
     profile = profiles[name]
 
     if live:
-        report = live_probe(profile, model=model, timeout=timeout)
+        report = live_probe(profile, model=model, timeout=timeout, record=record)
         if json_output:
             output_json(report)
         else:
@@ -382,7 +392,11 @@ _LIVE_SCHEMA: dict[str, object] = {
 
 
 def live_probe(
-    profile: InstrumentProfile, *, model: str | None = None, timeout: float = 180.0,
+    profile: InstrumentProfile,
+    *,
+    model: str | None = None,
+    timeout: float = 180.0,
+    record: Path | None = None,
 ) -> LiveReport:
     """Exercise ``profile`` against the installed instrument, end to end.
 
@@ -398,21 +412,32 @@ def live_probe(
     import asyncio
     import tempfile
     import time
-    from pathlib import Path
 
     from marianne.daemon.baton.backend_pool import _create_backend_for_profile
     from marianne.daemon.baton.musician import _classify_error
 
-    def _one(prompt: str, response_format: dict[str, object] | None) -> LiveCall:
+    def _one(
+        prompt: str, response_format: dict[str, object] | None, mode: str,
+    ) -> LiveCall:
         with tempfile.TemporaryDirectory(prefix="mzt-live-probe-") as wd:
             started = time.monotonic()
+            raw: dict[str, list[bytes]] = {"stdout": [], "stderr": []}
             try:
                 backend = _create_backend_for_profile(
                     profile, working_directory=Path(wd), model=model,
                 )
                 if response_format is not None:
                     backend.set_response_format(response_format)  # type: ignore[attr-defined]
+                if record is not None and hasattr(backend, "set_output_callback"):
+                    backend.set_output_callback(
+                        lambda stream, chunk: raw.setdefault(stream, []).append(chunk)
+                    )
                 result = asyncio.run(backend.execute(prompt, timeout_seconds=timeout))
+                if record is not None:
+                    _write_fixture(
+                        record, profile, mode, prompt, response_format, raw,
+                        result.exit_code,
+                    )
             except Exception as exc:  # noqa: BLE001 — the probe reports any failure as data
                 return {
                     "ok": False,
@@ -436,7 +461,7 @@ def live_probe(
             }
             return row
 
-    plain = _one("Reply with exactly the word: ok", None)
+    plain = _one("Reply with exactly the word: ok", None, "plain")
     ok = bool(plain["ok"])
     schema: LiveCall | None = None
     schema_capable = (
@@ -447,7 +472,7 @@ def live_probe(
         )
     )
     if schema_capable:
-        schema = _one("Return the number 7 as the value of n.", _LIVE_SCHEMA)
+        schema = _one("Return the number 7 as the value of n.", _LIVE_SCHEMA, "schema")
         if schema.get("ok"):
             import json as _json
 
@@ -467,6 +492,57 @@ def live_probe(
         "schema": schema,
         "ok": ok,
     }
+
+
+def _cli_version(profile: InstrumentProfile) -> str:
+    """The installed CLI's `--version` line, or "unknown" (bounded, never raises)."""
+    import subprocess
+
+    if profile.cli is None:
+        return "n/a"
+    try:
+        done = subprocess.run(  # noqa: S603 — fixed argv, profile's own executable
+            [profile.cli.command.executable, "--version"],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "unknown"
+    line = (done.stdout or done.stderr).strip().splitlines()
+    return line[0][:120] if line else "unknown"
+
+
+def _write_fixture(
+    root: Path,
+    profile: InstrumentProfile,
+    mode: str,
+    prompt: str,
+    response_format: dict[str, object] | None,
+    raw: dict[str, list[bytes]],
+    exit_code: int | None,
+) -> None:
+    """Persist one live call as a replayable parser fixture.
+
+    Layout: ``<root>/<instrument>/<mode>.stdout|.stderr|.json``. The JSON
+    sidecar carries the CLI version, exit code, prompt and response format,
+    so a test can replay the bytes through ``_parse_output`` and a reader can
+    tell which CLI build produced them.
+    """
+    import datetime as _dt
+    import json as _json
+
+    target = root / profile.name
+    target.mkdir(parents=True, exist_ok=True)
+    (target / f"{mode}.stdout").write_bytes(b"".join(raw.get("stdout", [])))
+    (target / f"{mode}.stderr").write_bytes(b"".join(raw.get("stderr", [])))
+    (target / f"{mode}.json").write_text(_json.dumps({
+        "instrument": profile.name,
+        "cli_version": _cli_version(profile),
+        "captured_at": _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds"),
+        "mode": mode,
+        "prompt": prompt,
+        "response_format": response_format,
+        "exit_code": exit_code,
+    }, indent=2) + "\n")
 
 
 def _live_rich(report: LiveReport) -> None:

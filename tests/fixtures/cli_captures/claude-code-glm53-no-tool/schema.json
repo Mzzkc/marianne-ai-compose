@@ -1,0 +1,26 @@
+{
+  "instrument": "claude-code",
+  "cli_version": "2.1.306 (Claude Code)",
+  "captured_at": "2026-10-21T16:40:39+00:00",
+  "mode": "schema",
+  "prompt": "Return the number 7 as the value of n.",
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "live_probe",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "n": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "n"
+        ]
+      }
+    }
+  },
+  "exit_code": 0,
+  "reduced": "1770 events captured; kept the init event (type/subtype/model) and every result event, which is all the parser reads"
+}

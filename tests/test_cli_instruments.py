@@ -529,3 +529,23 @@ def test_live_failure_reports_the_first_failed_mode() -> None:
         "plain", "TRANSIENT",
     )
     assert live_failure({**base, "schema": {"ok": False, "exit_code": 1}}) == ("schema", "exit 1")
+
+
+def test_live_record_writes_replayable_fixture(tmp_path) -> None:
+    """--record keeps the raw bytes, the exit code and the CLI version."""
+    import json as _json
+
+    profile = _script_profile(tmp_path, "rec", 'cat >/dev/null; echo ok; echo note >&2')
+    out = tmp_path / "caps"
+    with patch(
+        "marianne.cli.commands.instruments._load_all_profiles",
+        return_value={profile.name: profile},
+    ):
+        result = runner.invoke(
+            app, ["instruments", "check", "rec", "--live", "--record", str(out), "--timeout", "30"],
+        )
+    assert result.exit_code == 0, result.output
+    assert (out / "rec" / "plain.stdout").read_bytes() == b"ok\n"
+    assert (out / "rec" / "plain.stderr").read_bytes() == b"note\n"
+    meta = _json.loads((out / "rec" / "plain.json").read_text())
+    assert meta["exit_code"] == 0 and meta["mode"] == "plain" and meta["cli_version"]

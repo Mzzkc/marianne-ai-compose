@@ -1484,6 +1484,7 @@ Provides detailed information about a single instrument: binary location, capabi
 | `--live` | | false | Run one real prompt through the same backend the conductor uses, and one schema-mode prompt when the profile declares `json_schema_flag`. Reports pass/fail, wall time and the classification the baton would act on (`INSTRUMENT_UNAVAILABLE`, `RATE_LIMITED`, `TRANSIENT`, …). Readiness proves the binary is on PATH; `--live` proves the profile works against the installed CLI. Exits 1 on failure. Spends one or two model calls |
 | `--model` | | profile default | Model for `--live` |
 | `--timeout` | | 180 | Seconds per `--live` call |
+| `--record DIR` | | | With `--live`: write each call's raw stdout, stderr, exit code and the CLI's `--version` to `DIR/<instrument>/<mode>.*`. Use it to capture parser fixtures from the CLI actually installed (`tests/fixtures/cli_captures/` holds Claude Code's) and re-record after a CLI upgrade |
 
 #### Examples
 
