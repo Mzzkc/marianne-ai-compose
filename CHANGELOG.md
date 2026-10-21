@@ -285,6 +285,8 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **`mzt run --dry-run` honours `--var` (examples QA, 21 Oct).** The preview rendered the YAML's placeholder values (`[CHANGE THIS]`) whatever `--var` said, so the advertised safe verification path verified nothing; the runtime-variable merge now lives in `core/config/job.py` and both the conductor's submit/resume seam and the preview apply it. V106 also warns when a `content_contains` pattern carries regex syntax (a literal no prose contains); V201 also scans validation commands for Jinja.
+
 - **A schema with `$schema` no longer breaks Claude Code schema mode (GH #479).** `claude -p --json-schema` exits 1 on a schema whose top level carries `$schema` (it tries to resolve the draft URL); the CLI backend now drops top-level `$schema` and `$id` before building the argument, and the `instruments check --live` probe schema carries a `$schema` so the probe fails the way a sheet would if the strip regressed.
 
 - **`mzt validate` no longer re-parses every instrument profile a dozen times.** The profile loader parsed each YAML with PyYAML's pure-Python parser (~35 ms per profile) and every validator that asked for profiles loaded them all again, so a host with 50 personal profiles paid ~20 s per validate and the suite's validate-driven tests tripped their 30 s timeouts under load (the #308 solver's final verification failed its conductor-side suite three times on exactly those). The loader uses the C SafeLoader (same semantics) and memoises each file on (path, mtime, size): the same bytes parse once per process, an edited profile is re-read, hot reload and `instruments check` are unchanged. simple-sheet validate: 24 s → 0.8 s on that host.

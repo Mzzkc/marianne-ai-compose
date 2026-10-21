@@ -348,6 +348,25 @@ class TestRunCommand:
         assert "Dry run" in result.stdout
         assert "Sheet Plan" in result.stdout
 
+    def test_run_dry_run_renders_var_overrides(self, tmp_path: Path) -> None:
+        """The preview renders the score the conductor would run: --var merges (#359)."""
+        score = tmp_path / "var.yaml"
+        score.write_text(
+            "name: var-preview\n"
+            f"workspace: {tmp_path / 'ws'}\n"
+            "instrument: claude-code\n"
+            "sheet: {size: 1, total_items: 1}\n"
+            "prompt:\n"
+            "  variables: {topic: '[CHANGE THIS]'}\n"
+            "  template: 'Topic is {{ topic }}'\n"
+        )
+        result = runner.invoke(
+            app, ["run", str(score), "--dry-run", "--var", "topic=Flask deployment"],
+        )
+        assert result.exit_code == 0, result.stdout
+        assert "Flask deployment" in result.stdout
+        assert "[CHANGE THIS]" not in result.stdout
+
     def test_run_shows_config_panel(self, sample_yaml_config: Path) -> None:
         """Test run command displays configuration panel."""
         result = runner.invoke(app, ["run", str(sample_yaml_config), "--dry-run"])

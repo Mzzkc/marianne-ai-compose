@@ -39,6 +39,7 @@ from marianne.core.checkpoint import (
 from marianne.core.config.classes import InstrumentResolution
 from marianne.core.config.flow import ConcertTrigger
 from marianne.core.config.job import JobConfig as ConcreteJobConfig
+from marianne.core.config.job import merge_runtime_variables
 from marianne.core.config.spec import SpecCorpusConfig
 from marianne.core.config.workspace import sanitize_workspace_name
 from marianne.core.constants import STATE_DB_FILENAME
@@ -404,16 +405,10 @@ def _merge_runtime_variables(
     Module-level (not a method) so the single first-run/resume seam can
     never be shadowed by a selectively-mocked manager — calling it via
     ``self.`` on a MagicMock returns a mock and silently rewrites config
-    (the mock-binding trap). CLI variables override YAML on key collision
-    (the documented make/terraform contract). No-op when empty.
+    (the mock-binding trap). The primitive lives in core so ``mzt run
+    --dry-run`` renders the same merge the conductor applies.
     """
-    if not runtime_variables:
-        return config
-    merged = dict(config.prompt.variables)
-    merged.update(runtime_variables)
-    return config.model_copy(
-        update={"prompt": config.prompt.model_copy(update={"variables": merged})}
-    )
+    return merge_runtime_variables(config, runtime_variables)
 
 
 async def _setup_worktree_isolation(

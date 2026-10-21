@@ -76,7 +76,7 @@ Usage: mzt run [OPTIONS] CONFIG_FILE
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--dry-run` | `-n` | false | Show what would be executed without running |
+| `--dry-run` | `-n` | false | Show what would be executed without running. The preview renders with any `--var` overrides merged, exactly as the conductor would run the score |
 | `--start-sheet` | `-s` | | Override starting sheet number |
 | `--json` | `-j` | false | Output result as JSON for machine parsing |
 | `--escalation` | `-e` | false | Pause sheets in FERMATA on retry exhaustion for a composer decision; resolve with `mzt resolve`. Works without `--self-healing` |
@@ -585,7 +585,7 @@ code-registry and corpus-sweep tests.
 | WARNING | V101 | Template references a variable the score never declares (and no built-in provides) |
 | WARNING | V102 | `\| string` filter applied to a subscript of an int-keyed variable dict |
 | WARNING | V103 | Sheet or instrument timeout outside the reasonable range (V103/V104) |
-| WARNING | V106 | Empty pattern in a `content_contains`/`content_regex` validation |
+| WARNING | V106 | Empty pattern in a `content_contains`/`content_regex` validation, or regex syntax (`[Pp]x`, `A\|B`, `\s`) in a `content_contains` pattern, which is matched as a literal substring |
 | WARNING | V109 | A cadenza reads a file a later sheet produces |
 | WARNING | V201 | Jinja `{{ }}` syntax inside a validation path or command (they are format strings, never rendered) |
 | WARNING | V202 | Python format-string (`%s`, `{x}`) syntax inside a Jinja template |

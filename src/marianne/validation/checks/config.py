@@ -446,8 +446,18 @@ class VersionReferenceCheck:
         return issues
 
 
+_REGEX_SYNTAX = re.compile(r"\\\||\[[A-Za-z]{2}\]|\\[sdwSDWb]|\(\?|\.\*|\|")
+
+
 class EmptyPatternCheck:
-    """Check for empty patterns in validations (V106)."""
+    """Check content patterns that cannot match (V106).
+
+    An empty pattern matches anything. A ``content_contains`` pattern that
+    carries regex syntax (``[Pp]remise``, ``A\\|B``, ``foo|bar``, ``\\s``)
+    is tested as a literal substring, so it matches nothing the prompt asked
+    for: 63 such rules across two research examples failed every honest
+    report (examples QA, 21 Oct, GH #480).
+    """
 
     @property
     def check_id(self) -> str:
@@ -459,7 +469,7 @@ class EmptyPatternCheck:
 
     @property
     def description(self) -> str:
-        return "Checks for empty patterns in content validations"
+        return "Checks for empty or regex-shaped content_contains patterns"
 
     def check(
         self,
@@ -486,6 +496,32 @@ class EmptyPatternCheck:
                         suggestion="Add a meaningful pattern or remove this validation",
                         metadata={
                             "validation_index": str(i),
+                        },
+                    )
+                )
+            elif (
+                validation.type == "content_contains"
+                and validation.pattern is not None
+                and _REGEX_SYNTAX.search(validation.pattern)
+            ):
+                issues.append(
+                    ValidationIssue(
+                        check_id=self.check_id,
+                        severity=self.severity,
+                        message=(
+                            f"content_contains pattern in validation rule {i + 1} carries "
+                            f"regex syntax but is matched as a literal substring: "
+                            f"{validation.pattern!r}"
+                        ),
+                        line=find_line_in_yaml(raw_yaml, validation.pattern),
+                        context=validation.pattern,
+                        suggestion=(
+                            "Use content_regex for a pattern, or the exact text for "
+                            "content_contains"
+                        ),
+                        metadata={
+                            "validation_index": str(i),
+                            "pattern": validation.pattern,
                         },
                     )
                 )

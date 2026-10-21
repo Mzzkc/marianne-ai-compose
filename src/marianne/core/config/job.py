@@ -1548,3 +1548,23 @@ class JobConfig(BaseModel):
         identifier.
         """
         return self.instrument or DEFAULT_INSTRUMENT_NAME
+
+
+def merge_runtime_variables(
+    config: JobConfig, runtime_variables: dict[str, str],
+) -> JobConfig:
+    """Merge per-invocation ``--var`` variables into ``prompt.variables`` (#359).
+
+    CLI variables override YAML on key collision (the documented
+    make/terraform contract). No-op when empty. The daemon applies this at
+    submit and resume; ``mzt run --dry-run`` applies the same seam so the
+    preview renders the score the conductor would run (examples QA, 21 Oct:
+    the preview ignored ``--var`` and showed `[CHANGE THIS]` placeholders).
+    """
+    if not runtime_variables:
+        return config
+    merged = dict(config.prompt.variables)
+    merged.update(runtime_variables)
+    return config.model_copy(
+        update={"prompt": config.prompt.model_copy(update={"variables": merged})}
+    )

@@ -953,6 +953,37 @@ class TestEmptyPatternCheck:
 
         assert len(issues) == 0
 
+    def test_regex_syntax_in_content_contains_warns(self, tmp_path: Path) -> None:
+        """GH #480: `[Pp]remise` in content_contains is a literal nothing contains."""
+        from marianne.validation.checks.config import EmptyPatternCheck
+        yaml_content = dedent("""
+            name: test-job
+            sheet:
+              size: 1
+              total_items: 1
+            prompt:
+              template: "x"
+            validations:
+              - type: content_contains
+                path: "{workspace}/out.md"
+                pattern: "[Pp]remise"
+              - type: content_contains
+                path: "{workspace}/out.md"
+                pattern: "A\\\\|B"
+              - type: content_regex
+                path: "{workspace}/out.md"
+                pattern: "[Pp]remise"
+              - type: content_contains
+                path: "{workspace}/out.md"
+                pattern: "## Premise"
+        """).strip()
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text(yaml_content)
+        config = JobConfig.from_yaml(config_path)
+        issues = EmptyPatternCheck().check(config, config_path, yaml_content)
+        assert [i.metadata["validation_index"] for i in issues] == ["0", "1"]
+        assert all(i.check_id == "V106" for i in issues)
+
     def test_non_empty_pattern_passes(self, tmp_path: Path) -> None:
         """Validation with non-empty pattern is fine."""
         from marianne.validation.checks.config import EmptyPatternCheck

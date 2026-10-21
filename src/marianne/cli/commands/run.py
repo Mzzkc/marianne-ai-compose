@@ -236,6 +236,11 @@ def run(
         )
 
     if dry_run:
+        # The preview renders the score the conductor would run: --var merges
+        # through the same seam the daemon applies at submit (#359).
+        from marianne.core.config.job import merge_runtime_variables
+
+        config = merge_runtime_variables(config, runtime_vars or {})
         if not json_output:
             console.print("\n[yellow]Dry run - not executing[/yellow]")
             _show_dry_run(config, config_file)
