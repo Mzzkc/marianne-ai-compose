@@ -44,6 +44,7 @@ from marianne.validation.checks import (
     PromptValidationContractCheck,
     RegexPatternCheck,
     ReservedKeyUseCheck,
+    SchemaSheetInteractiveCheck,
     SkipWhenSheetRangeCheck,
     TechniqueMcpInstrumentCheck,
     TechniqueSkillPathCheck,
@@ -243,6 +244,7 @@ def create_default_checks() -> list[ValidationCheck]:
         AliasShadowsClassCheck(),
         ClassModelConfigCheck(),
         AliasSelectCheck(),
+        SchemaSheetInteractiveCheck(),
         ClassesFileValidCheck(),
         ClassChainSummaryCheck(),
         # Best-practice checks

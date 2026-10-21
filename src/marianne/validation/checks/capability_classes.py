@@ -652,6 +652,93 @@ class AliasSelectCheck:
         return issues
 
 
+class SchemaSheetInteractiveCheck:
+    """V331 (WARNING): a schema sheet would run interactively (GH #478).
+
+    A sheet with ``instrument_config.response_format`` needs a headless
+    backend (HTTP, or a CLI with ``json_schema_flag``); the interactive tmux
+    backend cannot enforce a schema and dispatch refuses it (adapter
+    "cannot enforce instrument_config.response_format"). Score silence on
+    ``interactive`` resolves to the profile's ``cli.interactive.
+    enabled_by_default`` — true for claude-code and antigravity — so a
+    schema sheet that does not say ``interactive: false`` passes V311 (the
+    profile CAN enforce, headless) and fails at sheet 1. This names the
+    sheet before the run.
+    """
+
+    @property
+    def check_id(self) -> str:
+        return "V331"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return "Warns when a response_format sheet resolves to interactive execution"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,  # noqa: ARG002 (protocol shape)
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        ctx = _load_context()
+        if ctx is None:
+            return []
+        try:
+            from marianne.core.sheet import build_sheets
+
+            used = ctx.used_classes(config)
+            snapshot = ctx.class_map.snapshot(set(used)) if used else None
+            sheets = build_sheets(config, classes=snapshot)
+        except Exception:  # noqa: BLE001 — an unbuildable score is another check's finding
+            return []
+        issues: list[ValidationIssue] = []
+        seen: set[str] = set()
+        for sheet in sheets:
+            cfg = sheet.instrument_config
+            if cfg.get("response_format") is None or cfg.get("interactive") is not None:
+                continue
+            profile = ctx.profiles.get(sheet.instrument_name)
+            if (
+                profile is None or profile.kind != "cli" or profile.cli is None
+                or profile.cli.interactive is None
+                or not profile.cli.interactive.enabled_by_default
+            ):
+                continue
+            key = f"{sheet.instrument_name}:{sheet.movement}"
+            if key in seen:
+                continue
+            seen.add(key)
+            issues.append(
+                ValidationIssue(
+                    check_id=self.check_id,
+                    severity=self.severity,
+                    message=(
+                        f"sheet {sheet.num} (movement {sheet.movement}) sets "
+                        f"response_format on '{sheet.instrument_name}', whose "
+                        "profile runs interactively by default; the interactive "
+                        "backend cannot enforce a schema and dispatch refuses the "
+                        "sheet"
+                    ),
+                    line=find_line_in_yaml(raw_yaml, "response_format:"),
+                    context=sheet.instrument_name,
+                    suggestion=(
+                        "set `interactive: false` in that sheet's instrument_config "
+                        "(score, movement, per-sheet or alias scope), or drop "
+                        "response_format"
+                    ),
+                    metadata={
+                        "sheet_num": str(sheet.num),
+                        "instrument": sheet.instrument_name,
+                    },
+                ),
+            )
+        return issues
+
+
 class ClassModelConfigCheck:
     """V323 (ERROR): a model set in instrument_config against a class primary (V-CLS-06).
 

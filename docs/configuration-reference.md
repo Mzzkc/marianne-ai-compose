@@ -100,8 +100,11 @@ For headless CLI profiles, schema mode requires `type: json_schema` and a
 profile-declared `cli.command.json_schema_flag`. Marianne passes the schema to
 that flag and validates the returned structured JSON against it. An unsupported
 profile or format fails explicitly. Interactive CLI execution does not provide
-this schema contract. These are different carriers for structured output, not
-interchangeable provider flags.
+this schema contract, and score silence on `interactive` selects the profile's
+`cli.interactive.enabled_by_default` — true for `claude-code` and `antigravity` —
+so a schema sheet on those profiles must say `interactive: false` in some merged
+scope or dispatch refuses it; `mzt validate` warns V331 first (GH #478). These
+are different carriers for structured output, not interchangeable provider flags.
 
 ---
 

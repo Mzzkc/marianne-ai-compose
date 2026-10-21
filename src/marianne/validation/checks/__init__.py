@@ -25,6 +25,7 @@ from marianne.validation.checks.capability_classes import (
     ClassesFileValidCheck,
     ClassModelConfigCheck,
     ClassNameResolutionCheck,
+    SchemaSheetInteractiveCheck,
 )
 from marianne.validation.checks.cli import (
     CliRawPromptBashCheck,
@@ -104,6 +105,7 @@ __all__ = [
     "ClassAliasProfileCheck",
     "AliasShadowsClassCheck",
     "AliasSelectCheck",
+    "SchemaSheetInteractiveCheck",
     "ClassModelConfigCheck",
     "ClassesFileValidCheck",
     "ClassChainSummaryCheck",
