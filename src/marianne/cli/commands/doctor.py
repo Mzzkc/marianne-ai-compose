@@ -492,6 +492,14 @@ def doctor(
         help="Delete storage-hygiene findings (dead nested state tree, "
         "stale one-off backups) after explicit confirmation (#352).",
     ),
+    live: bool = typer.Option(
+        False,
+        "--live",
+        help="Also run one real prompt through every ready agent instrument "
+        "(and one schema-mode prompt where the profile declares "
+        "json_schema_flag), the same check as `mzt instruments check --live`. "
+        "Proves each profile against its installed CLI; spends model calls.",
+    ),
 ) -> None:
     """Check Marianne environment health.
 
@@ -624,6 +632,31 @@ def doctor(
             "rate_limited": is_rate_limited,
             "rate_limit_seconds_remaining": limit_seconds,
         })
+
+    if live:
+        from marianne.cli.commands.instruments import live_failure, live_probe
+
+        live_ready = 0
+        for row in instrument_results:
+            if row["probe"] != "ready" or not row["execution_ready"]:
+                continue
+            profile = all_profiles[row["name"]]
+            if profile.raw_prompt:
+                continue
+            report = live_probe(profile, timeout=150.0)
+            row["live"] = report
+            if report["ok"]:
+                live_ready += 1
+                continue
+            row["status"] = "warning"
+            mode, reason = live_failure(report) or ("plain", "unknown")
+            row["detail"] = f"{row['detail']} — live {mode} probe failed: {reason}"
+            warnings.append(f"Instrument {profile.name} failed its live {mode} probe ({reason})")
+        if ready_count and live_ready == 0:
+            errors.append(
+                "No instrument passed its live probe: every ready instrument failed "
+                "a real prompt. Run `mzt instruments check <name> --live` for detail."
+            )
 
     # "Marianne is ready" means a score can run: at least one agent instrument
     # is runnable now. Zero runnable instruments is an error, not a warning —

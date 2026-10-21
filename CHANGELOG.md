@@ -68,6 +68,18 @@ an alias over an existing profile; archive what nothing names.
 
 ### Added
 
+- **`mzt instruments check NAME --live` and `mzt doctor --live`.** A profile
+  could validate, its binary sit on PATH, and every dispatch still fail:
+  a flag the installed CLI rejects (crush `--yolo`, since April), an
+  output shape the parser cannot read (Claude Code's verbose event array),
+  a provider that is not configured. `--live` sends one real prompt through
+  the conductor's own backend factory (plus a schema-mode prompt when the
+  profile declares `json_schema_flag`) and reports what a sheet would see,
+  classified by the baton's own classifier. First run on Pallas: claude-code
+  plain and schema ok; codex-cli, opencode, opencode-glm-5.3-flash, goose,
+  antigravity ok; crush rate-limited by its free provider; gemini-cli
+  unavailable (#469).
+
 - **`mzt run --require-lock LOCK` (GH #403).** An opt-in admission gate: the
   conductor verifies the composition lock the release gate wrote
   (`check_score_release.py --write-lock`) against the exact score bytes it is

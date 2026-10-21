@@ -12,7 +12,7 @@ plays a test note.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypedDict
 
 import typer
 from rich.table import Table
@@ -276,6 +276,22 @@ def check_instrument(
         "--json",
         help="Output as JSON",
     ),
+    live: bool = typer.Option(
+        False,
+        "--live",
+        help=(
+            "Run one real prompt through the same backend the conductor uses "
+            "(and one schema-mode prompt when the profile declares "
+            "json_schema_flag). Proves the profile against the installed CLI, "
+            "not just its schema. Spends one or two model calls."
+        ),
+    ),
+    model: str | None = typer.Option(
+        None, "--model", help="Model for --live (default: the profile's default_model)",
+    ),
+    timeout: float = typer.Option(
+        180.0, "--timeout", help="Seconds per --live call", min=5.0,
+    ),
 ) -> None:
     """Check readiness and configuration of a specific instrument."""
     profiles = _load_all_profiles()
@@ -296,10 +312,186 @@ def check_instrument(
 
     profile = profiles[name]
 
+    if live:
+        report = live_probe(profile, model=model, timeout=timeout)
+        if json_output:
+            output_json(report)
+        else:
+            _live_rich(report)
+        if not report["ok"]:
+            raise typer.Exit(1)
+        return
+
     if json_output:
         _check_json(profile)
     else:
         _check_rich(profile)
+
+
+class LiveCall(TypedDict, total=False):
+    """One real prompt through the conductor's backend factory."""
+
+    ok: bool
+    seconds: float
+    exit_code: int | None
+    error_type: str | None
+    classification: str | None
+    error_code: str | None
+    error: str | None
+    output_head: str
+    structured_ok: bool
+
+
+class LiveReport(TypedDict):
+    """`mzt instruments check --live` / `mzt doctor --live` result."""
+
+    name: str
+    model: str | None
+    availability: str
+    plain: LiveCall
+    schema: LiveCall | None
+    ok: bool
+
+
+def live_failure(report: LiveReport) -> tuple[str, str] | None:
+    """(mode, reason) of the first failed call, or None when the probe passed."""
+    for mode in ("plain", "schema"):
+        call = report["plain"] if mode == "plain" else report["schema"]
+        if call is None or call.get("ok"):
+            continue
+        reason = (
+            call.get("classification")
+            or call.get("error")
+            or f"exit {call.get('exit_code')}"
+        )
+        return mode, str(reason)
+    return None
+
+
+_LIVE_SCHEMA: dict[str, object] = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "live_probe",
+        "schema": {
+            "type": "object",
+            "properties": {"n": {"type": "integer"}},
+            "required": ["n"],
+        },
+    },
+}
+
+
+def live_probe(
+    profile: InstrumentProfile, *, model: str | None = None, timeout: float = 180.0,
+) -> LiveReport:
+    """Exercise ``profile`` against the installed instrument, end to end.
+
+    The probe builds the backend through the conductor's own factory and
+    classifies each result with the baton's own classifier, so what it
+    reports is what a sheet would see: success, the error bucket the chain
+    would act on, the wall time, and (in schema mode) whether the validated
+    object came back. A profile can pass schema validation and still fail
+    every dispatch: a flag the installed CLI rejects, an output shape the
+    parser does not read, a provider that is not configured. This is the
+    check that catches those.
+    """
+    import asyncio
+    import tempfile
+    import time
+    from pathlib import Path
+
+    from marianne.daemon.baton.backend_pool import _create_backend_for_profile
+    from marianne.daemon.baton.musician import _classify_error
+
+    def _one(prompt: str, response_format: dict[str, object] | None) -> LiveCall:
+        with tempfile.TemporaryDirectory(prefix="mzt-live-probe-") as wd:
+            started = time.monotonic()
+            try:
+                backend = _create_backend_for_profile(
+                    profile, working_directory=Path(wd), model=model,
+                )
+                if response_format is not None:
+                    backend.set_response_format(response_format)  # type: ignore[attr-defined]
+                result = asyncio.run(backend.execute(prompt, timeout_seconds=timeout))
+            except Exception as exc:  # noqa: BLE001 — the probe reports any failure as data
+                return {
+                    "ok": False,
+                    "seconds": round(time.monotonic() - started, 2),
+                    "classification": "PROBE_ERROR",
+                    "error": f"{type(exc).__name__}: {exc}"[:300],
+                }
+            cls = _classify_error(result)
+            row: LiveCall = {
+                "ok": bool(result.success),
+                "seconds": round(time.monotonic() - started, 2),
+                "exit_code": result.exit_code,
+                "error_type": result.error_type,
+                "classification": (
+                    "RATE_LIMITED" if result.rate_limited and not result.success
+                    else cls.classification
+                ),
+                "error_code": cls.error_code,
+                "error": (result.error_message or "")[:300] or None,
+                "output_head": (result.stdout or "")[:120],
+            }
+            return row
+
+    plain = _one("Reply with exactly the word: ok", None)
+    ok = bool(plain["ok"])
+    schema: LiveCall | None = None
+    schema_capable = (
+        profile.kind == "http"
+        or (
+            profile.cli is not None
+            and profile.cli.command.json_schema_flag is not None
+        )
+    )
+    if schema_capable:
+        schema = _one("Return the number 7 as the value of n.", _LIVE_SCHEMA)
+        if schema.get("ok"):
+            import json as _json
+
+            try:
+                schema["structured_ok"] = (
+                    _json.loads(str(schema.get("output_head", ""))) == {"n": 7}
+                )
+            except ValueError:
+                schema["structured_ok"] = False
+            schema["ok"] = bool(schema["structured_ok"])
+        ok = ok and bool(schema.get("ok"))
+    return {
+        "name": profile.name,
+        "model": model or profile.default_model,
+        "availability": probe_profile(profile).state,
+        "plain": plain,
+        "schema": schema,
+        "ok": ok,
+    }
+
+
+def _live_rich(report: LiveReport) -> None:
+    console.print(
+        f"\nLive probe [cyan]{report['name']}[/cyan] "
+        f"(model: {report['model'] or 'instrument default'}, "
+        f"availability: {report['availability']})"
+    )
+    for label in ("plain", "schema"):
+        row = report["plain"] if label == "plain" else report["schema"]
+        if row is None:
+            console.print("  schema:  [dim]not declared (no json_schema_flag)[/dim]")
+            continue
+        mark = "[green]✓[/green]" if row.get("ok") else "[red]✗[/red]"
+        detail = (
+            f"{row.get('seconds')}s"
+            if row.get("ok")
+            else f"{row.get('seconds')}s {row.get('classification')} {row.get('error') or ''}"
+        )
+        console.print(f"  {label + ':':8} {mark} {detail}")
+    console.print(
+        f"[green]{report['name']} passed the live probe.[/green]"
+        if report["ok"]
+        else f"[red]{report['name']} failed the live probe.[/red]"
+    )
 
 
 def _check_rich(profile: InstrumentProfile) -> None:

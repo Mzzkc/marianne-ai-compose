@@ -971,6 +971,7 @@ Validates that your environment is ready to run Marianne scores. Checks Python v
 |--------|-------|---------|-------------|
 | `--json` | | false | Output results as JSON |
 | `--clean` | | false | Delete storage-hygiene findings after explicit confirmation |
+| `--live` | | false | Also run `instruments check --live` on every ready agent instrument. A failed probe becomes a warning naming the mode and classification; no instrument passing is an error. Spends model calls; use it after installing or upgrading a CLI, or before a long run |
 
 #### Checks Performed
 
@@ -1480,12 +1481,18 @@ Provides detailed information about a single instrument: binary location, capabi
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--json` | | false | Output as JSON |
+| `--live` | | false | Run one real prompt through the same backend the conductor uses, and one schema-mode prompt when the profile declares `json_schema_flag`. Reports pass/fail, wall time and the classification the baton would act on (`INSTRUMENT_UNAVAILABLE`, `RATE_LIMITED`, `TRANSIENT`, …). Readiness proves the binary is on PATH; `--live` proves the profile works against the installed CLI. Exits 1 on failure. Spends one or two model calls |
+| `--model` | | profile default | Model for `--live` |
+| `--timeout` | | 180 | Seconds per `--live` call |
 
 #### Examples
 
 ```bash
 # Check a specific instrument
 mzt instruments check gemini-cli
+
+# Prove the profile end to end (a real prompt, plus schema mode if declared)
+mzt instruments check claude-code --live
 
 # JSON output
 mzt instruments check claude-code --json

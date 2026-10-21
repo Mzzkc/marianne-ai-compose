@@ -723,3 +723,53 @@ class TestConductorProbeBusy:
             ),
         ):
             assert doctor._check_conductor_status() == ("not running", None)
+
+
+class TestDoctorLive:
+    """`mzt doctor --live` runs the live probe on every ready agent instrument
+    and turns a failed probe into a named warning."""
+
+    def test_failed_live_probe_becomes_a_warning(self) -> None:
+        import importlib
+        import json as _json
+
+        doctor_mod = importlib.import_module("marianne.cli.commands.doctor")
+
+        def fake_probe(profile, **_kw):  # noqa: ANN001, ANN003
+            ok = profile.name != "broken"
+            return {
+                "name": profile.name, "model": None, "availability": "ready",
+                "plain": {"ok": ok, "classification": None if ok else "TRANSIENT",
+                          "exit_code": 0 if ok else 1},
+                "schema": None, "ok": ok,
+            }
+
+        from marianne.core.config.instruments import (
+            CliCommand,
+            CliOutputConfig,
+            CliProfile,
+            InstrumentProfile,
+        )
+
+        def _p(name: str) -> InstrumentProfile:
+            return InstrumentProfile(
+                name=name, display_name=name, kind="cli",
+                cli=CliProfile(
+                    command=CliCommand(executable="sh"), output=CliOutputConfig(format="text"),
+                ),
+            )
+
+        profiles = {"good": _p("good"), "broken": _p("broken")}
+        with (
+            patch.object(doctor_mod, "_check_conductor_status", return_value=("not running", None)),
+            patch.object(doctor_mod, "_get_all_profiles", return_value=profiles),
+            patch("marianne.cli.commands.instruments.live_probe", side_effect=fake_probe),
+        ):
+            result = runner.invoke(app, ["doctor", "--live", "--json"])
+        start = result.output.find("{")
+        report, _ = _json.JSONDecoder().raw_decode(result.output[start:])
+        names = {r["name"]: r for r in report["instruments"]}
+        assert names["good"]["live"]["ok"] is True
+        assert names["broken"]["status"] == "warning"
+        assert "live plain probe failed: TRANSIENT" in names["broken"]["detail"]
+        assert report["warnings_count"] >= 1

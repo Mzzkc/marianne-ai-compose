@@ -443,3 +443,89 @@ class TestInstrumentsCheck:
 
         assert result.exit_code == 1
         assert "no server answered" in result.output
+
+
+# ---------------------------------------------------------------------------
+# mzt instruments check --live: the profile against the installed binary
+# ---------------------------------------------------------------------------
+
+
+def _script_profile(tmp_path, name: str, body: str, *, schema_flag: str | None = None,
+                    fmt: str = "text") -> InstrumentProfile:
+    script = tmp_path / f"{name}.sh"
+    script.write_text("#!/bin/sh\n" + body + "\n")
+    script.chmod(0o755)
+    return InstrumentProfile(
+        name=name, display_name=name, kind="cli", capabilities={"tool_use"},
+        cli=CliProfile(
+            command=CliCommand(
+                executable=str(script), prompt_flag="-p", json_schema_flag=schema_flag,
+            ),
+            output=CliOutputConfig(format=fmt, result_path="result" if fmt == "json" else None),
+        ),
+    )
+
+
+class TestInstrumentsCheckLive:
+    def _run(self, profile: InstrumentProfile):
+        import json as _json
+
+        with patch(
+            "marianne.cli.commands.instruments._load_all_profiles",
+            return_value={profile.name: profile},
+        ):
+            result = runner.invoke(
+                app, ["instruments", "check", profile.name, "--live", "--json", "--timeout", "30"],
+            )
+        out = result.output
+        start = out.find("{\n")
+        assert start >= 0, f"no JSON object in output: {out[:400]!r}"
+        report, _ = _json.JSONDecoder().raw_decode(out[start:])
+        return result, report
+
+    def test_working_cli_passes(self, tmp_path) -> None:
+        result, report = self._run(_script_profile(tmp_path, "good", 'cat >/dev/null; echo ok'))
+        assert result.exit_code == 0, result.output
+        assert report["ok"] is True and report["plain"]["ok"] is True
+        assert report["schema"] is None
+
+    def test_rejected_flag_fails_with_the_cli_words(self, tmp_path) -> None:
+        """The crush --yolo shape: the binary is on PATH, the profile validates,
+        and every call dies before reaching a provider."""
+        body = 'echo "ERROR Unknown flag: --yolo." >&2; exit 1'
+        result, report = self._run(_script_profile(tmp_path, "badflag", body))
+        assert result.exit_code == 1
+        assert report["ok"] is False and report["plain"]["ok"] is False
+        assert report["plain"]["exit_code"] == 1
+
+    def test_schema_mode_proves_structured_output(self, tmp_path) -> None:
+        body = 'cat >/dev/null; echo \'{"type":"result","result":"x","structured_output":{"n":7}}\''
+        profile = _script_profile(tmp_path, "schema", body, schema_flag="--json-schema", fmt="json")
+        result, report = self._run(profile)
+        assert result.exit_code == 0, result.output
+        assert report["schema"]["ok"] is True and report["schema"]["structured_ok"] is True
+
+    def test_schema_mode_catches_unread_output_shape(self, tmp_path) -> None:
+        """The Claude Code verbose shape before the fix: the flag is declared
+        but the parser cannot find structured_output."""
+        body = 'cat >/dev/null; echo \'{"type":"result","result":"x"}\''
+        profile = _script_profile(
+            tmp_path, "noshape", body, schema_flag="--json-schema", fmt="json",
+        )
+        result, report = self._run(profile)
+        assert result.exit_code == 1
+        assert report["plain"]["ok"] is True and report["schema"]["ok"] is False
+
+
+def test_live_failure_reports_the_first_failed_mode() -> None:
+    from marianne.cli.commands.instruments import LiveReport, live_failure
+
+    base: LiveReport = {
+        "name": "x", "model": None, "availability": "ready",
+        "plain": {"ok": True}, "schema": None, "ok": True,
+    }
+    assert live_failure(base) is None
+    assert live_failure({**base, "plain": {"ok": False, "classification": "TRANSIENT"}}) == (
+        "plain", "TRANSIENT",
+    )
+    assert live_failure({**base, "schema": {"ok": False, "exit_code": 1}}) == ("schema", "exit 1")

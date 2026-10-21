@@ -3334,7 +3334,7 @@ class TestShutdownSettledPause:
         mgr._service = MagicMock()
 
         async def waiting_for_resume():
-            await asyncio.sleep(100)
+            await asyncio.Event().wait()
 
         task = asyncio.create_task(waiting_for_resume())
         mgr._jobs["paused-job"] = task
@@ -3361,10 +3361,10 @@ class TestShutdownSettledPause:
         mgr._service = MagicMock()
 
         async def waiting_for_resume():
-            await asyncio.sleep(100)
+            await asyncio.Event().wait()
 
         async def musician():
-            await asyncio.sleep(100)
+            await asyncio.Event().wait()
 
         musician_task = asyncio.create_task(musician())
         adapter = MagicMock()
