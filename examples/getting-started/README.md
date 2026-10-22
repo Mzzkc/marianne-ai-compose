@@ -48,7 +48,7 @@ Runs a project health assessment while teaching you Marianne's observability too
 
 ### worktree-isolation.yaml — Parallel Execution Without Conflicts
 
-Three code reviewers (quality, correctness, security) work simultaneously on the same codebase without interfering with each other by executing in isolated git worktrees. Each reviewer gets a private copy of the repo for inspection. Shows how worktree isolation enables true parallel execution when agents need to read or modify shared workspace state.
+Three code reviewers (quality, correctness, security) work simultaneously on the same codebase without touching your working tree: the job runs in one detached git worktree of the repository at `workspace` (parallel sheets share it, which is safe for reviewers that read). The repository gets a private checkout for inspection. Shows how worktree isolation enables true parallel execution when agents need to read or modify shared workspace state.
 
 ## Quick Start
 

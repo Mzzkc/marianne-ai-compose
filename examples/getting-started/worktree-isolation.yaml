@@ -3,10 +3,14 @@
 # Category: getting-started/ — First experience, minimal scores
 #
 # Demonstrates how worktree isolation enables parallel-safe code review.
-# Three expert reviewers work simultaneously in isolated git worktrees,
+# The job runs in ONE detached git worktree of the repository; three expert
+# reviewers read it in parallel (they inspect, they do not write), so the
+# repository you are reviewing is never touched and the reviewers never
+# collide. One worktree per JOB is what the runtime provides (#197) —
+# not one per reviewer.
 # each examining your codebase from a different perspective — quality,
-# correctness, and security. Because each reviewer operates in its own
-# worktree, they can inspect and even modify code without interfering
+# correctness, and security. Because the whole job operates in a worktree,
+# reviewers can inspect the code without interfering
 # with each other.
 #
 # This is the primary example for Marianne's worktree isolation feature.
@@ -15,15 +19,15 @@
 #        |
 #        +----+----+----+
 #        v    v    v
-#   Movement 2 x3: Expert Reviews (3 voices, parallel in isolated worktrees)
+#   Movement 2 x3: Expert Reviews (3 voices, parallel in the job's worktree)
 #        |    |    |
 #        +----+----+
 #             v
 #   Movement 3: Unified Report (1 sheet)
 #
 # Key benefits of worktree isolation:
-# - True parallel execution: Multiple agents can read/modify code without conflicts
-# - Clean validation: Each agent's changes are isolated from others
+# - True parallel execution: multiple agents read the same checkout without conflicts
+# - Clean separation: nothing the reviewers do reaches your working tree
 # - Fast isolation: ~24ms overhead per worktree (negligible vs API latency)
 # - Storage efficient: Git objects are shared between worktrees
 #
@@ -54,6 +58,11 @@
 name: parallel-safe-code-review
 description: "Parallel code review in isolated worktrees — three expert perspectives with unified synthesis"
 
+# [CHANGE THIS] Worktree isolation needs a GIT REPOSITORY here: the runtime
+# creates the job's worktree FROM this path and runs every sheet inside that
+# worktree, so the review reports land in the worktree, not in this
+# directory. Point it at the checkout you want reviewed. A non-git path
+# cannot be isolated; fallback_on_error below makes that fail loudly.
 workspace: ../../workspaces/review-workspace
 
 # `strong` keeps multi-step judgment on a frontier-capable chain; prefer yours in classes.yaml.
@@ -70,9 +79,9 @@ instrument_config:
   timeout_seconds: 600
 
 # ─── Worktree Isolation Configuration ───────────────────────────
-# When enabled, each sheet runs in an isolated git worktree. The git
-# repository is auto-detected from the score's location. Each parallel
-# reviewer gets its own copy of the codebase to inspect.
+# When enabled, the JOB runs in one detached git worktree created from
+# `workspace` above (the repository). Parallel sheets share that worktree
+# — fine for reviewers that read; not for sheets that write the same files.
 isolation:
   # Enable/disable isolation (default: false)
   enabled: true
@@ -94,9 +103,10 @@ isolation:
   # Lock worktree during execution to prevent accidental removal (default: true)
   lock_during_execution: true
 
-  # If worktree creation fails, continue without isolation (default: true)
-  # Set to false for strict mode where isolation is required
-  fallback_on_error: true
+  # If worktree creation fails (workspace is not a git repository, git is
+  # missing), fail the job instead of silently reviewing un-isolated: the
+  # score's whole claim is the isolation.
+  fallback_on_error: false
 
 # ─── Movement Declarations ──────────────────────────────────────
 movements:
@@ -194,7 +204,8 @@ prompt:
     {% if stage == 1 %}
     # Movement 1: Codebase Survey
 
-    You are working in an isolated git worktree of the repository.
+    You are working in a detached git worktree of the repository (the job's
+    own checkout; your working directory is its root).
     Survey the code in the `{{ source_dir }}` directory.
     The primary language is **{{ language }}**.
     Review scope: **{{ review_focus }}**.
@@ -237,7 +248,9 @@ prompt:
     {% set reviewer = reviewers[instance] %}
     # Movement 2, Voice {{ instance }}: {{ reviewer.title }}
 
-    You are a **{{ reviewer.title }}** working in an isolated git worktree.
+    You are a **{{ reviewer.title }}** working in the job's git worktree,
+    shared with two other reviewers running at the same time: read freely,
+    write only your own report file.
     Your perspective: **{{ reviewer.focus }}**.
 
     ## Context
@@ -285,9 +298,9 @@ prompt:
     {% elif stage == 3 %}
     # Movement 3: Unified Review Report
 
-    Three expert reviewers have independently analyzed the codebase.
-    Each worked in an **isolated git worktree** — their findings are
-    truly independent, making convergent findings especially significant.
+    Three expert reviewers have independently analyzed the codebase, each
+    on a different model, none seeing the others' reports — convergent
+    findings are therefore especially significant.
 
     Read all previous work:
     - {{ workspace }}/01-survey.md — Codebase overview and hotspots

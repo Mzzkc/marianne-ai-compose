@@ -90,7 +90,7 @@ prompt:
       date: "Saturday, November 22"
       time: "6:30 PM"
       guest_count: 8
-      budget: "$200 total"
+      budget_usd: 200
       kitchen: "Standard home kitchen, one oven, gas stove, no sous vide"
       vibe: "Warm, unhurried, lots of laughter. Not formal."
 
@@ -131,7 +131,8 @@ prompt:
         focus: >-
           Design the experience. Table setting, music playlist concept,
           lighting, conversation starters for early awkward moments.
-          Morgan wants to help — give them a meaningful role, not busywork.
+          A guest whose note says they want to help gets a meaningful role,
+          not busywork.
           Plan for the moment when someone inevitably ends up in the kitchen.
         output: "ambiance.md"
 
@@ -139,9 +140,10 @@ prompt:
         name: "logistics"
         title: "Timeline & Logistics"
         focus: >-
-          Build backward from 6:30 PM Saturday. Shopping list with store
+          Build backward from the party's start time. Shopping list with store
           sections. Prep timeline (what can be done Thursday, Friday, Saturday
-          morning, day-of). Pat is bringing sourdough — coordinate with that.
+          morning, day-of). Coordinate with anything a guest's note says
+          they are bringing.
           Plan for the realistic scenario where something takes longer than expected.
         output: "logistics.md"
 
@@ -164,7 +166,7 @@ prompt:
     ## The Basics
     - **Occasion**: {{ party.occasion }}
     - **Date/Time**: {{ party.date }}, {{ party.time }}
-    - **Budget**: {{ party.budget }}
+    - **Budget**: ${{ party.budget_usd }} total
     - **Kitchen**: {{ party.kitchen }}
     - **Vibe**: {{ party.vibe }}
 
@@ -176,7 +178,7 @@ prompt:
     1. **Constraint matrix**: All dietary restrictions in one clear table
     2. **Social dynamics**: Who knows whom? Any pairings to encourage?
     3. **Hidden requirements**: Things that aren't stated but matter
-       (e.g., Alex is newly gluten-free — be discreet, not performative about it)
+       (e.g., a newly diagnosed restriction — be discreet, not performative)
     4. **The one thing that makes this party THIS party**: What's the
        soul of this gathering? Everything else should serve it.
 
@@ -192,7 +194,7 @@ prompt:
 
     ## Party Context
     - **Date/Time**: {{ party.date }}, {{ party.time }}
-    - **Budget**: {{ party.budget }} (your track's share: ~${{ (200 / 4) | round | int }})
+    - **Budget**: ${{ party.budget_usd }} total (your track's share: ~${{ (party.budget_usd / (tracks | length)) | round | int }})
     - **Kitchen**: {{ party.kitchen }}
     - **Vibe**: {{ party.vibe }}
 
@@ -239,10 +241,10 @@ prompt:
     4. **Day-Of Timeline**: Hour-by-hour from noon to midnight
     5. **Shopping List**: Organized by store section, with quantities
     6. **Setup Checklist**: What goes where, when
-    7. **Morgan's Role**: Their specific contribution (they want to help)
+    7. **Helper Roles**: a specific contribution for each guest whose note says they want to help
     8. **Backup Plan**: What to do when the oven takes 20 minutes longer
 
-    Total budget check: does it all fit in {{ party.budget }}?
+    Total budget check: does it all fit in ${{ party.budget_usd }}?
     If not, identify what to cut.
 
     Save to {{ workspace }}/the-plan.md

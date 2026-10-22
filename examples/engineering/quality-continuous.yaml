@@ -279,14 +279,14 @@ prompt:
     Examine the project thoroughly:
     ```bash
     # Map project structure
-    find . -type f \
+    find "{{ project_root }}" -type f \
       -not -path '*/.git/*' -not -path '*/node_modules/*' \
       -not -path '*/target/*' -not -path '*/__pycache__/*' \
       -not -path '*/.quality-workspace/*' \
       | head -60
 
     # Find manifests and build files
-    find . -maxdepth 3 \( \
+    find "{{ project_root }}" -maxdepth 3 \( \
       -name "Cargo.toml" -o -name "package.json" -o -name "pyproject.toml" \
       -o -name "go.mod" -o -name "pom.xml" -o -name "build.gradle" \
       -o -name "Gemfile" -o -name "mix.exs" -o -name "composer.json" \
@@ -437,7 +437,7 @@ prompt:
     **2. Import/Dependency Graph**
     ```bash
     # Find source files and examine dependency patterns
-    find . -type f \( -name "*.py" -o -name "*.rs" -o -name "*.ts" -o -name "*.tsx" \
+    find "{{ project_root }}" -type f \( -name "*.py" -o -name "*.rs" -o -name "*.ts" -o -name "*.tsx" \
       -o -name "*.js" -o -name "*.go" -o -name "*.rb" -o -name "*.java" \) \
       -not -path '*/node_modules/*' -not -path '*/target/*' | head -30
 
@@ -509,7 +509,7 @@ prompt:
     **1. Unit Test Gaps**
     ```bash
     # Count test files (adapt patterns for the project's conventions)
-    find . -type f \( -name "test_*" -o -name "*_test.*" -o -name "*.test.*" \
+    find "{{ project_root }}" -type f \( -name "test_*" -o -name "*_test.*" -o -name "*.test.*" \
       -o -name "*.spec.*" -o -name "*Test.*" -o -name "*_test.rs" \) \
       -not -path '*/node_modules/*' -not -path '*/target/*' | head -30
 
@@ -619,7 +619,7 @@ prompt:
     **2. Complexity Hotspots**
     ```bash
     # Find large files (language-neutral)
-    find . -type f \( -name "*.py" -o -name "*.rs" -o -name "*.ts" -o -name "*.tsx" \
+    find "{{ project_root }}" -type f \( -name "*.py" -o -name "*.rs" -o -name "*.ts" -o -name "*.tsx" \
       -o -name "*.js" -o -name "*.go" \) \
       -not -path '*/node_modules/*' -not -path '*/target/*' \
       -exec wc -l {} \; | sort -rn | head -10
@@ -1546,6 +1546,9 @@ prompt:
     {% endif %}
 
   variables:
+    # [CHANGE THIS] The project under review. Every shell step below runs
+    # from here; the workspace only holds this score's own reports.
+    project_root: "[CHANGE THIS: ABSOLUTE path to the project checkout, e.g. /home/me/src/project]"
     preamble: |
       ╔══════════════════════════════════════════════════════════════════════════╗
       ║              CONTINUOUS QUALITY IMPROVEMENT (GENERIC)                    ║
@@ -1554,6 +1557,10 @@ prompt:
       ║                                                                          ║
       ║  Parallel Expert Reviews → Discovery → Prioritization → Fix → Commit    ║
       ╚══════════════════════════════════════════════════════════════════════════╝
+
+      The project under review is `{{ project_root }}`. Run every shell
+      command from there (`cd "{{ project_root }}"` first); the workspace
+      `{{ workspace }}` is for this score's reports only.
 
       This is a **language-agnostic** quality score. During Stage 1, you
       examined the project and generated runner scripts:
@@ -1989,7 +1996,7 @@ validations:
 
   # Verify commit was created (by stage 12 or stage 13)
   - type: command_succeeds
-    command: "cd {workspace} && git log --oneline -1 --since='30 minutes ago' 2>/dev/null | grep -qE '.'"
+    command: "cd {project_root} && git log --oneline -1 --since='30 minutes ago' 2>/dev/null | grep -qE '.'"
     description: "Recent commit should exist after commit/merge-resolve"
     condition: "stage == 13"
 
