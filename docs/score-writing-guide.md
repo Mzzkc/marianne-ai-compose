@@ -1687,6 +1687,14 @@ This is useful when earlier stages write workspace files that determine
 whether later stages should run — for example, a planning stage that
 decides how many implementation phases are needed.
 
+**A skip does not cascade.** The baton treats an intentionally skipped sheet
+as satisfying its dependents (they read `[SKIPPED]` in `previous_outputs` and
+run), so skipping sheet 1 does not skip sheets 2–9. A chain terminator — "when
+the marker exists, this iteration does nothing" — therefore needs the marker
+test on **every** sheet, including the sheet whose trigger chains, or the
+later sheets run for real and the trigger fires again (`codebase-rewrite`
+did this on 2026-10-22 and spawned an iteration its own review had ended).
+
 `SkipWhenCommand` fields:
 
 | Field | Type | Default | Description |

@@ -18,6 +18,9 @@ class UnknownScoreField:
     path: str
     key: str
     candidates: tuple[str, ...]
+    # The dropped value was a mapping or a list: a whole block of
+    # configuration the runtime will never read, not a stray scalar.
+    block: bool = False
 
 
 def _model_for(annotation: Any) -> type[BaseModel] | None:
@@ -93,7 +96,11 @@ def _walk_model(
     for key, item in value.items():
         matched_field = fields.get(key) if isinstance(key, str) else None
         if matched_field is None:
-            found.append(UnknownScoreField(path, str(key), tuple(sorted(fields))))
+            found.append(
+                UnknownScoreField(
+                    path, str(key), tuple(sorted(fields)), block=isinstance(item, (dict, list))
+                )
+            )
             continue
         child = f"{path}.{key}" if path else str(key)
         cleaned[key] = _walk_value(item, matched_field.annotation, child, found)

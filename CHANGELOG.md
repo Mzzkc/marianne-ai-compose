@@ -291,6 +291,8 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **A dropped root block warns, not whispers.** A top-level key the schema does not know whose value is a mapping or list (`deliver: {1: {to: …}}` from an unmerged branch) was V011 INFO — hidden unless `mzt validate --verbose` — so a product learned at runtime that nothing had written its output file. It is now V010 WARNING naming the block; a stray scalar stays INFO.
+
 - **Schema sheets on claude-code no longer hang under `--effort max`.** Claude Code 2.1.307 with `--effort max` and `--json-schema` emits nothing until the sheet timeout kills it (0 bytes at 150 s with a real 8.8 KB intake schema; `--effort high` answers in 23 s). CLI profiles gain `cli.command.schema_extra_flags` — flags a schema sheet gets *instead of* `extra_flags` (unset inherits, `[]` drops them) — and the shipped `claude-code` profile sends `--effort high` there. Found by a peer conductor's intake wall (cut4g); reproduced against the binary before the profile changed.
 
 - **hello-local no longer needs a private instrument profile (examples QA, GH #485).** The pure-local first score bound `opencode-gemma`, a profile that existed only on the author's machine, so `mzt validate` passed for the author and `mzt run` failed for everyone else. It now pins `ollama/gemma4:26b` on the built-in `opencode` profile through a score alias; the README states the OpenCode `ollama` provider it needs.
