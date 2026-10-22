@@ -202,6 +202,17 @@ class WorkspaceLifecycleConfig(BaseModel):
         "mutants and worktrees belong there, not in a system temp directory, "
         "so nothing outlives the job (GH #460).",
     )
+    foreign_artifacts: Literal["warn", "quarantine"] = Field(
+        default="warn",
+        description="What the conductor does when a sheet writes a file that a "
+        "later, non-ancestor sheet is declared to produce (its sheet-gated "
+        "file_exists validation; GH #386). `warn` (default) names it in the "
+        "sheet's preflight warnings and leaves the file; `quarantine` also moves "
+        "it to `<scratch>/quarantine/sheet-<N>/` under the job's scratch root "
+        "before any downstream sheet can read it as upstream input, and the "
+        "warning says where it went. The owner sheet still has to write its own "
+        "file either way.",
+    )
     preserve_patterns: list[str] = Field(
         default=[
             ".iteration",

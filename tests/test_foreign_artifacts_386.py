@@ -114,3 +114,62 @@ class TestMusicianGuard:
     def test_own_artifact_is_not_watched(self, tmp_path: Path) -> None:
         sheet = build_sheets(_config(tmp_path, deps={2: [1], 3: [2]}))[2]
         assert _expand_artifact_paths(sheet, total_sheets=3, total_movements=3) == []
+
+
+class TestQuarantine:
+    def test_quarantine_moves_the_fabrication_under_scratch_and_says_so(
+        self, tmp_path: Path,
+    ) -> None:
+        from marianne.core.config.workspace import scratch_root
+
+        sheet = build_sheets(_config(tmp_path, deps={2: [1], 3: [2]}))[0]
+        sheet.workspace.mkdir()
+        paths = _expand_artifact_paths(sheet, total_sheets=3, total_movements=3)
+        before = _snapshot_artifacts(paths)
+        fabricated = sheet.workspace / "03-review.md"
+        fabricated.write_text("fabricated review")
+        quarantine = scratch_root(sheet.workspace) / "quarantine" / "sheet-1"
+        warnings = _foreign_artifact_warnings(paths, before, quarantine=quarantine)
+        assert len(warnings) == 1
+        assert not fabricated.exists()
+        moved = quarantine / "03-review.md"
+        assert moved.read_text() == "fabricated review"
+        assert f"moved to {moved}" in warnings[0]
+
+    def test_warn_policy_leaves_the_file(self, tmp_path: Path) -> None:
+        sheet = build_sheets(_config(tmp_path, deps={2: [1], 3: [2]}))[0]
+        sheet.workspace.mkdir()
+        paths = _expand_artifact_paths(sheet, total_sheets=3, total_movements=3)
+        before = _snapshot_artifacts(paths)
+        (sheet.workspace / "03-review.md").write_text("fabricated")
+        warnings = _foreign_artifact_warnings(paths, before)
+        assert (sheet.workspace / "03-review.md").exists()
+        assert "moved to" not in warnings[0]
+
+    def test_sheet_carries_the_policy_from_workspace_lifecycle(self, tmp_path: Path) -> None:
+        from marianne.daemon.baton.musician import _quarantine_dir
+
+        config = _config(tmp_path, deps={2: [1]})
+        assert build_sheets(config)[0].foreign_artifact_policy == "warn"
+        strict = JobConfig.model_validate({
+            **config.model_dump(mode="json"),
+            "workspace_lifecycle": {"foreign_artifacts": "quarantine"},
+        })
+        sheet = build_sheets(strict)[0]
+        assert sheet.foreign_artifact_policy == "quarantine"
+        assert _quarantine_dir(sheet) == (
+            sheet.workspace / ".marianne-scratch" / "quarantine" / "sheet-1"
+        )
+
+    def test_failed_move_leaves_the_file_and_says_so(self, tmp_path: Path) -> None:
+        sheet = build_sheets(_config(tmp_path, deps={2: [1], 3: [2]}))[0]
+        sheet.workspace.mkdir()
+        paths = _expand_artifact_paths(sheet, total_sheets=3, total_movements=3)
+        before = _snapshot_artifacts(paths)
+        (sheet.workspace / "03-review.md").write_text("fabricated")
+        # A regular file where the quarantine directory must go.
+        blocker = tmp_path / "blocked"
+        blocker.write_text("")
+        warnings = _foreign_artifact_warnings(paths, before, quarantine=blocker / "sheet-1")
+        assert (sheet.workspace / "03-review.md").exists()
+        assert "quarantine failed" in warnings[0] and "file left in place" in warnings[0]

@@ -301,6 +301,7 @@ Controls how workspace files are handled across score iterations, particularly f
 | `archive_naming` | `"iteration" \| "timestamp"` | `"iteration"` | | Naming scheme for archive directories. `iteration` reads `.iteration` file, `timestamp` uses current time. |
 | `max_archives` | `int` | `0` | `>= 0` | Maximum archive directories to keep. 0 = unlimited. When exceeded, oldest archives are deleted. |
 | `scratch` | `"remove" \| "keep"` | `"remove"` | | What happens to the job's scratch root `<workspace>/.marianne-scratch` when the job ends COMPLETED or FAILED. Every instrument receives its path as `MARIANNE_SCRATCH`; probe clones, mutants and worktrees belong there, not in a system temp directory, so nothing outlives the job (GH #460). `keep` leaves it for inspection. |
+| `foreign_artifacts` | `"warn" \| "quarantine"` | `"warn"` | | What happens when a sheet writes a file a later, non-ancestor sheet is declared to produce (its sheet-gated `file_exists`; GH #386). `warn` names it in the sheet's preflight warnings and leaves it; `quarantine` also moves it to `<scratch>/quarantine/sheet-<N>/` before any downstream sheet can read it as upstream input, and the warning says where it went. |
 | `preserve_patterns` | `list[str]` | `[".iteration", ".marianne-*", ".coverage", "archive/**", ".worktrees/**"]` | | Glob patterns for files/directories to preserve (not archive). Matched against paths relative to workspace root. |
 
 ```yaml

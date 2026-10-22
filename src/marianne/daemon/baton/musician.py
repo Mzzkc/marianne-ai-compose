@@ -35,6 +35,7 @@ See: ``docs/plans/2026-03-26-baton-design.md`` — Single-Attempt Musician
 from __future__ import annotations
 
 import asyncio
+import shutil
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
@@ -216,8 +217,11 @@ async def sheet_task(
         exec_result = await _execute(
             backend, prompt, sheet.timeout_seconds, request_state
         )
+        quarantine = (
+            _quarantine_dir(sheet) if sheet.foreign_artifact_policy == "quarantine" else None
+        )
         preflight_warnings.extend(
-            _foreign_artifact_warnings(artifact_paths, artifacts_before)
+            _foreign_artifact_warnings(artifact_paths, artifacts_before, quarantine=quarantine)
         )
 
         # Step 3a: Classify output via TechniqueRouter (Stage 2a).
@@ -461,16 +465,27 @@ def _snapshot_artifacts(paths: list[tuple[str, Path]]) -> dict[str, float | None
     return snap
 
 
+def _quarantine_dir(sheet: Sheet) -> Path:
+    """Where this sheet's fabricated artifacts go: under the job's scratch root."""
+    from marianne.core.config.workspace import scratch_root
+
+    return scratch_root(sheet.workspace) / "quarantine" / f"sheet-{sheet.num}"
+
+
 def _foreign_artifact_warnings(
     paths: list[tuple[str, Path]], before: dict[str, float | None],
+    *, quarantine: Path | None = None,
 ) -> list[str]:
     """Warn when this attempt wrote a file another sheet owns (GH #386).
 
     A sheet that writes a downstream movement's declared artifact before
     that movement runs plants content later sheets will read as upstream
-    input. Advisory only — the owner's own sheet still has to write the
-    file (``file_modified`` guards that); this names the contamination so
-    the composer can quarantine it.
+    input. The owner's own sheet still has to write the file
+    (``file_modified`` guards that). With ``quarantine`` set
+    (``workspace_lifecycle.foreign_artifacts: quarantine``) the file is
+    moved there — under the job's scratch root, so it is cleaned with the
+    job and never lands in a commit — before any downstream sheet can read
+    it; a move that fails leaves the file and says so.
     """
     warnings: list[str] = []
     for template, path in paths:
@@ -482,10 +497,19 @@ def _foreign_artifact_warnings(
         if after is None or after == before.get(key):
             continue
         verb = "created" if before.get(key) is None else "modified"
+        where = ""
+        if quarantine is not None:
+            try:
+                quarantine.mkdir(parents=True, exist_ok=True)
+                target = quarantine / path.name
+                shutil.move(str(path), str(target))
+                where = f"; moved to {target}"
+            except OSError as exc:
+                where = f"; quarantine failed ({exc}), file left in place"
         warnings.append(
             f"artifact: this sheet {verb} {template}, which a later, "
             f"non-ancestor sheet is declared to produce (file_exists); "
-            f"downstream sheets may read it as upstream input"
+            f"downstream sheets may read it as upstream input{where}"
         )
     return warnings
 

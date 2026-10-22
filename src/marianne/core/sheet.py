@@ -20,7 +20,7 @@ sheets complete. The baton renders at dispatch time.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -165,6 +165,12 @@ class Sheet(BaseModel):
         "their sheet-gated file_exists validations. A sheet that writes one "
         "fabricates a downstream artifact before its owner runs (GH #386); "
         "the musician reports it as a preflight warning.",
+    )
+    foreign_artifact_policy: Literal["warn", "quarantine"] = Field(
+        default="warn",
+        description="workspace_lifecycle.foreign_artifacts for this job: whether a "
+        "foreign artifact this sheet writes is only named (`warn`) or also moved "
+        "to the scratch quarantine before downstream sheets run (`quarantine`).",
     )
 
     # --- Timeout ---
@@ -590,6 +596,7 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
                 prompt_extensions=extensions,
                 validations=validations,
                 foreign_artifacts=foreign,
+                foreign_artifact_policy=config.workspace_lifecycle.foreign_artifacts,
                 timeout_seconds=timeout,
             )
         )

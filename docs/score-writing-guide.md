@@ -1392,7 +1392,11 @@ sheet that writes a file some later, non-ancestor sheet is declared to
 produce gets an `artifact:` warning in `mzt status` / `mzt diagnose`
 (GH #386). A musician that "helpfully" writes the whole downstream pipeline
 is planting content later sheets will read as upstream input; the warning
-names the file so the composer can quarantine it before those sheets run.
+names the file so the composer can quarantine it before those sheets run —
+or set `workspace_lifecycle.foreign_artifacts: quarantine` and the conductor
+moves it to `$MARIANNE_SCRATCH/quarantine/sheet-<N>/` the moment the attempt
+ends, before any downstream sheet is dispatched (the warning then says where
+it went; the owner sheet still writes its own file).
 Gate each stage's own output with a sheet-scoped `file_exists` and that
 guard works for free.
 
