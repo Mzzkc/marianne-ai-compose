@@ -35,6 +35,7 @@ See: ``docs/plans/2026-03-26-baton-design.md`` — Single-Attempt Musician
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 import time
 from pathlib import Path
@@ -43,7 +44,11 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 import jinja2
 
 from marianne.core.config.job import InjectionCategory, InjectionItem
-from marianne.core.constants import SHEET_NUM_KEY, TRUNCATE_STDOUT_TAIL_CHARS
+from marianne.core.constants import (
+    SHEET_NUM_KEY,
+    STRUCTURED_OUTPUT_MAX_BYTES,
+    TRUNCATE_STDOUT_TAIL_CHARS,
+)
 from marianne.core.errors.classifier import ErrorClassifier
 from marianne.core.errors.codes import ErrorCategory, ErrorCode
 from marianne.core.logging import get_logger
@@ -317,6 +322,9 @@ async def sheet_task(
 
         # Step 5: Record output with credential redaction
         stdout_tail, stderr_tail = _capture_output(exec_result)
+        structured_output, structured_omitted = _capture_structured_output(
+            exec_result
+        )
 
         # Step 6: Classify errors (redact credentials from error messages —
         # backend error_message can contain API keys from auth failures,
@@ -363,6 +371,8 @@ async def sheet_task(
             model_requested=exec_result.model_requested,
             stdout_tail=stdout_tail,
             stderr_tail=stderr_tail,
+            structured_output=structured_output,
+            structured_output_omitted=structured_omitted,
             output_kind=output_kind_value,
             tool_calls=tool_call_payloads,
             a2a_requests=a2a_request_payloads,
@@ -1275,6 +1285,44 @@ def _capture_output(exec_result: ExecutionResult) -> tuple[str, str]:
     stderr = redact_credentials(stderr) or ""
 
     return stdout, stderr
+
+
+def _redact_json_value(value: Any) -> Any:
+    """Credential-redact every string (keys included) inside a JSON value."""
+    if isinstance(value, str):
+        return redact_credentials(value)
+    if isinstance(value, dict):
+        return {
+            redact_credentials(k) if isinstance(k, str) else k: _redact_json_value(v)
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_json_value(v) for v in value]
+    return value
+
+
+def _capture_structured_output(
+    exec_result: ExecutionResult,
+) -> tuple[dict[str, Any] | None, bool]:
+    """Keep a response_format sheet's validated object for the sheet record (GH #489).
+
+    Returns ``(object, omitted)``. Every string in the object is
+    credential-redacted where it stands; redacting the serialised text instead
+    would let a key pattern swallow the JSON punctuation after it. An object
+    whose compact JSON exceeds STRUCTURED_OUTPUT_MAX_BYTES is not kept, since
+    a cut object would not parse; ``omitted`` is then True so the record says so.
+    """
+    obj = exec_result.structured_output
+    if not exec_result.success or not isinstance(obj, dict):
+        return None, False
+    redacted = _redact_json_value(obj)
+    try:
+        encoded = json.dumps(redacted, ensure_ascii=False, separators=(",", ":"))
+    except (TypeError, ValueError):
+        return None, True
+    if len(encoded.encode("utf-8")) > STRUCTURED_OUTPUT_MAX_BYTES:
+        return None, True
+    return redacted, False
 
 
 class _ErrorClassification(NamedTuple):

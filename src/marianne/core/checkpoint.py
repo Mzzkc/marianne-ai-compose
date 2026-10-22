@@ -457,6 +457,25 @@ class SheetState(BaseModel):
         default=False,
         description="True if output was larger than capture limit and was truncated",
     )
+    structured_output: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "The validated JSON object of the latest attempt of a sheet that set "
+            "instrument_config.response_format, kept whole (not a tail) and "
+            "credential-redacted, so a caller can read it from job.status or "
+            "`mzt status --json` after the job completes. None when the sheet has "
+            "no response_format or the attempt failed (GH #489)."
+        ),
+    )
+    structured_output_omitted: bool = Field(
+        default=False,
+        description=(
+            "True when the latest attempt produced a validated object but it was "
+            "not kept: its compact JSON exceeded 64 KiB "
+            "(STRUCTURED_OUTPUT_MAX_BYTES) or redaction broke it. Read the sheet's "
+            "output stream or have the sheet write a file instead (GH #489)."
+        ),
+    )
 
     # Preflight metrics (Task 2: Prompt Metrics and Pre-flight Checks)
     prompt_metrics: PromptMetricsDict | None = Field(
@@ -894,6 +913,11 @@ class SheetState(BaseModel):
         self.error_code = getattr(result, "error_code", None)
         self.stdout_tail = getattr(result, "stdout_tail", None) or None
         self.stderr_tail = getattr(result, "stderr_tail", None) or None
+        structured = getattr(result, "structured_output", None)
+        self.structured_output = structured if isinstance(structured, dict) else None
+        self.structured_output_omitted = bool(
+            getattr(result, "structured_output_omitted", False)
+        )
 
         validation_details = getattr(result, "validation_details", None)
         validation_results: list[ValidationDetailDict] = []

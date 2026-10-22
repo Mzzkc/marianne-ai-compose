@@ -1041,6 +1041,8 @@ class PluginCliBackend(Backend):
         error_message: str | None = None
         input_tokens: int | None = None
         output_tokens: int | None = None
+        # GH #489: the schema-valid object, kept whole for the sheet record.
+        validated_object: dict[str, Any] | None = None
 
         if response_format is not None:
             # Schema mode — never fall through to plain result parsing:
@@ -1063,6 +1065,7 @@ class PluginCliBackend(Backend):
                 )
                 if conformance_refusal is None:
                     result_text = json.dumps(structured)
+                    validated_object = structured
                 elif is_success:
                     is_success = False
                     error_type = error_type or "schema_conformance"
@@ -1193,6 +1196,7 @@ class PluginCliBackend(Backend):
             model=self._model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            structured_output=validated_object if is_success else None,
         )
 
     def _parse_jsonl(

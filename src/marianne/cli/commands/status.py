@@ -1022,6 +1022,11 @@ def _output_status_json(
             sheet_data["instrument_resolution"] = sheet.instrument_resolution.model_dump(
                 mode="json"
             )
+        # GH #489: a response_format sheet's validated object, whole.
+        if sheet.structured_output is not None:
+            sheet_data["structured_output"] = sheet.structured_output
+        if sheet.structured_output_omitted:
+            sheet_data["structured_output_omitted"] = True
         sheets_json[str(num)] = sheet_data
 
     output: dict[str, Any] = {

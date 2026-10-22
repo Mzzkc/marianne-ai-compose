@@ -155,6 +155,13 @@ class ExecutionResult:
     output_tokens: int | None = None
     """Output tokens consumed (completion tokens). None if not available from backend."""
 
+    structured_output: dict[str, Any] | None = None
+    """The validated JSON object of a ``response_format`` sheet (GH #489).
+
+    Set only when the backend ran in schema/JSON mode and the object passed
+    its conformance check. ``None`` for every other execution.
+    """
+
     model_echo_status: Literal["observed", "absent", "malformed", "empty"] | None = None
     """HTTP model-field provenance; None means no transport evidence is available."""
     model_observed: str | None = None

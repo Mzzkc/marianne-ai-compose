@@ -98,6 +98,13 @@ sheet, and an object overrides it. Marianne validates the format declaration
 and forwards it to the server; HTTP transport does not independently validate
 the returned content against the JSON Schema. Server support is required.
 
+The returned object is kept whole on the sheet record as `structured_output`
+(credential-redacted, up to 64 KiB of compact JSON), so a caller reads it from
+`job.status` or `mzt status --json` after the job completes; the output tail is
+only the last 500 characters. The field belongs to the latest attempt: a
+failed retry clears it. A larger object is not stored, and `structured_output_omitted: true` says
+so; have the sheet write a file instead (GH #489).
+
 For headless CLI profiles, schema mode requires `type: json_schema` and a
 profile-declared `cli.command.json_schema_flag`. Marianne passes the schema to
 that flag — with top-level `$schema` and `$id` removed, since Claude Code's

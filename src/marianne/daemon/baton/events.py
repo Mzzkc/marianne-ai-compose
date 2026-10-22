@@ -131,6 +131,13 @@ class SheetAttemptResult:
     stdout_tail: str = ""
     stderr_tail: str = ""
 
+    # GH #489: the validated object of a response_format sheet, credential-
+    # redacted and bounded by STRUCTURED_OUTPUT_MAX_BYTES. None when the sheet
+    # has no response_format; ``structured_output_omitted`` marks an object
+    # that existed but was too large to keep.
+    structured_output: dict[str, Any] | None = None
+    structured_output_omitted: bool = False
+
     # Technique router classification (Stage 2a).
     # Set by the musician when a TechniqueRouter is provided and execution
     # succeeded. Values are OutputKind.value strings: "prose", "code_block",

@@ -142,6 +142,13 @@ VALIDATION_PASS_RATE_KEY = "validation_pass_rate"
 TRUNCATE_STDOUT_TAIL_CHARS = 500
 """Default truncation limit for stdout/stderr tails in error display and state."""
 
+STRUCTURED_OUTPUT_MAX_BYTES = 64 * 1024
+"""Largest validated ``structured_output`` object kept on the sheet record (GH #489).
+
+Measured as compact JSON. A larger object is not stored (a cut JSON object
+cannot be parsed) and ``SheetState.structured_output_omitted`` is set instead.
+"""
+
 
 # =============================================================================
 # Healing / Diagnostic Context Limits

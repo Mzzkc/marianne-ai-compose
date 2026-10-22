@@ -23,6 +23,7 @@ uses SENSITIVE_PATTERNS to automatically redact fields containing
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from pathlib import Path
@@ -510,7 +511,10 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
 
             # Parse successful response
             data = response.json()
-            return self._parse_success_response(data, duration, started_at, requested_model)
+            return self._parse_success_response(
+                data, duration, started_at, requested_model,
+                json_mode=response_format is not None,
+            )
 
         except httpx.ConnectError as e:
             duration = time.monotonic() - start_time
@@ -713,6 +717,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         duration: float,
         started_at: Any,
         requested_model: str,
+        json_mode: bool = False,
     ) -> ExecutionResult:
         """Parse a successful OpenAI-compatible API response.
 
@@ -723,6 +728,9 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             data: Parsed JSON response.
             duration: Elapsed time in seconds.
             started_at: Execution start timestamp.
+            json_mode: The request carried a ``response_format``; a content
+                string that parses as a JSON object is kept whole as
+                ``structured_output`` (GH #489).
 
         Returns:
             ExecutionResult with response content and token usage.
@@ -771,6 +779,15 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
 
         self._write_log_file(self._stdout_log_path, content)
 
+        structured: dict[str, Any] | None = None
+        if json_mode and content.strip():
+            try:
+                parsed = json.loads(content)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, dict):
+                structured = parsed
+
         return ExecutionResult(
             success=True,
             exit_code=0,
@@ -785,6 +802,7 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             model_requested=requested_model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            structured_output=structured,
         )
 
     async def health_check(self) -> bool:
