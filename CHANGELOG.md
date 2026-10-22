@@ -315,6 +315,10 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **The instrument supervisor no longer scans all of `/proc` every 50 ms (GH #490).** Its run loop counted adopted children by reading every process's stat file twenty times a second, about 18% CPU per running sheet on a host with ~550 processes. It now reads the kernel's per-task children list and keeps the full scan for the exit sweep.
+
+- **Log lookups stop at the first matching line (GH #491).** Deciding whether the conductor log held any line for a job read the whole file, 24 MB on a busy host, on every MCP `get_logs` call and dashboard stream.
+
 - **`mzt instruments resolve SCORE` shows what every sheet's binding resolves to.** One row per sheet — bound through (alias, class or direct), profile, model, fallback chain — resolved the way admission resolves them on this machine, plus a count of distinct profile+model bindings. The examples QA found seven scores whose prose claimed independent reviewers while every voice resolved to one binding (GH #485); this is the command that would have shown it.
 
 - **`{{ instrument_alias }}` names the score alias a sheet was bound through.** `instrument_name` renders the profile an alias resolved to, so a seat census that joins evidence against a roster of alias names (condorcet-s-premise's ten seats) collapsed as soon as two seats shared a profile. The new core template variable is the `instruments:` key for an alias-bound sheet and `""` otherwise; it is stable across fallback where `instrument_name` is the profile that actually ran. Unblocks GH #485 family 3.

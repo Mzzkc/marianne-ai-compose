@@ -331,3 +331,26 @@ async def test_e2big_spawn_failure_names_the_prompt_not_the_binary() -> None:
     assert result.exit_reason == "error" and result.error_type == "spawn_failed"
     assert "exceeds the kernel argv limit" in result.stderr
     assert "prompt_via_stdin" in result.stderr
+
+
+def test_run_loop_reads_the_kernel_children_file_not_all_of_proc() -> None:
+    """The 50 ms loop must not read every process's stat file (~18% CPU each)."""
+    from marianne.utils import instrument_supervisor as sup
+
+    child = subprocess.Popen(["sleep", "5"])
+    try:
+        me = os.getpid()
+        assert child.pid in sup._run_loop_children(me)
+        assert set(sup._run_loop_children(me)) <= set(sup._children_of(me)) | {child.pid}
+    finally:
+        child.kill()
+        child.wait()
+
+
+def test_run_loop_falls_back_to_the_scan_without_the_children_file(monkeypatch) -> None:
+    from marianne.utils import instrument_supervisor as sup
+
+    calls: list[int] = []
+    monkeypatch.setattr(sup, "_children_of", lambda pid: calls.append(pid) or [])
+    assert sup._run_loop_children(2**22 + 7) == []
+    assert calls == [2**22 + 7]

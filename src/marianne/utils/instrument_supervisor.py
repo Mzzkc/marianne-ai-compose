@@ -78,6 +78,23 @@ def _apply_open_files_cap(cap: int | None) -> int | None:
         return None
 
 
+def _run_loop_children(pid: int) -> list[int]:
+    """This single-threaded process's children, cheaply, for the 50 ms run loop.
+
+    ``/proc/<pid>/task/<pid>/children`` (CONFIG_PROC_CHILDREN) is one read;
+    the full ``/proc`` scan reads every process's stat file, and seven
+    supervisors doing that twenty times a second cost ~18% CPU each on a
+    host with ~550 processes. The kernel documents the file as possibly
+    missing a child that exits mid-read, which only delays the adoption
+    count by one tick; the exit sweep still uses the full scan.
+    """
+    try:
+        with open(f"/proc/{pid}/task/{pid}/children", "rb") as handle:
+            return [int(token) for token in handle.read().split()]
+    except OSError:
+        return _children_of(pid)
+
+
 def _children_of(pid: int) -> list[int]:
     """PIDs whose parent is ``pid`` right now, from /proc (live or zombie)."""
     found: list[int] = []
@@ -246,7 +263,7 @@ def main(argv: list[str]) -> int:
             except ProcessLookupError:
                 pass
             signalled_child_at = time.monotonic() + 3600.0  # once
-        for pid in _children_of(me):
+        for pid in _run_loop_children(me):
             if pid != child_pid and pid not in seen:
                 seen.add(pid)
                 adopted_during_run += 1
