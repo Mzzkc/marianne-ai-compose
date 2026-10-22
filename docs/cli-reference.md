@@ -543,6 +543,7 @@ Performs comprehensive validation including YAML syntax, Pydantic schema validat
 | `--verbose` | `-v` | false | Include INFO findings and a fuller rendering preview |
 | `--strict` | | false | Exit 1 for any unsuppressed WARNING |
 | `--errors-only` | | false | Show only ERROR findings; exit behavior is unchanged |
+| `--render-prompts PATH` | | | Write every sheet's fully rendered prompt to a Markdown file (`-` for stdout). Sheets whose renders are byte-identical share one section headed by their numbers (`## Sheets 2-3`), so a thousand-sheet fan-out reads as its few distinct prompts. Rendering is static: loop indexes read as iteration 1 and `{{ previous_outputs }}` is empty. With `--json`, each sheet also carries `rendered_prompt`. |
 
 #### Exit Codes
 
@@ -925,7 +926,7 @@ The diagnostic report includes:
 - Score-run overview and current status
 - Preflight warnings from all sheets (`preflight:` prompt-size notes; `artifact:` a sheet wrote a file a later, non-ancestor sheet is declared to produce — GH #386)
 - Prompt metrics (token counts, line counts)
-- Execution timeline with timing information, and under it one line per attempt for any sheet that needed more than one or ended abnormally: `1. claude-code (claude-opus-5-5): 30m → TIMEOUT`, `2. codex-cli: 1m 9s → ok` (GH #434)
+- Execution timeline with timing information, and under it one line per attempt for any sheet that needed more than one or ended abnormally: `1. claude-code (claude-opus-5-5): 30m → TIMEOUT E301`, `2. codex-cli: 1m 9s → ok` (GH #434). A failed attempt's line is followed by the cause the classifier selected as root, redacted and trimmed to 300 characters (`agent process killed by SIGKILL before signalling completion`), so the category word is not the only evidence (GH #143).
 - All errors with full context and output tails
 - Log file locations, sizes, and modification times
 - (with `--include-logs`) Inline log content from each log file

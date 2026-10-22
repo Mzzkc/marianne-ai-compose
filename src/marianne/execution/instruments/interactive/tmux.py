@@ -38,7 +38,10 @@ _logger = get_logger("execution.interactive.tmux")
 _COMMAND_TIMEOUT_SECONDS = 10.0
 _SYNC_COMMAND_TIMEOUT_SECONDS = 10.0
 # A dead pane's exit status arrives on the SIGCHLD reap, after pane_dead.
-_PANE_EXIT_SETTLE_POLLS = 5
+# Up to 5 s, paid only once a pane has already died. tmux fills the status
+# on its SIGCHLD reap; on a host running a full parallel test suite that
+# reap has lagged the pty close by more than 2 s.
+_PANE_EXIT_SETTLE_POLLS = 50
 _PANE_EXIT_SETTLE_SECONDS = 0.1
 
 # Minimum supported tmux version. capture-pane/paste-buffer semantics are

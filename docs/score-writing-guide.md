@@ -2135,6 +2135,19 @@ Dry run works **without** a running daemon and shows:
 - What prompts will be rendered
 - Which validations will run
 
+To read the whole text every musician will receive — not the first 15
+lines — dump it:
+
+```bash
+mzt validate my-score.yaml --render-prompts prompts.md   # or - for stdout
+```
+
+Identical renders are grouped (fan-out voices, loop iterations), so the file
+is as long as the score has distinct prompts. Read it before a run that costs
+money: a Jinja conditional that picked the wrong branch, a variable that
+rendered empty, or a cadenza path that did not resolve shows up here, not in
+`mzt validate`'s findings.
+
 ### Detached Execution
 
 For long-running scores, use `setsid` to create an independent session:

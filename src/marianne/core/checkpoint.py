@@ -311,6 +311,22 @@ class FlowAttemptRecord(BaseModel):
     recorded_at: datetime = Field(default_factory=utc_now, description="Record timestamp.")
 
 
+_ATTEMPT_ERROR_MESSAGE_MAX = 300
+
+
+def _attempt_error_message(result: Any) -> str | None:
+    """A failed attempt's redacted cause, trimmed; None for a success."""
+    if getattr(result, "execution_success", False):
+        return None
+    message = getattr(result, "error_message", None)
+    if not message:
+        return None
+    text = " ".join(str(message).split())
+    if len(text) > _ATTEMPT_ERROR_MESSAGE_MAX:
+        text = text[: _ATTEMPT_ERROR_MESSAGE_MAX - 1] + "…"
+    return text
+
+
 class SheetState(BaseModel):
     """State for a single sheet."""
 
@@ -477,7 +493,8 @@ class SheetState(BaseModel):
         default_factory=list,
         description="One record per attempt: {attempt, instrument, model, "
         "duration_seconds, success, exit_reason, error_classification, "
-        "error_code, timestamp}. Persisted (max 50) for status and diagnose.",
+        "error_code, error_message, timestamp}. Persisted (max 50) for status "
+        "and diagnose; error_message is the musician's redacted cause text.",
     )
 
     # Instrument fallback history (M5: per-sheet instrument fallbacks)
@@ -859,6 +876,10 @@ class SheetState(BaseModel):
             "exit_reason": getattr(result, "exit_reason", None),
             "error_classification": getattr(result, "error_classification", None),
             "error_code": getattr(result, "error_code", None),
+            # The cause, not just the category: the musician redacts
+            # credentials before setting this (GH #143 — a diagnose line
+            # reading "TRANSIENT" alone sent an operator to the logs).
+            "error_message": _attempt_error_message(result),
             "timestamp": _dt.datetime.now(tz=_dt.UTC).isoformat(),
         })
         if len(self.attempt_history) > MAX_ATTEMPT_HISTORY:

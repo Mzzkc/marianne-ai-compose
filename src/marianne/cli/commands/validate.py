@@ -37,6 +37,7 @@ from marianne.validation import (
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks.schema import _KNOWN_TYPOS
 from marianne.validation.output_contract import apply_suppression, class_summary, structural_summary
+from marianne.validation.rendering import RenderingPreview, render_prompts_markdown
 
 from ..helpers import configure_global_logging
 from ..output import console, output_error
@@ -63,6 +64,16 @@ def validate(
     ),
     strict: bool = typer.Option(False, "--strict", help="Treat unsuppressed warnings as failures"),
     errors_only: bool = typer.Option(False, "--errors-only", help="Show only error findings"),
+    render_prompts: str | None = typer.Option(
+        None,
+        "--render-prompts",
+        help=(
+            "Write every sheet's fully rendered prompt (deduplicated: identical "
+            "renders share one section) to this Markdown file, or '-' for stdout. "
+            "With --json, each sheet also carries rendered_prompt."
+        ),
+        show_default=False,
+    ),
 ) -> None:
     """Validate a score configuration file.
 
@@ -219,7 +230,11 @@ def validate(
                 issue for issue in validation_data["issues"] if issue["severity"] == "error"
             ]
         preview = generate_preview(config, config_file)
-        validation_data["rendering"] = reporter.report_rendering_json(preview)
+        validation_data["rendering"] = reporter.report_rendering_json(
+            preview, full_prompts=render_prompts is not None,
+        )
+        if render_prompts is not None and render_prompts != "-":
+            _write_rendered_prompts(preview, config.name, Path(render_prompts))
         console.print(
             json_mod.dumps(validation_data, indent=2),
             soft_wrap=True,
@@ -250,6 +265,23 @@ def validate(
         if suppressed:
             console.print(f"Suppressed: {sum(int(row['count']) for row in suppressed)}")
         reporter.report_terminal(issues, config.name, verbose=verbose, errors_only=errors_only)
+
+        if render_prompts is not None:
+            # Every sheet, full text, whatever the findings say: the prompts
+            # are what the composer wants to read when a finding is about them.
+            from marianne.validation.rendering import generate_preview
+
+            full = generate_preview(config, config_file)
+            if render_prompts == "-":
+                console.print(render_prompts_markdown(full, config.name), markup=False)
+            else:
+                written = _write_rendered_prompts(full, config.name, Path(render_prompts))
+                console.print(
+                    f"Rendered prompts: {written} "
+                    f"({full.total_sheets} sheet(s), "
+                    f"{_distinct_prompt_count(full)} distinct)",
+                    markup=False,
+                )
 
         # Show config summary if no errors
         if not runner.has_errors(issues):
@@ -603,3 +635,20 @@ def _unknown_field_hints(error_msg: str) -> list[str]:
 __all__ = [
     "validate",
 ]
+
+
+def _distinct_prompt_count(preview: RenderingPreview) -> int:
+    import hashlib
+
+    return len({
+        hashlib.sha256(sp.rendered_prompt.encode("utf-8")).hexdigest()
+        for sp in preview.sheets
+        if sp.rendered_prompt is not None
+    })
+
+
+def _write_rendered_prompts(preview: RenderingPreview, score_name: str, out: Path) -> Path:
+    """Write the deduplicated prompt dump; a parent directory is created."""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(render_prompts_markdown(preview, score_name), encoding="utf-8")
+    return out

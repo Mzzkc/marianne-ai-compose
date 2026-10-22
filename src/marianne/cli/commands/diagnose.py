@@ -1579,11 +1579,19 @@ def _display_diagnostic_report(job: CheckpointState, report: dict[str, Any]) -> 
                 outcome = "ok" if a.get("success") else (
                     a.get("error_classification") or a.get("exit_reason") or "failed"
                 )
+                code = a.get("error_code")
+                if not a.get("success") and code and code not in outcome:
+                    outcome = f"{outcome} {code}"
                 model = f" ({a['model']})" if a.get("model") else ""
                 console.print(
                     f"    {a.get('attempt')}. {a.get('instrument')}{model}: "
                     f"{format_duration(a.get('duration_seconds') or 0.0)} → {outcome}"
                 )
+                # GH #143: the category names the symptom class; the cause
+                # is the message the classifier picked as root (redacted).
+                cause = a.get("error_message")
+                if cause and not a.get("success"):
+                    console.print(f"       {cause}", markup=False, highlight=False)
         if len(timeline) > 20:
             console.print(f"[dim]... and {len(timeline) - 20} more sheets[/dim]")
 

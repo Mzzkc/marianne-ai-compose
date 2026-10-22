@@ -1049,6 +1049,41 @@ class TestAttemptHistory434:
         note = format_instrument_with_fallback(sheet)
         assert "was claude-code: execution_timeout after 30m" in note
 
+    def test_history_keeps_the_redacted_cause_of_a_failed_attempt(self) -> None:
+        """GH #143: the record carries the cause text, not only the category."""
+        from marianne.daemon.baton.events import SheetAttemptResult
+
+        sheet = SheetState(sheet_num=1, instrument_name="claude-code")
+        sheet.record_attempt(SheetAttemptResult(
+            job_id="j", sheet_num=1, instrument_name="claude-code", attempt=1,
+            execution_success=False, duration_seconds=31.8, exit_reason="error",
+            error_classification="TRANSIENT", error_code="E999",
+            error_message="agent process killed by SIGKILL\n  before signalling completion",
+        ))
+        sheet.record_attempt(SheetAttemptResult(
+            job_id="j", sheet_num=1, instrument_name="claude-code", attempt=2,
+            execution_success=True, duration_seconds=170.0, exit_reason="completed",
+            error_message="stale text a success must not carry",
+        ))
+        failed, ok = sheet.attempt_history
+        assert failed["error_message"] == (
+            "agent process killed by SIGKILL before signalling completion"
+        )
+        assert ok["error_message"] is None
+
+    def test_history_trims_a_long_cause(self) -> None:
+        from marianne.core.checkpoint import _ATTEMPT_ERROR_MESSAGE_MAX
+        from marianne.daemon.baton.events import SheetAttemptResult
+
+        sheet = SheetState(sheet_num=1, instrument_name="a")
+        sheet.record_attempt(SheetAttemptResult(
+            job_id="j", sheet_num=1, instrument_name="a", attempt=1,
+            execution_success=False, duration_seconds=1.0, exit_reason="error",
+            error_message="x" * (_ATTEMPT_ERROR_MESSAGE_MAX + 50),
+        ))
+        text = sheet.attempt_history[0]["error_message"]
+        assert len(text) == _ATTEMPT_ERROR_MESSAGE_MAX and text.endswith("…")
+
     def test_history_is_capped(self) -> None:
         from marianne.core.checkpoint import MAX_ATTEMPT_HISTORY
 

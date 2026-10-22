@@ -258,6 +258,47 @@ class TestBuildDiagnosticReport:
         failure = report["validation_failures"][0]
         assert failure["details"][0]["error_message"] == "File does not exist"
 
+    def test_attempt_cause_is_printed_under_the_attempt(self) -> None:
+        """GH #143: diagnose shows the cause, not only the category word."""
+        import importlib
+        from io import StringIO
+        from unittest.mock import patch
+
+        from rich.console import Console
+
+        diagnose_mod = importlib.import_module("marianne.cli.commands.diagnose")
+
+        sheets = {
+            1: SheetState(
+                sheet_num=1,
+                status=SheetStatus.COMPLETED,
+                attempt_count=2,
+                attempt_history=[
+                    {"attempt": 1, "instrument": "claude-code", "model": None,
+                     "duration_seconds": 31.8, "success": False, "exit_reason": "error",
+                     "error_classification": "TRANSIENT", "error_code": "E999",
+                     "error_message": (
+                         "agent process killed by SIGKILL before signalling completion"
+                     ),
+                     "timestamp": "2026-10-22T03:19:16+00:00"},
+                    {"attempt": 2, "instrument": "claude-code", "model": None,
+                     "duration_seconds": 170.0, "success": True, "exit_reason": "completed",
+                     "error_classification": None, "error_code": None,
+                     "error_message": None, "timestamp": "2026-10-22T03:22:00+00:00"},
+                ],
+            ),
+        }
+        job = _make_job(total_sheets=1, status=JobStatus.COMPLETED, sheets=sheets)
+        report = _build_diagnostic_report(job)
+        buf = StringIO()
+        console = Console(file=buf, width=120, force_terminal=False)
+        with patch.object(diagnose_mod, "console", console):
+            diagnose_mod._display_diagnostic_report(job, report)
+        out = buf.getvalue()
+        assert "1. claude-code: 31.8s → TRANSIENT E999" in out
+        assert "agent process killed by SIGKILL before signalling completion" in out
+        assert "2. claude-code: 2m 50s → ok" in out
+
     def test_error_collection_from_history(self) -> None:
         now = datetime.now(UTC)
         error = ErrorRecord(

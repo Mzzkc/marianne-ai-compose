@@ -8,6 +8,7 @@ before actually running the job.
 
 from __future__ import annotations
 
+import hashlib
 import operator
 import re
 from dataclasses import dataclass, field
@@ -148,6 +149,62 @@ def _expand_path(template: str, context: dict[str, str]) -> str:
 # ---------------------------------------------------------------------------
 # Snippet builder
 # ---------------------------------------------------------------------------
+
+
+def render_prompts_markdown(preview: RenderingPreview, score_name: str) -> str:
+    """The full rendered prompt of every sheet as one Markdown document.
+
+    Sheets whose rendered text is byte-identical share one section headed by
+    all their numbers (a 1,797-sheet score has ~48 distinct prompts: fan-out
+    voices and loop iterations render alike). A sheet that failed to render
+    gets its error instead of a prompt. Order is by first sheet number.
+    """
+    groups: dict[str, list[int]] = {}
+    text_for: dict[str, str] = {}
+    errors: list[tuple[int, str]] = []
+    for sp in preview.sheets:
+        if sp.rendered_prompt is None:
+            errors.append((sp.sheet_num, sp.render_error or "render failed"))
+            continue
+        key = hashlib.sha256(sp.rendered_prompt.encode("utf-8")).hexdigest()
+        groups.setdefault(key, []).append(sp.sheet_num)
+        text_for.setdefault(key, sp.rendered_prompt)
+    out: list[str] = [
+        f"# Rendered prompts — {score_name}",
+        "",
+        f"{preview.total_sheets} sheet(s), {len(groups)} distinct prompt(s)"
+        + (f", {len(errors)} render error(s)" if errors else "")
+        + ".",
+        "",
+    ]
+    for key, nums in sorted(groups.items(), key=lambda kv: kv[1][0]):
+        label = _sheet_range_label(nums)
+        out.append(f"## Sheet{'s' if len(nums) > 1 else ''} {label}")
+        out.append("")
+        out.append("```text")
+        out.append(text_for[key].rstrip("\n"))
+        out.append("```")
+        out.append("")
+    for num, err in errors:
+        out.append(f"## Sheet {num} — render error")
+        out.append("")
+        out.append(f"```text\n{err}\n```")
+        out.append("")
+    return "\n".join(out)
+
+
+def _sheet_range_label(nums: list[int]) -> str:
+    """``[1, 2, 3, 7, 9, 10]`` → ``1-3, 7, 9-10``."""
+    runs: list[str] = []
+    start = prev = nums[0]
+    for n in nums[1:]:
+        if n == prev + 1:
+            prev = n
+            continue
+        runs.append(f"{start}-{prev}" if start != prev else str(start))
+        start = prev = n
+    runs.append(f"{start}-{prev}" if start != prev else str(start))
+    return ", ".join(runs)
 
 
 def _build_snippet(text: str, max_lines: int = 15) -> str:

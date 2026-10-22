@@ -266,11 +266,15 @@ class ValidationReporter:
             for err in preview.render_errors:
                 self.console.print(f"  [red]{err}[/red]")
 
-    def report_rendering_json(self, preview: "RenderingPreview") -> dict[str, Any]:
+    def report_rendering_json(
+        self, preview: "RenderingPreview", *, full_prompts: bool = False,
+    ) -> dict[str, Any]:
         """Return a rendering preview as a JSON-serializable dict.
 
         Args:
             preview: The rendering preview to serialize.
+            full_prompts: Also emit each sheet's complete ``rendered_prompt``
+                (``--render-prompts``); the 15-line snippet is always present.
 
         Returns:
             Dict with total_sheets, has_fan_out, has_dependencies,
@@ -317,6 +321,8 @@ class ValidationReporter:
                 "render_error": sp.render_error,
                 "validations": validations,
             }
+            if full_prompts:
+                sheet_dict["rendered_prompt"] = sp.rendered_prompt
             sheets.append(sheet_dict)
 
         return {
