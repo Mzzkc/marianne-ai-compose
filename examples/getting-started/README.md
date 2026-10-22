@@ -78,6 +78,7 @@ All scores use `prompt.variables` for customization. The patterns:
 
 **Prerequisites:**
 - A running Ollama server with `llama3.1:8b` for `api-backend.yaml`
+- A running Ollama server with `gemma4:26b` for `hello-local.yaml`, plus an `ollama` provider in OpenCode's config (`~/.config/opencode/opencode.json`, `@ai-sdk/openai-compatible` at `http://localhost:11434/v1`) — the score pins `ollama/gemma4:26b` on the built-in `opencode` profile through a score alias, so no extra instrument profile is needed
 - Git repository for `worktree-isolation.yaml`
 - Project directory to analyze for `observability-demo.yaml`
 

@@ -22,8 +22,10 @@
 #
 # Prerequisites (one-time):
 #   pip install -e ".[daemon]"           # Marianne + conductor
-#   # a local model served by Ollama, reachable by the opencode-gemma instrument:
-#   ollama pull gemma4:26b               # (or adjust the instrument's model)
+#   ollama pull gemma4:26b               # a local model served by Ollama
+#   # and an `ollama` provider in OpenCode's config pointing at it
+#   # (~/.config/opencode/opencode.json — see the README); or change the
+#   # model below to any provider/model OpenCode can already reach.
 #
 # Usage:
 #   mzt start                                          # start the conductor
@@ -41,11 +43,17 @@ description: "Pure-local first score — the same orchestration as hello.yaml, r
 
 workspace: ../../workspaces/hello-local
 
-# Fully local — opencode drives a local Ollama model via its OpenAI-compatible
-# endpoint. No OpenRouter, no fallback chain, no network. Swap the model in
-# the opencode-gemma profile (~/.marianne/instruments/opencode-gemma.yaml) for
-# any Ollama tag you have pulled.
-instrument: opencode-gemma
+# Fully local — the built-in opencode profile drives a local Ollama model via
+# OpenCode's `ollama` provider. No OpenRouter, no fallback chain, no network.
+# The alias pins the model here in the score, so there is no private profile
+# to install; swap the model for any Ollama tag you have pulled.
+instruments:
+  local-gemma:
+    profile: opencode
+    config:
+      model: "ollama/gemma4:26b"
+      timeout_seconds: 3600       # a 26B model on local hardware is slow
+instrument: local-gemma
 
 movements:
   1:
