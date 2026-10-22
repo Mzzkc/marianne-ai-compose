@@ -284,6 +284,20 @@ description: "The Join-Semilattice Merge proof — a county-grain, license-compl
 # base profiles and guessing family from substrings. Empty proposer fallbacks
 # make the configured profile the executed authority or fail the sheet.
 
+instruments:
+  # Three vendor families as score aliases over the shipped profiles, each
+  # pinned to one exact model. The alias NAME is the seat the oracle contract
+  # keys on; `mzt instruments resolve` is what the family probe reads.
+  music-critic:
+    profile: claude-code
+    config: {model: "claude-opus-4-7"}
+  gpt-5.6-repair:
+    profile: codex-cli
+    config: {model: "gpt-5.6-terra"}
+  opencode-glm-5.3-flash:
+    profile: opencode
+    config: {model: "zai-coding-plan/glm-5.3-flash"}
+
 instrument: strong
 instrument_config:
   timeout_seconds: 1800
@@ -781,7 +795,15 @@ prompt:
     import json, sys
     listing = json.load(open(sys.argv[1]))
     expected = json.load(open(sys.argv[2]))
-    live = {it.get("name"): it for it in listing}
+    # Seats are score ALIASES over shipped profiles: their live model is what
+    # this score resolves (sys.argv[4], from `mzt instruments resolve`), and
+    # their readiness is the underlying profile's.
+    registry = {it.get("name"): it for it in listing}
+    resolved = {r["bound_through"]: r for r in json.load(open(sys.argv[4]))["sheets"] if r["bound_through"]}
+    live = {}
+    for name, row in resolved.items():
+        base = registry.get(row["profile"], {})
+        live[name] = {"name": name, "default_model": row["model"], "ready": base.get("ready") is True}
     missing = set(expected) - set(live)
     if missing:
         print("FAMILY-PROBE-FAIL: exact profiles missing:", sorted(missing))
@@ -821,7 +843,8 @@ prompt:
     }
     PINS
     mzt instruments list --json > pin/conductor-instruments.json
-    "$PY" scripts/family-derive.py pin/conductor-instruments.json pin/proposer-pins.json pin/instrument-families.json
+    mzt instruments resolve "{{ score_dir }}/join-semilattice-merge.yaml" --json > pin/resolved-bindings.json
+    "$PY" scripts/family-derive.py pin/conductor-instruments.json pin/proposer-pins.json pin/instrument-families.json pin/resolved-bindings.json
 
     # ── fetch-pages.sh: the paced paginator (Dormancy Gate discipline) ─────────
     cat > scripts/fetch-pages.sh <<'SH'

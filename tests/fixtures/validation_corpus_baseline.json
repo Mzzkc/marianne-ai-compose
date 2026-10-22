@@ -1123,7 +1123,6 @@
     },
     "venue:examples/rosetta/condorcet-s-premise.yaml": {
       "issues": {
-        "V210": 30,
         "V325": 1
       },
       "parse": "ok"
@@ -1136,7 +1135,6 @@
     },
     "venue:examples/rosetta/join-semilattice-merge.yaml": {
       "issues": {
-        "V210": 6,
         "V325": 1
       },
       "parse": "ok"
@@ -1162,7 +1160,6 @@
     },
     "venue:examples/rosetta/the-attested-merge-gate.yaml": {
       "issues": {
-        "V210": 1,
         "V325": 1
       },
       "parse": "ok"
@@ -1175,14 +1172,12 @@
     },
     "venue:examples/rosetta/the-precedent-bench.yaml": {
       "issues": {
-        "V210": 1,
         "V325": 1
       },
       "parse": "ok"
     },
     "venue:examples/rosetta/the-unprimed-falsifier.yaml": {
       "issues": {
-        "V210": 25,
         "V325": 1
       },
       "parse": "ok"

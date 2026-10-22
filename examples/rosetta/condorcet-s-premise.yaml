@@ -14,8 +14,8 @@
 # ║      census → panel → audit — runs at full scale on THIS host's real          ║
 # ║      fleet, where six instrument names route to ONE model family              ║
 # ║      (movement 2 body-probes ALL TEN seats [R1/R2/R3: the four-probe         ║
-# ║      gap is closed; seat 3's probe now passes --model so it probes           ║
-# ║      its own route] and DERIVES family from each probed route via            ║
+# ║      gap is closed; every seat is a score ALIAS whose route is what          ║
+# ║      `mzt instruments resolve` reports] and DERIVES family from that route via║
 # ║      scripts/derive-family.py — the family census is measured, not            ║
 # ║      declared [R2/R3: "probed-route" was a mislabel]). 10 seats ·             ║
 # ║      K = 72 sealed-answer calibration items · 45 pairs · full                ║
@@ -223,6 +223,22 @@ description: "Condorcet's Premise proven on this host's real fleet (revised agai
 # theater this experiment measures (instrument letterheads <= derived model
 # families) is out of scope: movement 2 says PREMISE FAIL and names the fact.
 
+instruments:
+  # The ten seats are score ALIASES over the shipped profiles — the whole
+  # point of this score is that letterheads outnumber families, and an alias
+  # is exactly a letterhead. `{{ instrument_alias }}` stamps the seat; the
+  # probe derives each seat's family from the model the alias resolves to.
+  seat-claude-glm:   {profile: claude-code}                                        # GLM via the gateway default
+  seat-opencode-glm: {profile: opencode}                                           # zai glm-5.3 default
+  seat-glm-flash:    {profile: opencode,    config: {model: "zai-coding-plan/glm-5.3-flash"}}
+  seat-glm-turbo:    {profile: opencode,    config: {model: "zai-coding-plan/glm-5-turbo"}}
+  seat-glm-53-b:     {profile: opencode,    config: {model: "zai-coding-plan/glm-5.3"}}
+  seat-glm-53-c:     {profile: opencode,    config: {model: "zai-coding-plan/glm-5.3"}}
+  seat-gpt:          {profile: codex-cli,   config: {model: "gpt-5.6-terra"}}
+  seat-claude-opus:  {profile: claude-code, config: {model: "claude-opus-4-7"}}
+  seat-gemma:        {profile: crush}                                              # google/gemma-4-31b:free default
+  seat-gemini:       {profile: gemini-cli}                                         # gemini-3.7-flash default
+
 instrument: strong            # score default; every deterministic movement
 instrument_config:                 # and every juror sheet overrides below
   timeout_seconds: 3600
@@ -426,59 +442,59 @@ sheet:
   #    the frozen roster, so routing drift is caught by the census gate.
   per_sheet_instruments:
     # calibrate — sheets 8–17 = seats 1–10
-    8: claude-code                         # seat 1 · GLM route (glm-5.3)
-    9: opencode                            # seat 2 · GLM route (zai glm-5.3)
-    10: opencode-glm-5.3-flash             # seat 3 · GLM route (zai glm-5.3-flash)
-    11: musician-void                      # seat 4 · GLM route (zai glm-5-turbo)
-    12: flowspec-q5c2-sandbox              # seat 5 · GLM route (zai glm-5.3)
-    13: agents-registry-restricted-worker  # seat 6 · GLM route (zai glm-5.3)
-    14: gpt-5.6-repair                     # seat 7 · GPT (gpt-5.6-terra)
-    15: music-critic                       # seat 8 · CLAUDE (claude-opus-4-7)
-    16: crush                              # seat 9 · GEMMA (google/gemma-4-31b:free)
-    17: gemini-cli                         # seat 10 · GEMINI (gemini-3.7-flash) —
+    8: seat-claude-glm                         # seat 1 · GLM route (glm-5.3)
+    9: seat-opencode-glm                            # seat 2 · GLM route (zai glm-5.3)
+    10: seat-glm-flash             # seat 3 · GLM route (zai glm-5.3-flash)
+    11: seat-glm-turbo                      # seat 4 · GLM route (zai glm-5-turbo)
+    12: seat-glm-53-b              # seat 5 · GLM route (zai glm-5.3)
+    13: seat-glm-53-c  # seat 6 · GLM route (zai glm-5.3)
+    14: seat-gpt                     # seat 7 · GPT (gpt-5.6-terra)
+    15: seat-claude-opus                       # seat 8 · CLAUDE (claude-opus-4-7)
+    16: seat-gemma                              # seat 9 · GEMMA (google/gemma-4-31b:free)
+    17: seat-gemini                         # seat 10 · GEMINI (gemini-3.7-flash) —
                                            # [R1/R2/R3] replaces ollama (kind:http,
                                            # cannot author workspace artifacts)
     # panel — sheets 19–58 = seat s frames sr,kb,cog,aud repeating
-    19: claude-code                         # s1/sr
-    20: claude-code                         # s1/kb
-    21: claude-code                         # s1/cog
-    22: claude-code                         # s1/aud
-    23: opencode                            # s2/sr
-    24: opencode                            # s2/kb
-    25: opencode                            # s2/cog
-    26: opencode                            # s2/aud
-    27: opencode-glm-5.3-flash             # s3/sr
-    28: opencode-glm-5.3-flash             # s3/kb
-    29: opencode-glm-5.3-flash             # s3/cog
-    30: opencode-glm-5.3-flash             # s3/aud
-    31: musician-void                       # s4/sr
-    32: musician-void                       # s4/kb
-    33: musician-void                       # s4/cog
-    34: musician-void                       # s4/aud
-    35: flowspec-q5c2-sandbox              # s5/sr
-    36: flowspec-q5c2-sandbox              # s5/kb
-    37: flowspec-q5c2-sandbox              # s5/cog
-    38: flowspec-q5c2-sandbox              # s5/aud
-    39: agents-registry-restricted-worker  # s6/sr
-    40: agents-registry-restricted-worker  # s6/kb
-    41: agents-registry-restricted-worker  # s6/cog
-    42: agents-registry-restricted-worker  # s6/aud
-    43: gpt-5.6-repair                      # s7/sr
-    44: gpt-5.6-repair                      # s7/kb
-    45: gpt-5.6-repair                      # s7/cog
-    46: gpt-5.6-repair                      # s7/aud
-    47: music-critic                        # s8/sr
-    48: music-critic                        # s8/kb
-    49: music-critic                        # s8/cog
-    50: music-critic                        # s8/aud
-    51: crush                               # s9/sr
-    52: crush                               # s9/kb
-    53: crush                               # s9/cog
-    54: crush                               # s9/aud
-    55: gemini-cli                          # s10/sr
-    56: gemini-cli                          # s10/kb
-    57: gemini-cli                          # s10/cog
-    58: gemini-cli                          # s10/aud
+    19: seat-claude-glm                         # s1/sr
+    20: seat-claude-glm                         # s1/kb
+    21: seat-claude-glm                         # s1/cog
+    22: seat-claude-glm                         # s1/aud
+    23: seat-opencode-glm                            # s2/sr
+    24: seat-opencode-glm                            # s2/kb
+    25: seat-opencode-glm                            # s2/cog
+    26: seat-opencode-glm                            # s2/aud
+    27: seat-glm-flash             # s3/sr
+    28: seat-glm-flash             # s3/kb
+    29: seat-glm-flash             # s3/cog
+    30: seat-glm-flash             # s3/aud
+    31: seat-glm-turbo                       # s4/sr
+    32: seat-glm-turbo                       # s4/kb
+    33: seat-glm-turbo                       # s4/cog
+    34: seat-glm-turbo                       # s4/aud
+    35: seat-glm-53-b              # s5/sr
+    36: seat-glm-53-b              # s5/kb
+    37: seat-glm-53-b              # s5/cog
+    38: seat-glm-53-b              # s5/aud
+    39: seat-glm-53-c  # s6/sr
+    40: seat-glm-53-c  # s6/kb
+    41: seat-glm-53-c  # s6/cog
+    42: seat-glm-53-c  # s6/aud
+    43: seat-gpt                      # s7/sr
+    44: seat-gpt                      # s7/kb
+    45: seat-gpt                      # s7/cog
+    46: seat-gpt                      # s7/aud
+    47: seat-claude-opus                        # s8/sr
+    48: seat-claude-opus                        # s8/kb
+    49: seat-claude-opus                        # s8/cog
+    50: seat-claude-opus                        # s8/aud
+    51: seat-gemma                               # s9/sr
+    52: seat-gemma                               # s9/kb
+    53: seat-gemma                               # s9/cog
+    54: seat-gemma                               # s9/aud
+    55: seat-gemini                          # s10/sr
+    56: seat-gemini                          # s10/kb
+    57: seat-gemini                          # s10/cog
+    58: seat-gemini                          # s10/aud
 
   # Architecture §4: per_sheet_fallbacks EMPTY for every deterministic gate
   # sheet (movement-level instrument_fallbacks: [] already covers them; these
@@ -551,16 +567,16 @@ sheet:
     5: "Engine scan — axe + pa11y over pinned bytes (lighthouse commission-only), axe double-run diff = 0"
     6: "Author calibration — K=72 items, sealed key, generator determinism"
     7: "Gate self-tests — designed failures OBSERVED FIRING, mutations flip outcomes"
-    8: "Calibrate seat 1 · claude-code (GLM letterhead 1/6)"
-    9: "Calibrate seat 2 · opencode (GLM letterhead 2/6)"
-    10: "Calibrate seat 3 · opencode-glm-5.3-flash (GLM letterhead 3/6)"
-    11: "Calibrate seat 4 · musician-void (GLM letterhead 4/6)"
-    12: "Calibrate seat 5 · flowspec-q5c2-sandbox (GLM letterhead 5/6)"
-    13: "Calibrate seat 6 · agents-registry-restricted-worker (GLM letterhead 6/6)"
-    14: "Calibrate seat 7 · gpt-5.6-repair (GPT-terra)"
-    15: "Calibrate seat 8 · music-critic (Claude opus)"
-    16: "Calibrate seat 9 · crush (Gemma-free)"
-    17: "Calibrate seat 10 · gemini-cli (Gemini — the fifth family; replaced HTTP-only ollama)"
+    8: "Calibrate seat 1 · seat-claude-glm (GLM letterhead 1/6)"
+    9: "Calibrate seat 2 · seat-opencode-glm (GLM letterhead 2/6)"
+    10: "Calibrate seat 3 · seat-glm-flash (GLM letterhead 3/6)"
+    11: "Calibrate seat 4 · seat-glm-turbo (GLM letterhead 4/6)"
+    12: "Calibrate seat 5 · seat-glm-53-b (GLM letterhead 5/6)"
+    13: "Calibrate seat 6 · seat-glm-53-c (GLM letterhead 6/6)"
+    14: "Calibrate seat 7 · seat-gpt (GPT-terra)"
+    15: "Calibrate seat 8 · seat-claude-opus (Claude opus)"
+    16: "Calibrate seat 9 · seat-gemma (Gemma-free)"
+    17: "Calibrate seat 10 · seat-gemini (Gemini — the fifth family; replaced HTTP-only ollama)"
     18: "Census — M, rho-bar, design effect, n_eff, demotion by join, EXACT recheck"
     19: "Panel s1/sr — screen-reader frame"
     20: "Panel s1/kb — keyboard-only frame"
@@ -649,20 +665,20 @@ prompt:
     #    (roster drift is a host change, not a rounding error) [R2/R3: the
     #    family census is now measured, not declared]. EVERY seat carries a
     #    body-asserted semantic probe [R1/R2: six seats were never body-probed;
-    #    seat 3's probe now passes --model so it probes its own route] — run
+    #    every seat now resolves its own route through its alias] — run
     #    with timeout, exit code DELIBERATELY ignored, the BODY is the
     #    assertion (the crush lesson: exit 0 lies).
     seats:
-      1:  { instrument: "claude-code", family: "GLM", probe: "claude -p 'Reply with exactly this token and nothing else: SEATPROBE_OK'" }
-      2:  { instrument: "opencode", family: "GLM", probe: "opencode run 'Reply with exactly this token and nothing else: SEATPROBE_OK'" }
-      3:  { instrument: "opencode-glm-5.3-flash", family: "GLM", probe: "opencode run --model zai-coding-plan/glm-5.3-flash 'Reply with exactly this token and nothing else: SEATPROBE_OK'" }
-      4:  { instrument: "musician-void", family: "GLM", probe: "opencode run --model zai-coding-plan/glm-5-turbo 'Reply with exactly this token and nothing else: SEATPROBE_OK'" }
-      5:  { instrument: "flowspec-q5c2-sandbox", family: "GLM", probe: "/home/emzi/Projects/SCORES/flowspec-launch/scripts/run_q5c2_sandboxed_opencode.sh run 'Reply with exactly this token and nothing else: SEATPROBE_OK'" }
-      6:  { instrument: "agents-registry-restricted-worker", family: "GLM", probe: "printf '%s' 'Reply with exactly this token and nothing else: SEATPROBE_OK' | python3 /home/emzi/Projects/SCORES/agents-registry-migration-v1/scripts/restricted_model_launcher.py worker" }
-      7:  { instrument: "gpt-5.6-repair", family: "GPT", probe: "/home/emzi/.nvm/versions/node/v20.19.5/bin/codex exec 'Reply with exactly this token and nothing else: SEATPROBE_OK'" }
-      8:  { instrument: "music-critic", family: "CLAUDE", probe: "claude -p --model claude-opus-4-7 'Reply with exactly this token and nothing else: SEATPROBE_OK'" }
-      9:  { instrument: "crush", family: "GEMMA", probe: "crush run --quiet 'Reply with exactly this token and nothing else: SEATPROBE_OK'" }
-      10: { instrument: "gemini-cli", family: "GEMINI", probe: "gemini -p 'Reply with exactly this token and nothing else: SEATPROBE_OK'" }
+      1:  { instrument: "seat-claude-glm",   family: "GLM" }
+      2:  { instrument: "seat-opencode-glm", family: "GLM" }
+      3:  { instrument: "seat-glm-flash",    family: "GLM" }
+      4:  { instrument: "seat-glm-turbo",    family: "GLM" }
+      5:  { instrument: "seat-glm-53-b",     family: "GLM" }
+      6:  { instrument: "seat-glm-53-c",     family: "GLM" }
+      7:  { instrument: "seat-gpt",          family: "GPT" }
+      8:  { instrument: "seat-claude-opus",  family: "CLAUDE" }
+      9:  { instrument: "seat-gemma",        family: "GEMMA" }
+      10: { instrument: "seat-gemini",       family: "GEMINI" }
     # ── The four Rashomon frames — cadenza files SHIP WITH THE SCORE at      ──
     #    {score_dir}/frames/frame-<key>.md (authored statically from this table,
     #    reviewable before first run, blindness-gated by the M1 validation      ──
@@ -2390,17 +2406,27 @@ prompt:
     # BEFORE any measurement.
     : > run/seat-matrix.jsonl
     probe_fail=0
+    # Every seat is a score ALIAS: resolve this score once, then each seat's
+    # profile and model route come from the conductor's own resolution —
+    # never from a hand-written probe command with an absolute path.
+    mzt instruments resolve "{{ score_dir }}/condorcet-s-premise.yaml" --json > run/resolved-bindings.json
     {% for sid, s in seats.items() %}
     NAME="{{ s.instrument }}"
-    mzt instruments check "$NAME" > "run/probe-$NAME.txt" 2>&1 || true
+    PROFILE=$(jq -r --arg a "$NAME" '[.sheets[] | select(.bound_through == $a)][0].profile // ""' run/resolved-bindings.json)
+    ROUTE=$(jq -r --arg a "$NAME" '[.sheets[] | select(.bound_through == $a)][0].model // ""' run/resolved-bindings.json)
+    [ -n "$PROFILE" ] || { echo "PROBE FAIL: seat {{ sid }} alias $NAME is bound to no sheet of this score"; probe_fail=1; PROFILE=unresolved; }
+    mzt instruments check "$PROFILE" > "run/probe-$NAME.txt" 2>&1 || true
     if grep -q "is ready" "run/probe-$NAME.txt"; then LIVE=true; else LIVE=false; probe_fail=1; fi
-    ROUTE=$(grep -m1 'Default model' "run/probe-$NAME.txt" | sed 's/.*Default model: *//' | tr -d '\n')
+    # An alias without a pinned model runs the profile's default route.
+    [ -n "$ROUTE" ] || ROUTE=$(grep -m1 'Default model' "run/probe-$NAME.txt" | sed 's/.*Default model: *//' | tr -d '\n')
     [ -n "$ROUTE" ] || ROUTE=unresolved
     FAM=$(python3 scripts/derive-family.py "$ROUTE") || {
       echo "PROBE FAIL: seat {{ sid }} route '$ROUTE' maps to no known model family — HALT for roster remediation";
       probe_fail=1; FAM=UNKNOWN; }
-    timeout 600 {{ s.probe }} > "run/probe-$NAME.body" 2>&1 || true
-    if grep -q SEATPROBE_OK "run/probe-$NAME.body"; then BODY_LIVE=true; else BODY_LIVE=false; fi
+    # Body liveness: one real prompt through the conductor's own backend for
+    # the seat's PROFILE (the model pin rides on the alias at dispatch).
+    mzt instruments check "$PROFILE" --live --timeout 300 > "run/probe-$NAME.body" 2>&1 || true
+    if grep -q "passed the live probe" "run/probe-$NAME.body"; then BODY_LIVE=true; else BODY_LIVE=false; fi
     if [ "$BODY_LIVE" = false ]; then LIVE=false; probe_fail=1; fi
     if [ "$FAM" != "{{ s.family }}" ]; then
       echo "PROBE FAIL: seat {{ sid }} {{ s.instrument }} — declared family {{ s.family }} but route '$ROUTE' derives $FAM (roster drift)";
@@ -2704,7 +2730,7 @@ prompt:
     {% elif stage == 8 %}
     {% set seat = instance %}
     You are a JUROR: seat {{ seat }} of 10 on a measured-independence
-    panel, executing as instrument `{{ instrument_name }}`. Your calibration
+    panel, executing as seat `{{ instrument_alias }}` (profile `{{ instrument_name }}`). Your calibration
     answers are being MEASURED, not trusted — answer honestly from evidence.
 
     {{ ai_ground_rules() }}
@@ -2724,7 +2750,7 @@ prompt:
     Write {{ workspace }}/calibration/answers-{{ seat }}.jsonl — one JSON object
     per line, EVERY item answered or explicitly unanswered:
     {"item_id": "K-001", "answer": "yes" | "no" | "UNANSWERED",
-     "instrument": "{{ instrument_name }}", "seat": {{ seat }},
+     "instrument": "{{ instrument_alias }}", "seat": {{ seat }},
      "evidence_note": "<one line citing the pinned bytes>"}
     - Exactly 72 lines matching the 72 item ids: an item you cannot determine
       from evidence is "UNANSWERED" — a declared cell, never an omission
@@ -2783,7 +2809,7 @@ prompt:
     {% set seat = ((instance - 1) // 4) + 1 %}
     {% set frame = frames[((instance - 1) % 4) + 1] %}
     You are a JUROR: seat {{ seat }}, frame `{{ frame.key }}` ({{ frame.name }}),
-    executing as instrument `{{ instrument_name }}`. Your frame lens arrives as
+    executing as seat `{{ instrument_alias }}` (profile `{{ instrument_name }}`). Your frame lens arrives as
     an injected methodology document — the ONLY lens you were given. The other
     frame files exist somewhere on this host's disk; do not open them [R2:
     honesty about what isolation means here — the cadenza architecture DELIVERS

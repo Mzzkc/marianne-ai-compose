@@ -98,9 +98,9 @@
 # ║  PREREQUISITES   : (the price, stated before you pay it)                    ║
 # ║                    - three vendor CLIs on PATH with working auth:            ║
 # ║                      `claude` (GLM route), `codex` (GPT route), and         ║
-# ║                      opencode configured with a NON-GLM default model        ║
-# ║                      for the oracle profile (this host: opencode-gemma       ║
-# ║                      → ollama/gemma4:26b, local daemon must be up)           ║
+# ║                      opencode (the oracle seat `opencode-gemma` is a score ║
+# ║                      ALIAS over it pinned to ollama/gemma4:26b — a local   ║
+# ║                      ollama daemon must be up; no personal profile needed) ║
 # ║                    - `gh` authenticated AS THE REPO OWNER (the score         ║
 # ║                      pushes gh-pages subpaths and attaches release           ║
 # ║                      assets; only the owner can run movements 15-17)        ║
@@ -271,6 +271,17 @@ description: "The Attested Merge Gate proof — five vendor-diverse writers agai
 # The score never writes outside its workspace except the two HERALDED external
 # effects, both gated: the gh-pages subpath push + release asset at GO (armed
 # first), and the evidence-page seal push at movement 17.
+
+instruments:
+  # The local tier is the shipped opencode profile pinned to an Ollama tag,
+  # as a score alias — no private profile to install. The alias NAME is the
+  # seat; `{{ instrument_alias }}` stamps it and the families table keys on
+  # it. Needs an `ollama` provider in OpenCode's config and the tag pulled.
+  opencode-gemma:
+    profile: opencode
+    config:
+      model: "ollama/gemma4:26b"
+      timeout_seconds: 3600
 
 instrument: strong
 instrument_config:
@@ -737,9 +748,20 @@ prompt:
     ```bash
     {{ strict() }}
     mzt instruments list --json > pin/instruments-raw.json
+    # The oracle (opencode-gemma) is a score ALIAS over the shipped opencode
+    # profile, so its family comes from the model THIS score resolves for it,
+    # not from a registry row: fold the resolved aliases in as rows.
+    mzt instruments resolve "{{ score_dir }}/the-attested-merge-gate.yaml" --json > pin/resolved-bindings.json
     python3 - <<'PY'
     import json, sys
     raw = json.load(open("pin/instruments-raw.json"))
+    by_name = {r.get("name"): r for r in raw}
+    for row in json.load(open("pin/resolved-bindings.json"))["sheets"]:
+        alias = row["bound_through"]
+        if alias and alias not in by_name and row["profile"] in by_name:
+            base = by_name[row["profile"]]
+            raw.append({**base, "name": alias, "default_model": row["model"] or base.get("default_model")})
+            by_name[alias] = raw[-1]
     # Instruments without a pinned default model route by their own vendor
     # construction (codex-cli is OpenAI's Codex CLI), so the brand is the
     # family source of record for them; pinned models outrank brands. The

@@ -299,6 +299,17 @@ description: "The Unprimed Falsifier proof — FDA Medication Guides for warfari
 # run/deployment.json, and EVERY script reads disk (never a hardcoded drug
 # list). Override with --var github_owner=<login> etc.
 
+instruments:
+  # The local tier is the shipped opencode profile pinned to an Ollama tag,
+  # as a score alias — no private profile to install. The alias NAME is the
+  # seat; `{{ instrument_alias }}` stamps it and the families table keys on
+  # it. Needs an `ollama` provider in OpenCode's config and the tag pulled.
+  opencode-gemma:
+    profile: opencode
+    config:
+      model: "ollama/gemma4:26b"
+      timeout_seconds: 3600
+
 instrument: strong            # score default; every deterministic movement
 instrument_config:                 # overrides to cli below
   timeout_seconds: 1800
@@ -895,8 +906,13 @@ prompt:
       || { echo "PROBE FAIL: ollama daemon not reachable (opencode-gemma needs it)"; exit 1; }
     curl -fsS --max-time 10 http://localhost:11434/api/tags 2>/dev/null | grep -q "{{ reader_model }}" \
       || { echo "PROBE FAIL: ollama is not serving {{ reader_model }} (pull it first)"; exit 1; }
-    mzt instruments check opencode-gemma 2>/dev/null | grep -q "is ready" \
-      || { echo "PROBE FAIL: opencode-gemma instrument not registered on this host (a HOST profile, see header PREREQUISITES)"; exit 1; }
+    # The local tier is a score alias over the shipped `opencode` profile:
+    # resolve THIS score and require the alias to land on opencode with the
+    # Ollama model pinned (a missing provider or tag fails at the probes
+    # above; a missing profile fails here).
+    mzt instruments resolve "{{ score_dir }}/the-unprimed-falsifier.yaml" --json \
+      | jq -e '[.sheets[] | select(.bound_through == "opencode-gemma")] | length > 0 and all(.[]; .profile == "opencode" and (.model | startswith("ollama/")))' >/dev/null \
+      || { echo "PROBE FAIL: alias opencode-gemma does not resolve to opencode + an ollama/ model on this host"; exit 1; }
     command -v node >/dev/null || { echo "PROBE FAIL: node missing (pa11y needs it)"; exit 1; }
     command -v npm >/dev/null || { echo "PROBE FAIL: npm missing"; exit 1; }
 
