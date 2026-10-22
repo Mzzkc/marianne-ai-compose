@@ -610,9 +610,14 @@ validations:
       assert 'findings' in m, 'Missing findings';
       assert 'diagnosis_summary' in m, 'Missing summary';
       findings = m['findings'];
-      assert len(findings) > 0, 'No findings classified';
+      assert isinstance(findings, list), 'findings must be a list';
+      # A clean project is a valid result: zero findings with a summary that
+      # says so. A non-empty list must classify every finding.
+      if not findings:
+          assert m['diagnosis_summary'], 'zero findings needs a diagnosis_summary saying the scan was clean'
       for f in findings:
-          assert f['echelon'] in ('E1', 'E2', 'E3'), 'Invalid echelon'
+          assert f.get('echelon') in ('E1', 'E2', 'E3'), 'Invalid echelon';
+          assert f.get('title') or f.get('description'), 'a finding needs a title or description'
       "
     condition: "stage == 2"
     stage: 2
@@ -648,10 +653,10 @@ validations:
 
   - type: content_regex
     path: "{workspace}/03-e1-field-results.md"
-    pattern: "(?i)(CONFIRMED|FALSE POSITIVE)"
+    pattern: "(?i)(CONFIRMED|FALSE POSITIVE|NEEDS UPGRADE|no E1 findings)"
     condition: "stage == 3"
     stage: 2
-    description: "E1 results have finding status classifications"
+    description: "E1 results classify each finding, or state there were no E1 findings"
 
   - type: content_contains
     path: "{workspace}/03-e1-field-results.md"
