@@ -34,7 +34,8 @@
 #
 # Prerequisites:
 #   - gh CLI authenticated (gh auth login)
-#   - pip available (Stage 3 installs cisco-ai-skill-scanner if missing)
+#   - uv or pipx available (Stage 3 installs cisco-ai-skill-scanner as a tool
+#     if `skill-scanner` is missing; a bare pip install is refused on PEP 668 hosts)
 #   - Target project is a git repo with open issues under the configured label
 #
 # How to Adapt:
@@ -283,18 +284,23 @@ prompt:
     **Step 0: Scanner preflight (install-first, then fail hard).**
 
     ```bash
-    if ! command -v cisco-ai-skill-scanner >/dev/null 2>&1; then
-      echo "cisco-ai-skill-scanner not found. Attempting install..."
-      pip install --quiet cisco-ai-skill-scanner 2>&1 || \
+    # The PyPI distribution is `cisco-ai-skill-scanner`; the command it installs
+    # is `skill-scanner`. A bare `pip install` is refused on every PEP 668 host
+    # (externally-managed-environment), so install as a tool.
+    if ! command -v skill-scanner >/dev/null 2>&1; then
+      echo "skill-scanner not found. Attempting install..."
+      { command -v uv >/dev/null 2>&1 && uv tool install --quiet cisco-ai-skill-scanner 2>&1; } || \
+        { command -v pipx >/dev/null 2>&1 && pipx install --quiet cisco-ai-skill-scanner 2>&1; } || \
         pip install --user --quiet cisco-ai-skill-scanner 2>&1 || \
-        { echo "ERROR: failed to install cisco-ai-skill-scanner. Install it manually: pip install cisco-ai-skill-scanner"; exit 1; }
+        { echo "ERROR: failed to install cisco-ai-skill-scanner. Install it manually: uv tool install cisco-ai-skill-scanner (or pipx)"; exit 1; }
+      export PATH="$HOME/.local/bin:$PATH"
     fi
-    if ! command -v cisco-ai-skill-scanner >/dev/null 2>&1; then
-      echo "ERROR: cisco-ai-skill-scanner still not on PATH after install."
+    if ! command -v skill-scanner >/dev/null 2>&1; then
+      echo "ERROR: skill-scanner still not on PATH after install."
       echo "Check your Python environment and re-run."
       exit 1
     fi
-    cisco-ai-skill-scanner --version || true
+    skill-scanner --version || true
     ```
 
     If the preflight exits non-zero, STOP. Do not write the sanitized corpus.
@@ -322,7 +328,7 @@ prompt:
     Use this Python script pattern (runs entirely inside the agent session):
     ```bash
     python3 - <<'PY'
-    import json, re, subprocess, yaml, pathlib, tempfile
+    import json, re, shutil, subprocess, yaml, pathlib, tempfile
     raw = json.loads(pathlib.Path("{{ workspace }}/issues/raw-corpus.json").read_text())
 
     # Defense-in-depth: titles and labels flow verbatim into agent prompts AND
@@ -350,26 +356,38 @@ prompt:
         # Scan title AND body combined — title is an attack surface too
         scan_text = f"TITLE: {raw_title}\nLABELS: {','.join(raw_labels)}\nBODY:\n{raw_body}"
         verdict, threat = "CLEAN", None
-        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
-            f.write(scan_text)
-            tmp = f.name
+        # skill-scanner scans a DIRECTORY holding a SKILL.md (a file path is
+        # "not a directory", exit 0, no JSON). The issue goes in as that
+        # skill's body under a fixed manifest. Its report always carries
+        # policy notes about the manifest itself (missing license, low
+        # analyzability), so a verdict keys on `is_safe` and the severity
+        # of content findings, never on "any finding at all".
+        tmp = tempfile.mkdtemp(prefix="issue-scan-")
         try:
+            pathlib.Path(tmp, "SKILL.md").write_text(
+                "---\nname: issue-triage-input\n"
+                "description: one GitHub issue, title and body, scanned before any agent reads it\n"
+                "---\n" + scan_text
+            )
             r = subprocess.run(
-                ["cisco-ai-skill-scanner", "scan", tmp, "--lenient", "--format", "json"],
+                ["skill-scanner", "scan", tmp, "--lenient", "--format", "json"],
                 capture_output=True, text=True, timeout=60,
             )
-            if r.returncode != 0:
+            data = json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else None
+            if data is None:
                 verdict, threat = "FLAGGED", "scanner_nonzero_exit"
             else:
-                data = json.loads(r.stdout) if r.stdout.strip() else {}
-                threats = data.get("threats") or data.get("findings") or []
-                if threats:
+                content = [f for f in data.get("findings") or []
+                           if f.get("category") != "policy_violation"]
+                severe = [f for f in content if f.get("severity") in ("HIGH", "CRITICAL")]
+                if data.get("is_safe") is False or severe:
                     verdict = "FLAGGED"
-                    threat = threats[0].get("type") or threats[0].get("category") or "unspecified"
+                    first = (severe or content or [{}])[0]
+                    threat = first.get("category") or first.get("rule_id") or "unspecified"
         except Exception as e:
             verdict, threat = "FLAGGED", f"scanner_error:{type(e).__name__}"
         finally:
-            pathlib.Path(tmp).unlink(missing_ok=True)
+            shutil.rmtree(tmp, ignore_errors=True)
         # Also flag if title contained shell-dangerous chars (even if scanner cleared the body)
         if verdict == "CLEAN" and title_changed:
             verdict, threat = "FLAGGED", "suspicious_title_chars"
