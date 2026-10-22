@@ -1423,6 +1423,37 @@ backed up and written atomically.
 
 These commands manage and inspect available instruments — the AI tools Marianne can use to execute scores. Instruments include CLI tools (Claude Code, Gemini CLI, Codex CLI, Aider, Goose) and HTTP APIs (Anthropic API, Ollama).
 
+### `mzt instruments resolve`
+
+Show, per sheet, what each instrument binding in a score resolves to.
+
+```
+Usage: mzt instruments resolve [OPTIONS] SCORE
+```
+
+Reads the score the way the conductor does at admission — score aliases
+(`instruments:`), capability classes from this machine's class map,
+`per_sheet_instruments` and `instrument_map` pins — and prints one row per
+sheet: what the sheet was bound through (an alias or class name, or
+`(direct)`), the profile it resolved to, the model, and the fallback chain.
+The closing line counts distinct profile+model bindings: a "three
+independent reviewers" fan-out that resolves to one binding is not
+independent, whatever its prose says. Pair with `{{ instrument_alias }}` in
+the score to stamp evidence with the binding name.
+
+#### Options
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--json` | | false | Output as JSON (`{"score": ..., "sheets": [{sheet, movement, voice, bound_through, profile, model, fallbacks}]}`) |
+
+#### Examples
+
+```bash
+mzt instruments resolve examples/engineering/quality-triage.yaml
+mzt instruments resolve my-score.yaml --json | jq '.sheets[] | select(.movement == 4)'
+```
+
 ### `mzt instruments list`
 
 List all available instruments and their readiness status.

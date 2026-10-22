@@ -269,6 +269,86 @@ def _list_json(profiles: dict[str, InstrumentProfile]) -> None:
     output_json(result)
 
 
+class ResolvedRow(TypedDict):
+    """One sheet's binding as `mzt instruments resolve` reports it."""
+
+    sheet: int
+    movement: int
+    voice: int | None
+    bound_through: str
+    profile: str
+    model: str | None
+    fallbacks: list[str]
+
+
+@instruments_app.command(name="resolve")
+def resolve_score(
+    score: Path = typer.Argument(..., help="Score YAML to resolve"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Show, per sheet, the profile and model each instrument binding resolves to.
+
+    Reads the score the way the conductor does at admission — score aliases,
+    capability classes from this machine's class map, per-sheet and
+    instrument_map pins — and prints one row per sheet: the alias (or class)
+    the sheet was bound through, the profile it resolved to, the model, and
+    the fallback chain. This is what a score's diversity claim actually
+    configures; the prose says what the author meant.
+    """
+    from marianne.core.config.job import JobConfig
+    from marianne.core.sheet import build_sheets
+    from marianne.instruments.classes import load_class_map, resolve_job_classes
+
+    try:
+        config = JobConfig.from_yaml(score)
+    except Exception as exc:  # noqa: BLE001 — the score's own error is the answer
+        output_error(f"cannot load {score}: {exc}")
+        raise typer.Exit(1) from exc
+    profile_names = set(_load_all_profiles())
+    try:
+        snapshot = resolve_job_classes(
+            config, profile_names, load_class_map(profile_names=profile_names)
+        )
+    except ValueError as exc:
+        output_error(str(exc))
+        raise typer.Exit(1) from exc
+    sheets = build_sheets(config, classes=snapshot)
+    rows: list[ResolvedRow] = []
+    for sheet in sheets:
+        resolution = sheet.instrument_resolution
+        bound_through = sheet.instrument_alias or (
+            resolution.requested if resolution is not None else ""
+        )
+        model = sheet.instrument_config.get("model")
+        rows.append({
+            "sheet": sheet.num,
+            "movement": sheet.movement,
+            "voice": sheet.voice,
+            "bound_through": bound_through,
+            "profile": sheet.instrument_name,
+            "model": str(model) if model is not None else None,
+            "fallbacks": list(sheet.instrument_fallbacks),
+        })
+    if json_output:
+        output_json({"score": str(score), "sheets": rows})
+        return
+    table = Table(title=f"Resolved bindings — {config.name}", show_header=True,
+                  header_style="bold", padding=(0, 2))
+    for col in ("SHEET", "MOVEMENT", "VOICE", "BOUND THROUGH", "PROFILE", "MODEL", "FALLBACKS"):
+        table.add_column(col, no_wrap=col != "FALLBACKS")
+    for r in rows:
+        table.add_row(
+            str(r["sheet"]), str(r["movement"]),
+            "" if r["voice"] is None else str(r["voice"]),
+            r["bound_through"] or "[dim](direct)[/dim]", r["profile"],
+            r["model"] or "[dim](profile default)[/dim]",
+            ", ".join(r["fallbacks"]) or "[dim]none[/dim]",
+        )
+    console.print(table)
+    distinct = {(r["profile"], r["model"]) for r in rows}
+    console.print(f"{len(rows)} sheets, {len(distinct)} distinct profile+model bindings")
+
+
 @instruments_app.command(name="check")
 def check_instrument(
     name: str = typer.Argument(help="Instrument name to check"),
