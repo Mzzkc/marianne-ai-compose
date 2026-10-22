@@ -134,7 +134,7 @@ prompt:
     Create a content strategy document that includes:
 
     1. **Audience Pain Points** — 3-5 specific frustrations your audience
-       has with existing CI/CD tools (be concrete, not abstract)
+       has with existing {{ product.category }} tools (be concrete, not abstract)
     2. **Key Messages** — 3 primary messages, ranked by impact.
        Each should connect a pain point to a product feature.
     3. **Tone Guide** — Specific dos and don'ts for this campaign,
@@ -154,7 +154,7 @@ prompt:
     {% elif stage == 2 %}
     # Movement 2, Voice {{ voice }}: Content Generation
 
-    You are a content creator specializing in developer marketing.
+    You are a content creator writing for this audience: {{ campaign.audience }}.
 
     ## Read the Strategy
     Read {{ workspace }}/01-strategy.md — follow its tone guide, key
@@ -169,9 +169,9 @@ prompt:
     Requirements:
     - Lead with a relatable developer frustration (from the strategy)
     - Show, don't tell — use a real-world scenario to demonstrate value
-    - Include a code-like example showing before/after (traditional
-      CI/CD config vs. Deploy's zero-config approach)
-    - Technical depth: explain HOW auto-detection works at a high level
+    - Include a concrete before/after example: the audience's current way
+      versus {{ product.name }}'s ({{ campaign.differentiator }})
+    - Depth: explain HOW the product's headline feature works, at a high level
     - End with a clear CTA to {{ campaign.landing_url }}
     - SEO-friendly title and meta description
 
@@ -206,7 +206,7 @@ prompt:
     Requirements:
     - **Email 1** (Day 0): Hook — the pain point. Subject line that
       gets opened. Show you understand their world. Soft CTA.
-    - **Email 2** (Day 3): Proof — how Deploy solves it. Include one
+    - **Email 2** (Day 3): Proof — how {{ product.name }} solves it. Include one
       concrete example or metric. Stronger CTA.
     - **Email 3** (Day 7): Urgency — beta closing soon. Social proof
       (even if hypothetical: "X engineers are already using...").
@@ -232,7 +232,7 @@ prompt:
     - **Hero:** Headline (8 words max) + subheadline (20 words max) +
       CTA button
     - **Problem:** 3 pain-point cards (icon placeholder + title + 1 sentence)
-    - **Solution:** How Deploy works in 3 steps (visual-friendly copy)
+    - **Solution:** How {{ product.name }} works in 3 steps (visual-friendly copy)
     - **Features:** 4 feature blocks matching product.key_features
       (title + 2-sentence description each)
     - **Social Proof:** Placeholder section for testimonials

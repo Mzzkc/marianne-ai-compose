@@ -510,11 +510,6 @@
   "rules": "2"
  },
  {
-  "score": "examples/product/contract-generator.yaml",
-  "sheet": "5",
-  "rules": "3"
- },
- {
   "score": "examples/product/invoice-analysis.yaml",
   "sheet": "1",
   "rules": "2"

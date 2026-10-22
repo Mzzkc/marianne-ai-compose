@@ -112,9 +112,10 @@ prompt:
         thinkers: "Dewey, James, Rorty"
         method: >-
           Judge claims by their practical consequences. Don't ask
-          "is it true?" — ask "what difference does it make?"
-          If AGI produces useful outcomes, the philosophical error
-          charge is itself an error. Truth is what works.
+          "is it true?" — ask "what difference does it make?" Trace
+          what follows, in practice, if the proposition is accepted and
+          if it is rejected; a distinction that makes no practical
+          difference is not a distinction. Truth is what works.
 
       2:
         name: "phenomenologist"
@@ -122,21 +123,22 @@ prompt:
         thinkers: "Husserl, Heidegger, Merleau-Ponty"
         method: >-
           Return to the things themselves. Examine the lived experience
-          of understanding, of being-in-the-world. Challenge the
-          proposition's implicit dualism between "real" and "mimicked"
-          understanding. What is the structure of understanding as
-          it presents itself to consciousness?
+          the proposition is about, as it presents itself to
+          consciousness, before any theory of it. Challenge every
+          dualism the proposition smuggles in — "real" versus "apparent",
+          inner versus outer — and ask what the phenomenon's own
+          structure is.
 
       3:
         name: "analytic"
         school: "Analytic Philosophy of Mind"
         thinkers: "Dennett, Chalmers, Churchland"
         method: >-
-          Analyze the logical structure of the claims. Is "mimicry
-          of cognition" a coherent concept? What exactly is the
-          difference between mimicking X and being X? Is the
-          proposition a disguised category error, or does it
-          identify a real distinction?
+          Analyze the logical structure of the claims. Define every
+          key term the proposition relies on and ask whether each is
+          coherent; find the distinction the proposition's force depends
+          on and test whether it is real or a category error; state the
+          proposition's strongest form before attacking it.
 
   template: |
     {% if movement == 1 %}

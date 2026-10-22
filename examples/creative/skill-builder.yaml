@@ -214,7 +214,7 @@ prompt:
     - **Name it** clearly (give it a memorable label)
     - **Explain it** without jargon first, then introduce the proper term
     - **Show it** with a concrete, sensory example
-    - **Connect it** to something they already understand from cooking
+    - **Connect it** to something they already understand from {{ skill.domain }}
 
     End with a "mental model" — a single metaphor or diagram (described in
     text) that ties all the concepts together. The learner should be able
@@ -239,15 +239,18 @@ prompt:
     **{{ level.exercise }}**
 
     Write this as a self-contained practice guide. The learner should be
-    able to print this page and take it to the kitchen.
+    able to print this page and work from it wherever {{ skill.domain }}
+    is practised.
 
     {% if instance == 1 %}
     Include a "what you'll need" checklist at the top.
     {% elif instance == 2 %}
-    Include a "fermentation journal" template they can copy.
+    Include a practice-log template they can copy: what they tried, what
+    they observed, what they will change next time.
     {% elif instance == 3 %}
-    Include photos-to-look-for descriptions (what does healthy vs
-    unhealthy fermentation LOOK like?).
+    Include "what to look for" descriptions: how the learner tells a
+    healthy result from a failing one, by observation, before it is too
+    late to intervene.
     {% endif %}
 
     {{ save_to("03-practice-" ~ level.name ~ ".md") }}
