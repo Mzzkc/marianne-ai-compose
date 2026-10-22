@@ -867,11 +867,15 @@
       "parse": "ok"
     },
     "venue:examples/engineering/codebase-rewrite.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 4
+      },
       "parse": "ok"
     },
     "venue:examples/engineering/issue-solver.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 4
+      },
       "parse": "ok"
     },
     "venue:examples/engineering/issue-triage.yaml": {
@@ -886,23 +890,28 @@
     },
     "venue:examples/engineering/project-roadmap.yaml": {
       "issues": {
-        "V308": 1
+        "V308": 1,
+        "V325": 1
       },
       "parse": "ok"
     },
     "venue:examples/engineering/quality-continuous.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 4
+      },
       "parse": "ok"
     },
     "venue:examples/engineering/quality-triage.yaml": {
       "issues": {
-        "V217": 1,
-        "V308": 1
+        "V308": 1,
+        "V325": 1
       },
       "parse": "ok"
     },
     "venue:examples/engineering/saas-app-builder.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/engineering/score-composer.yaml": {
@@ -998,7 +1007,9 @@
       "parse": "ok"
     },
     "venue:examples/patterns/dead-letter-quarantine.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/patterns/design-review.yaml": {
@@ -1008,23 +1019,33 @@
       "parse": "ok"
     },
     "venue:examples/patterns/echelon-repair.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/patterns/immune-cascade.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/patterns/prefabrication.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/patterns/shipyard-sequence.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/patterns/source-triangulation.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/product/candidate-screening.yaml": {
@@ -1070,7 +1091,9 @@
       "parse": "ok"
     },
     "venue:examples/research/research-agent.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/research/strategic-plan.yaml": {
@@ -1093,51 +1116,75 @@
     },
     "venue:examples/rosetta/cathedral-construction.yaml": {
       "issues": {
-        "V202": 1
+        "V202": 1,
+        "V325": 1
       },
       "parse": "ok"
     },
     "venue:examples/rosetta/condorcet-s-premise.yaml": {
       "issues": {
-        "V210": 5
+        "V210": 30,
+        "V325": 1
       },
       "parse": "ok"
     },
     "venue:examples/rosetta/firing-the-pass.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/rosetta/join-semilattice-merge.yaml": {
-      "issues": {},
+      "issues": {
+        "V210": 6,
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/rosetta/live-relay.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/rosetta/negative-treatment-watch.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok",
       "reason": "Root max_wall_seconds is the one-release tick-window alias; V328 names schedule.max_wall_seconds."
     },
     "venue:examples/rosetta/rashomon-gate.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/rosetta/the-attested-merge-gate.yaml": {
-      "issues": {},
+      "issues": {
+        "V210": 1,
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/rosetta/the-economic-injury-line.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/rosetta/the-precedent-bench.yaml": {
-      "issues": {},
+      "issues": {
+        "V210": 1,
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:examples/rosetta/the-unprimed-falsifier.yaml": {
-      "issues": {},
+      "issues": {
+        "V210": 25,
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:scores/generic-fleet-technique-research.yaml": {
@@ -1145,23 +1192,29 @@
       "parse": "ok"
     },
     "venue:scores/instrument-catalog-build-fold.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:scores/instrument-catalog-build.yaml": {
       "issues": {
         "V110": 1,
-        "V202": 1
+        "V202": 1,
+        "V325": 1
       },
       "parse": "ok"
     },
     "venue:scores/instrument-catalog-refresh-fold.yaml": {
-      "issues": {},
+      "issues": {
+        "V325": 1
+      },
       "parse": "ok"
     },
     "venue:scores/instrument-catalog-refresh.yaml": {
       "issues": {
-        "V110": 2
+        "V110": 2,
+        "V325": 1
       },
       "parse": "ok"
     },
@@ -1171,7 +1224,8 @@
     },
     "venue:scores/thinking-lab.yaml": {
       "issues": {
-        "V108": 4
+        "V108": 4,
+        "V325": 1
       },
       "parse": "ok"
     }

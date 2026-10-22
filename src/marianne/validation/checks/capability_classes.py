@@ -709,7 +709,7 @@ class SchemaSheetInteractiveCheck:
         config_path: Path,  # noqa: ARG002 (protocol shape)
         raw_yaml: str,
     ) -> list[ValidationIssue]:
-        ctx = _load_context()
+        ctx = _load_context(self.check_id)
         if ctx is None:
             return []
         try:
@@ -812,7 +812,7 @@ class CliSchemaShapeCheck:
         config_path: Path,  # noqa: ARG002 (protocol shape)
         raw_yaml: str,
     ) -> list[ValidationIssue]:
-        ctx = _load_context()
+        ctx = _load_context(self.check_id)
         if ctx is None:
             return []
         try:
