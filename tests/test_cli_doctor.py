@@ -836,6 +836,58 @@ class TestCredentialExposure:
                 monkeypatch.delenv(name, raising=False)
         assert doctor_mod._credential_exposure(self._profiles(), self._results()) == []
 
+    def test_user_profile_that_lost_ambient_credentials_is_named(self, monkeypatch) -> None:
+        """A user profile running `claude` with no env policy, while
+        ANTHROPIC_AUTH_TOKEN is set, is told what stopped reaching it."""
+        import importlib
+
+        from marianne.core.config.instruments import (
+            CliCommand,
+            CliOutputConfig,
+            CliProfile,
+            InstrumentProfile,
+        )
+
+        doctor_mod = importlib.import_module("marianne.cli.commands.doctor")
+        # Only the one variable this test plants may be present: the host
+        # running the suite may carry the rest of claude-code's set.
+        import os
+
+        for name in list(os.environ):
+            if name.startswith(("ANTHROPIC_", "CLAUDE_CODE_", "AWS_", "GOOGLE_", "CLOUD_ML_")):
+                monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "x")
+
+        def _p(name: str, executable: str, **command: object) -> InstrumentProfile:
+            return InstrumentProfile(
+                name=name, display_name=name, kind="cli",
+                cli=CliProfile(
+                    command=CliCommand(executable=executable, **command),  # type: ignore[arg-type]
+                    output=CliOutputConfig(format="text"),
+                ),
+            )
+
+        profiles = {
+            "music-critic": _p("music-critic", "claude"),
+            "my-opencode": _p("my-opencode", "opencode"),  # shipped profile has []
+            "scoped-claude": _p(
+                "scoped-claude", "/usr/bin/claude", required_env=["ANTHROPIC_AUTH_TOKEN"],
+            ),
+            "store-claude": _p("store-claude", "claude", required_env=[]),
+            "granted-claude": _p(
+                "granted-claude", "claude", env={"ANTHROPIC_AUTH_TOKEN": "${ANTHROPIC_AUTH_TOKEN}"},
+            ),
+            "unknown-tool": _p("unknown-tool", "my-agent"),
+            "claude-code": _p("claude-code", "claude"),  # a shipped name: ranked by the builtin
+        }
+        results = [{"name": n, "probe": "ready"} for n in profiles]
+        results[0] = {"name": "music-critic", "probe": "ready"}
+        rows = doctor_mod._silently_filtered(profiles, results)
+        assert rows == [("music-critic", "claude", ["ANTHROPIC_AUTH_TOKEN"])]
+        # Not ready: not named.
+        results = [{"name": n, "probe": "unavailable"} for n in profiles]
+        assert doctor_mod._silently_filtered(profiles, results) == []
+
     def test_names_never_values(self, monkeypatch) -> None:
         import importlib
 

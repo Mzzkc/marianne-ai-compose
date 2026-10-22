@@ -92,6 +92,46 @@ def _credential_env_names() -> list[str]:
     return sorted(k for k in os.environ if _CREDENTIAL_NAME.search(k))
 
 
+def _silently_filtered(
+    profiles: dict[str, InstrumentProfile], results: list[dict[str, Any]],
+) -> list[tuple[str, str, list[str]]]:
+    """Ready user/venue CLI profiles that lost ambient credentials under GH #335.
+
+    A profile with neither ``required_env`` nor ``inherit_env`` now passes only
+    system essentials. When its executable is one a shipped profile declares
+    ``required_env`` for, and any of those variables is set in this
+    environment, the instrument will authenticate differently from the shell
+    it was tested in — silently, at sheet 1. Returns (profile, executable,
+    variables set) rows; the raw shell profile and executables no shipped
+    profile knows are skipped.
+    """
+    from marianne.instruments.loader import InstrumentProfileLoader
+
+    builtins = InstrumentProfileLoader.load_directories([profile_source_dirs()[0]])
+    by_executable: dict[str, list[str]] = {}
+    for profile in builtins.values():
+        if profile.cli is not None and profile.cli.command.required_env:
+            by_executable.setdefault(
+                profile.cli.command.executable, [],
+            ).extend(profile.cli.command.required_env)
+    ready = {r["name"] for r in results if r.get("probe") == "ready"}
+    out: list[tuple[str, str, list[str]]] = []
+    for name, profile in sorted(profiles.items()):
+        if name in builtins or name not in ready or profile.cli is None or profile.raw_prompt:
+            continue
+        command = profile.cli.command
+        if command.required_env is not None or command.inherit_env or command.env:
+            continue
+        executable = command.executable.rsplit("/", 1)[-1]
+        known = by_executable.get(executable)
+        if not known:
+            continue
+        present = sorted({k for k in known if k in os.environ})
+        if present:
+            out.append((name, executable, present))
+    return out
+
+
 def _credential_exposure(
     profiles: dict[str, InstrumentProfile], results: list[dict[str, Any]],
 ) -> list[str]:
@@ -726,6 +766,16 @@ def doctor(
             f"{len(exposed)} ready CLI instrument(s) inherit the full environment "
             f"({count} credential-shaped variable(s) set): {names}. Declare "
             "cli.command.required_env or remove inherit_env to pass only what it needs (GH #335)."
+        )
+    # GH #335 migration: a user profile that never declared an env policy
+    # used to inherit the shell's credentials and now gets none. Name it
+    # before a sheet fails on authentication.
+    for name, executable, present in _silently_filtered(all_profiles, instrument_results):
+        safety_warnings.append(
+            f"{name} runs `{executable}` with no cli.command.required_env, so the "
+            f"{', '.join(present)} set in this environment no longer reach it "
+            "(filtered by default since GH #335). Declare required_env with the "
+            "variables it authenticates by, or required_env: [] if it reads its own store."
         )
 
     # --- Storage hygiene (#352) ---
