@@ -982,6 +982,20 @@ class InstrumentProfile(BaseModel):
         description="Human-readable reason for non-ready execution_status.",
     )
 
+    class_hints: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Where `mzt instruments classes write` seats this profile in a "
+            "generated class chain, per class: `{strong: 'after opencode', "
+            "fast: first, review: last}`. The value is `first`, `last`, "
+            "`after <profile>` or `before <profile>`; a named profile that is "
+            "not in the chain seats the hint last. Only profiles with a hint "
+            "are considered beyond the shipped ones, and a hinted profile "
+            "still has to pass the class's capability and availability probe "
+            "(GH #469)."
+        ),
+    )
+
     # Prompt-assembly bypass for instruments that consume raw input
     raw_prompt: bool = Field(
         default=False,
@@ -1004,6 +1018,20 @@ class InstrumentProfile(BaseModel):
         default=None,
         description="HTTP-specific execution profile. Required when kind=http.",
     )
+
+    @field_validator("class_hints")
+    @classmethod
+    def _validate_class_hints(cls, value: dict[str, str]) -> dict[str, str]:
+        """Each hint is `first`, `last`, `after <profile>` or `before <profile>`."""
+        import re
+
+        for class_name, hint in value.items():
+            if not re.match(r"^(first|last|(?:after|before)\s+\S+)$", hint.strip()):
+                raise ValueError(
+                    f"class_hints.{class_name}: {hint!r} is not one of "
+                    "first, last, after <profile>, before <profile>"
+                )
+        return value
 
     @model_validator(mode="after")
     def _validate_kind_profile(self) -> InstrumentProfile:

@@ -146,3 +146,77 @@ def test_writer_and_checker_agree_on_a_local_server_that_lacks_the_model(
     data = yaml.safe_load(content)
     assert "ollama" not in {name for chain in data["classes"].values() for name in chain}
 
+
+
+# ─── GH #469: user/venue profiles seat themselves through class_hints ─────
+
+
+def _probe_row(**overrides: object) -> dict[str, object]:
+    row: dict[str, object] = {
+        "available": True,
+        "execution_status": "ready",
+        "capabilities": ["tool_use", "file_editing", "thinking"],
+        "zero_cost": False,
+        "raw_prompt": False,
+        "class_hints": {},
+    }
+    row.update(overrides)
+    return row
+
+
+def test_hinted_user_profile_is_seated_where_its_hint_says() -> None:
+    from marianne.instruments.class_policy import CLASS_POLICIES, select_class_chains
+
+    names = {name for policy in CLASS_POLICIES.values() for name in policy.order}
+    probe = {
+        "openrouter_api_key": True,
+        "profiles": {name: _probe_row() for name in names},
+    }
+    probe["profiles"]["opencode-glm"] = _probe_row(class_hints={
+        "strong": ("after", "opencode"),
+        "fast": ("first", None),
+        "review": ("last", None),
+        "writing": ("before", "no-such-profile"),
+    })
+    selected = select_class_chains(probe)
+    strong = list(CLASS_POLICIES["strong"].order)
+    assert selected["strong"][: strong.index("opencode") + 2] == (
+        strong[: strong.index("opencode") + 1] + ["opencode-glm"]
+    )[:4]
+    assert selected["fast"][0] == "opencode-glm"
+    # `last` and an absent anchor both seat behind the shipped entries, so a
+    # full chain caps them out — that is the shipped order winning.
+    assert "opencode-glm" not in selected["review"][:4] or len(CLASS_POLICIES["review"].order) < 4
+    # A hint never exempts the profile from the class's own probe.
+    probe["profiles"]["opencode-glm"] = _probe_row(
+        available=False, class_hints={"fast": ("first", None)},
+    )
+    assert "opencode-glm" not in select_class_chains(probe)["fast"]
+
+
+def test_unhinted_user_profile_is_never_seated_and_hints_are_parsed() -> None:
+    from marianne.core.config.instruments import InstrumentProfile
+    from marianne.instruments.class_policy import parse_class_hint, probe_builtin_profiles
+    from marianne.instruments.loader import InstrumentProfileLoader, profile_source_dirs
+
+    builtins = InstrumentProfileLoader.load_directories([profile_source_dirs()[0]])
+    base = builtins["opencode"].model_dump()
+    base["name"] = "quiet-user-profile"
+    quiet = InstrumentProfile.model_validate(base)
+    base["name"] = "loud-user-profile"
+    base["class_hints"] = {"strong": "after opencode"}
+    loud = InstrumentProfile.model_validate(base)
+    probe = probe_builtin_profiles(
+        builtins, {"quiet-user-profile": quiet, "loud-user-profile": loud},
+    )
+    assert "quiet-user-profile" not in probe["profiles"]
+    loud_row = probe["profiles"]["loud-user-profile"]
+    assert loud_row["class_hints"] == {"strong": ("after", "opencode")}
+    assert probe["profiles"]["opencode"]["class_hints"] == {}
+    assert parse_class_hint("first") == ("first", None)
+    assert parse_class_hint("before  codex-cli") == ("before", "codex-cli")
+    with pytest.raises(ValueError, match="not one of"):
+        parse_class_hint("somewhere near the top")
+    base["class_hints"] = {"strong": "somewhere near the top"}
+    with pytest.raises(ValueError, match="class_hints.strong"):
+        InstrumentProfile.model_validate(base)

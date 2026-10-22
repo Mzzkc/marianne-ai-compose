@@ -114,7 +114,10 @@ refused (V310). Use `mzt
 instruments classes show --json` to inspect the winning layers and `mzt
 instruments classes check` to inspect current availability. `mzt instruments
 classes write --if-absent` creates a machine-specific user map without
-overwriting an existing one.
+overwriting an existing one. The writer ranks the shipped profiles; a user or
+venue profile joins a generated chain only where its own `class_hints` put it
+(`class_hints: {strong: "after opencode"}` in the profile YAML), so a machine
+with a working GLM or Gemini route gets it into the map without a hand edit.
 
 Class entries may select a `model`, but a score-level or sheet-level model
 cannot override a class primary. Use a score alias or named profile for a
@@ -218,6 +221,7 @@ mzt instruments check my-tool
 | `models` | No | List of available models with pricing and context windows |
 | `default_model` | No | Model to use when none specified in the score |
 | `default_timeout_seconds` | No | Default execution timeout (default: 1800) |
+| `class_hints` | No | Where `mzt instruments classes write` seats this profile per class: `{strong: "after opencode", fast: first}` — `first`, `last`, `after <profile>` or `before <profile>`. Only a user or venue profile with a hint is considered by the writer, and it still has to pass the class's capability and availability probe; a named anchor missing from the chain seats it last (GH #469) |
 
 #### Capability Tags
 

@@ -301,9 +301,13 @@ def write_user_classes(
     destination = path or class_source_paths()[1]
     if if_absent and destination.exists():
         return destination, destination.read_text(encoding="utf-8"), False
-    builtins_dir = profile_source_dirs()[0]
+    builtins_dir, org_dir, venue_dir = profile_source_dirs()
     profiles = InstrumentProfileLoader.load_directories([builtins_dir])
-    probe = probe_builtin_profiles(profiles)
+    # GH #469: a user or venue profile is seated only where its own
+    # `class_hints` say; a same-named override of a shipped profile is
+    # still read from the builtin here (the writer ranks shipped names).
+    hinted = InstrumentProfileLoader.load_directories([org_dir, venue_dir])
+    probe = probe_builtin_profiles(profiles, hinted)
     classes = select_class_chains(probe)
     body_digest = hashlib.sha256(canonical_json(classes)).hexdigest()
     probe_digest = hashlib.sha256(canonical_probe(probe)).hexdigest()

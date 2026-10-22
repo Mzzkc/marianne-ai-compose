@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
+from typing import Any
 
 from marianne.core.config.instruments import InstrumentProfile
 from marianne.instruments.availability import probe_profile
@@ -44,10 +46,41 @@ CLASS_POLICIES: dict[str, ClassPolicy] = {
 }
 
 
-def probe_builtin_profiles(profiles: dict[str, InstrumentProfile]) -> dict[str, object]:
-    """Probe only shipped profiles; this is called by explicit setup, not show."""
+_HINT_RE = re.compile(r"^(first|last|(?:after|before)\s+(\S+))$")
+
+
+def parse_class_hint(value: str) -> tuple[str, str | None]:
+    """``'after opencode'`` → ``('after', 'opencode')``; ``'first'`` → ``('first', None)``.
+
+    Raises ValueError on any other shape — a profile hint is a seating
+    instruction, not free text.
+    """
+    match = _HINT_RE.match(value.strip())
+    if match is None:
+        raise ValueError(
+            f"class hint {value!r} is not one of: first, last, after <profile>, before <profile>"
+        )
+    if match.group(2):
+        return match.group(1).split()[0], match.group(2)
+    return match.group(1), None
+
+
+def probe_builtin_profiles(
+    profiles: dict[str, InstrumentProfile],
+    hinted: dict[str, InstrumentProfile] | None = None,
+) -> dict[str, object]:
+    """Probe shipped profiles — and user/venue profiles that carry ``class_hints``.
+
+    Called by explicit setup, not show. A user profile with no hint is never
+    seated by the writer (GH #469: ranking a user profile against the shipped
+    order is a decision the profile's author makes, not the writer).
+    """
     record: dict[str, object] = {}
-    for name, profile in sorted(profiles.items()):
+    hinted = {
+        name: profile for name, profile in (hinted or {}).items()
+        if profile.class_hints and name not in profiles
+    }
+    for name, profile in sorted({**profiles, **hinted}.items()):
         # The same probe `classes check` applies later (GH #447): a chain the
         # writer emits is one the checker accepts on the same machine. A local
         # server that answers but does not serve the profile's model is NOT
@@ -64,6 +97,9 @@ def probe_builtin_profiles(profiles: dict[str, InstrumentProfile]) -> dict[str, 
                 for model in profile.models
             ),
             "raw_prompt": profile.raw_prompt,
+            "class_hints": {
+                cls: parse_class_hint(hint) for cls, hint in sorted(profile.class_hints.items())
+            } if name in hinted else {},
         }
     return {
         "profiles": record,
@@ -82,6 +118,7 @@ def select_class_chains(probe: dict[str, object]) -> dict[str, list[str]]:
         if not probe["openrouter_api_key"] and "crush" in order:
             order.remove("crush")
             order.append("crush")
+        order = _seat_hinted(order, class_name, profiles)
         chain: list[str] = []
         for name in order:
             row = profiles.get(name)
@@ -102,6 +139,31 @@ def select_class_chains(probe: dict[str, object]) -> dict[str, list[str]]:
         if chain:
             selected[class_name] = chain
     return selected
+
+
+def _seat_hinted(order: list[str], class_name: str, profiles: dict[str, Any]) -> list[str]:
+    """Splice every profile hinting this class into the policy order.
+
+    Hints apply in profile-name order so the result is deterministic. A
+    hint naming a profile absent from the chain seats the hinted one last.
+    """
+    seated = list(order)
+    for name in sorted(profiles):
+        row = profiles[name]
+        hints = row.get("class_hints") if isinstance(row, dict) else None
+        if not hints or class_name not in hints:
+            continue
+        where, anchor = hints[class_name]
+        if name in seated:
+            seated.remove(name)
+        if where == "first":
+            seated.insert(0, name)
+        elif where == "last" or anchor not in seated:
+            seated.append(name)
+        else:
+            idx = seated.index(anchor)
+            seated.insert(idx + 1 if where == "after" else idx, name)
+    return seated
 
 
 def canonical_probe(probe: dict[str, object]) -> bytes:
