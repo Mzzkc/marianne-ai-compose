@@ -499,11 +499,27 @@ class TestInstrumentsCheckLive:
         assert report["plain"]["exit_code"] == 1
 
     def test_schema_mode_proves_structured_output(self, tmp_path) -> None:
-        body = 'cat >/dev/null; echo \'{"type":"result","result":"x","structured_output":{"n":7}}\''
+        body = (
+            'cat >/dev/null; echo \'{"type":"result","result":"x",'
+            '"structured_output":{"n":7,"shape":{"kind":"int","value":7}}}\''
+        )
         profile = _script_profile(tmp_path, "schema", body, schema_flag="--json-schema", fmt="json")
         result, report = self._run(profile)
         assert result.exit_code == 0, result.output
         assert report["schema"]["ok"] is True and report["schema"]["structured_ok"] is True
+
+    def test_schema_mode_fails_when_the_nested_union_is_ignored(self, tmp_path) -> None:
+        """A backend that answers the flat part and drops the nested
+        discriminated union is the GH #486 shape: the old probe passed it."""
+        body = 'cat >/dev/null; echo \'{"type":"result","result":"x","structured_output":{"n":7}}\''
+        profile = _script_profile(tmp_path, "flat", body, schema_flag="--json-schema", fmt="json")
+        result, report = self._run(profile)
+        assert result.exit_code == 1
+        # The backend validates structured_output against the schema, so the
+        # missing required `shape` fails the call before the probe's own
+        # branch check runs; either way the probe reports the schema mode red.
+        assert report["schema"]["ok"] is False
+        assert report["schema"].get("structured_ok") is not True
 
     def test_schema_mode_catches_unread_output_shape(self, tmp_path) -> None:
         """The Claude Code verbose shape before the fix: the flag is declared
