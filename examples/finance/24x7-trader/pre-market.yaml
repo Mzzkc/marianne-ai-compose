@@ -171,11 +171,11 @@ prompt:
 
     ## State read
 
-    Read these files (already in your prelude as context):
-    - `02-strategy.md` (the codified strategy)
-    - `risk-envelope.yaml` (the hard caps)
-    - `learnings.md` (what we've learned across weeks)
-    - `positions.json` (current portfolio)
+    `02-strategy.md` (the codified strategy) is already in your prelude.
+    Read these workspace files yourself:
+    - `{{ workspace }}/risk-envelope.yaml` (the hard caps)
+    - `{{ workspace }}/learnings.md` (what we've learned across weeks)
+    - `{{ workspace }}/positions.json` (current portfolio, refreshed above)
 
     ## Bootstrap precondition check
 
@@ -354,7 +354,7 @@ prompt:
     - `{{ workspace }}/research-log/today-state.md`
     - `{{ workspace }}/research-log/today-triangulation.md`
     - `{{ workspace }}/02-strategy.md` (already in prelude)
-    - `{{ workspace }}/risk-envelope.yaml` (already in prelude)
+    - `{{ workspace }}/risk-envelope.yaml`
     - `{{ workspace }}/positions.json`
 
     ## Tasks

@@ -220,8 +220,8 @@ prompt:
         "number": "...",
         "date": "...",
         "due_date": "...",
-        "vendor": "...",
-        "client": "...",
+        "vendor": {"name": "...", "address": "...", "tax_id": "..."},
+        "client": {"name": "...", "address": "..."},
         "po_number": "..."
       },
       "line_items": [
@@ -287,8 +287,8 @@ prompt:
     4. **Tax calculation** — Does subtotal * tax_rate = stated tax? Is the
        tax rate correct for the vendor/client jurisdictions?
     5. **Grand total** — Does subtotal + tax = stated total?
-    6. **Discount application** — The contract specifies a 15% discount on
-       compute over $500/month. Is it applied? Should it be?
+    6. **Discount application** — The contract's discount is
+       "{{ contract_terms.discount }}". Is it applied? Should it be?
     7. **Rounding** — Are there rounding inconsistencies? Check to the cent.
 
     ### Output Format
@@ -317,9 +317,11 @@ prompt:
     1. **PO match** — Does the invoice reference a valid PO number?
     2. **Contract terms** — Is the monthly commit met? Are overage charges
        correctly applied above the commit threshold?
-    3. **Payment terms** — Is Net 30 correctly calculated from invoice date?
-    4. **SLA compliance** — Are there any SLA credit indicators? If uptime
-       was below 99.95%, credits should appear.
+    3. **Payment terms** — Is "{{ contract_terms.payment_terms }}" correctly
+       calculated from the invoice date?
+    4. **SLA compliance** — The contract's SLA is "{{ contract_terms.sla }}".
+       Are there any SLA credit indicators? If the SLA was missed, credits
+       should appear.
     5. **Tax ID verification** — Is the vendor tax ID in the correct format
        for their jurisdiction (EIN for US entities)?
     6. **Category alignment** — Do the line item categories match what the
