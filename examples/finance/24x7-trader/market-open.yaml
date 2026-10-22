@@ -194,7 +194,11 @@ prompt:
 
     ```bash
     set -e
-    today=$(cat {{ workspace }}/today-date.txt 2>/dev/null || date +%F)
+    # Today is today: pre-market writes today-date.txt each morning, but if
+    # this morning's pre-market was missed the file holds YESTERDAY, and
+    # reading it would ingest yesterday's slate as if it were current. The
+    # documented fallback for a missed pre-market is the empty slate.
+    today=$(date +%F)
     echo "$today" > {{ workspace }}/today-date.txt
 
     : "${BROKER_CMD:?BROKER_CMD must be an absolute path to the broker script}"

@@ -909,14 +909,14 @@ prompt:
        ```bash
        {% if issue_tracker == "github" %}
        gh issue list --repo "{{ repo }}" --label "{{ local_finding_label }}" \
-         --state all --json number,body,state,title --limit 500 > /tmp/existing.json
+         --state all --json number,body,state,title --limit 500 > {{ workspace }}/.existing-issues.json
        {% elif issue_tracker == "jira" %}
        # jira-cli outputs TSV/JSON. Filter by label. Only run if FETCH_AVAILABLE=1.
        if [ "$FETCH_AVAILABLE" = "1" ]; then
          jira issue list --project "{{ repo }}" --label "{{ local_finding_label }}" \
-           --plain --raw > /tmp/existing.json
+           --plain --raw > {{ workspace }}/.existing-issues.json
        else
-         echo "[]" > /tmp/existing.json
+         echo "[]" > {{ workspace }}/.existing-issues.json
        fi
        {% elif issue_tracker == "linear" %}
        # Linear GraphQL — only run if FETCH_AVAILABLE=1.
@@ -924,12 +924,12 @@ prompt:
          curl -sS -X POST https://api.linear.app/graphql \
            -H "Authorization: $LINEAR_API_KEY" -H "Content-Type: application/json" \
            -d '{"query":"{ issues(filter:{labels:{name:{eq:\"{{ local_finding_label }}\"}}}) { nodes { identifier title description state { name } } } }"}' \
-           > /tmp/existing.json
+           > {{ workspace }}/.existing-issues.json
        else
-         echo '{"data":{"issues":{"nodes":[]}}}' > /tmp/existing.json
+         echo '{"data":{"issues":{"nodes":[]}}}' > {{ workspace }}/.existing-issues.json
        fi
        {% else %}
-       echo "[]" > /tmp/existing.json   # no fetch for issue_tracker=none
+       echo "[]" > {{ workspace }}/.existing-issues.json   # no fetch for issue_tracker=none
        {% endif %}
        ```
        Parse the fingerprint out of each existing issue body (regex on the comment

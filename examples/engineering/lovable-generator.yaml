@@ -75,7 +75,25 @@ retry:
 prompt:
   template: |
     {% if stage == 1 %}
-    # Movement 1: Architecture Design
+    # Movement 1: Architecture Design + Scaffold
+
+    This movement runs ALONE; the next movement's three voices run in
+    parallel and each is gated on `package.json` + `npm install`. The
+    scaffold therefore has to exist BEFORE they start — scaffolding it from
+    one of the parallel voices lets a faster sibling fail on a package.json
+    that is not there yet, and three concurrent `npm install`s race on
+    node_modules. After the architecture documents below, scaffold:
+
+    ```bash
+    cd {{ workspace }}
+    npm create vite@latest . -- --template react-ts
+    npm install -D tailwindcss postcss autoprefixer
+    npm install @anthropic-ai/sdk
+    mkdir -p src/components src/services src/hooks src/types
+    npm install
+    ```
+
+    Then write the architecture documents.
 
     You are architecting an AI-powered web application generator — similar to what Lovable (formerly GPT Engineer) does: take a natural language description and generate a working web app.
 
@@ -125,39 +143,33 @@ prompt:
     - COMPONENT_TREE.md
     - API_DESIGN.md
 
+    The scaffold (Vite + React + TypeScript, Tailwind and the Anthropic SDK
+    installed, `src/{components,services,hooks,types}/`) already exists from
+    movement 1. Do NOT run `npm create` or `npm install` in this movement —
+    two other voices are working in the same tree right now, and ownership
+    is by directory: voice 1 owns the config files and `src/main.tsx`,
+    voice 2 owns `src/components/`, voice 3 owns `src/services/` and
+    `src/hooks/`. If you need a dependency the scaffold lacks, record it in
+    `{{ workspace }}/DEPS_WANTED.md`; movement 3's first voice installs them.
+
     {% if instance == 1 %}
-    ## Voice 1: Project Scaffolding
+    ## Voice 1: Project Configuration
 
-    Bootstrap the project foundation:
+    Finish the foundation's configuration:
 
-    1. **Initialize Vite + React + TypeScript**
-       ```bash
-       npm create vite@latest . -- --template react-ts
-       ```
+    1. **Verify the scaffold** builds: `npm run build` must succeed before
+       you change anything.
 
     2. **Configure Tailwind CSS**
-       - Install tailwind, postcss, autoprefixer
        - Create tailwind.config.js
        - Set up index.css with @tailwind directives
 
-    3. **Set up package.json**
-       - Add all necessary dependencies:
-         - @anthropic-ai/sdk (for Claude API)
-         - react, react-dom, typescript
-         - @vitejs/plugin-react
-         - tailwindcss, autoprefixer
-       - Add scripts: dev, build, preview
+    3. **Check package.json** has scripts dev, build, preview (Vite adds
+       them); do not add dependencies here (see DEPS_WANTED.md above).
 
-    4. **Create project structure**
-       ```
-       src/
-         components/     (will hold UI components)
-         services/       (will hold AI integration)
-         hooks/          (will hold React hooks)
-         types/          (will hold TypeScript types)
-         App.tsx         (main app)
-         main.tsx        (entry point)
-       ```
+    4. **Write `src/main.tsx` and a minimal `src/App.tsx`** that renders the
+       AppShell voice 2 is building (import it; a missing component is
+       voice 2's to finish, not yours to stub over).
 
     5. **Write README.md** with setup instructions
 
@@ -247,6 +259,14 @@ prompt:
     # Movement 3: Core Features (Voice {{ instance }}/4)
 
     The foundation is built. Now implement the main features.
+
+    Four voices work in this tree at once. Ownership is by file: voice 1
+    owns `src/components/InputPanel.tsx`; voice 2 owns `src/hooks/` and
+    `src/services/anthropic.ts`; voice 3 owns `src/components/PreviewPane.tsx`;
+    voice 4 owns `src/components/IterationControls.tsx`. Read anything;
+    write only what you own; a change you need in another voice's file goes
+    in `{{ workspace }}/INTEGRATION_NOTES.md` for the next movement. Voice 1
+    installs anything listed in `DEPS_WANTED.md` first, once.
 
     {% if instance == 1 %}
     ## Voice 1: App Description Input System
@@ -513,14 +533,25 @@ validations:
     path: "{workspace}/TECH_STACK.md"
     condition: "stage == 1"
 
-  # Movement 2: Foundation produces working project
+  # The scaffold is movement 1's deliverable, so the parallel foundation
+  # voices never wait on a sibling for package.json (EN F11).
   - type: file_exists
     path: "{workspace}/package.json"
-    condition: "stage >= 2"
+    condition: "stage >= 1"
+    description: "Scaffold exists before the foundation voices fan out"
 
   - type: command_succeeds
     command: "cd {workspace} && npm install --silent 2>&1"
+    condition: "stage == 1"
+    description: "Scaffold installs cleanly once, before any parallel voice"
+
+  # Every later sheet must leave a project that still BUILDS — the gate a
+  # stub cannot satisfy; `npm install` is not repeated per voice (that is
+  # the race) but the build is.
+  - type: command_succeeds
+    command: "cd {workspace} && npm run build --silent 2>&1"
     condition: "stage >= 2"
+    description: "Project still builds after this sheet's changes"
 
   # Movement 3: Core files exist
   - type: file_exists
