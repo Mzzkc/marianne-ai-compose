@@ -40,7 +40,7 @@ because the HTTP executor has no filesystem tools.
 
 ### prelude-cadenza-example.yaml — Context Injection Workflow
 
-Produces technical documentation through three phases: research (with methodology cadenza) → draft (with shared writing guidelines) → review (with review checklist cadenza). Prelude files inject shared context into all sheets; cadenza files inject phase-specific methodology into specific sheets. Teaches how to give agents consistent background and stage-specific guidance without duplicating content in templates.
+Produces technical documentation through three phases: research (with methodology cadenza) → draft (with shared writing guidelines) → review (with review checklist cadenza). Prelude files inject shared context into all sheets; cadenza files inject phase-specific methodology into specific sheets. The four seed files ship in `assets/prelude-demo/` and are injected from the score's own directory, so the example runs as checked out — edit them in place to make it yours. Teaches how to give agents consistent background and stage-specific guidance without duplicating content in templates.
 
 ### observability-demo.yaml — Monitoring and Debugging
 
