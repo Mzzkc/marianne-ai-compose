@@ -5173,11 +5173,15 @@ class JobManager:
 
         if graceful:
             timeout = self._config.shutdown_timeout_seconds
+            # Name what the drain waits on (GH #476): a PAUSED job whose pause
+            # is still pending keeps a musician in flight, and running_jobs=0
+            # alone made a 300 s drain look like a hang.
             _logger.info(
                 "manager.shutting_down",
                 graceful=True,
                 timeout=timeout,
                 running_jobs=self.running_count,
+                in_flight=self.in_flight_sheets,
             )
 
             # Wait for running tasks to complete (up to timeout). A PAUSED
@@ -5195,6 +5199,12 @@ class JobManager:
                     running,
                     timeout=timeout,
                 )
+                if pending:
+                    _logger.warning(
+                        "manager.shutdown_timeout_exceeded",
+                        timeout=timeout,
+                        held_by=self.in_flight_sheets,
+                    )
                 for task in pending:
                     task.cancel(msg="graceful shutdown timeout exceeded")
                 if pending:
@@ -5439,6 +5449,17 @@ class JobManager:
     def shutting_down(self) -> bool:
         """Whether the manager is in the process of shutting down."""
         return self._shutting_down
+
+    @property
+    def in_flight_sheets(self) -> list[dict[str, Any]]:
+        """Musicians still executing, as the adapter sees them (GH #476).
+
+        What a graceful drain waits on. Empty when no baton adapter is up.
+        """
+        adapter = self._baton_adapter
+        if adapter is None:
+            return []
+        return adapter.active_musicians()
 
     @property
     def running_count(self) -> int:

@@ -446,7 +446,7 @@ IPC: `daemon.orchestra.snapshot` (fleet now plus recent beats),
 The `daemon.health` and `daemon.ready` IPC methods are available for integration with external monitoring. They are used internally by `mzt conductor-status`:
 
 - **Liveness** (`daemon.health`): Returns OK if the conductor can execute the handler — minimal cost, no resource checks.
-- **Readiness** (`daemon.ready`): Returns `ready` when memory is within limits, failure rate is normal, notifications are functional, and the conductor is not shutting down.
+- **Readiness** (`daemon.ready`): Returns `ready` when memory is within limits, failure rate is normal, notifications are functional, and the conductor is not shutting down. Its `in_flight` list names every musician still executing (`job_id`, `sheet_num`, `instrument`, `model`, `elapsed_seconds`) — including the sheets of jobs paused at a boundary whose pause has not settled, which is what a graceful drain waits on while `running_jobs` reads 0 (GH #476).
 
 ## Conductor Clones
 
@@ -674,6 +674,6 @@ mzt stop --wait=5     # Custom budget in seconds
 mzt stop              # Signal and return immediately (default)
 ```
 
-Budgets must be finite and non-negative; `--wait=0` keeps the default signal-and-return behavior. If the conductor does not exit within a positive budget, the command exits 1 with a message naming the still-draining PID. A graceful drain can take up to `shutdown_timeout_seconds` (default 300s) while running jobs checkpoint.
+Budgets must be finite and non-negative; `--wait=0` keeps the default signal-and-return behavior. After signalling, `mzt stop` prints the in-flight sheets the drain will wait on (job, sheet, instrument/model, elapsed) — a job paused at a sheet boundary keeps its current sheet in flight until that sheet ends, and the drain gives it the budget even though the sheet re-runs on resume. If the conductor does not exit within a positive budget, the command exits 1, re-probes the still-draining conductor, and names what it is still waiting on. The drain itself runs up to `shutdown_timeout_seconds` (default 300s) plus a few seconds of teardown; a `--wait` budget at or below that is a bounded poll, not the drain's length. To restart without holding the drain, let paused jobs settle first (`mzt conductor-status` shows `In flight: 0`).
 
 After a `mzt stop`, a fresh `mzt start` supersedes a still-draining conductor: it detects the shutdown state, waits (up to 30s) for the old process to exit, then starts the new one. If the drain exceeds that budget, start exits 1 rather than spawning a second conductor into held locks.

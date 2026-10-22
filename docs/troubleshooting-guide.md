@@ -403,7 +403,7 @@ kill <PID>
 mzt conductor-status
 
 # Restart conductor cleanly
-mzt stop --wait=   # Signals; waits up to 30s for the conductor to exit
+mzt stop --wait=   # Signals; names the in-flight sheets the drain waits on; waits up to 30s
 mzt start
 ```
 
@@ -412,6 +412,9 @@ mzt start
 ```bash
 mzt stop --wait=    # Graceful stop, waits up to 30s for shutdown to finish
 # NOT: kill -9 <pid>
+# A job paused at a sheet boundary holds the drain until its current sheet
+# ends (up to shutdown_timeout_seconds); stop prints which sheets those are.
+# Let pauses settle first: mzt conductor-status shows `In flight: 0`.
 ```
 
 When interrupting a running score, use `mzt pause` instead of killing the conductor:

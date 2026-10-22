@@ -1859,7 +1859,7 @@ Usage: mzt stop [OPTIONS]
 
 **Safety guard:** When scores are running, `mzt stop` probes the conductor via IPC to check for active scores. If any are found, it warns with the count and asks for confirmation. The `--force` flag bypasses this check entirely and sends SIGKILL.
 
-With a positive `--wait` budget, the command blocks until the conductor exits (prints `Marianne conductor stopped`) or exits 1 with a message naming the still-draining PID. A graceful drain can take up to `shutdown_timeout_seconds` (default 300s) while running jobs checkpoint — a `--wait` budget shorter than that is a bounded poll, not a guarantee.
+After signalling, the command lists the in-flight sheets the graceful drain will wait on (`<job> sheet <n> on <instrument>/<model> for <elapsed>s`); a boundary-paused job's current sheet is among them until it ends. With a positive `--wait` budget, the command blocks until the conductor exits (prints `Marianne conductor stopped`) or exits 1 with `did not exit within <budget>s. It is still draining.` followed by the sheets a fresh probe says it is still waiting on. A graceful drain can take up to `shutdown_timeout_seconds` (default 300s) plus teardown while running jobs checkpoint — a `--wait` budget shorter than that is a bounded poll, not a guarantee.
 
 ```bash
 # Normal stop (warns if jobs running; signals and returns immediately)
@@ -1921,7 +1921,11 @@ Usage: mzt conductor-status [OPTIONS]
 mzt conductor-status
 ```
 
-When the socket answers, the Resources block shows memory, processes,
+When the socket answers, the Jobs block shows the running count and, when
+any musician is still executing, `In flight: <n> sheet(s)` with one line per
+sheet (job, sheet, instrument/model, elapsed) — the rows a graceful drain
+would wait on, including a boundary-paused job's unfinished sheet (GH #476).
+The Resources block shows memory, processes,
 backpressure, **event loop lag** (how late the loop wakes from a one-second
 sleep, with the 60-second peak) and **host I/O pressure** (`/proc/pressure/io`
 `some`/`full` ten-second averages). When the socket does not answer but the
