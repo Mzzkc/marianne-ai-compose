@@ -115,6 +115,15 @@ When you run `mzt run job.yaml`:
 
 1. **Parse & Validate** — YAML parsed into Pydantic `JobConfig` with 51+ config models. Fan-out expansion happens at parse time (e.g., movement 2 with `voices: 5` becomes sheets 2–6). Dependencies validated for cycles.
 
+   The parse is reversible for programmatic composition: `JobConfig.from_yaml(path)` /
+   `JobConfig.from_yaml_string(text)` load a score, and `config.to_yaml()` emits valid
+   score YAML that `from_yaml_string` parses back to an equivalent config
+   (`model_dump()`-equal; tests pin the round trip). Build or modify a `JobConfig` in
+   Python, serialize it, and submit the file. Two things are not preserved byte-for-byte:
+   a relative `workspace` is resolved to an absolute path at parse time, and fan-out
+   movements are emitted expanded. `to_yaml(exclude_defaults=True)` drops fields at
+   their defaults for a short score (hello-setup: 259 lines → 25).
+
 2. **Conductor Routing** — CLI checks for a running conductor via Unix socket. If found, job is submitted to the conductor for execution. If not, the command exits with an error (conductor is required). Only `--dry-run` and `mzt validate` work without a conductor.
 
 3. **Baton Registration** — The conductor's baton engine registers the job: builds sheet execution states, extracts the dependency graph, auto-registers instruments with concurrency limits, and resolves per-sheet instrument assignments.
