@@ -259,6 +259,8 @@ and used by the conductor for instrument selection in future versions.
 | `extra_flags` | No | `[]` | Fixed flags always appended |
 | `schema_extra_flags` | No | | Flags appended *instead of* `extra_flags` when the sheet runs in schema mode (`response_format` through `json_schema_flag`). Unset = schema sheets inherit `extra_flags`; `[]` = none. The shipped `claude-code` profile sends `--effort high` here because `--effort max` with `--json-schema` emits nothing until killed on Claude Code 2.1.307. |
 | `env` | No | `{}` | Environment variables. `${VAR}` references expand from `os.environ` |
+| `required_env` | No | `null` | Parent variables allowed alongside system essentials and profile `env`. Missing or `[]` grants no additional variables. |
+| `inherit_env` | No | `false` | Explicit full-environment inheritance when `required_env` is `null`. An explicit list takes precedence. Exposes unrelated credentials. |
 | `supervise` | No | `true` | Launch the instrument under Marianne's Linux **instrument supervisor**: a child subreaper in the instrument's own process group. A grandchild whose parent exits (an agent's filesystem-search helper, a disowned shell) re-parents to the supervisor instead of init, and is ended and reaped when the instrument exits or the attempt is torn down. Set `false` only for an instrument the supervisor cannot wrap. Where the subreaper is unavailable (not Linux) the instrument is spawned directly and the backend's own descendant reaper (GH #406) is the only guard. |
 | `max_open_files` | No | `4096` | Soft `RLIMIT_NOFILE` the supervisor sets for the instrument and everything it spawns, so a runaway search or a leaking helper is bounded to its share of the host's file table (the conductor's own limit on a server is often 1,048,576). Never raised above the hard limit; `null` leaves the conductor's limit in place. Ignored when `supervise` is `false`. |
 | `io_priority` | No | `low` | I/O scheduling class the supervisor gives the instrument and everything it spawns: `low` (best-effort, lowest priority) keeps an agent's whole-disk search from stalling the conductor's own state reads; `idle` yields to every other process; `inherit` keeps the conductor's class. Ignored when `supervise` is `false`. |
@@ -269,16 +271,43 @@ and used by the conductor for instrument selection in future versions.
 
 #### Environment the musician receives
 
-Without `required_env` a CLI instrument inherits the conductor's whole
-environment, every API key and token in it included. Declare the variables the
-harness actually reads (`[]` when it keeps its own credential store, as
-opencode does); `mzt doctor` lists every ready profile that still inherits
-everything while a credential-shaped variable is set (GH #335). The shipped
-`claude-code`, `codex-cli`, `gemini-cli`, `antigravity`, `opencode` and
-`goose` profiles are scoped.
+CLI instruments receive only system essentials (`PATH`, `HOME`, `USER`,
+terminal/locale/temp settings and the listed XDG paths), variables named in
+`cli.command.required_env`, and profile `env` entries. Missing `required_env`
+and `[]` both grant no additional parent variables. The same policy applies to
+exec and interactive/tmux launches; panes replace the tmux server environment.
+Profile `env` entries expand `${VAR}` from the parent and override allowed values.
 
-Besides the profile's `env` and (when `required_env` filters) the system
-essentials, every CLI and interactive instrument is started with
+To migrate a profile that relied on ambient credentials, declare the variables
+its CLI actually reads:
+
+```yaml
+cli:
+  command:
+    executable: my-agent
+    required_env: [MY_AGENT_API_KEY, HTTPS_PROXY]
+```
+
+Use `required_env: []` for a CLI using its own credential store. As a temporary
+migration opt-out, `cli.command.inherit_env: true` inherits the full conductor
+environment when `required_env` is absent or null. An explicit `required_env`
+list (including `[]`) still filters even with this opt-out. `mzt doctor` names
+ready agent profiles using full inheritance when credential-shaped variables
+are set, without printing values (GH #335).
+
+The shipped `aider`, `cline-cli`, `crush` and shell `cli` profiles explicitly
+use `required_env: []`. Cline can use its configured settings; other tools may
+use their own credential stores where supported. For environment-based provider
+authentication, set `cli.command.required_env` in your local profile to the
+specific key names your selected provider needs (for example, `[OPENAI_API_KEY]`
+for an OpenAI route). Shell validation steps that need build credentials or
+other non-system variables must likewise declare them. No provider keys are
+granted automatically to these four profiles.
+
+This filters environment variables only. `HOME` and XDG paths remain available;
+file-based credentials, daemon MCP children and hooks require separate isolation.
+
+Every CLI and interactive instrument is also started with
 `MARIANNE_SCRATCH` set to the job's scratch root `<workspace>/.marianne-scratch`
 (created before launch). Anything an agent needs outside the workspace proper,
 such as a probe clone, a mutant tree or a git worktree, belongs under that path:

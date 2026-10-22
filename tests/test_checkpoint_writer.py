@@ -283,6 +283,33 @@ class TestCheckpointWriter:
 
         assert reg.saves == [("first", "one"), ("second", "two")]
 
+    async def test_caller_cancellation_during_admission_cleanup_propagates(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Shutdown must not lose cancellation while reaping its helper task."""
+        reg = _FakeRegistry()
+        writer = CheckpointWriter(reg)  # type: ignore[arg-type]
+        writer.start()
+        original_wait = writer._stop_requested.wait
+
+        async def cancel_caller_during_cleanup() -> bool:
+            try:
+                return await original_wait()
+            except asyncio.CancelledError:
+                acknowledged.cancel("shutdown during admission cleanup")
+                raise
+
+        monkeypatch.setattr(writer._stop_requested, "wait", cancel_caller_during_cleanup)
+        acknowledged = asyncio.create_task(writer.write_and_wait("j", "payload"))
+        try:
+            with pytest.raises(asyncio.CancelledError):
+                await acknowledged
+            assert acknowledged.cancelled()
+            assert writer._active_ack_admissions == 0
+            assert writer._admissions_idle.is_set()
+        finally:
+            await writer.stop()
+
     async def test_stop_is_idempotent(self) -> None:
         reg = _FakeRegistry()
         writer = CheckpointWriter(reg)  # type: ignore[arg-type]

@@ -76,6 +76,8 @@ models:
 
 cli:
   command:
+    # Grant provider/build credentials explicitly in your local profile.
+    required_env: []
     executable: crush
     subcommand: "run"
     # prompt_flag omitted — crush run takes prompt as positional arg

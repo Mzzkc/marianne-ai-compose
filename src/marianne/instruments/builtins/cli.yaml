@@ -37,6 +37,8 @@ default_timeout_seconds: 300
 
 cli:
   command:
+    # Grant provider/build credentials explicitly in your local profile.
+    required_env: []
     executable: bash
     # -c is the flag that introduces the command string
     prompt_flag: "-c"

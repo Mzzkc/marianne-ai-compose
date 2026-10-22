@@ -993,6 +993,7 @@ Validates that your environment is ready to run Marianne scores. Checks Python v
 | Safety | Whether cost limits are configured |
 | Storage | Cleanable stale state or backup artifacts |
 | Instrument hygiene | User- and venue-layer profiles that no score the conductor has been given names and no class chain includes (GH #443). Reported only, never deleted: a seat is an alias over an existing profile, so a profile nothing names is archived by a person or kept by submitting the score that needs it. `--json` lists them under `unreferenced_profiles`. Skipped before the conductor has ever run. Reads the registry of the conductor the CLI addresses (`--conductor-clone` selects the clone's) |
+| Credential exposure | Ready agent profiles using the explicit `cli.command.inherit_env` opt-out while credential-shaped variables are set (GH #335). Profiles are named without printing values; declare `required_env` or remove the opt-out to clear the warning |
 
 Every command that answers "can this instrument run here" — `doctor`, `instruments list`, `instruments check`, `instruments classes check` and `classes write` — uses one probe with four states (GH #447):
 

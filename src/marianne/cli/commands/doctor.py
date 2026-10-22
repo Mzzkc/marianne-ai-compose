@@ -110,7 +110,7 @@ def _credential_exposure(
             continue
         if profile.raw_prompt:
             continue
-        if profile.cli.command.required_env is None:
+        if profile.cli.command.inherit_env and profile.cli.command.required_env is None:
             out.append(name)
     return out
 
@@ -714,7 +714,7 @@ def doctor(
     # The default CostLimitConfig has enabled=False
     safety_warnings.append("No cost limits configured. Recommend: cost_limits.max_cost_per_job")
 
-    # GH #335: a CLI profile without `cli.command.required_env` hands the
+    # GH #335: an explicit `inherit_env` opt-out without an allowlist hands the
     # instrument the conductor's whole environment, every credential included.
     # Name each ready one together with how many credential-shaped variables
     # are set right now, so the exposure is visible where the operator looks.
@@ -725,7 +725,7 @@ def doctor(
         safety_warnings.append(
             f"{len(exposed)} ready CLI instrument(s) inherit the full environment "
             f"({count} credential-shaped variable(s) set): {names}. Declare "
-            "cli.command.required_env in the profile to pass only what it needs (GH #335)."
+            "cli.command.required_env or remove inherit_env to pass only what it needs (GH #335)."
         )
 
     # --- Storage hygiene (#352) ---

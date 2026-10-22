@@ -312,8 +312,8 @@ class TestCredentialEnvFiltering:
         assert "SECRET_KEY" not in env
         assert env.get("PATH") == "/usr/bin"
 
-    def test_none_required_env_inherits_full_parent(self) -> None:
-        """required_env=None → full parent environment inherited."""
+    def test_none_required_env_filters_parent_with_profile_overlay(self) -> None:
+        """Missing allowlists exclude secrets while retaining explicit profile env."""
         backend = _make_backend(required_env=None, env={"PROFILE_VAR": "value"})
         with patch.dict(
             os.environ,
@@ -324,8 +324,7 @@ class TestCredentialEnvFiltering:
             clear=True,
         ):
             env = backend._build_env()
-        assert env is not None
-        assert "SECRET_KEY" in env
+        assert env == {"PATH": "/usr/bin", "PROFILE_VAR": "value"}
 
     def test_profile_env_overlay_in_filtered_mode(self) -> None:
         """Profile env vars are merged on top of filtered env."""

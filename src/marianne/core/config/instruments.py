@@ -367,14 +367,18 @@ class CliCommand(BaseModel):
         "group on timeout, rather than leaving orphaned children.",
     )
 
-    # Credential filtering — declare which env vars the instrument needs
+    # Credential filtering is the default for both exec and interactive launches.
     required_env: list[str] | None = Field(
         default=None,
         description="Env vars the instrument needs from the parent environment. "
-        "When set, only these vars (plus system essentials like PATH, HOME) "
-        "are passed to the subprocess. When None (default), the full parent "
-        "environment is inherited (backward compatible). Use this to prevent "
-        "credentials for other services from leaking to instrument subprocesses.",
+        "Only these vars plus system essentials (PATH, HOME, etc.) and profile "
+        "env entries are passed. None and [] both default to system essentials only.",
+    )
+    inherit_env: bool = Field(
+        default=False,
+        description="Explicit migration opt-out: inherit the full parent environment "
+        "when required_env is None. This exposes unrelated credentials; prefer "
+        "declaring required_env. An explicit required_env list takes precedence.",
     )
 
     @field_validator("mcp_config_workspace_path")

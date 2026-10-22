@@ -199,6 +199,21 @@ cli:
       REGION: "us-east-1"
 ```
 
+The subprocess does **not** inherit your whole shell environment. By default
+it receives only system essentials (`PATH`, `HOME`, terminal/locale settings),
+the variables listed in `required_env`, and the profile `env` entries above:
+
+```yaml
+cli:
+  command:
+    executable: my-tool
+    required_env: [MY_TOOL_API_KEY, HTTPS_PROXY]
+```
+
+`required_env: []` means the tool keeps its own credential store and needs no
+parent variables. See the [Instrument Guide](instrument-guide.md) for the full
+policy, including the temporary `inherit_env` migration opt-out.
+
 ---
 
 ## Output Parsing

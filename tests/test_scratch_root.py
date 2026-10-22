@@ -96,8 +96,9 @@ async def test_tmux_new_session_passes_env_entries() -> None:
         env={SCRATCH_ENV_VAR: "/w/.marianne-scratch"},
     )
     args = calls[0]
-    assert "-e" in args and args[args.index("-e") + 1] == f"{SCRATCH_ENV_VAR}=/w/.marianne-scratch"
-    assert args.index("-e") < args.index("--"), "env flags precede the command separator"
+    assert args[args.index("--") + 1:] == (
+        "env", "-i", "--", f"{SCRATCH_ENV_VAR}=/w/.marianne-scratch", "sleep", "1",
+    )
 
 
 @pytest.mark.asyncio

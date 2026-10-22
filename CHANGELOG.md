@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- CLI instrument environments now default to system essentials and explicitly
+  declared `required_env` / profile `env` variables (GH #335). Interactive tmux
+  launches use the same policy and replace the server environment. Custom
+  profiles relying on ambient keys must declare them in `cli.command.required_env`.
+  Temporary `cli.command.inherit_env: true` restores full inheritance only when
+  `required_env` is null; doctor warns about this opt-out. File-based credentials
+  and daemon hook/MCP subprocess isolation remain separate work.
+
 ### Score-language release note (2026-10-15)
 
 The score language is the product's type system: a key's name, its validator

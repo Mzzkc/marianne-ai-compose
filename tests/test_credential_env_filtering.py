@@ -39,6 +39,7 @@ def _make_profile(
     *,
     env: dict[str, str] | None = None,
     required_env: list[str] | None = None,
+    inherit_env: bool = False,
 ) -> InstrumentProfile:
     """Create a minimal InstrumentProfile for env filtering tests."""
     return InstrumentProfile(
@@ -60,6 +61,7 @@ def _make_profile(
                 prompt_flag="-p",
                 env=env or {},
                 required_env=required_env,
+                inherit_env=inherit_env,
             ),
             output=CliOutputConfig(format="text"),
             errors=CliErrorConfig(),
@@ -93,32 +95,39 @@ class TestSystemEnvVars:
 
 
 # ---------------------------------------------------------------------------
-# Test: Backward compatibility — no required_env = full parent env
+# Test: Fail-closed default and explicit migration opt-out
 # ---------------------------------------------------------------------------
 
 
-class TestBackwardCompatibility:
-    """When required_env is not specified, behavior is unchanged."""
+class TestDefaultFiltering:
+    def test_required_env_none_now_filters_to_system_vars(self) -> None:
+        with patch.dict(os.environ, {"PATH": "/usr/bin", "FOREIGN_SECRET": "probe"}, clear=True):
+            assert PluginCliBackend(_make_profile())._build_env() == {"PATH": "/usr/bin"}
 
-    def test_no_required_env_no_profile_env_returns_none(self) -> None:
-        """No required_env + no profile env = None (inherit parent env)."""
-        profile = _make_profile()
-        backend = PluginCliBackend(profile)
-        env = backend._build_env()
-        assert env is None
+    def test_profile_env_now_filters_to_system_vars(self) -> None:
+        with patch.dict(os.environ, {"PATH": "/usr/bin", "FOREIGN_SECRET": "probe"}, clear=True):
+            env = PluginCliBackend(_make_profile(env={"CUSTOM": "value"}))._build_env()
+        assert env == {"PATH": "/usr/bin", "CUSTOM": "value"}
 
-    def test_no_required_env_with_profile_env_passes_full_parent(self) -> None:
-        """No required_env + profile env = full parent + profile vars.
+    def test_inherit_env_opt_out_restores_full_inherit(self) -> None:
+        with patch.dict(os.environ, {"FOREIGN_SECRET": "probe"}, clear=True):
+            assert PluginCliBackend(_make_profile(inherit_env=True))._build_env() is None
+            profile = _make_profile(inherit_env=True, env={"CUSTOM": "v"})
+            env = PluginCliBackend(profile)._build_env()
+        assert env == {"FOREIGN_SECRET": "probe", "CUSTOM": "v"}
 
-        This is the existing behavior — backward compatible.
-        """
-        profile = _make_profile(env={"CUSTOM_VAR": "custom_value"})
-        backend = PluginCliBackend(profile)
-        with patch.dict(os.environ, {"EXISTING_VAR": "existing_value"}, clear=False):
-            env = backend._build_env()
-        assert env is not None
-        assert env["CUSTOM_VAR"] == "custom_value"
-        assert "EXISTING_VAR" in env
+    def test_inherit_env_does_not_override_explicit_allowlist(self) -> None:
+        with patch.dict(os.environ, {"FOREIGN_SECRET": "probe", "PATH": "/bin"}, clear=True):
+            env = PluginCliBackend(_make_profile(inherit_env=True, required_env=[]))._build_env()
+        assert env == {"PATH": "/bin"}
+
+    def test_inherit_env_schema_accepts_and_rejects(self) -> None:
+        from pydantic import ValidationError
+
+        assert CliCommand(executable="echo").inherit_env is False
+        assert CliCommand(executable="echo", inherit_env=True).inherit_env is True
+        with pytest.raises(ValidationError):
+            CliCommand(executable="echo", inherit_env={"invalid": True})
 
 
 # ---------------------------------------------------------------------------
@@ -327,7 +336,7 @@ class TestRequiredEnvModel:
     """Test the required_env field on CliCommand."""
 
     def test_required_env_default_is_none(self) -> None:
-        """Default is None (backward compatible — no filtering)."""
+        """Default is None (system essentials only)."""
         cmd = CliCommand(executable="echo")
         assert cmd.required_env is None
 
@@ -346,3 +355,22 @@ class TestRequiredEnvModel:
         profile = _make_profile(required_env=["GEMINI_API_KEY", "CUSTOM_VAR"])
         assert profile.cli is not None
         assert profile.cli.command.required_env == ["GEMINI_API_KEY", "CUSTOM_VAR"]
+
+
+@pytest.mark.parametrize("name", ["aider", "cline-cli", "crush", "cli"])
+def test_builtin_profile_requires_explicit_credential_grants(name: str) -> None:
+    """Shipped generic/provider-configured tools never acquire ambient keys."""
+    from pathlib import Path
+
+    from marianne.instruments.loader import InstrumentProfileLoader
+
+    directory = Path(__file__).parents[1] / "src/marianne/instruments/builtins"
+    profile = InstrumentProfileLoader.load_directory(directory)[name]
+    assert profile.cli is not None
+    assert profile.cli.command.required_env == []
+    with patch.dict(os.environ, {"PATH": "/usr/bin", "OPENAI_API_KEY": "probe"}, clear=True):
+        assert PluginCliBackend(profile)._build_env() == {"PATH": "/usr/bin"}
+        profile.cli.command.required_env = ["OPENAI_API_KEY"]
+        assert PluginCliBackend(profile)._build_env() == {
+            "PATH": "/usr/bin", "OPENAI_API_KEY": "probe",
+        }

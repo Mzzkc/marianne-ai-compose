@@ -181,11 +181,15 @@ class CheckpointWriter:
             for task in (put_task, stop_task):
                 if not task.done():
                     task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
-            self._active_ack_admissions -= 1
-            if self._active_ack_admissions == 0:
-                self._admissions_idle.set()
+            try:
+                # Collect helper cancellation as a result, but propagate a
+                # cancellation of this producer (e.g. manager shutdown).
+                # suppress(CancelledError) around await can swallow BOTH.
+                await asyncio.gather(put_task, stop_task, return_exceptions=True)
+            finally:
+                self._active_ack_admissions -= 1
+                if self._active_ack_admissions == 0:
+                    self._admissions_idle.set()
         await completed
 
     async def drain(self) -> None:

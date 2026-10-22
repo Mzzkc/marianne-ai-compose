@@ -787,17 +787,23 @@ class TestCredentialExposure:
             InstrumentProfile,
         )
 
-        def _p(name: str, required_env, raw: bool = False) -> InstrumentProfile:
+        def _p(
+            name: str, required_env, raw: bool = False, inherit: bool = False,
+        ) -> InstrumentProfile:
             return InstrumentProfile(
                 name=name, display_name=name, kind="cli", raw_prompt=raw,
                 cli=CliProfile(
-                    command=CliCommand(executable="sh", required_env=required_env),
+                    command=CliCommand(
+                        executable="sh", required_env=required_env, inherit_env=inherit,
+                    ),
                     output=CliOutputConfig(format="text"),
                 ),
             )
 
         return {
-            "open": _p("open", None),
+            "open": _p("open", None, inherit=True),
+            "default": _p("default", None),
+            "bounded": _p("bounded", [], inherit=True),
             "scoped": _p("scoped", ["OPENAI_API_KEY"]),
             "shell": _p("shell", None, raw=True),
             "missing": _p("missing", None),
@@ -806,12 +812,14 @@ class TestCredentialExposure:
     def _results(self):
         return [
             {"name": "open", "probe": "ready"},
+            {"name": "default", "probe": "ready"},
+            {"name": "bounded", "probe": "ready"},
             {"name": "scoped", "probe": "ready"},
             {"name": "shell", "probe": "ready"},
             {"name": "missing", "probe": "unavailable"},
         ]
 
-    def test_names_only_ready_unscoped_agent_profiles(self, monkeypatch) -> None:
+    def test_doctor_warns_only_on_inherit_env_profiles(self, monkeypatch) -> None:
         import importlib
 
         doctor_mod = importlib.import_module("marianne.cli.commands.doctor")

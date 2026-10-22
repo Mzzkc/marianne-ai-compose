@@ -291,14 +291,14 @@ class TmuxControl:
         The command is passed as an explicit argv tail — tmux execs it
         directly (no shell), so the pane process is the agent itself in its
         own process group (spike-verified; integration tests pin this).
-        ``env`` entries are set in the pane's environment (tmux ``-e``,
-        3.2+), e.g. the job's scratch root (GH #460).
+        When supplied, ``env`` replaces the server environment via ``env -i``.
+        The wrapper execs the target, preserving the pane PID/process group.
+        None retains tmux inheritance for callers without an environment policy.
         """
         if not command:
             raise ValueError("command must be non-empty")
-        env_args: list[str] = []
-        for key, value in (env or {}).items():
-            env_args += ["-e", f"{key}={value}"]
+        if env is not None:
+            command = ["env", "-i", "--", *(f"{k}={v}" for k, v in env.items()), *command]
         await self._run(
             "new-session",
             "-d",
@@ -306,7 +306,6 @@ class TmuxControl:
             "-x", str(width),
             "-y", str(height),
             "-c", str(cwd),
-            *env_args,
             "--",
             *command,
         )

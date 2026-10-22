@@ -21,6 +21,7 @@ See docs/specs/2026-06-10-interactive-mode-design.md.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import shutil
 import time
@@ -33,6 +34,7 @@ from marianne.core.config.workspace import SCRATCH_ENV_VAR, scratch_root
 from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger
 from marianne.execution.base import Backend, ExecutionResult, SheetRequestState
+from marianne.execution.instruments.cli_backend import build_instrument_env
 from marianne.execution.instruments.interactive.driver import (
     DriverResult,
     InteractiveSessionDriver,
@@ -422,7 +424,7 @@ class InteractiveCliBackend(Backend):
                 max_nudges=self._max_nudges,
                 transcript_path=transcript,
                 on_pane_pid=_register_pid,
-                env=self._scratch_env(workspace),
+                env=self._instrument_env(workspace),
                 on_output=self._on_output,
             )
         finally:
@@ -449,6 +451,19 @@ class InteractiveCliBackend(Backend):
             transcript=str(transcript),
         )
         return result
+
+    def _instrument_env(self, workspace: Path) -> dict[str, str]:
+        """Snapshot the shared policy, then add the job-owned scratch root.
+
+        Even opt-out profiles pass a complete snapshot to tmux: its server may
+        have been started with a different environment from this conductor.
+        """
+        env = build_instrument_env(self._cli.command, self._profile.name)
+        if env is None:
+            env = dict(os.environ)
+        env.pop(SCRATCH_ENV_VAR, None)
+        env.update(self._scratch_env(workspace) or {})
+        return env
 
     @staticmethod
     def _scratch_env(workspace: Path) -> dict[str, str] | None:

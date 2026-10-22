@@ -24,6 +24,8 @@ default_timeout_seconds: 1800
 
 cli:
   command:
+    # Grant provider/build credentials explicitly in your local profile.
+    required_env: []
     executable: cline
     prompt_flag: null  # positional argument
     model_flag: "-m"
