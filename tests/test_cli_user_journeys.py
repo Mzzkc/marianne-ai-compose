@@ -12,6 +12,7 @@ Not crashes — confusion. Not errors — dead ends.
 
 from __future__ import annotations
 
+import importlib
 import json
 from pathlib import Path
 
@@ -63,10 +64,10 @@ class TestSarahsFirstDay:
         assert "passed" in result.stdout.lower()
 
     @pytest.mark.adversarial
-    def test_doctor_works_without_conductor(self) -> None:
+    def test_doctor_works_without_conductor(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Sarah can check her environment even if the conductor isn't running."""
-        # Doctor should not crash — it reports status whether conductor is
-        # running or not
+        doctor_module = importlib.import_module("marianne.cli.commands.doctor")
+        monkeypatch.setattr(doctor_module, "_check_conductor_status", lambda: ("not running", None))
         result = runner.invoke(app, ["doctor"])
         assert result.exit_code == 0
         assert "python" in result.stdout.lower()
@@ -300,12 +301,17 @@ class TestBobTheScripter:
         assert "score_file" in data
 
     @pytest.mark.adversarial
-    def test_doctor_json_output_is_parseable(self) -> None:
-        """Doctor --json produces parseable JSON."""
+    def test_doctor_json_output_is_parseable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Doctor --json produces parseable JSON without contacting the host conductor."""
+        doctor_module = importlib.import_module("marianne.cli.commands.doctor")
+        monkeypatch.setattr(doctor_module, "_check_conductor_status", lambda: ("not running", None))
         result = runner.invoke(app, ["doctor", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.stdout)
         assert isinstance(data, dict)
+        assert data["conductor"] == {
+            "status": "not running", "pid": None, "last_reload": None,
+        }
 
 
 # =============================================================================

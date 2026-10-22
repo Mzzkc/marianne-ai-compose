@@ -52,6 +52,7 @@ class TestDiscoverInstruments:
         expected_names = {
             "claude-code",
             "gemini-cli",
+            "qwen-code",
             "antigravity",
             "codex-cli",
             "cline-cli",

@@ -48,6 +48,7 @@ startup:
 | Name | Tool | Auth |
 |------|------|------|
 | `claude-code` | Claude Code CLI | `claude login` |
+| `qwen-code` | Qwen Code CLI (`qwen`) | Saved Qwen OAuth or OpenAI-compatible API credentials |
 | `gemini-cli` | Google Gemini CLI | `GOOGLE_API_KEY` or `gcloud auth` |
 | `codex-cli` | OpenAI Codex CLI | `OPENAI_API_KEY or CODEX_API_KEY` |
 | `antigravity` | Google Antigravity CLI (`agy`), Gemini CLI's successor; tmux-interactive by default, print mode delivers the prompt as one stream-json line on stdin | Existing Google account/API configuration |
@@ -64,6 +65,63 @@ mzt instruments list
 ---
 
 ## Using Instruments in Scores
+
+### Qwen Code
+
+Install the client version used to verify this headless contract (Node.js 20+
+required), then configure authentication before starting a score:
+
+```bash
+npm install -g @qwen-code/qwen-code@0.12.6
+qwen --version
+qwen
+```
+
+Complete the client's interactive login/setup once. Saved Qwen OAuth credentials
+remain accessible through HOME. For an OpenAI-compatible provider, configure
+Qwen's authentication settings and supply `OPENAI_API_KEY`, `OPENAI_BASE_URL`
+and optionally `OPENAI_MODEL` or `QWEN_MODEL`. Marianne passes those four provider
+variables and system variables; other provider families or custom credential
+variable names require an organization/venue profile override of
+`cli.command.required_env`. Provider access and billing depend on your account.
+
+Use `instrument: qwen-code` directly or a named instrument for a model override.
+This example assigns the named override to sheet 1, while sheet 2 uses the
+client's configured model:
+
+```yaml
+name: qwen-example
+workspace: ./workspaces/qwen-example
+instrument: qwen-code
+instruments:
+  coder:
+    profile: qwen-code
+    config:
+      model: your-provider-model
+sheet:
+  size: 1
+  total_items: 2
+  per_sheet_instruments:
+    1: coder
+prompt:
+  template: "Review the code and write findings for sheet {{ sheet_num }}."
+```
+
+The profile runs headlessly with `--yolo --output-format json` and sends the
+prompt over stdin. `--yolo` auto-approves tools, including file edits and shell
+commands: choose an appropriate workspace and permissions. Final text and
+input/output token usage are read from the terminal JSON result, including
+exit-zero error envelopes. Without a score model override, Qwen chooses its
+configured model; Marianne ships no assumed Qwen model prices or capacities.
+
+This integration advertises tool use, file editing and shell access. It does
+not advertise Marianne schema output, MCP injection, interactive execution or
+vision support. A self-hosted model requires a separately running compatible
+provider and Qwen configuration; selecting this instrument does not host a
+model. The source contract is pinned to v0.12.6; live authenticated execution
+was unavailable on the implementation host. Source-derived fixtures and their
+[immutable vendor references](../tests/fixtures/qwen_code/README.md) document the
+verified protocol separately from live access.
 
 ### The `instrument:` Field
 
@@ -344,6 +402,7 @@ ppid 1 for hours and saturated the disk; the supervisor is the fix, and the
 | `format` | No | `text` | `text`, `json`, or `jsonl` |
 | `result_path` | No | | JSON dot-path to response text (`result`, `response`) |
 | `error_path` | No | | JSON dot-path to error message (`error.message`) |
+| `error_flag_path` | No | | JSON dot-path to a terminal boolean error flag; exactly `true` fails the attempt even at a successful exit code (unset preserves exit-code behavior; `qwen-code` uses `is_error`) |
 | `completion_event_type` | No | | For JSONL: event type signaling completion |
 | `event_type_key` | No | `type` | For JSONL: the key that carries each event's type (`event` for Antigravity's stream-json) |
 | `completion_event_filter` | No | | For JSONL: additional key-value filter |

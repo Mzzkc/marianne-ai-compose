@@ -1,0 +1,36 @@
+[
+  {
+    "type": "assistant",
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Earlier distractor"
+        }
+      ]
+    },
+    "result": "Not the final answer",
+    "usage": {
+      "input_tokens": 999,
+      "output_tokens": 999
+    }
+  },
+  {
+    "type": "result",
+    "uuid": "00000000-0000-4000-8000-000000000083",
+    "session_id": "fixture-session",
+    "duration_ms": 120,
+    "duration_api_ms": 80,
+    "num_turns": 1,
+    "permission_denials": [],
+    "subtype": "success",
+    "is_error": false,
+    "result": "Created greeting.py.",
+    "usage": {
+      "input_tokens": 100,
+      "output_tokens": 50,
+      "cache_read_input_tokens": 10
+    }
+  }
+]
