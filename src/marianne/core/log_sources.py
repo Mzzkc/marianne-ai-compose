@@ -130,6 +130,18 @@ def iter_source_lines(source: LogSource) -> list[str]:
         ]
 
 
+def source_has_lines(source: LogSource) -> bool:
+    """True when the source holds at least one line its filter admits.
+
+    Stops at the first match: the shared conductor log grows to tens of MB,
+    and reading all of it to answer yes or no stalled every log lookup.
+    """
+    with open(source.path, encoding="utf-8", errors="replace") as handle:
+        if source.job_filter is None:
+            return any(True for _ in handle)
+        return any(line_matches_job(line, source.job_filter) for line in handle)
+
+
 def _append_source(
     sources: list[LogSource],
     seen: set[Path],
@@ -172,7 +184,7 @@ def _append_source(
         alias_state=alias_state,
         raw_state=raw_state,
     )
-    if require_matching_lines and not iter_source_lines(source):
+    if require_matching_lines and not source_has_lines(source):
         return
     if not follow and candidate.stat().st_size == 0:
         return
@@ -325,7 +337,7 @@ def _append_conductor_sources(
             kind="conductor",
             alias_state=alias_state,
         )
-        has_lines = bool(iter_source_lines(source))
+        has_lines = source_has_lines(source)
         if not has_lines and (sources or state.status != JobStatus.RUNNING):
             continue
         _append_source(

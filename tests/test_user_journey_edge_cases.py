@@ -301,6 +301,15 @@ class TestMarcusMultiInstrument:
 class TestPriyasForgottenScore:
     """Priya needs to recover context about scores she doesn't remember."""
 
+    @pytest.fixture(autouse=True)
+    def _no_live_conductor(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """These assert on the no-conductor path; never wait on the developer's daemon."""
+        from marianne.daemon import detect
+
+        missing = tmp_path / "no-conductor.sock"
+        monkeypatch.setattr(detect, "_default_socket_path", lambda: missing)
+        monkeypatch.setattr(detect, "LEGACY_SOCKET_PATH", missing)
+
     @pytest.mark.adversarial
     def test_status_no_args_shows_something_useful(self) -> None:
         """Running 'mzt status' with no args gives an overview."""

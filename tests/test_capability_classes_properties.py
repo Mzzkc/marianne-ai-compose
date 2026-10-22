@@ -25,7 +25,7 @@ from marianne.core.config.classes import (
     model=st.one_of(st.none(), st.text(alphabet="abc123-", min_size=1, max_size=12)),
     tombstone=st.booleans(),
 )
-@settings(max_examples=40)
+@settings(max_examples=40, deadline=None)  # pure data; a loaded host must not fail it
 def test_classesfile_entry_and_generatedby_round_trip_and_refuse_repeats(
     name: str, profile: str, model: str | None, tombstone: bool,
 ) -> None:
@@ -55,7 +55,7 @@ def test_classesfile_entry_and_generatedby_round_trip_and_refuse_repeats(
     source_layer=st.sampled_from(["default", "user", "venue"]),
     phase=st.sampled_from(["submit", "resume"]),
 )
-@settings(max_examples=35)
+@settings(max_examples=35, deadline=None)  # pure data; a loaded host must not fail it
 def test_classsnapshot_layer_entry_and_resolution_preserve_frozen_chain(
     name: str, profile: str, source_layer: str, phase: str,
 ) -> None:

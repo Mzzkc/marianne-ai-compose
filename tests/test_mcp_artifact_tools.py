@@ -289,8 +289,11 @@ class TestArtifactTools:
     async def test_get_logs_uses_state_backed_sources_without_workspace(
         self,
         temp_workspace,
+        monkeypatch,
     ):
         """MCP log retrieval uses shared sources when checkpoint state exists."""
+        # Never read the developer's real ~/.marianne/conductor.log.
+        monkeypatch.setenv("HOME", str(temp_workspace / "home"))
         backend = AsyncMock()
         backend.load.return_value = CheckpointState(
             job_id="job1",

@@ -25,6 +25,7 @@ from marianne.core.log_sources import (
     LogSource,
     discover_job_log_sources,
     iter_source_lines,
+    source_has_lines,
 )
 from marianne.core.logging import get_logger
 from marianne.daemon.clone import active_registry_db_path
@@ -192,7 +193,7 @@ def _append_log_source(
         return
 
     source = LogSource(path=resolved, label=label, follow=follow, job_filter=job_filter)
-    if require_matching_lines and not _iter_source_lines(source):
+    if require_matching_lines and not source_has_lines(source):
         return
     if not follow and candidate.stat().st_size == 0:
         return
@@ -328,7 +329,7 @@ def _append_conductor_log_source(
         follow=state.status == JobStatus.RUNNING,
         job_filter=job_id,
     )
-    has_existing_lines = bool(_iter_source_lines(source))
+    has_existing_lines = source_has_lines(source)
     if not has_existing_lines and (sources or state.status != JobStatus.RUNNING):
         return
 
