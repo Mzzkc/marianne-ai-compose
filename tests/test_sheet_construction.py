@@ -63,6 +63,28 @@ class TestBuildSheetsBasic:
         for sheet in sheets:
             assert sheet.instrument_name == "gemini-cli"
 
+    def test_instrument_alias_is_the_binding_name_or_empty(self):
+        """A sheet bound through a score alias carries the alias name;
+        instrument_name is the profile it resolved to. Bound directly to a
+        profile, the alias is empty. A seat census joins on the alias."""
+        from marianne.core.config.job import JobConfig
+        from marianne.core.sheet import build_sheets
+
+        config = JobConfig(
+            name="alias-census",
+            workspace="/tmp/alias-census",
+            instruments={"seat-3": {"profile": "opencode", "config": {"model": "x/y"}}},
+            instrument="claude-code",
+            sheet={"size": 1, "total_items": 2, "per_sheet_instruments": {2: "seat-3"}},
+            prompt={"template": "hi"},
+        )
+        direct, via_alias = build_sheets(config)
+        assert (direct.instrument_name, direct.instrument_alias) == ("claude-code", "")
+        assert (via_alias.instrument_name, via_alias.instrument_alias) == ("opencode", "seat-3")
+        variables = via_alias.template_variables(total_sheets=2, total_movements=2)
+        assert variables["instrument_alias"] == "seat-3"
+        assert variables["instrument_name"] == "opencode"
+
     def test_prompt_template_from_config(self):
         """prompt_template comes from prompt.template."""
         from marianne.core.sheet import build_sheets

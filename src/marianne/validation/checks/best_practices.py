@@ -21,6 +21,7 @@ _BUILTIN_NAMES: frozenset[str] = frozenset(
         "start_item",
         "end_item",
         "instrument_name",
+        "instrument_alias",
         # movement/voice vocabulary and its legacy aliases, from the shared table
         *TERMINOLOGY_ALIASES.keys(),
         *TERMINOLOGY_ALIASES.values(),

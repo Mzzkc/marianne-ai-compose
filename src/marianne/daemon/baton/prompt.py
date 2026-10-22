@@ -298,6 +298,7 @@ class PromptRenderer:
                 str(sheet.score_path.parent) if sheet.score_path is not None else ""
             ),
             instrument_name=sheet.instrument_name,
+            instrument_alias=sheet.instrument_alias,
         )
 
         # Fan-out metadata from the Sheet entity

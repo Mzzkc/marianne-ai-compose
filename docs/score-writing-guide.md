@@ -447,6 +447,7 @@ These are always available in every template:
 | `end_item` | int | Last item number for this sheet. |
 | `workspace` | str | Absolute path to the workspace directory. |
 | `instrument_name` | str | Name of the instrument executing this sheet (e.g., `claude-code`). |
+| `instrument_alias` | str | The score alias (`instruments:` key) the sheet was bound through, or `""` when bound to a profile or class directly. A seat census that joins answers against a roster of alias names joins on this; `instrument_name` is the profile the alias resolved to and changes on fallback. |
 
 ### Native Execution Context
 
