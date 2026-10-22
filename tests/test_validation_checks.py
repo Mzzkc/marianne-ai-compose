@@ -1072,6 +1072,65 @@ class TestEmptyPatternCheck:
 # ============================================================================
 
 
+
+class TestInjectionSizeCheck:
+    """V334: a static injection item already over its max_bytes (GH #474)."""
+
+    def _issues(self, tmp_path: Path, item_yaml: str) -> list:
+        from marianne.validation.checks.paths import InjectionSizeCheck
+
+        yaml_content = dedent(f"""
+            name: test-job
+            sheet:
+              size: 1
+              total_items: 1
+              cadenzas:
+                1:
+                  - {item_yaml}
+            prompt:
+              template: "Test"
+        """).strip()
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text(yaml_content)
+        config = JobConfig.from_yaml(config_path)
+        return InjectionSizeCheck().check(config, config_path, yaml_content)
+
+    def test_directory_over_cap_warns_with_measured_size(self, tmp_path: Path) -> None:
+        active = tmp_path / "active"
+        active.mkdir()
+        (active / "a.md").write_text("x" * 600)
+        (active / "b.md").write_text("y" * 600)
+        issues = self._issues(
+            tmp_path, f"{{directory: {active}, as: context, required: true, max_bytes: 1000}}"
+        )
+        assert [(i.check_id, i.severity) for i in issues] == [
+            ("V334", ValidationSeverity.WARNING)
+        ]
+        assert "1,200 bytes" in issues[0].message and "fail the sheet" in issues[0].message
+        assert issues[0].metadata["measured"] == "1200"
+
+    def test_under_cap_and_no_cap_are_silent(self, tmp_path: Path) -> None:
+        active = tmp_path / "active"
+        active.mkdir()
+        (active / "a.md").write_text("x" * 100)
+        assert self._issues(
+            tmp_path, f"{{directory: {active}, as: context, max_bytes: 1000}}"
+        ) == []
+        assert self._issues(tmp_path, f"{{directory: {active}, as: context}}") == []
+
+    def test_optional_file_over_cap_says_dropped(self, tmp_path: Path) -> None:
+        memo = tmp_path / "memory.md"
+        memo.write_text("m" * 2048)
+        issues = self._issues(tmp_path, f"{{file: {memo}, as: context, max_bytes: 1024}}")
+        assert len(issues) == 1 and "be dropped" in issues[0].message
+
+    def test_templated_path_is_skipped(self, tmp_path: Path) -> None:
+        issues = self._issues(
+            tmp_path, "{directory: '{{ workspace }}/active', as: context, max_bytes: 10}"
+        )
+        assert issues == []
+
+
 class TestPreludeCadenzaFileCheck:
     """Tests for PreludeCadenzaFileCheck (V108)."""
 

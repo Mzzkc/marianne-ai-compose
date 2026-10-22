@@ -52,6 +52,31 @@ from marianne.core.logging import get_logger
 _logger = get_logger("daemon.baton.prompt")
 
 
+def injection_over_max_bytes(item: InjectionItem, files: list[Path], where: Path) -> bool:
+    """Enforce ``max_bytes`` on what an injection item would inject (GH #474).
+
+    A required item over its cap fails the sheet before execution with the
+    measured size; an optional one is dropped with a warning. Either way the
+    prompt is never silently shipped over-sized — the conductor's token
+    warning fires only after assembly and names no item.
+    """
+    if item.max_bytes is None:
+        return False
+    measured = sum(f.stat().st_size for f in files)
+    if measured <= item.max_bytes:
+        return False
+    if item.required:
+        raise ValueError(
+            f"required injection {where} is {measured:,} bytes, over its max_bytes "
+            f"{item.max_bytes:,}: rotate or trim it (GH #474)"
+        )
+    _logger.warning(
+        "prompt_renderer.injection.over_max_bytes_dropped",
+        extra={"path": str(where), "measured": measured, "max_bytes": item.max_bytes},
+    )
+    return True
+
+
 @dataclass(frozen=True)
 class RenderedPrompt:
     """Output of the prompt rendering pipeline.
@@ -443,6 +468,9 @@ class PromptRenderer:
             )
             return
 
+        if injection_over_max_bytes(item, files, dir_path):
+            return
+
         for file_path in files:
             self._inject_single_file(
                 item,
@@ -499,6 +527,9 @@ class PromptRenderer:
                     "prompt_renderer.file_not_found",
                     extra={"file": str(path), "category": item.as_.value},
                 )
+            return
+
+        if injection_over_max_bytes(item, [path], path):
             return
 
         self._inject_single_file(

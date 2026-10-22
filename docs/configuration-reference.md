@@ -469,6 +469,7 @@ A single injection item referencing a file **or a directory** with a category. U
 | `directory` | `str \| None` | `None` | mutually exclusive with `file` | Path to a directory whose files are ALL injected (directory cadenza). Text files inject inline; binary files inject as structured read instructions with absolute paths. Supports Jinja templating. NOT recursive — only immediate children are injected; flatten or list subdirectories as separate items. |
 | `as` | `InjectionCategory` | **required** | `"context"`, `"skill"`, or `"tool"` | Category determining prompt placement. See InjectionCategory below. |
 | `required` | `bool` | `false` | | Fail the sheet **before execution** when this attachment cannot be read. Persistent-agent identity, memory, and every load-bearing cadenza attachment should set this `true` — missing context then fails loudly instead of silently running degraded. Runtime context-delivery receipts record the resolved paths and hashes actually assembled into the prompt. |
+| `max_bytes` | `int \| None` | `None` | `> 0` | Cap on the bytes this item injects (a directory sums its files). Over the cap, a `required` item fails the sheet before execution with the measured size; an optional item is dropped with a warning — never shipped as an over-sized prompt. Give every cadenza ledger that grows with every sheet (an `active/` directory, a memory file) a cap; `mzt validate` warns V334 when a static path is already over it (GH #474). |
 
 **InjectionCategory values:**
 

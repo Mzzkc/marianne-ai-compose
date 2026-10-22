@@ -56,6 +56,7 @@ from marianne.validation.checks.jinja import (
 from marianne.validation.checks.paths import (
     AbsoluteHomePathCheck,
     CadenzaOrderingCheck,
+    InjectionSizeCheck,
     PreludeCadenzaFileCheck,
     TemplateFileExistsCheck,
     ValidationPathScopeCheck,
@@ -89,6 +90,7 @@ __all__ = [
     "WorkspaceParentExistsCheck",
     "AbsoluteHomePathCheck",
     "TemplateFileExistsCheck",
+    "InjectionSizeCheck",
     "PreludeCadenzaFileCheck",
     "ValidationPathScopeCheck",
     # Config checks

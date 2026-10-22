@@ -320,6 +320,76 @@ class TemplateFileExistsCheck:
         return issues
 
 
+class InjectionSizeCheck:
+    """A static injection item already exceeds its ``max_bytes`` (V334).
+
+    The runtime refuses (required) or drops (optional) an over-cap item at
+    every sheet; this is the same measurement taken once, before the run,
+    for paths that need no templating. A snapshot, not the contract — a
+    ledger that is under the cap now can cross it on sheet 40 (GH #474).
+    """
+
+    @property
+    def check_id(self) -> str:
+        return "V334"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return "A prelude/cadenza item already exceeds its max_bytes (static paths only)"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+        items: list[tuple[InjectionItem, str]] = [
+            (item, "prelude") for item in config.sheet.prelude
+        ]
+        for sheet_num, group in config.sheet.cadenzas.items():
+            items.extend((item, f"cadenza (sheet {sheet_num})") for item in group)
+        for item, source in items:
+            if item.max_bytes is None:
+                continue
+            declared = item.directory or item.file or ""
+            if "{{" in declared:
+                continue
+            path = resolve_path(Path(declared), config_path)
+            if item.directory is not None:
+                if not path.is_dir():
+                    continue  # V108's finding
+                files = [f for f in path.glob("*") if f.is_file()]
+            else:
+                if not path.is_file():
+                    continue
+                files = [path]
+            measured = sum(f.stat().st_size for f in files)
+            if measured <= item.max_bytes:
+                continue
+            fate = "fail the sheet" if item.required else "be dropped"
+            issues.append(
+                ValidationIssue(
+                    check_id=self.check_id,
+                    severity=self.severity,
+                    message=(
+                        f"Injection from {source} is {measured:,} bytes, over its "
+                        f"max_bytes {item.max_bytes:,}: {path} — it will {fate} at "
+                        "every sheet"
+                    ),
+                    line=find_line_in_yaml(raw_yaml, declared),
+                    suggestion="Rotate or trim the injected files, or raise max_bytes",
+                    metadata={"source": source, "path": str(path),
+                              "measured": str(measured), "max_bytes": str(item.max_bytes)},
+                )
+            )
+        return issues
+
+
 class PreludeCadenzaFileCheck:
     """Check that prelude/cadenza files exist when paths are static (V108).
 
