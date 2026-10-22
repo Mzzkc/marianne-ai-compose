@@ -146,7 +146,7 @@ Registered RPC methods:
 | `job.list` | List all known jobs |
 | `job.diagnose` | Get diagnostic report for a job |
 | `job.errors` | Get error details for a job |
-| `job.history` | Get execution history for a job |
+| `job.history` | Per-attempt records from the job's checkpoint, newest first |
 | `job.recover` | Recover failed sheets for a job |
 | `daemon.status` | Get conductor status summary (PID, uptime, memory, version) |
 | `daemon.shutdown` | Initiate conductor shutdown |

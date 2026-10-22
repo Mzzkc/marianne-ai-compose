@@ -782,7 +782,7 @@ Multi-phase classification pipeline: structured JSON → exit code/signal → re
 - Structured logging via structlog with context propagation
 - 20+ baton event types published via async event bus
 - 40 error codes across 8 categories
-- Execution history in SQLite for post-mortem
+- Per-attempt history in the checkpoint (`mzt history`: instrument, outcome, exit, cause) for post-mortem
 - Cost tracking with token-level granularity
 - Web dashboard with SSE for real-time updates
 - `mzt diagnose` for comprehensive failure analysis

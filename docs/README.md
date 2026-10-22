@@ -363,7 +363,7 @@ mzt instruments list        # See available instruments
 | `mzt diagnose <id>` | Comprehensive diagnostic report |
 | `mzt errors <id>` | Color-coded error history |
 | `mzt logs <id>` | View or tail log sources |
-| `mzt history <id>` | Execution history from SQLite |
+| `mzt history <id>` | Every attempt from the checkpoint: instrument, outcome, exit code, cause |
 | `mzt recover <id>` | Re-validate without re-execution |
 
 ### Conductor

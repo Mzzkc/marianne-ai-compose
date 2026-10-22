@@ -43,7 +43,6 @@ from marianne.core.checkpoint import (
 from marianne.core.constants import (
     DAEMON_STATE_DB_PATH,
     SHEET_NUM_KEY,
-    STATE_DB_FILENAME,
 )
 from marianne.core.log_sources import (
     LogSource,
@@ -892,7 +891,6 @@ async def _diagnose_job(
     from marianne.daemon.exceptions import DaemonError, JobSubmissionError
 
     found_job: CheckpointState | None = None
-    found_backend = None
 
     ws_str = str(workspace) if workspace else None
     params = {"job_id": job_id, "workspace": ws_str}
@@ -903,7 +901,7 @@ async def _diagnose_job(
         # F-451: Fall back to workspace filesystem if -w was provided.
         if workspace is not None:
             from ..helpers import _find_job_state_direct
-            found_job, found_backend = await _find_job_state_direct(
+            found_job, _backend = await _find_job_state_direct(
                 job_id, workspace, json_output=json_output,
             )
             routed = False
@@ -926,7 +924,6 @@ async def _diagnose_job(
     # (F-451 workspace fallback). Only proceed with conductor result
     # if the fallback didn't already find the job.
     if found_job is None:
-        found_backend = None
         effective_workspace = workspace
 
         if routed and result:
@@ -938,7 +935,7 @@ async def _diagnose_job(
         elif not routed and workspace is not None:
             # Fallback to filesystem with workspace override
             from ..helpers import _find_job_state_direct
-            found_job, found_backend = await _find_job_state_direct(
+            found_job, _backend = await _find_job_state_direct(
                 job_id, workspace, json_output=json_output,
             )
         else:
@@ -975,15 +972,11 @@ async def _diagnose_job(
     if resources:
         await _attach_resource_profile(report, job_id)
 
-    # Add execution history count if backend supports it
-    report["execution_history_count"] = None
-    if found_backend is not None and hasattr(found_backend, 'get_execution_history_count'):
-        try:
-            report["execution_history_count"] = await found_backend.get_execution_history_count(
-                job_id
-            )
-        except (OSError, ValueError, KeyError):
-            report["execution_history_count"] = -1
+    # Attempts on record (GH #488: the checkpoint's attempt_history, which
+    # `mzt history` lists; the old SQLite table was never written).
+    report["execution_history_count"] = sum(
+        len(sheet.attempt_history) for sheet in found_job.sheets.values()
+    )
 
     if json_output:
         # soft_wrap, highlight=False, markup=False prevent Rich from inserting
@@ -1875,11 +1868,10 @@ def history(
 ) -> None:
     """Show execution history for a score.
 
-    Displays a table of past execution attempts from the SQLite state backend,
-    including sheet number, attempt number, exit code, duration, and timestamp.
-
-    Requires the SQLite state backend (execution history is not available with
-    the JSON backend).
+    One row per attempt, newest first: sheet, attempt, instrument and model,
+    outcome, exit code, duration, timestamp, and the redacted cause of a
+    failure. Read from the score's checkpoint (the last 50 attempts per sheet),
+    so it survives completion and conductor restarts.
 
     Examples:
         mzt history my-job                  # Show all history
@@ -1927,44 +1919,21 @@ async def _history_job(
         report_daemon_route_error(err, json_output=json_output)
 
     records: list[dict[str, Any]] = []
-    has_history = True
-
     if routed and result:
         records = result.get("records", [])
-        has_history = result.get("has_history", False)
     elif not routed and workspace is not None:
-        # Fallback to filesystem — load from SQLite backend directly
-        from marianne.state import SQLiteStateBackend
+        # Conductor down: read the checkpoint from the registry directly.
+        from marianne.core.checkpoint import execution_history_records
 
-        sqlite_path = workspace / STATE_DB_FILENAME
-        if sqlite_path.exists():
-            backend = SQLiteStateBackend(sqlite_path)
-            try:
-                if hasattr(backend, 'get_execution_history'):
-                    records = await backend.get_execution_history(
-                        job_id=job_id, sheet_num=sheet_filter, limit=limit,
-                    )
-            finally:
-                await backend.close()
-        else:
-            has_history = False
+        from ..helpers import _find_job_state_direct
+
+        state, _backend = await _find_job_state_direct(
+            job_id, workspace, json_output=json_output,
+        )
+        records = execution_history_records(state, sheet_filter, limit)
     else:
         require_conductor(routed, json_output=json_output)
         return
-
-    # Check if backend supports execution history
-    if not has_history:
-        if json_output:
-            output_json({
-                "error": "Execution history requires SQLite state backend",
-                "hint": "Re-run the score with SQLite state to enable history tracking",
-            })
-        else:
-            console.print(
-                "[yellow]Execution history requires the SQLite state backend.[/yellow]\n"
-                "[dim]History is only recorded when using SQLite state storage.[/dim]"
-            )
-        raise typer.Exit(1)
 
     # Output as JSON if requested
     if json_output:
@@ -1984,36 +1953,47 @@ async def _history_job(
         if sheet_filter is not None:
             console.print(f"[dim]Sheet filter: {sheet_filter}[/dim]")
         console.print(
-            "\n[dim]Hint: Execution history is recorded when the score runs "
-            "with the SQLite state backend.[/dim]"
+            "\n[dim]Hint: no sheet has finished an attempt yet.[/dim]"
         )
         return
 
     table = Table(title=f"Execution History: {job_id}")
     table.add_column("Sheet", justify="right", style="cyan", width=6)
     table.add_column("Attempt", justify="right", width=7)
-    table.add_column("Exit Code", justify="right", width=9)
-    table.add_column("Duration", justify="right", width=10)
+    table.add_column("Instrument", overflow="fold")
+    table.add_column("Outcome", width=8)
+    table.add_column("Exit", justify="right", width=5)
+    table.add_column("Duration", justify="right", width=9)
     table.add_column("Timestamp", style="dim", width=19)
+    table.add_column("Cause", overflow="fold")
 
     for record in records:
         exit_code = record.get("exit_code")
         exit_str = str(exit_code) if exit_code is not None else "-"
-        exit_style = "green" if exit_code == 0 else "red" if exit_code is not None else "dim"
-
+        success = record.get("success")
+        outcome = (
+            "[green]ok[/green]" if success
+            else "[red]failed[/red]" if success is False else "-"
+        )
         duration = record.get("duration_seconds")
         duration_str = f"{duration:.1f}s" if duration is not None else "-"
-
-        timestamp = record.get("executed_at", "")
-        if timestamp and len(timestamp) > 19:
-            timestamp = timestamp[:19]
-
+        timestamp = str(record.get("executed_at") or "")[:19]
+        instrument = record.get("instrument") or "-"
+        if record.get("model"):
+            instrument = f"{instrument} ({record['model']})"
+        cause = " ".join(
+            str(part) for part in (record.get("error_code"), record.get("error_message"))
+            if part
+        )
         table.add_row(
             str(record.get(SHEET_NUM_KEY, "")),
             str(record.get("attempt_num", "")),
-            f"[{exit_style}]{exit_str}[/{exit_style}]",
+            instrument,
+            outcome,
+            exit_str,
             duration_str,
             timestamp,
+            cause or "-",
         )
 
     console.print(table)

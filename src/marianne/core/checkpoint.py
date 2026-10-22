@@ -327,6 +327,38 @@ def _attempt_error_message(result: Any) -> str | None:
     return text
 
 
+def execution_history_records(
+    state: CheckpointState,
+    sheet_num: int | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Every sheet's attempt records, newest first, for ``mzt history`` (GH #488).
+
+    The checkpoint's per-sheet ``attempt_history`` is the conductor's one
+    persisted, redacted record of each attempt; history is a view over it.
+    """
+    rows: list[dict[str, Any]] = []
+    for num, sheet in state.sheets.items():
+        if sheet_num is not None and num != sheet_num:
+            continue
+        for entry in sheet.attempt_history:
+            rows.append({
+                "sheet_num": num,
+                "attempt_num": entry.get("attempt"),
+                "instrument": entry.get("instrument"),
+                "model": entry.get("model"),
+                "success": entry.get("success"),
+                "exit_code": entry.get("exit_code"),
+                "exit_reason": entry.get("exit_reason"),
+                "error_code": entry.get("error_code"),
+                "error_message": entry.get("error_message"),
+                "duration_seconds": entry.get("duration_seconds"),
+                "executed_at": entry.get("timestamp"),
+            })
+    rows.sort(key=lambda row: str(row.get("executed_at") or ""), reverse=True)
+    return rows[: max(limit, 0)]
+
+
 class SheetState(BaseModel):
     """State for a single sheet."""
 
@@ -512,8 +544,9 @@ class SheetState(BaseModel):
         default_factory=list,
         description="One record per attempt: {attempt, instrument, model, "
         "duration_seconds, success, exit_reason, error_classification, "
-        "error_code, error_message, timestamp}. Persisted (max 50) for status "
-        "and diagnose; error_message is the musician's redacted cause text.",
+        "error_code, error_message, exit_code, timestamp}. Persisted (max 50) "
+        "for status, diagnose and `mzt history`; error_message is the "
+        "musician's redacted cause text.",
     )
 
     # Instrument fallback history (M5: per-sheet instrument fallbacks)
@@ -899,6 +932,7 @@ class SheetState(BaseModel):
             # credentials before setting this (GH #143 — a diagnose line
             # reading "TRANSIENT" alone sent an operator to the logs).
             "error_message": _attempt_error_message(result),
+            "exit_code": getattr(result, "exit_code", None),
             "timestamp": _dt.datetime.now(tz=_dt.UTC).isoformat(),
         })
         if len(self.attempt_history) > MAX_ATTEMPT_HISTORY:

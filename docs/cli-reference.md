@@ -1053,9 +1053,7 @@ Show execution history for a job.
 Usage: mzt history [OPTIONS] JOB_ID
 ```
 
-Displays a table of past execution attempts from the SQLite state backend, including sheet number, attempt number, exit code, duration, and timestamp.
-
-> **Note:** Requires the SQLite state backend. Execution history is not available with the JSON backend.
+One row per attempt, newest first: sheet, attempt, instrument and model, outcome, exit code, duration, timestamp, and the redacted cause of a failure. The rows come from the score's checkpoint, which keeps each sheet's last 50 attempts, so history survives completion and conductor restarts. It holds no output: read a sheet's output tail with `mzt status --json`, and a `response_format` sheet's object from its `structured_output`.
 
 #### Arguments
 
@@ -1069,7 +1067,7 @@ Displays a table of past execution attempts from the SQLite state backend, inclu
 |--------|-------|---------|-------------|
 | `--sheet` | `-b` | | Filter by specific sheet number |
 | `--limit` | `-n` | 50 | Maximum number of records to show |
-| `--workspace` | `-w` | | *(hidden)* Debug override: bypass conductor for history |
+| `--workspace` | `-w` | | *(hidden)* Debug override: read the registry directly when the conductor is down |
 | `--json` | `-j` | false | Output history as JSON |
 
 #### Examples

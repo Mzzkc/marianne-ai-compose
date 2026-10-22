@@ -9,6 +9,27 @@ from marianne.core.checkpoint import CheckpointState, JobStatus, SheetStatus
 from marianne.state.sqlite_backend import SQLiteStateBackend
 
 
+async def _seed_legacy_history(
+    backend: SQLiteStateBackend,
+    job_id: str,
+    rows: list[tuple[int, int, int | None, float | None]],
+) -> None:
+    """Insert legacy execution_history rows (sheet, attempt, exit, duration).
+
+    The table survives for old databases; nothing in Marianne writes it now
+    (GH #488), so tests seed it directly.
+    """
+    import aiosqlite
+
+    async with aiosqlite.connect(backend.db_path) as db:
+        await db.executemany(
+            "INSERT INTO execution_history (job_id, sheet_num, attempt_num, "
+            "exit_code, duration_seconds, executed_at) VALUES (?, ?, ?, ?, ?, ?)",
+            [(job_id, *row, datetime.now(UTC).isoformat()) for row in rows],
+        )
+        await db.commit()
+
+
 @pytest.fixture
 async def sqlite_backend(tmp_path: Path) -> SQLiteStateBackend:
     """Create a SQLite backend with temp database."""
@@ -268,72 +289,6 @@ class TestSheetStatePreservation:
         assert sheet.exit_reason is None
 
 
-class TestExecutionHistory:
-    """Test execution history recording."""
-
-    async def test_record_execution(
-        self, sqlite_backend: SQLiteStateBackend, sample_state: CheckpointState
-    ) -> None:
-        """Test recording an execution attempt."""
-        await sqlite_backend.save(sample_state)
-
-        record_id = await sqlite_backend.record_execution(
-            job_id=sample_state.job_id,
-            sheet_num=1,
-            attempt_num=1,
-            prompt="Test prompt",
-            output="Test output",
-            exit_code=0,
-            duration_seconds=5.5,
-        )
-
-        assert record_id > 0
-
-    async def test_get_execution_history(
-        self, sqlite_backend: SQLiteStateBackend, sample_state: CheckpointState
-    ) -> None:
-        """Test retrieving execution history."""
-        await sqlite_backend.save(sample_state)
-
-        # Record multiple executions
-        for i in range(3):
-            await sqlite_backend.record_execution(
-                job_id=sample_state.job_id,
-                sheet_num=1,
-                attempt_num=i + 1,
-                prompt=f"Prompt {i}",
-                output=f"Output {i}",
-                exit_code=0 if i == 2 else 1,
-                duration_seconds=float(i + 1),
-            )
-
-        history = await sqlite_backend.get_execution_history(sample_state.job_id, sheet_num=1)
-
-        assert len(history) == 3
-        # Most recent first
-        assert history[0]["attempt_num"] == 3
-        assert history[0]["exit_code"] == 0
-
-    async def test_get_execution_history_all_sheets(
-        self, sqlite_backend: SQLiteStateBackend, sample_state: CheckpointState
-    ) -> None:
-        """Test retrieving execution history for all sheets."""
-        await sqlite_backend.save(sample_state)
-
-        # Record for multiple sheets
-        for sheet in range(1, 4):
-            await sqlite_backend.record_execution(
-                job_id=sample_state.job_id,
-                sheet_num=sheet,
-                attempt_num=1,
-                exit_code=0,
-            )
-
-        history = await sqlite_backend.get_execution_history(sample_state.job_id)
-
-        assert len(history) == 3
-
-
 class TestJobStatistics:
     """Test job statistics calculation."""
 
@@ -348,15 +303,9 @@ class TestJobStatistics:
         )
         await sqlite_backend.save(state)
 
-        # Record some executions
-        for i in range(1, 8):
-            await sqlite_backend.record_execution(
-                job_id="stats-job",
-                sheet_num=i,
-                attempt_num=1,
-                exit_code=0,
-                duration_seconds=2.0,
-            )
+        await _seed_legacy_history(
+            sqlite_backend, "stats-job", [(i, 1, 0, 2.0) for i in range(1, 8)]
+        )
 
         stats = await sqlite_backend.get_job_statistics("stats-job")
 
@@ -673,14 +622,11 @@ class TestCascadeDelete:
 
         await sqlite_backend.save(sample_state)
 
-        # Record some execution history
-        for i in range(1, 4):
-            await sqlite_backend.record_execution(
-                job_id=sample_state.job_id,
-                sheet_num=1,
-                attempt_num=i,
-                exit_code=1 if i < 3 else 0,
-            )
+        await _seed_legacy_history(
+            sqlite_backend,
+            sample_state.job_id,
+            [(1, i, 1 if i < 3 else 0, None) for i in range(1, 4)],
+        )
 
         # Verify execution history exists
         async with aiosqlite.connect(sqlite_backend.db_path) as db:

@@ -315,6 +315,8 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **`mzt history` shows every attempt (GH #488).** It read a SQLite table nothing wrote, so every job answered "requires the SQLite state backend". History is now a view over each sheet's persisted attempt records: instrument and model, outcome, exit code, duration, and the redacted cause of a failure, newest first. `mzt diagnose` counts the same records. The never-called `record_execution` writer and its SQLite readers are removed; the table stays so older databases open unchanged.
+
 - **The instrument supervisor no longer scans all of `/proc` every 50 ms (GH #490).** Its run loop counted adopted children by reading every process's stat file twenty times a second, about 18% CPU per running sheet on a host with ~550 processes. It now reads the kernel's per-task children list and keeps the full scan for the exit sweep.
 
 - **Log lookups stop at the first matching line (GH #491).** Deciding whether the conductor log held any line for a job read the whole file, 24 MB on a busy host, on every MCP `get_logs` call and dashboard stream.

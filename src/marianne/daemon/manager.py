@@ -4984,31 +4984,23 @@ class JobManager:
         sheet_num: int | None = None,
         limit: int = 50,
     ) -> dict[str, Any]:
-        """Get execution history for a specific job.
+        """Per-attempt history for a job, read from its checkpoint (GH #488).
 
-        Requires the SQLite state backend for history records.
+        Each sheet's ``attempt_history`` is written on every attempt and
+        persisted with the checkpoint, so history needs no second store.
         """
-        ws = await self._resolve_job_workspace(job_id, workspace)
+        from marianne.core.checkpoint import (
+            CheckpointState,
+            execution_history_records,
+        )
 
-        from marianne.state import SQLiteStateBackend
-
-        sqlite_path = ws / STATE_DB_FILENAME
+        status = await self.get_job_status(job_id, workspace)
         records: list[dict[str, Any]] = []
         has_history = False
-
-        if sqlite_path.exists():
-            backend = SQLiteStateBackend(sqlite_path)
-            try:
-                if hasattr(backend, "get_execution_history"):
-                    records = await backend.get_execution_history(
-                        job_id=job_id,
-                        sheet_num=sheet_num,
-                        limit=limit,
-                    )
-                    has_history = True
-            finally:
-                await backend.close()
-
+        if isinstance(status, dict) and isinstance(status.get("sheets"), dict):
+            state = CheckpointState.model_validate(status)
+            records = execution_history_records(state, sheet_num, limit)
+            has_history = True
         return {
             "job_id": job_id,
             "records": records,

@@ -57,8 +57,8 @@ class SQLiteStateBackend(StateBackend):
         Pure reads must short-circuit on a missing file instead of
         initializing the schema (#333): read-paths that ran migrations
         left empty ``.marianne-state.db`` files in workspaces, making
-        them look like they hold local state. Writers (``save``,
-        ``record_execution``) still create the database on first use.
+        them look like they hold local state. Writers (``save``) still
+        create the database on first use.
         """
         return not self.db_path.exists()
 
@@ -681,126 +681,6 @@ class SQLiteStateBackend(StateBackend):
         await self.save(state)
 
     # Extended methods for dashboard and analytics
-
-    @property
-    def supports_execution_history(self) -> bool:  # noqa: D102
-        return True
-
-    async def record_execution(
-        self,
-        job_id: str,
-        sheet_num: int,
-        attempt_num: int,
-        prompt: str | None = None,
-        output: str | None = None,
-        exit_code: int | None = None,
-        duration_seconds: float | None = None,
-    ) -> int | None:
-        """Record an execution attempt in history.
-
-        Args:
-            job_id: Job identifier
-            sheet_num: Sheet number
-            attempt_num: Attempt number within the sheet
-            prompt: The prompt sent to Claude
-            output: The output received
-            exit_code: Exit code from the execution
-            duration_seconds: Execution duration
-
-        Returns:
-            The ID of the inserted record, or None if insertion failed.
-        """
-        await self._ensure_initialized()
-
-        async with self._connect() as db:
-            cursor = await db.execute(
-                """
-                INSERT INTO execution_history (
-                    job_id, sheet_num, attempt_num, prompt, output,
-                    exit_code, duration_seconds, executed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    job_id,
-                    sheet_num,
-                    attempt_num,
-                    prompt,
-                    output,
-                    exit_code,
-                    duration_seconds,
-                    utc_now().isoformat(),
-                ),
-            )
-            await db.commit()
-            return cursor.lastrowid or 0
-
-    async def get_execution_history(
-        self,
-        job_id: str,
-        sheet_num: int | None = None,
-        limit: int = 100,
-    ) -> list[dict[str, Any]]:
-        """Get execution history for a job.
-
-        Args:
-            job_id: Job identifier
-            sheet_num: Optional sheet number filter
-            limit: Maximum records to return
-
-        Returns:
-            List of execution history records
-        """
-        if self._db_missing():
-            return []
-        await self._ensure_initialized()
-
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-
-            if sheet_num is not None:
-                cursor = await db.execute(
-                    """
-                    SELECT * FROM execution_history
-                    WHERE job_id = ? AND sheet_num = ?
-                    ORDER BY executed_at DESC
-                    LIMIT ?
-                """,
-                    (job_id, sheet_num, limit),
-                )
-            else:
-                cursor = await db.execute(
-                    """
-                    SELECT * FROM execution_history
-                    WHERE job_id = ?
-                    ORDER BY executed_at DESC
-                    LIMIT ?
-                """,
-                    (job_id, limit),
-                )
-
-            rows = await cursor.fetchall()
-            return [dict(row) for row in rows]
-
-    async def get_execution_history_count(self, job_id: str) -> int:
-        """Get total count of execution history records for a job.
-
-        Args:
-            job_id: Job identifier
-
-        Returns:
-            Total number of execution history records
-        """
-        if self._db_missing():
-            return 0
-        await self._ensure_initialized()
-
-        async with self._connect() as db:
-            cursor = await db.execute(
-                "SELECT COUNT(*) FROM execution_history WHERE job_id = ?",
-                (job_id,),
-            )
-            row = await cursor.fetchone()
-            return row[0] if row else 0
 
     async def get_job_statistics(self, job_id: str) -> dict[str, Any]:
         """Get aggregate statistics for a job.

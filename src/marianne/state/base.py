@@ -3,7 +3,6 @@
 from abc import ABC, abstractmethod
 
 from marianne.core.checkpoint import CheckpointState, SheetStatus
-from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
 
 _logger = get_logger("state")
@@ -92,47 +91,6 @@ class StateBackend(ABC):
         handles should override this. The default no-op is safe for backends
         that use per-operation connections (e.g. aiosqlite context managers).
         """
-
-    @property
-    def supports_execution_history(self) -> bool:
-        """Whether this backend persists execution history.
-
-        Backends that override ``record_execution`` should also override this
-        to return ``True``.  Callers can check this to avoid silent data loss
-        when a backend unexpectedly lacks execution recording.
-        """
-        return False
-
-    async def record_execution(
-        self,
-        job_id: str,
-        sheet_num: int,
-        attempt_num: int,
-        prompt: str | None = None,
-        output: str | None = None,
-        exit_code: int | None = None,
-        duration_seconds: float | None = None,
-    ) -> int | None:
-        """Record an execution attempt in history.
-
-        Optional method -- backends that support execution recording (e.g. SQLite)
-        override this. The default logs at WARNING level so silent data
-        loss is traceable, then returns None.
-
-        Args:
-            job_id: Job identifier.
-            sheet_num: Sheet number.
-            attempt_num: Attempt number within the sheet.
-            prompt: The prompt sent to the backend.
-            output: The output received.
-            exit_code: Exit code from the execution.
-            duration_seconds: Execution duration.
-
-        Returns:
-            The ID of the inserted record, or None if not supported.
-        """
-        _logger.warning("record_execution_noop", job_id=job_id, **{SHEET_NUM_KEY: sheet_num})
-        return None
 
     async def infer_state_from_artifacts(
         self,

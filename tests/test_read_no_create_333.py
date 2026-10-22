@@ -40,12 +40,6 @@ class TestReadsDoNotCreate:
         assert await backend.list_jobs() == []
         assert not db_path.exists()
 
-    async def test_execution_history_missing_db(self, tmp_path: Path) -> None:
-        backend, db_path = _backend(tmp_path)
-        assert await backend.get_execution_history("nope") == []
-        assert await backend.get_execution_history_count("nope") == 0
-        assert not db_path.exists()
-
     async def test_statistics_and_query_missing_db(self, tmp_path: Path) -> None:
         backend, db_path = _backend(tmp_path)
         assert await backend.get_job_statistics("nope") == {}
