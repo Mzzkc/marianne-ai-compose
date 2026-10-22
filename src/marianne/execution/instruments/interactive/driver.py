@@ -30,7 +30,7 @@ from typing import Literal, Protocol
 
 from marianne.core.config.instruments import InteractiveCliConfig
 from marianne.core.logging import get_logger
-from marianne.execution.instruments.interactive.tmux import TmuxControl, TmuxError
+from marianne.execution.instruments.interactive.tmux import PaneExit, TmuxControl, TmuxError
 
 _logger = get_logger("execution.interactive.driver")
 
@@ -153,6 +153,8 @@ class InteractiveSessionDriver:
     def __init__(self, tmux: TmuxControl, config: InteractiveCliConfig) -> None:
         self._tmux = tmux
         self._config = config
+        # How the last attempt's pane process ended, when tmux could say.
+        self._last_pane_exit: PaneExit | None = None
 
     async def run(
         self,
@@ -207,6 +209,7 @@ class InteractiveSessionDriver:
         deadline = time.monotonic() + timeout_seconds
         last_screen = ""
         nudges_total = 0
+        self._last_pane_exit = None
 
         try:
             # ── LAUNCH ────────────────────────────────────────────────
@@ -289,7 +292,13 @@ class InteractiveSessionDriver:
             elif outcome == "timeout":
                 detail = f"attempt deadline ({timeout_seconds}s) reached"
             elif outcome == "session_lost":
-                detail = "agent session died before signalling completion"
+                exited = self._last_pane_exit
+                detail = (
+                    f"agent process {exited.describe()} before signalling completion"
+                    if exited is not None
+                    else "agent session vanished before signalling completion "
+                    "(tmux no longer holds it: server gone or session killed)"
+                )
             elif outcome == "provider_error":
                 detail = "interactive provider error screen detected"
             return DriverResult(
@@ -438,6 +447,22 @@ class InteractiveSessionDriver:
                     return "completed", last_screen, total_nudges
                 return "session_lost", last_screen, total_nudges
             last_screen = screen
+
+            # The pane process exited; remain-on-exit kept the pane so tmux
+            # can say how. A marker written just before exiting still wins.
+            exit_info = await self._tmux.pane_exit(session)
+            if exit_info is not None:
+                if marker_path.is_file():
+                    return "completed", last_screen, total_nudges
+                self._last_pane_exit = exit_info
+                _logger.error(
+                    "interactive_pane_exited",
+                    session=session,
+                    exit_status=exit_info.status,
+                    exit_signal=exit_info.signal,
+                    detail=exit_info.describe(),
+                )
+                return "session_lost", last_screen, total_nudges
 
             # Transcript growth cap — debug artifact must not eat the disk.
             if transcript_live and transcript_path is not None:

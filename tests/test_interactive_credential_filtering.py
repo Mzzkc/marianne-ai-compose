@@ -19,7 +19,8 @@ async def test_new_session_wraps_command_with_env_dash_i(tmp_path: Path, env) ->
         await tmux.new_session(
             "probe", ["/bin/sleep", "1"], cwd=tmp_path, width=80, height=24, env=env,
         )
-    args = run.call_args.args
+    # new-session is the first tmux call; remain-on-exit follows it.
+    args = run.call_args_list[0].args
     tail = args[args.index("--") + 1:]
     assert tail == ("env", "-i", "--", *(f"{k}={v}" for k, v in env.items()), "/bin/sleep", "1")
     assert "-e" not in args

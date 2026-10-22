@@ -379,6 +379,15 @@ capacity, and every pattern is compiled when the profile loads, so a bad regex
 is refused there rather than mid-attempt. Keep them anchored to the
 instrument's real messages.
 
+An interactive (tmux) attempt whose agent process ends without writing the
+completion marker fails as `session_lost` with the cause tmux recorded: the
+pane is created with `remain-on-exit` so the driver reads `pane_dead_status`
+/ `pane_dead_signal` and the attempt's error reads `agent process killed by
+SIGKILL before signalling completion` or `agent process exited with status N
+…`. Only when tmux no longer holds the session at all (server gone, session
+killed by name) does it read `agent session vanished …`. The driver kills the
+session on every outcome, so a dead pane never outlives its attempt.
+
 #### `models` — Available Models
 
 Each model entry describes capacity and pricing:

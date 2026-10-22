@@ -159,6 +159,10 @@ class FakeTmux:
     async def pane_pid(self, session: str) -> int | None:
         return self.fake_pane_pid
 
+    async def pane_exit(self, session: str) -> Any:
+        """None while the pane runs; set ``fake_pane_exit`` to end it."""
+        return getattr(self, "fake_pane_exit", None)
+
     async def capture_screen(self, session: str) -> str:
         idx = min(self.capture_count, len(self.screens) - 1)
         self.capture_count += 1
@@ -690,6 +694,46 @@ class TestDriverFailureModes:
         fake = FakeTmux([READY_SCREEN, READY_SCREEN, TmuxError("server gone")])
         result = await run_driver(fake, tmp_path)
         assert result.outcome == "session_lost"
+        assert result.detail is not None and "vanished" in result.detail
+
+    async def test_dead_pane_names_the_signal(self, tmp_path: Path) -> None:
+        """remain-on-exit keeps the pane; the driver reads how it died."""
+        from marianne.execution.instruments.interactive.tmux import PaneExit
+
+        fake = FakeTmux([READY_SCREEN, READY_SCREEN])
+        fake.fake_pane_exit = PaneExit(status=None, signal=9)
+        result = await run_driver(fake, tmp_path)
+        assert result.outcome == "session_lost"
+        assert result.detail == (
+            "agent process killed by SIGKILL before signalling completion"
+        )
+
+    async def test_dead_pane_names_the_exit_status(self, tmp_path: Path) -> None:
+        from marianne.execution.instruments.interactive.tmux import PaneExit
+
+        fake = FakeTmux([READY_SCREEN, READY_SCREEN])
+        fake.fake_pane_exit = PaneExit(status=137, signal=None)
+        result = await run_driver(fake, tmp_path)
+        assert result.outcome == "session_lost"
+        assert "exited with status 137" in (result.detail or "")
+
+    async def test_marker_written_before_exit_still_completes(
+        self, tmp_path: Path,
+    ) -> None:
+        """An agent that writes the marker and then quits is done, not dead."""
+        from marianne.execution.instruments.interactive.tmux import PaneExit
+
+        marker = tmp_path / "s1-a1.complete"
+
+        def write_marker() -> str:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("done")
+            return READY_SCREEN
+
+        fake = FakeTmux([READY_SCREEN, write_marker])
+        fake.fake_pane_exit = PaneExit(status=0, signal=None)
+        result = await run_driver(fake, tmp_path, marker=marker)
+        assert result.outcome == "completed"
 
     async def test_provider_error_screen_stops_before_nudge(
         self, tmp_path: Path,

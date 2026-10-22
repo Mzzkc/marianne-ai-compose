@@ -23,8 +23,10 @@ import asyncio
 import hashlib
 import os
 import re
+import signal as _signal
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from marianne.core.logging import get_logger
@@ -35,6 +37,9 @@ _logger = get_logger("execution.interactive.tmux")
 # complete in milliseconds; 10s means "the server is wedged", not "slow".
 _COMMAND_TIMEOUT_SECONDS = 10.0
 _SYNC_COMMAND_TIMEOUT_SECONDS = 10.0
+# A dead pane's exit status arrives on the SIGCHLD reap, after pane_dead.
+_PANE_EXIT_SETTLE_POLLS = 5
+_PANE_EXIT_SETTLE_SECONDS = 0.1
 
 # Minimum supported tmux version. capture-pane/paste-buffer semantics are
 # verified against 3.x; bracketed paste (-p) behavior differs in 2.x.
@@ -167,6 +172,25 @@ def kill_sessions_with_prefix_sync(
                 stderr=result.stderr.strip(),
             )
     return killed
+
+
+@dataclass(frozen=True)
+class PaneExit:
+    """How a pane's process ended: an exit status, or the signal that killed it."""
+
+    status: int | None
+    signal: int | None
+
+    def describe(self) -> str:
+        if self.signal:
+            try:
+                name = _signal.Signals(self.signal).name
+            except ValueError:
+                name = f"signal {self.signal}"
+            return f"killed by {name}"
+        if self.status is not None:
+            return f"exited with status {self.status}"
+        return "exited (status unknown)"
 
 
 class TmuxError(RuntimeError):
@@ -309,6 +333,17 @@ class TmuxControl:
             "--",
             *command,
         )
+        # Keep the pane after its process exits so the driver can read HOW
+        # it died (exit status or signal) instead of finding the session
+        # gone and reporting "session died" with no cause (18 such reports
+        # in one night). The driver kills the session on every outcome, so
+        # a dead pane never outlives its attempt.
+        # Window option: the target needs the window suffix (``=name:``);
+        # ``=name`` alone is "no such window" on tmux 3.4.
+        await self._run(
+            "set-option", "-t", f"={session}:", "remain-on-exit", "on",
+            allow_failure=True,
+        )
 
     async def has_session(self, session: str) -> bool:
         """Whether the session exists on this server."""
@@ -347,6 +382,40 @@ class TmuxControl:
             "capture-pane", "-p", "-t", f"={session}:",
         )
         return stdout
+
+    async def pane_exit(self, session: str) -> PaneExit | None:
+        """How the pane's process ended, or None while it is still running.
+
+        Reads tmux's ``pane_dead`` / ``pane_dead_status`` / ``pane_dead_signal``
+        (tmux 3.0+). A vanished session or a tmux failure also reads as None —
+        the caller already knows the session is unusable and only wants the
+        cause when tmux still holds the dead pane.
+        """
+        # ``pane_dead`` is set when the pty closes; the status and signal
+        # land on the later SIGCHLD reap. Under load a probe can fall in
+        # between (seen in parallel test runs), so give the reap a moment
+        # before settling for "status unknown".
+        status: int | None = None
+        signal: int | None = None
+        for attempt in range(_PANE_EXIT_SETTLE_POLLS):
+            code, stdout, _ = await self._run(
+                "display-message", "-p", "-t", f"={session}:",
+                "#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}",
+                allow_failure=True,
+            )
+            if code != 0:
+                return None
+            parts = stdout.rstrip("\n").split("\t")
+            if len(parts) != 3 or parts[0].strip() != "1":
+                return None
+            raw_status, raw_signal = parts[1].strip(), parts[2].strip()
+            status = int(raw_status) if raw_status.lstrip("-").isdigit() else None
+            signal = int(raw_signal) if raw_signal.isdigit() else None
+            if status is not None or signal is not None:
+                break
+            if attempt + 1 < _PANE_EXIT_SETTLE_POLLS:
+                await asyncio.sleep(_PANE_EXIT_SETTLE_SECONDS)
+        return PaneExit(status=status, signal=signal)
 
     async def pane_pid(self, session: str) -> int | None:
         """The pane process PID, or None when unavailable."""

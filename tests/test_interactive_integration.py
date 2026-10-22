@@ -237,10 +237,39 @@ class TestDriverAgainstRealTmux:
             max_nudges=2,
         )
 
-        # The pane dies (tmux destroys the session) before completion.
-        assert result.outcome in ("session_lost", "nudges_exhausted")
+        # The pane dies before completion; remain-on-exit lets the driver
+        # read the exit status, and the driver then kills the session.
+        assert result.outcome == "session_lost"
+        assert result.detail == (
+            "agent process exited with status 0 before signalling completion"
+        )
         assert not marker.exists()
         assert not await tmux.has_session("it-dead")
+
+    async def test_signalled_agent_reports_the_signal(
+        self, tmux: TmuxControl, tmp_path: Path,
+    ) -> None:
+        marker = tmp_path / "attempt.complete"
+        driver = InteractiveSessionDriver(tmux, _interactive_config())
+        result = await driver.run(
+            session="it-sig",
+            command=[
+                sys.executable, "-c",
+                "import os, signal, time; print('\\u276f '); time.sleep(1.5); "
+                "os.kill(os.getpid(), signal.SIGKILL)",
+            ],
+            cwd=tmp_path,
+            prompt="anything",
+            marker_path=marker,
+            timeout_seconds=25.0,
+            policy=StaticNudgePolicy("please continue"),
+            max_nudges=2,
+        )
+        assert result.outcome == "session_lost"
+        assert result.detail == (
+            "agent process killed by SIGKILL before signalling completion"
+        )
+        assert not await tmux.has_session("it-sig")
 
     async def test_transcript_pipe_captures_output(
         self, tmux: TmuxControl, tmp_path: Path,
