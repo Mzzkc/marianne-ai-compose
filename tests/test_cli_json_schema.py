@@ -72,6 +72,8 @@ def _make_profile(
     *,
     json_schema_flag: str | None = None,
     output_format: str = "json",
+    extra_flags: list[str] | None = None,
+    schema_extra_flags: list[str] | None = None,
 ) -> InstrumentProfile:
     return InstrumentProfile(
         name="claude-code",
@@ -86,6 +88,8 @@ def _make_profile(
                 output_format_flag="--output-format",
                 output_format_value=output_format,
                 json_schema_flag=json_schema_flag,
+                extra_flags=extra_flags or [],
+                schema_extra_flags=schema_extra_flags,
             ),
             output=CliOutputConfig(
                 format=output_format,
@@ -99,13 +103,49 @@ def _make_profile(
 def _make_backend(
     *, json_schema_flag: str | None = "--json-schema",
     output_format: str = "json",
+    extra_flags: list[str] | None = None,
+    schema_extra_flags: list[str] | None = None,
 ) -> PluginCliBackend:
     return PluginCliBackend(
         _make_profile(
             json_schema_flag=json_schema_flag,
             output_format=output_format,
+            extra_flags=extra_flags,
+            schema_extra_flags=schema_extra_flags,
         ),
     )
+
+
+def test_schema_sheet_takes_schema_extra_flags_instead_of_extra_flags() -> None:
+    """A schema sheet gets schema_extra_flags; a plain sheet keeps extra_flags.
+
+    claude-code 2.1.307 under ``--effort max`` with ``--json-schema`` emits
+    nothing until killed (0 bytes at 150 s with a real 8.8 KB intake schema;
+    ``--effort high`` answers in 23 s), so the profile can say which flags a
+    structured sheet gets.
+    """
+    backend = _make_backend(
+        extra_flags=["--effort", "max"], schema_extra_flags=["--effort", "high"]
+    )
+    plain = backend._build_command("prompt", timeout_seconds=None)
+    schema = backend._build_command(
+        "prompt", timeout_seconds=None, response_format=JSON_SCHEMA_RF
+    )
+    assert plain[-2:] == ["--effort", "max"]
+    assert schema[-2:] == ["--effort", "high"]
+    assert "max" not in schema
+
+
+def test_schema_extra_flags_empty_list_drops_every_extra_flag() -> None:
+    """``[]`` means a schema sheet gets no extra flags; None means it inherits."""
+    dropped = _make_backend(extra_flags=["--effort", "max"], schema_extra_flags=[])
+    inherits = _make_backend(extra_flags=["--effort", "max"], schema_extra_flags=None)
+    assert dropped._build_command(
+        "prompt", timeout_seconds=None, response_format=JSON_SCHEMA_RF
+    )[-2:] != ["--effort", "max"]
+    assert inherits._build_command(
+        "prompt", timeout_seconds=None, response_format=JSON_SCHEMA_RF
+    )[-2:] == ["--effort", "max"]
 
 
 def _claude_terminal_output(

@@ -718,7 +718,7 @@ class PluginCliBackend(Backend):
         Follows the construction order specified in the design:
         [executable] [subcommand?] [auto_approve_flag?] [output_format_flag? value?]
         [model_flag? model?] [timeout_flag? timeout?] [prompt_flag?] <prompt>
-        [...extra_flags]
+        [json_schema_flag? schema?] [...extra_flags | ...schema_extra_flags]
 
         Args:
             prompt: The prompt text (already assembled with preamble/extensions).
@@ -823,8 +823,14 @@ class PluginCliBackend(Backend):
             args.append(validated_schema_flag)
             args.append(json.dumps(_cli_schema(schema_obj), separators=(",", ":")))
 
-        # Extra flags (always last)
-        args.extend(cmd.extra_flags)
+        # Extra flags (always last). A schema sheet takes the profile's
+        # schema_extra_flags when it declares them, because a flag that is
+        # right for free-form work can hang structured output (claude-code
+        # `--effort max` + `--json-schema`: zero bytes until killed).
+        if response_format is not None and cmd.schema_extra_flags is not None:
+            args.extend(cmd.schema_extra_flags)
+        else:
+            args.extend(cmd.extra_flags)
 
         return args
 

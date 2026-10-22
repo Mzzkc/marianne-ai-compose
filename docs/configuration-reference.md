@@ -100,7 +100,10 @@ For headless CLI profiles, schema mode requires `type: json_schema` and a
 profile-declared `cli.command.json_schema_flag`. Marianne passes the schema to
 that flag — with top-level `$schema` and `$id` removed, since Claude Code's
 validator rejects a draft URL it cannot resolve (GH #479) — and validates the
-returned structured JSON against it. An unsupported
+returned structured JSON against it. The profile's `schema_extra_flags`, when
+declared, replace `extra_flags` on that command (the shipped `claude-code`
+profile drops from `--effort max` to `--effort high` for schema sheets, since
+max with `--json-schema` hangs on Claude Code 2.1.307). An unsupported
 profile or format fails explicitly. Interactive CLI execution does not provide
 this schema contract, and score silence on `interactive` selects the profile's
 `cli.interactive.enabled_by_default` — true for `claude-code` and `antigravity` —

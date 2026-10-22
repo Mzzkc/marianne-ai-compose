@@ -277,6 +277,19 @@ class CliCommand(BaseModel):
         default_factory=list,
         description="Fixed flags always appended to the command",
     )
+    schema_extra_flags: list[str] | None = Field(
+        default=None,
+        description=(
+            "Flags appended INSTEAD of extra_flags when the sheet runs in "
+            "schema mode (instrument_config.response_format of type "
+            "json_schema, passed through json_schema_flag). None = schema "
+            "sheets get extra_flags like every other sheet; [] = schema "
+            "sheets get no extra flags at all. Exists because a flag that "
+            "is right for free-form work can break structured output: "
+            "Claude Code 2.1.307 under `--effort max` with `--json-schema` "
+            "emits nothing until killed, while `--effort high` completes."
+        ),
+    )
 
     # Environment variables to set for the subprocess
     env: dict[str, str] = Field(
