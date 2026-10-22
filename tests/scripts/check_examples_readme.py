@@ -36,11 +36,25 @@ def readmes(root: Path) -> list[Path]:
     return found
 
 
+_SUBMODULE_PATH = re.compile(r"^\s*path\s*=\s*(\S+)", re.M)
+
+
+def absent_submodules(root: Path) -> list[Path]:
+    """Submodule roots that are not checked out (CI skips rosetta-corpus and
+    compiler on purpose). A link into one is unverifiable here, not dead."""
+    gitmodules = root / ".gitmodules"
+    if not gitmodules.exists():
+        return []
+    roots = [root / m.group(1) for m in _SUBMODULE_PATH.finditer(gitmodules.read_text())]
+    return [r for r in roots if not r.is_dir() or not any(r.iterdir())]
+
+
 def check(root: Path) -> list[dict[str, str]]:
     logging.disable(logging.CRITICAL)
     from marianne.core.config.job import JobConfig  # type: ignore[import-untyped]
 
     findings: list[dict[str, str]] = []
+    skipped = absent_submodules(root)
     for readme in readmes(root):
         text = readme.read_text()
         rel = str(readme.relative_to(root))
@@ -48,7 +62,10 @@ def check(root: Path) -> list[dict[str, str]]:
             target = m.group(1)
             if target.startswith(("http://", "https://", "mailto:")):
                 continue
-            if not (readme.parent / target).exists():
+            resolved = (readme.parent / target).resolve()
+            if any(resolved.is_relative_to(sub.resolve()) for sub in skipped):
+                continue
+            if not resolved.exists():
                 findings.append({"check": "dead-link", "readme": rel, "target": target})
         for m in _ROW.finditer(text):
             name, score_rel, claimed = m.group(1), m.group(2), int(m.group(3))
