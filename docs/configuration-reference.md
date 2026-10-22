@@ -88,6 +88,8 @@ Per-sheet configuration is resolved for each attempt, including fallback
 configuration. HTTP instruments share a pooled executor, but the model,
 generation limits, HTTP timeout, schema, preamble and prompt extensions travel
 with the request; they do not mutate another in-flight sheet's settings.
+Any top-level key this reference does not list is dropped by the tolerant loader; when its value is a block (a mapping or a list) `mzt validate` warns V010 — the runtime implements no such block, so nothing it configures will happen (a key from an unmerged branch, such as `deliver:`, is the usual cause). A stray scalar is V011 INFO.
+
 The same typed key set is checked at score `instrument_config`, `movements.<N>.instrument_config`, `sheet.per_sheet_instrument_config.<N>`, and `instruments.<alias>.config`. These scopes merge in that order, with an alias applied before a per-sheet override. An unknown key warns and is ignored; it does not change the sheet timeout.
 
 `response_format` is opt-in. For OpenAI-compatible HTTP profiles, an omitted

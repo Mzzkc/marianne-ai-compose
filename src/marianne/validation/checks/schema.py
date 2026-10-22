@@ -154,6 +154,23 @@ def unknown_field_issue(field: UnknownScoreField, raw_yaml: str) -> ValidationIs
             suggestion=f"Move `{field.key}` under {shown}",
             metadata={"field": location},
         )
+    # A whole block at the root (`deliver: {1: {to: ...}}`) is not a typo
+    # the author can be nudged on: it is a feature the score relies on and
+    # the runtime does not implement (or a key from a branch that never
+    # merged). INFO is hidden without --verbose, and a silently dropped
+    # block is how a product learned at runtime that nothing wrote its
+    # output file. A root block therefore warns.
+    if field.block and not field.path and not suggested:
+        return ValidationIssue(
+            check_id="V010",
+            severity=ValidationSeverity.WARNING,
+            message=f"Unknown field `{location}` will be ignored — the runtime "
+            "implements no such block, so nothing it configures will happen",
+            line=line,
+            suggestion=f"Remove `{field.key}` or move its intent to a key the "
+            "runtime reads (see docs/configuration-reference.md)",
+            metadata={"field": location},
+        )
     return ValidationIssue(
         check_id="V010" if severity == ValidationSeverity.WARNING else "V011",
         severity=severity,

@@ -18,6 +18,7 @@ import yaml
 
 from marianne.cli.commands.validate import _schema_error_hints
 from marianne.core.config.job import JobConfig
+from marianne.validation.base import ValidationIssue, ValidationSeverity
 
 
 class TestSarahFirstScoreTypos:
@@ -164,6 +165,48 @@ class TestPriyaUnimplementedFeatures:
             JobConfig(**score)
 
         assert "repeat_until" in str(exc_info.value)
+
+
+class TestPriyaDroppedBlockWarns:
+    """Priya's score carries a whole `deliver:` block from a branch that never
+    merged. The tolerant loader keeps the score runnable; `mzt validate` must
+    not file the dropped block under INFO, which the terminal hides without
+    --verbose (a product learned at runtime that nothing wrote its output)."""
+
+    def _issues(self, tmp_path: Path, extra: str) -> list[ValidationIssue]:
+        from marianne.validation.checks.schema import UnknownFieldCheck
+
+        text = (
+            "name: priya-deliver\nworkspace: /tmp/priya\ninstrument: claude-code\n"
+            "sheet: {size: 1, total_items: 1}\nprompt: {template: hi}\n"
+            "validations:\n  - {type: file_exists, path: '{workspace}/x.md'}\n" + extra
+        )
+        path = tmp_path / "score.yaml"
+        path.write_text(text)
+        config = JobConfig.from_yaml(path)
+        return UnknownFieldCheck().check(config, path, text)
+
+    def test_root_block_is_a_warning(self, tmp_path: Path) -> None:
+        issues = self._issues(tmp_path, "deliver:\n  1: {to: /tmp/out.json}\n")
+        assert [(i.check_id, i.severity) for i in issues] == [
+            ("V010", ValidationSeverity.WARNING)
+        ]
+        assert "implements no such block" in issues[0].message
+        assert issues[0].line == 8
+
+    def test_root_scalar_stays_info(self, tmp_path: Path) -> None:
+        issues = self._issues(tmp_path, "zzz_note: remember to rerun\n")
+        assert [(i.check_id, i.severity) for i in issues] == [
+            ("V011", ValidationSeverity.INFO)
+        ]
+
+    def test_nested_block_stays_info(self, tmp_path: Path) -> None:
+        """Inside a known mapping the walk already names the surface; a nested
+        unknown block is still a distant key, not a dropped root feature."""
+        issues = self._issues(tmp_path, "sheet:\n  size: 1\n  total_items: 1\n  zzz: {a: 1}\n")
+        assert [(i.check_id, i.severity) for i in issues] == [
+            ("V011", ValidationSeverity.INFO)
+        ]
 
 
 class TestLeoNestedFieldTypos:
