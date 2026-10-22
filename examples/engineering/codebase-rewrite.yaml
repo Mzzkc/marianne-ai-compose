@@ -280,9 +280,12 @@ prompt:
     functional_test_command: ""
     # Coverage contract: each command prints the TOTAL LINE COVERAGE PERCENT
     # as a bare number on its last line (e.g. `91.4`). It must follow the
-    # code the way the tests reach it: a suite that runs the program as a
-    # subprocess needs subprocess coverage (Python: COVERAGE_PROCESS_START),
-    # or the number is 0 and the floor is meaningless.
+    # code the way the tests reach it, on BOTH sides: a suite that runs the
+    # program as a subprocess needs subprocess coverage (Python:
+    # COVERAGE_PROCESS_START; Go: `go build -cover` + GOCOVERDIR, merged with
+    # `go test` via `go tool covdata`; Rust: `cargo llvm-cov` with the binary
+    # run under it), or the number counts only in-process unit tests and the
+    # gate reopens units that are already tested.
     source_coverage_command: "[CHANGE THIS: e.g. coverage run -m pytest -q >/dev/null; coverage report --format=total]"
     target_coverage_command: "[CHANGE THIS: e.g. cargo llvm-cov --summary-only | awk '/TOTAL/{print $10+0}']"
     coverage_floor: 90
