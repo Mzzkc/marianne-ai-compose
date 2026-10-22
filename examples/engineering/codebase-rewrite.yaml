@@ -193,8 +193,11 @@ sheet:
   # CEGAR check-termination: skip expensive stages when no REAL candidates.
   # Exit 0 from grep = pattern found = skip the stage.
   # Chain terminator: a COMPLETE decision from the previous iteration ends the
-  # Cathedral loop at the next job's first sheet (zero prompt cost). Every
-  # later sheet depends on sheet 1, so one skip settles the whole job.
+  # Cathedral loop at the next job (zero prompt cost). A skip does NOT cascade:
+  # the baton treats an intentional skip as satisfying its dependents, so every
+  # sheet carries the marker test — otherwise sheets 2-9 run for real and the
+  # sheet-9 trigger chains again (chain3 of the hoard-mill proof did exactly
+  # that, 2026-10-22, and was cancelled by hand).
   triggers:
     9:
       on_success:
@@ -208,17 +211,37 @@ sheet:
       command: 'test -f "{workspace}/.rewrite-complete"'
       description: "Chain complete — the previous iteration's review decided COMPLETE"
       timeout_seconds: 10
+    2:
+      command: 'test -f "{workspace}/.rewrite-complete"'
+      description: "Chain complete — skip"
+      timeout_seconds: 10
+    3:
+      command: 'test -f "{workspace}/.rewrite-complete"'
+      description: "Chain complete — skip"
+      timeout_seconds: 10
+    4:
+      command: 'test -f "{workspace}/.rewrite-complete"'
+      description: "Chain complete — skip"
+      timeout_seconds: 10
+    5:
+      command: 'test -f "{workspace}/.rewrite-complete"'
+      description: "Chain complete — skip"
+      timeout_seconds: 10
     6:
-      command: 'grep -q "status: CONVERGED" "{workspace}/05-gate-status.yaml"'
-      description: "Skip rewrite if no REAL candidates remain"
+      command: 'test -f "{workspace}/.rewrite-complete" || grep -q "status: CONVERGED" "{workspace}/05-gate-status.yaml"'
+      description: "Chain complete, or no REAL candidates remain — skip rewrite"
       timeout_seconds: 10
     7:
-      command: 'grep -q "status: CONVERGED" "{workspace}/05-gate-status.yaml"'
-      description: "Skip unit tests if no rewrite occurred"
+      command: 'test -f "{workspace}/.rewrite-complete" || grep -q "status: CONVERGED" "{workspace}/05-gate-status.yaml"'
+      description: "Chain complete, or no rewrite occurred — skip unit tests"
       timeout_seconds: 10
     8:
-      command: 'grep -q "status: CONVERGED" "{workspace}/05-gate-status.yaml" || grep -qE "\*\*Results:\*\*\s*FAIL" "{workspace}/07-unit-test-results.md"'
-      description: "Skip integration tests if no rewrite occurred, or if unit tests failed (fail-fast)"
+      command: 'test -f "{workspace}/.rewrite-complete" || grep -q "status: CONVERGED" "{workspace}/05-gate-status.yaml" || grep -qE "\*\*Results:\*\*\s*FAIL" "{workspace}/07-unit-test-results.md"'
+      description: "Chain complete, no rewrite, or unit tests failed (fail-fast) — skip integration tests"
+      timeout_seconds: 10
+    9:
+      command: 'test -f "{workspace}/.rewrite-complete"'
+      description: "Chain complete — skip the review, so its trigger never fires"
       timeout_seconds: 10
 
 # ═══════════════════════════════════════════════════════════════════════════════
