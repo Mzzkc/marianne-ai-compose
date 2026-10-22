@@ -725,7 +725,11 @@ prompt:
     - Quality issues were found that need another pass
 
     **COMPLETE** — if ALL of these are true:
-    - Every unit is DONE (or gate said CONVERGED)
+    - Every unit is DONE (or gate said CONVERGED), or the only units not
+      DONE are BLOCKED on something this host cannot supply (a privilege,
+      a device, a credential) that another iteration on this host cannot
+      supply either — list each such unit under **Blocked remainder** with
+      what it needs; another iteration would only fail the same way
     - Unit tests pass (or were skipped due to convergence)
     - Integration tests pass (or were skipped due to convergence)
     - Code quality meets {{ target_language }} idioms
