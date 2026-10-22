@@ -103,7 +103,7 @@ class SpecCorpusLoader:
                     tags=fragment.tags,
                     content_length=len(fragment.content),
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — structured logger reports fragment_load_error
                 error_msg = f"{file_path.name}: {exc}"
                 errors.append(error_msg)
                 _logger.warning(
@@ -156,7 +156,7 @@ class SpecCorpusLoader:
                 tags=[],
                 kind="text",
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — structured logger reports claude_md_load_error
             _logger.warning(
                 "claude_md_load_error",
                 path=str(claude_path),

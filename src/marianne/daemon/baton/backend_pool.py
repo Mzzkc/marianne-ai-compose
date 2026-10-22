@@ -483,7 +483,7 @@ class BackendPool:
             for backend in self._all_backends:
                 try:
                     await backend.close()
-                except Exception:
+                except Exception:  # noqa: BLE001 — structured logger reports backend_pool.close_failed
                     _logger.warning(
                         "backend_pool.close_failed",
                         extra={"backend": backend.name},

@@ -73,7 +73,7 @@ def _load_recovery_config(
     if config_snapshot:
         try:
             return JobConfig.model_validate(config_snapshot)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — structured logger reports recover.config_snapshot_invalid
             _logger.warning(
                 "recover.config_snapshot_invalid",
                 error=str(exc),
@@ -84,7 +84,7 @@ def _load_recovery_config(
     if config_path and Path(config_path).exists():
         try:
             return JobConfig.from_yaml(Path(config_path))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — structured logger reports recover.config_path_invalid
             _logger.warning(
                 "recover.config_path_invalid",
                 config_path=str(config_path),

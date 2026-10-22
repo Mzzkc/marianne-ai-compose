@@ -828,6 +828,29 @@ unknown code emits V012 ERROR. Suppressed warnings do not fail `mzt validate
 issue-count keys retain their meanings. Use suppression only after reading the
 finding in the score's context.
 
+### Validation dependency failures
+
+When a profile or class-state operation raises inside a guarded preflight
+check, Marianne logs `validation.profiles_unavailable_skip` at WARNING level
+with exception information and a `check` identifier. Checks with multiple
+guarded operations also include `operation` to identify the failed step.
+
+| Affected check or summary | Fallback after the logged exception |
+| --- | --- |
+| Raw shell prompts (V307) | Profile loading failure returns no findings; class-map loading failure continues shell checks without custom class resolution. |
+| Loop cost limits (V228) | Profile loading failure skips the cost check. |
+| MCP instrument capabilities (V302) | Built-in profile loading failure skips the capability check. |
+| Capability-class checks (V310, V311, V321–V325) | Profile/class-map loading failure skips the affected check. V311 also continues without response-format collection if that step fails; V323 skips on class-snapshot failure. |
+| JSON class summary | Profile/class-map loading failure leaves `layers`, `used`, `per_sheet`, and `failures` as empty lists. |
+
+These log warnings are separate from `ValidationIssue` findings: they do not
+themselves change the exit code, trigger `--strict`, or appear in JSON issue
+counts. `validate.suppress` applies to V-code findings, not these log events.
+An empty result after a loading failure does not establish that the skipped
+checks passed. Repair the reported failure and rerun validation. An exception
+that escapes a check still becomes an ERROR finding in the validation runner.
+No new score setting is required to enable these diagnostics.
+
 ## validations
 
 *Source: `src/marianne/core/config/execution.py` — `ValidationRule`*

@@ -109,7 +109,7 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "BLE001"]
 ignore = [
     "B008",  # Function call in default argument - required for typer CLI patterns
     "E402",  # Module-level import not at top - logger init before imports is intentional

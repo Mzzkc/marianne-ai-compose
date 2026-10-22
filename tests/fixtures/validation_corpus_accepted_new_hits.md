@@ -46,3 +46,52 @@ read in score context before this refresh. True positives, not exceptions.
 | `agents:adversary/scores/lifecycle-integration.yaml` | V327 ×3 | Same shape as full-lifecycle: `retry.completion_threshold_percent`, `rate_limit.wait_minutes`, `rate_limit.max_waits` — accepted-but-unread; agent-owned, left for its owner. |
 | 106 agent and venue scores (stock shapes; see `/tmp` sweep summary in the
 stage report) | V327 ×1–3 each | Stock engagement shapes set `rate_limit.wait_minutes`, `rate_limit.max_waits`, and/or `retry.completion_threshold_percent` — accepted-but-unread today (mostly at their defaults). Agent-owned scores left for owners; rosetta mirrors (byte-identical to the submodule) and `negative-treatment-watch.yaml`'s `cost_limits.max_cost_per_sheet` (stage-7 wiring pending) absorbed here rather than edited. |
+
+# MN-007 profile-loader repair (2026-10-21)
+
+The former sweep fixture recursively called its patched loader. The repaired
+fixture loads all 11 shipped profiles and asserts that the registry is nonempty.
+Each row below was reviewed against the score's instrument declarations and
+the emitted diagnostics. Only the specified growth is accepted; unrelated
+expectations and the growth assertion remain intact.
+
+V325 is an INFO summary for the explicitly selected `strong` capability class.
+V210 reports host-specific names absent from the shipped registry. V215 for
+`hello-local` follows from its sole unresolved `opencode-gemma` AI route.
+These are true diagnostics under the hermetic shipped-profile test, not new
+validator false positives. The host-dependent examples still require the
+profiles described in their prerequisites; this baseline does not install or
+certify them.
+
+| Score | Accepted growth | Reviewed reason |
+| --- | --- | --- |
+| `examples/engineering/codebase-rewrite.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/engineering/issue-solver.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/engineering/project-roadmap.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/engineering/quality-continuous.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/engineering/quality-triage.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/engineering/saas-app-builder.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/getting-started/hello-local.yaml` | V210 ×1, V215 ×1 | Top-level `opencode-gemma` requires the user profile described at lines 44–48; no shipped profile resolves the chain. |
+| `examples/patterns/dead-letter-quarantine.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/patterns/echelon-repair.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/patterns/immune-cascade.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/patterns/prefabrication.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/patterns/shipyard-sequence.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/patterns/source-triangulation.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/research/research-agent.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/rosetta/cathedral-construction.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/rosetta/condorcet-s-premise.yaml` | V210 ×25, V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. Host-coupled jury references six custom profiles on 30 sheets; five V210 hits were already recorded, so growth is 25. |
+| `examples/rosetta/firing-the-pass.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/rosetta/join-semilattice-merge.yaml` | V210 ×6, V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. `music-critic`, `gpt-5.6-repair`, and `opencode-glm-5.3-flash` each occur in a movement and a per-sheet override; none is shipped. |
+| `examples/rosetta/live-relay.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/rosetta/negative-treatment-watch.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/rosetta/rashomon-gate.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/rosetta/the-attested-merge-gate.yaml` | V210 ×1, V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. Movement 18 selects host profile `opencode-gemma`. |
+| `examples/rosetta/the-economic-injury-line.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `examples/rosetta/the-precedent-bench.yaml` | V210 ×1, V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. Movement 18 selects host profile `opencode-gemma`. |
+| `examples/rosetta/the-unprimed-falsifier.yaml` | V210 ×25, V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. The explicitly documented host `opencode-gemma` reader occupies 24 per-sheet overrides and movement 7. |
+| `scores/instrument-catalog-build-fold.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `scores/instrument-catalog-build.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `scores/instrument-catalog-refresh-fold.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `scores/instrument-catalog-refresh.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |
+| `scores/thinking-lab.yaml` | V325 ×1 | Top-level `instrument: strong` resolves through the shipped class map. |

@@ -240,7 +240,8 @@ def _resolve_instrument_window_from_registry(instrument: str) -> int | None:
             chosen = models[0]
         window = getattr(chosen, "context_window", None)
         return int(window) if window else None
-    except Exception:
+    except Exception:  # noqa: BLE001 — unknown capacity falls back to token accounting defaults
+        _logger.debug("tokens.registry_window_unavailable", exc_info=True)
         # Registry resolution is best-effort; never break token accounting
         # because of an unexpected registry error.
         return None

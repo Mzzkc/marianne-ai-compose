@@ -235,81 +235,49 @@ class TestTimestampMonotonicityInvariants:
     non-negative. These seem obvious but F-518 violated them.
     """
 
-    @given(
-        delta_hours=st.floats(min_value=-1000.0, max_value=1000.0),
-    )
+    @given(delta_hours=st.floats(min_value=-1000.0, max_value=1000.0))
     def test_invariant_104_checkpoint_completed_at_not_before_started_at(
         self, delta_hours: float
     ) -> None:
-        """Invariant 104: For COMPLETED jobs, completed_at >= started_at.
+        """Completion replaces stale timestamps with the current run's end.
 
-        F-518 violated this by keeping stale completed_at when setting fresh
-        started_at on resume. This caused (old - new) = negative duration.
-
-        Property: If status=COMPLETED and both timestamps are set, time flows forward.
+        Constructors preserve historical timestamps; the lifecycle transition
+        owns the current completion time. Never catch AssertionError here.
         """
         now = utc_now()
-        started_at = now
-        completed_at = now + timedelta(hours=delta_hours)
+        checkpoint = CheckpointState(
+            job_id="test-job", job_name="test", total_sheets=1,
+            status=JobStatus.RUNNING, started_at=now,
+            completed_at=now + timedelta(hours=delta_hours),
+        )
+        assert checkpoint.completed_at is None
+        checkpoint.mark_sheet_started(1)
+        checkpoint.mark_sheet_completed(1)
+        assert checkpoint.status == JobStatus.COMPLETED
+        assert checkpoint.started_at is not None
+        assert checkpoint.completed_at is not None
+        assert checkpoint.completed_at >= checkpoint.started_at
 
-        try:
-            checkpoint = CheckpointState(
-                job_id="test-job",
-                job_name="test",
-                total_sheets=1,
-                status=JobStatus.COMPLETED,
-                started_at=started_at,
-                completed_at=completed_at,
-                sheets={1: SheetState(sheet_num=1, status=SheetStatus.COMPLETED)},
-            )
-
-            # Invariant: If both are set, completed_at >= started_at
-            if checkpoint.started_at and checkpoint.completed_at:
-                elapsed = (checkpoint.completed_at - checkpoint.started_at).total_seconds()
-                start_iso = checkpoint.started_at.isoformat()
-                end_iso = checkpoint.completed_at.isoformat()
-                assert elapsed >= 0, (
-                    f"F-518: Time must flow forward. "
-                    f"started_at={start_iso}, completed_at={end_iso}, elapsed={elapsed:.1f}s"
-                )
-        except Exception:
-            # Pydantic may reject invalid timestamps - that's also valid enforcement
-            pass
-
-    @given(
-        delta_hours=st.floats(min_value=-1000.0, max_value=1000.0),
-    )
+    @given(delta_hours=st.floats(min_value=-1000.0, max_value=1000.0))
     def test_invariant_105_sheet_completed_at_not_before_started_at(
         self, delta_hours: float
     ) -> None:
-        """Invariant 105: For COMPLETED sheets, completed_at >= started_at.
-
-        Same as invariant 104 but for SheetState. Time flows forward at every level.
-
-        Property: Completed sheets have non-negative duration.
-        """
+        """A retried sheet's completion replaces its previous attempt's end."""
         now = utc_now()
-        started_at = now
-        completed_at = now + timedelta(hours=delta_hours)
-
-        try:
-            sheet = SheetState(
-                sheet_num=1,
-                status=SheetStatus.COMPLETED,
-                started_at=started_at,
-                completed_at=completed_at,
-            )
-
-            # Invariant: If both are set, completed_at >= started_at
-            if sheet.started_at and sheet.completed_at:
-                elapsed = (sheet.completed_at - sheet.started_at).total_seconds()
-                assert elapsed >= 0, (
-                    f"Time must flow forward. started_at={sheet.started_at.isoformat()}, "
-                    f"completed_at={sheet.completed_at.isoformat()}, elapsed={elapsed:.1f}s"
-                )
-        except Exception:
-            # Pydantic may reject invalid timestamps - that's also valid enforcement
-            pass
+        sheet = SheetState(
+            sheet_num=1, status=SheetStatus.COMPLETED, started_at=now,
+            completed_at=now + timedelta(hours=delta_hours),
+        )
+        checkpoint = CheckpointState(
+            job_id="test-job", job_name="test", total_sheets=1, sheets={1: sheet},
+        )
+        checkpoint.mark_sheet_started(1)
+        checkpoint.mark_sheet_completed(1)
+        sheet = checkpoint.sheets[1]
+        assert sheet.status == SheetStatus.COMPLETED
+        assert sheet.started_at is not None
+        assert sheet.completed_at is not None
+        assert sheet.completed_at >= sheet.started_at
 
     @given(
         job_status=st.sampled_from(list(JobStatus)),

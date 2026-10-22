@@ -1172,7 +1172,7 @@ async def _attach_resource_profile(report: dict[str, Any], job_id: str) -> None:
 
     except ImportError:
         resource_profile["error"] = "Profiler module not available"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — profiler failure is included in the returned diagnostic report
         resource_profile["error"] = f"Failed to read profiler data: {exc}"
 
     report["resource_profile"] = resource_profile

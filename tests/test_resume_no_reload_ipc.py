@@ -158,7 +158,7 @@ class TestManagerResumeNoReload:
             task.cancel()
             try:
                 await task
-            except (asyncio.CancelledError, Exception):
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001 — join cancelled test task after assertions without masking teardown
                 pass
 
         assert captured_args == [{"no_reload": True}]
@@ -191,7 +191,7 @@ class TestManagerResumeNoReload:
             task.cancel()
             try:
                 await task
-            except (asyncio.CancelledError, Exception):
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001 — join cancelled test task after assertions without masking teardown
                 pass
 
         assert captured_args == [{"no_reload": False}]

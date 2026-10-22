@@ -358,7 +358,7 @@ async def test_baton_dispatch_generates_code_bridge_for_non_native_backend(
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:
+            except OSError:
                 pass
 
     server = await asyncio.start_unix_server(handle, path=str(socket_path))
@@ -470,7 +470,7 @@ async def test_all_builtin_profiles_can_use_shared_mcp_code_bridge(
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:
+            except OSError:
                 pass
 
     server = await asyncio.start_unix_server(handle, path=str(socket_path))

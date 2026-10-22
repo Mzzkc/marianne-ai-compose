@@ -530,7 +530,7 @@ class TestValidationPathScopeCheck:
             raw_yaml = path.read_text(encoding="utf-8", errors="replace")
             try:
                 config = JobConfig.from_yaml(path)
-            except Exception:
+            except (ValueError, OSError):
                 continue
             parsed += 1
             issues = check.check(config, path, raw_yaml)

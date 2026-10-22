@@ -115,7 +115,7 @@ class DiagnosisEngine:
                 diagnosis = remedy.diagnose(context)
                 if diagnosis is not None:
                     diagnoses.append(diagnosis)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — structured logger reports remedy_diagnosis_failed
                 remedy_name = type(remedy).__name__
                 # Individual remedy failures shouldn't block diagnosis
                 _logger.warning(

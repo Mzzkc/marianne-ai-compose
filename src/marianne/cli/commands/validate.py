@@ -83,7 +83,7 @@ def validate(
     # First try to read and parse YAML
     try:
         raw_yaml = config_file.read_text()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — CLI boundary reports the error and exits unsuccessfully
         output_error(
             f"Cannot read score file: {e}",
             hints=["Check that the file exists and you have read permission."],
@@ -177,7 +177,7 @@ def validate(
         hints = _schema_error_hints(str(e))
         output_error(f"Schema validation failed: {e}", hints=hints, json_output=json_output)
         raise typer.Exit(2) from None
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — CLI boundary reports the error and exits unsuccessfully
         hints = _schema_error_hints(str(e))
         output_error(
             f"Schema validation failed: {e}",

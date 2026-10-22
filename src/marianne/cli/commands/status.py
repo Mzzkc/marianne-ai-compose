@@ -330,7 +330,7 @@ async def _status_job(
         try:
             found_job = CheckpointState.model_validate(result)
             schedule = _public_schedule(result.get("schedule"))
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports checkpoint_model_validate_fallback
             _logger.debug("checkpoint_model_validate_fallback", exc_info=True)
             _output_meta_status(result, json_output)
             return
@@ -401,7 +401,7 @@ async def _status_job_watch(
                 routed, result = True, None
             except (DaemonAccessDeniedError, DaemonUnresponsiveError, DaemonProtocolError) as exc:
                 report_daemon_route_error(exc, json_output=json_output)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — structured logger reports watch_daemon_error
                 # Conductor error — show the real error, not "not found"
                 error_detail = f"{type(exc).__name__}: {exc}"
                 _logger.warning("watch_daemon_error", error=error_detail)
@@ -420,7 +420,7 @@ async def _status_job_watch(
                 try:
                     found_job = CheckpointState.model_validate(result)
                     schedule = _public_schedule(result.get("schedule"))
-                except Exception:
+                except Exception:  # noqa: BLE001 — structured logger reports watch_checkpoint_model_validate_fallback
                     _logger.debug("watch_checkpoint_model_validate_fallback", exc_info=True)
                     console.clear()
                     _output_meta_status(result, json_output)
@@ -528,7 +528,7 @@ async def _status_overview(json_output: bool) -> None:
         routed, result = await try_daemon_route("daemon.health", {})
     except (DaemonAccessDeniedError, DaemonUnresponsiveError, DaemonProtocolError) as exc:
         report_daemon_route_error(exc, json_output=json_output)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — CLI boundary reports the error and exits unsuccessfully
         output_error(
             f"Cannot read conductor health: {exc}",
             json_output=json_output,
@@ -543,7 +543,7 @@ async def _status_overview(json_output: bool) -> None:
         jobs_routed, jobs_data = await try_daemon_route("job.list", {})
         if not jobs_routed or not isinstance(jobs_data, list):
             raise ValueError("Conductor job list is unavailable or invalid")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — CLI boundary reports the error and exits unsuccessfully
         detail = "access denied" if isinstance(exc, DaemonAccessDeniedError) else str(exc)
         if json_output:
             output_json({
@@ -2482,7 +2482,7 @@ async def _clear_jobs(
         routed, result = await try_daemon_route("job.clear", params)
     except (DaemonAccessDeniedError, DaemonUnresponsiveError, DaemonProtocolError) as exc:
         report_daemon_route_error(exc, json_output=False)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — CLI boundary reports the error and exits unsuccessfully
         output_error(
             str(exc),
             hints=[

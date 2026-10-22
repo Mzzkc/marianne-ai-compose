@@ -189,7 +189,7 @@ class CorrelationAnalyzer:
                 profile = await self._storage.read_job_resource_profile(job_id)
                 if profile.get("unique_pid_count", 0) > 0:
                     profiles.append(profile)
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports correlation_analyzer.profile_read_failed
                 _logger.debug(
                     "correlation_analyzer.profile_read_failed",
                     job_id=job_id,
@@ -251,7 +251,7 @@ class CorrelationAnalyzer:
                     return "success"
                 if "outcome:failure" in tag_str:
                     return "failure"
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports correlation_analyzer.outcome_inference_failed
             _logger.debug(
                 "correlation_analyzer.outcome_inference_failed",
                 job_id=job_id,
@@ -478,7 +478,7 @@ class CorrelationAnalyzer:
                 await self.analyze()
             except asyncio.CancelledError:
                 break
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports correlation_analyzer.analysis_failed
                 _logger.warning(
                     "correlation_analyzer.analysis_failed",
                     exc_info=True,

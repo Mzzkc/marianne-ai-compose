@@ -186,7 +186,7 @@ async def _stream_from_sqlite(
 
             except asyncio.CancelledError:
                 break
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports monitor_stream.sqlite_read_error
                 _logger.debug("monitor_stream.sqlite_read_error", exc_info=True)
                 await asyncio.sleep(poll_interval * 2)
 
@@ -224,7 +224,7 @@ async def _stream_from_daemon(
                         heartbeat_counter = 0
             except asyncio.CancelledError:
                 break
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports monitor_stream.daemon_poll_error
                 _logger.debug("monitor_stream.daemon_poll_error", exc_info=True)
                 heartbeat_counter += 1
                 if heartbeat_counter >= 15:
@@ -341,7 +341,7 @@ async def get_latest_snapshot() -> dict[str, object]:
             return snap
     except RuntimeError:
         pass  # SystemView not configured — fall through to file-based path
-    except Exception:
+    except Exception:  # noqa: BLE001 — structured logger reports monitor_snapshot.daemon_error
         _logger.debug("monitor_snapshot.daemon_error", exc_info=True)
 
     # Fallback: read from monitor.db

@@ -347,7 +347,7 @@ class JudgmentClient:
             return None
         try:
             return JudgmentConfig.model_validate(raw)
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports judgment.config_invalid
             _logger.warning(
                 "judgment.config_invalid", job_id=job_id, exc_info=True
             )
@@ -364,7 +364,7 @@ class JudgmentClient:
                 await self._judge(job_id, sheet_num, config)
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports judgment.failed_open
             _logger.warning(
                 "judgment.failed_open",
                 job_id=job_id,
@@ -480,7 +480,7 @@ class JudgmentClient:
         if ok and self._persist_fn is not None:
             try:
                 self._persist_fn(job_id)
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports judgment.persist_failed
                 _logger.warning(
                     "judgment.persist_failed", job_id=job_id, sheet_num=sheet_num,
                     exc_info=True,
@@ -516,7 +516,10 @@ class JudgmentClient:
             return None
         try:
             return self._diagnostic_fn(job_id)
-        except Exception:
+        except Exception:  # noqa: BLE001 — judgment continues without optional diagnostic context
+            _logger.warning(
+                "judgment.diagnostics_unavailable", job_id=job_id, exc_info=True,
+            )
             return None
 
     @staticmethod

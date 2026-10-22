@@ -179,7 +179,7 @@ class TestProxyShimBehavior:
                 }
                 w.write(json.dumps(resp).encode() + b"\n")
                 await w.drain()
-            except Exception:
+            except (ValueError, OSError):
                 pass
             w.close()
             await w.wait_closed()

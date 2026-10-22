@@ -77,7 +77,7 @@ class JinjaSyntaxCheck:
                         env,
                     )
                     issues.extend(template_issues)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 — template read failure is appended to returned validation issues
                     issues.append(
                         ValidationIssue(
                             check_id=self.check_id,
@@ -218,7 +218,7 @@ class JinjaUndefinedVariableCheck:
                         env,
                     )
                     issues.extend(var_issues)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 — template read failure is appended to returned validation issues
                     issues.append(ValidationIssue(
                         check_id="V101",
                         severity=ValidationSeverity.WARNING,

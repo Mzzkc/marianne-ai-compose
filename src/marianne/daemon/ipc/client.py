@@ -409,7 +409,7 @@ class DaemonClient:
             try:
                 ConnectionPool._close_writer(writer)
                 await asyncio.wait_for(writer.wait_closed(), timeout=_CLOSE_TIMEOUT_SECONDS)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — structured logger reports writer_close_failed
                 # No exc_info: rendering a chained traceback here (rich walks
                 # source for every frame) took >30 s under load and stalled the
                 # very status read that was reporting a busy conductor (GH #455).

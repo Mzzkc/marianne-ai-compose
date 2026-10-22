@@ -62,6 +62,22 @@ the PR, and re-record captures when a CLI upgrade moves its output. A release
 is not cut until `mzt doctor --live` passes on the reference host for every
 shipped builtin that is installed there.
 
+**Exception handling (MN-007).** Ruff enables `BLE001` for broad exception
+handlers. Catch specific exceptions where possible. If a broad catch is needed
+at a recovery or reporting boundary, preserve the diagnostic or return the
+failure through the caller's error contract. Where Ruff requires an exemption,
+put a reviewed explanation on the handler line, for example
+`# noqa: BLE001 — return failure details through the public result contract`.
+Do not use a blanket ignore or a reason-free suppression.
+
+`tests/test_mn007_no_silent_broad_except.py` also scans `src/marianne/` for
+silent broad handlers, including bare catches and `builtins.Exception` catches.
+It recognises direct reporting, re-raising, returned exception information,
+and explicit local BLE001 reasons. This is a syntax guard, not proof that every
+execution path reports its failure: test the fallback and its diagnostic.
+Unused nested functions and discarded expressions such as `str(exc)` do not
+count as reporting.
+
 A few non-negotiables (see `.marianne/spec/` for the full set):
 
 - **Only the full suite is green.** Subsets, stale mocks, and polluted venvs lie.

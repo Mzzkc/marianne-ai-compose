@@ -126,7 +126,9 @@ class FieldSpec:
 def get_field_specs(model: type) -> list[FieldSpec]:
     """Extract field specifications from a Pydantic or dataclass model.
 
-    Returns fields in declaration order.
+    Returns fields in declaration order. If dataclass type-hint resolution
+    raises, log ``schema.type_hints_unresolved`` at WARNING with model identity
+    and use the raw field annotations instead.
     """
     from pydantic import BaseModel
 
@@ -144,7 +146,12 @@ def get_field_specs(model: type) -> list[FieldSpec]:
 
         try:
             hints = typing.get_type_hints(model)
-        except Exception:
+        except Exception:  # noqa: BLE001 — unresolved hints fall back to raw dataclass annotations
+            _logger.warning(
+                "schema.type_hints_unresolved",
+                model=getattr(model, "__qualname__", type(model).__qualname__),
+                exc_info=True,
+            )
             hints = {}
         specs = []
         for f in dataclasses.fields(model):

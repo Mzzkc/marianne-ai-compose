@@ -147,7 +147,8 @@ class MonitorStorage:
                 # Quick liveness check — if the thread died, recreate.
                 await self._pool.execute("SELECT 1")
                 return self._pool
-            except Exception:
+            except Exception:  # noqa: BLE001 — a failed pooled connection is closed and recreated
+                _logger.warning("profiler.storage_pool_unavailable", exc_info=True)
                 await self._close_pool()
 
         db = await aiosqlite.connect(self._db_path)

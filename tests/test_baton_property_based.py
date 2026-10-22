@@ -3047,15 +3047,15 @@ class TestRecordAttemptCountsOnlyFailures:
 
     @pytest.mark.asyncio
     @given(
-        results=st.lists(
-            sheet_attempt_result(),
+        outcomes=st.lists(
+            st.tuples(st.booleans(), st.booleans()),
             min_size=1,
             max_size=20,
         ),
     )
     @settings(max_examples=50, suppress_health_check=[HealthCheck.function_scoped_fixture])
     async def test_normal_attempts_equals_failed_non_rate_limited(
-        self, results: list[SheetAttemptResult]
+        self, outcomes: list[tuple[bool, bool]]
     ) -> None:
         """normal_attempts = count(not success AND not rate_limited)."""
         sheet = SheetExecutionState(
@@ -3065,16 +3065,22 @@ class TestRecordAttemptCountsOnlyFailures:
         )
 
         expected_normal = 0
-        for result in results:
-            # record_attempt only uses rate_limited, execution_success,
-            # cost_usd, duration_seconds — doesn't check job_id/sheet_num
+        # This invariant depends only on the two outcome flags. Generate
+        # those directly instead of spending the input-generation budget on
+        # unrelated Unicode IDs and accounting metadata for every attempt.
+        for success, rate_limited in outcomes:
+            result = SheetAttemptResult(
+                job_id="counting", sheet_num=1, instrument_name="claude-code",
+                attempt=1, execution_success=success, rate_limited=rate_limited,
+            )
             sheet.record_attempt(result)
-            if not result.rate_limited and not result.execution_success:
+            if not rate_limited and not success:
                 expected_normal += 1
+            assert sheet.normal_attempts == expected_normal
 
         assert sheet.normal_attempts == expected_normal, (
             f"Expected {expected_normal} normal attempts, "
-            f"got {sheet.normal_attempts} after {len(results)} results"
+            f"got {sheet.normal_attempts} after {len(outcomes)} results"
         )
 
     @pytest.mark.asyncio

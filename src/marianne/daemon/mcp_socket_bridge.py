@@ -372,7 +372,7 @@ class McpSocketBridge:
                 await self._route_upstream_message(message)
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports mcp_bridge.upstream_read_failed
             if not self._stopping:
                 _logger.warning(
                     "mcp_bridge.upstream_read_failed",

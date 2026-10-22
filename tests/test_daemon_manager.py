@@ -949,7 +949,7 @@ class TestResumeJob:
         manager._jobs["job-paused"].cancel()
         try:
             await manager._jobs["job-paused"]
-        except (asyncio.CancelledError, Exception):
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001 — join cancelled test task after assertions without masking teardown
             pass
 
     @pytest.mark.asyncio
@@ -971,7 +971,7 @@ class TestResumeJob:
         manager._jobs["job-paused"].cancel()
         try:
             await manager._jobs["job-paused"]
-        except (asyncio.CancelledError, Exception):
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001 — join cancelled test task after assertions without masking teardown
             pass
 
     @pytest.mark.asyncio
@@ -995,7 +995,7 @@ class TestResumeJob:
         manager._jobs["job-cancelled"].cancel()
         try:
             await manager._jobs["job-cancelled"]
-        except (asyncio.CancelledError, Exception):
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001 — join cancelled test task after assertions without masking teardown
             pass
 
     @pytest.mark.asyncio
@@ -2855,7 +2855,7 @@ class TestResumeConductorConfigReload131:
         manager._jobs["job-failed"].cancel()
         try:
             await manager._jobs["job-failed"]
-        except (asyncio.CancelledError, Exception):
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001 — join cancelled test task after assertions without masking teardown
             pass
 
     @pytest.mark.asyncio
@@ -2879,7 +2879,7 @@ class TestResumeConductorConfigReload131:
         manager._jobs["job-paused"].cancel()
         try:
             await manager._jobs["job-paused"]
-        except (asyncio.CancelledError, Exception):
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001 — join cancelled test task after assertions without masking teardown
             pass
 
     @pytest.mark.asyncio
@@ -2910,7 +2910,7 @@ class TestResumeConductorConfigReload131:
         manager._jobs["job-failed"].cancel()
         try:
             await manager._jobs["job-failed"]
-        except (asyncio.CancelledError, Exception):
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001 — join cancelled test task after assertions without masking teardown
             pass
 
     @pytest.mark.asyncio
@@ -2936,7 +2936,7 @@ class TestResumeConductorConfigReload131:
         manager._jobs["job-paused"].cancel()
         try:
             await manager._jobs["job-paused"]
-        except (asyncio.CancelledError, Exception):
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001 — join cancelled test task after assertions without masking teardown
             pass
 
 

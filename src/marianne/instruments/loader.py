@@ -313,7 +313,7 @@ class InstrumentProfileLoader:
         # Validate through Pydantic
         try:
             profile = InstrumentProfile.model_validate(data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — structured logger reports instrument_validation_error
             _logger.warning(
                 "instrument_validation_error",
                 file=str(path),

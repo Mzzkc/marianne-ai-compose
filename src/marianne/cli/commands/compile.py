@@ -194,7 +194,7 @@ def compile_scores(
                         "No doctor-available instrument remains for tiers: "
                         f"{missing}"
                     )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — structured logger reports compile_preset_error
             _logger.error("compile_preset_error", preset=preset, error=str(e))
             console.print(f"[red]Error:[/red] Cannot load preset '{preset}': {e}")
             raise typer.Exit(code=1) from None

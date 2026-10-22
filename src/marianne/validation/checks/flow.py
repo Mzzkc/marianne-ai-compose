@@ -9,10 +9,13 @@ from marianne.core.config import JobConfig
 from marianne.core.config.flow import ConcertTrigger, span_range
 from marianne.core.config.instruments import InstrumentProfile
 from marianne.core.expressions import parse_expression
+from marianne.core.logging import get_logger
 from marianne.core.sheet import build_sheets
 from marianne.utils.run_supervisor import subreaper_available
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks.structure import _IDENTITY_VARIABLES
+
+_logger = get_logger("validation.flow")
 
 
 def _issue(code: str, severity: ValidationSeverity, message: str) -> ValidationIssue:
@@ -214,6 +217,12 @@ def _zero_cost_reason(
 
 
 class ZeroCostLoopLimitCheck:
+    """Check whether a loop cost limit can stop its configured routes (V228).
+
+    Profile loading exceptions log ``validation.profiles_unavailable_skip``
+    at WARNING and return no findings; no cost assessment was made in that case.
+    """
+
     check_id = "V228"
     severity = ValidationSeverity.WARNING
     description = "A loop cost limit cannot stop a route that reports no cost"
@@ -226,7 +235,10 @@ class ZeroCostLoopLimitCheck:
             from marianne.instruments.loader import load_all_profiles
 
             profiles = load_all_profiles()
-        except Exception:
+        except Exception:  # noqa: BLE001 — unavailable profiles skip the cost check, loudly
+            _logger.warning(
+                "validation.profiles_unavailable_skip", check=self.check_id, exc_info=True,
+            )
             return []
         sheets = build_sheets(config)
         issues = []

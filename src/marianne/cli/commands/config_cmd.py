@@ -144,7 +144,7 @@ def _try_live_config() -> dict[str, Any] | None:
     async def _fetch() -> dict[str, Any] | None:
         try:
             return await client.config()
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports config.live_fetch_failed
             _logger.debug("config.live_fetch_failed", exc_info=True)
             return None
 
@@ -193,7 +193,7 @@ def show(
         try:
             effective = DaemonConfig.model_validate(live_data)
             is_live = True
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports config.live_validation_failed_fallback_disk
             _logger.warning("config.live_validation_failed_fallback_disk", exc_info=True)
 
     if is_live:
@@ -205,7 +205,7 @@ def show(
 
         try:
             effective = DaemonConfig.model_validate(file_data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — CLI boundary reports the error and exits unsuccessfully
             output_error(
                 f"Error loading config: {e}",
                 hints=["Check ~/.marianne/conductor.yaml syntax."],
@@ -305,7 +305,7 @@ def set_value(
     # Validate the full config before saving
     try:
         DaemonConfig.model_validate(data)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — CLI boundary reports the error and exits unsuccessfully
         output_error(
             f"Invalid value: {e}",
             hints=["Run 'mzt config show --all' to see current values."],
@@ -421,7 +421,7 @@ def check(
 
     try:
         DaemonConfig.model_validate(data)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — CLI boundary reports the error and exits unsuccessfully
         output_error(
             f"Invalid config: {path} — {e}",
             hints=["Run 'mzt config show' to see the expected schema."],

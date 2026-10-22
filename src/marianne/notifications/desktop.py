@@ -175,7 +175,7 @@ class DesktopNotifier:
             _logger.debug("desktop_notification_sent", title=title)
             return True
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — structured logger reports desktop_notification_failed
             # Various platform-specific errors can occur
             # (missing system notification service, etc.)
             _logger.warning("desktop_notification_failed", error=str(e))

@@ -71,12 +71,12 @@ class GpuProbe:
         if _pynvml_available:
             try:
                 return GpuProbe._probe_pynvml()
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports pynvml_probe_failed
                 _logger.debug("pynvml_probe_failed", exc_info=True)
         # Fallback to nvidia-smi
         try:
             return GpuProbe._probe_nvidia_smi_sync()
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports nvidia_smi_probe_failed
             _logger.debug("nvidia_smi_probe_failed", exc_info=True)
         return []
 
@@ -93,11 +93,11 @@ class GpuProbe:
         if _pynvml_available:
             try:
                 return GpuProbe._probe_pynvml()
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports pynvml_probe_failed
                 _logger.debug("pynvml_probe_failed", exc_info=True)
         try:
             return await GpuProbe._probe_nvidia_smi_async()
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports nvidia_smi_async_probe_failed
             _logger.debug("nvidia_smi_async_probe_failed", exc_info=True)
         return []
 
@@ -135,7 +135,7 @@ class GpuProbe:
                             temperature_c=float(temp),
                         )
                     )
-                except Exception:
+                except Exception:  # noqa: BLE001 — structured logger reports pynvml_device_probe_failed
                     _logger.debug("pynvml_device_probe_failed", gpu_index=i, exc_info=True)
         finally:
             try:

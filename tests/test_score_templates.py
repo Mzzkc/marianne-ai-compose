@@ -310,7 +310,7 @@ class TestTemplateRendersForAllSheets:
                     f"Template syntax error rendering sheet {sheet_num} "
                     f"(stage={meta.stage}, instance={meta.instance}): {exc}"
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — turn every unexpected render exception into an explicit test failure
                 pytest.fail(
                     f"Unexpected error rendering sheet {sheet_num} "
                     f"(stage={meta.stage}, instance={meta.instance}): {exc}"

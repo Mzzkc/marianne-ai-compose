@@ -75,7 +75,7 @@ class MonitorReader:
                 running = await self._ipc_client.is_daemon_running()
                 if running:
                     return "ipc"
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports reader.ipc_detect_failed
                 _logger.debug("reader.ipc_detect_failed", exc_info=True)
 
         # Try SQLite
@@ -171,7 +171,7 @@ class MonitorReader:
                 if result and isinstance(result, dict):
                     events: list[dict[str, Any]] = result.get("events", [])
                     return events
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports reader.observer_events_failed
                 _logger.debug("reader.observer_events_failed", exc_info=True)
         return []
 
@@ -217,7 +217,7 @@ class MonitorReader:
             result = await self._ipc_client.call("daemon.top")
             if result and isinstance(result, dict):
                 return SystemSnapshot(**result)
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports reader.ipc_snapshot_failed
             # Fallback: daemon may not support monitor.snapshot yet
             _logger.debug("reader.ipc_snapshot_failed", exc_info=True)
         return None
@@ -251,7 +251,7 @@ class MonitorReader:
                 if evt.timestamp >= since:
                     events.append(evt)
             return events
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports reader.ipc_events_failed
             _logger.debug("reader.ipc_events_failed", exc_info=True)
             return []
 

@@ -517,7 +517,8 @@ def _preflight_token_warnings(
                 f"{window}-token effective window for {target}); heuristic estimate — "
                 f"may exceed the limit at the backend"
             ]
-    except Exception:
+    except Exception:  # noqa: BLE001 — advisory token estimation must not block dispatch
+        _logger.debug("musician.token_preflight_failed", exc_info=True)
         # Preflight is advisory; a probe failure must never break dispatch.
         return []
     return []
@@ -983,7 +984,7 @@ def _classify_output(
     stdout = exec_result.stdout or ""
     try:
         classified = router.classify(stdout)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — structured logger reports musician.technique_router.classify_error
         _logger.warning(
             "musician.technique_router.classify_error",
             extra={
@@ -1210,7 +1211,7 @@ async def _validate(
         }
         return passed, total, rate, details
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — structured logger reports musician.validation.error
         # Redact credentials from validation error messages before storing
         error_text = redact_credentials(str(exc)) or str(exc)
         _logger.warning(

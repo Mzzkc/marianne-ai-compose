@@ -407,7 +407,7 @@ class ResourceMonitor:
                         reason=reason,
                     )
                     await self._manager.pause_job(job_id)
-                except Exception:
+                except Exception:  # noqa: BLE001 — structured logger reports monitor.pause_failed_falling_back_to_cancel
                     _logger.warning(
                         "monitor.pause_failed_falling_back_to_cancel",
                         job_id=job_id,

@@ -575,7 +575,7 @@ class TestMCPProxyBindMount:
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:
+            except OSError:
                 pass
             handled.set()
 

@@ -24,9 +24,12 @@ import typer
 from marianne import __version__
 from marianne.cli.output import console as default_console
 from marianne.core.config.instruments import InstrumentProfile
+from marianne.core.logging import get_logger
 from marianne.daemon.clone import active_registry_db_path
 from marianne.instruments.availability import probe_profile
 from marianne.instruments.loader import load_all_profiles, profile_source_dirs
+
+_logger = get_logger("cli.doctor")
 
 _DOCTOR_RUNTIME_TIMEOUT_SECONDS = 1.0
 
@@ -131,7 +134,8 @@ def _last_conductor_reload() -> dict[str, Any] | None:
             return last if isinstance(last, dict) else None
 
         return asyncio.run(_fetch())
-    except Exception:
+    except Exception:  # noqa: BLE001 — doctor remains usable without a reachable conductor
+        _logger.debug("doctor.reload_status_unavailable", exc_info=True)
         return None
 
 
@@ -222,7 +226,8 @@ def _active_rate_limited_instruments() -> dict[str, float | None]:
 
     try:
         return asyncio.run(_fetch_active_rate_limited_instruments())
-    except Exception:
+    except Exception:  # noqa: BLE001 — runtime health is optional when the conductor is down
+        _logger.debug("doctor.rate_limits_unavailable", exc_info=True)
         return {}
 
 

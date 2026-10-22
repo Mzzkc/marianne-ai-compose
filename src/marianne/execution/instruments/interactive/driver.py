@@ -661,7 +661,7 @@ class InteractiveSessionDriver:
             return offset, True
         try:
             on_output("stdout", chunk)
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports interactive_output_sink_failed
             _logger.warning("interactive_output_sink_failed", exc_info=True)
             return offset + len(chunk), False
         return offset + len(chunk), True

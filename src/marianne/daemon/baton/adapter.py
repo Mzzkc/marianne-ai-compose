@@ -1174,7 +1174,7 @@ class BatonAdapter:
 
         try:
             await self._event_bus.publish(to_observer_event(event))
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports adapter.a2a_event_publish_failed
             _logger.warning(
                 "adapter.a2a_event_publish_failed",
                 extra={"event_type": type(event).__name__},
@@ -1448,7 +1448,7 @@ class BatonAdapter:
             )
 
             killed = kill_sessions_with_prefix_sync(job_session_prefix(job_id))
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports adapter.interactive_session_sweep_failed
             _logger.warning(
                 "adapter.interactive_session_sweep_failed",
                 extra={"job_id": job_id},
@@ -2137,7 +2137,7 @@ class BatonAdapter:
         if self._diagnostic_snapshot_fn is not None:
             try:
                 snap = self._diagnostic_snapshot_fn(job_id)
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports adapter.diagnostic_snapshot_failed
                 _logger.warning(
                     "adapter.diagnostic_snapshot_failed",
                     exc_info=True,
@@ -2284,7 +2284,7 @@ class BatonAdapter:
                                             "error": str(e),
                                         },
                                     )
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001 — structured logger reports adapter.cross_sheet.pattern_error
                         _logger.warning(
                             "adapter.cross_sheet.pattern_error",
                             extra={"pattern": pattern, "error": str(e)},
@@ -2416,7 +2416,7 @@ class BatonAdapter:
         for job_id in self._baton._jobs:
             try:
                 self._persist_callback(job_id)
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports adapter.persist_failed
                 _logger.warning(
                     "adapter.persist_failed",
                     extra={"job_id": job_id},
@@ -2698,7 +2698,7 @@ class BatonAdapter:
                 resolved_techniques = resolve_techniques_for_sheet(
                     job_techniques, phase
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — dispatch failure is delivered to the baton for retry handling
                 self._send_dispatch_failure(
                     job_id,
                     sheet_num,
@@ -2720,7 +2720,7 @@ class BatonAdapter:
             ) = self._prepare_dispatch_techniques(
                 job_id, sheet, resolved_techniques
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — dispatch failure is delivered to the baton for retry handling
             self._send_dispatch_failure(
                 job_id,
                 sheet_num,
@@ -2794,7 +2794,7 @@ class BatonAdapter:
                     )
                 else:
                     raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — structured logger reports adapter.dispatch.backend_acquire_failed
             if not self._is_dispatch_registration_current(
                 job_id, sheet_num, registration_token, registered_state
             ):
@@ -2845,7 +2845,7 @@ class BatonAdapter:
                 mcp_bind_mounts=mcp_bind_mounts,
                 event_generation=event_generation,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — structured logger reports adapter.dispatch.mcp_config_reset_failed
             if hasattr(backend, "set_mcp_config"):
                 try:
                     backend.set_mcp_config(None)
@@ -2914,7 +2914,7 @@ class BatonAdapter:
             }
             try:
                 await self._event_bus.publish(dispatched)
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports adapter.dispatch_event_publish_failed
                 _logger.warning(
                     "adapter.dispatch_event_publish_failed",
                     extra={"job_id": job_id, "sheet_num": sheet_num},
@@ -3219,7 +3219,12 @@ class BatonAdapter:
                     registry = getattr(self._backend_pool, "_registry", None)
                     if registry is not None:
                         profile = registry.get(actual_instrument)
-                except Exception:
+                except Exception:  # noqa: BLE001 — dispatch continues without profile rendering and pricing metadata
+                    _logger.warning(
+                        "adapter.instrument_profile_unavailable",
+                        instrument=actual_instrument, job_id=job_id, sheet_num=sheet.num,
+                        exc_info=True,
+                    )
                     profile = None
 
             # Use PromptRenderer if available (full 9-layer pipeline)
@@ -3259,7 +3264,7 @@ class BatonAdapter:
                     pre_rendered = rendered.prompt
                     pre_preamble = rendered.preamble
                     context_delivery = rendered
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 — dispatch failure is delivered to the baton for retry handling
                     self._send_dispatch_failure(
                         job_id,
                         sheet.num,
@@ -3385,7 +3390,7 @@ class BatonAdapter:
                             actual_instrument, backend
                         )
                     )
-                except (Exception, asyncio.CancelledError):
+                except (Exception, asyncio.CancelledError):  # noqa: BLE001 — structured logger reports adapter.backend_release_failed
                     _logger.warning(
                         "adapter.backend_release_failed",
                         extra={
@@ -3512,7 +3517,7 @@ class BatonAdapter:
         obs_event = skipped_to_observer_event(event)
         try:
             await self._event_bus.publish(obs_event)
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports adapter.event_publish_failed
             _logger.warning(
                 "adapter.event_publish_failed",
                 extra={
@@ -3547,7 +3552,7 @@ class BatonAdapter:
         }
         try:
             await self._event_bus.publish(event)
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports adapter.job_event_publish_failed
             _logger.warning(
                 "adapter.job_event_publish_failed",
                 extra={"job_id": job_id, "event": event_name},
@@ -3575,7 +3580,7 @@ class BatonAdapter:
             obs_event = to_observer_event(fallback_ev)
             try:
                 await self._event_bus.publish(obs_event)
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports adapter.fallback_event_publish_failed
                 _logger.warning(
                     "adapter.fallback_event_publish_failed",
                     extra={
@@ -4255,7 +4260,7 @@ class BatonAdapter:
                 event.job_id,
                 event.sheet_num,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports adapter.rate_limit_report_failed
             _logger.warning(
                 "adapter.rate_limit_report_failed",
                 exc_info=True,
@@ -4363,7 +4368,7 @@ class BatonAdapter:
                 )
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — subprocess failure is delivered in FlowRunFinished
                 self._baton.inbox.put_nowait(FlowRunFinished(
                     job_id, request.chain_id, request.cursor, None, False, None,
                     error=f"{type(exc).__name__}: {exc}",
@@ -4395,7 +4400,7 @@ class BatonAdapter:
                 accepted, child_id, message = await self._flow_concert_callback(
                     job_id, action.concert
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — callback failure is delivered in FlowConcertSubmitted
                 accepted, child_id, message = False, None, f"{type(exc).__name__}: {exc}"
         self._baton.inbox.put_nowait(FlowConcertSubmitted(
             job_id, request.chain_id, request.cursor, accepted, child_id, message,
@@ -4426,7 +4431,7 @@ class BatonAdapter:
                 error = "flow file facts timed out"
             except OSError as exc:
                 error = f"flow file facts failed: {exc}"
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — prefetch failure is delivered in LoopFactsReady
                 error = f"flow file facts failed: {type(exc).__name__}: {exc}"
         self._baton.inbox.put_nowait(LoopFactsReady(
             job_id=job_id,
@@ -4645,7 +4650,7 @@ class BatonAdapter:
         if self._backend_pool is not None:
             try:
                 await self._backend_pool.close_all()
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports adapter.pool_close_failed
                 _logger.warning("adapter.pool_close_failed", exc_info=True)
 
         _logger.info("adapter.shutdown_complete")

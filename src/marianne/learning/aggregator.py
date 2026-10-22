@@ -167,7 +167,7 @@ class PatternAggregator:
                 instrument_name=getattr(self, "_instrument_name", None),
             )
             return pattern_id
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — structured logger reports pattern_merge_failed
             _logger.warning(
                 "pattern_merge_failed",
                 pattern_name=pattern_name,
@@ -278,7 +278,7 @@ class PatternAggregator:
                     grounding_confidence=outcome.grounding_confidence,
                 )
                 recorded += 1
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — structured logger reports pattern_application_record_failed
                 _logger.warning(
                     "pattern_application_record_failed",
                     pattern_id=pattern_id,

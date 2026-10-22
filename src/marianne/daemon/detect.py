@@ -81,7 +81,7 @@ async def is_daemon_available(socket_path: Path | None = None) -> bool:
     except ImportError:
         _logger.debug("daemon_detection_import_error")
         return False
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — structured logger reports daemon_detection_unexpected
         _logger.warning("daemon_detection_unexpected", error=str(exc), exc_info=True)
         return False
     finally:

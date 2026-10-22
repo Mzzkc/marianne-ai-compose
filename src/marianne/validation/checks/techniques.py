@@ -16,9 +16,12 @@ from pathlib import Path
 from marianne.core.config import JobConfig
 from marianne.core.config.instruments import InstrumentProfile
 from marianne.core.config.techniques import TechniqueKind
+from marianne.core.logging import get_logger
 from marianne.instruments.loader import InstrumentProfileLoader
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml
+
+_logger = get_logger("validation.techniques")
 
 
 @lru_cache(maxsize=1)
@@ -114,7 +117,12 @@ class TechniqueMcpInstrumentCheck:
         config_path: Path,
         raw_yaml: str,
     ) -> list[ValidationIssue]:
-        """Check MCP techniques against instrument capabilities."""
+        """Check MCP techniques against instrument capabilities.
+
+        Built-in profile loading exceptions log
+        ``validation.profiles_unavailable_skip`` at WARNING and return no
+        findings without assessing capability.
+        """
         if not config.techniques:
             return []
 
@@ -133,9 +141,10 @@ class TechniqueMcpInstrumentCheck:
         try:
             profiles = _builtin_profiles()
             profile = profiles.get(instrument_name)
-        except Exception:
-            # Can't load profiles — skip the check rather than
-            # blocking validation on a profile loading issue
+        except Exception:  # noqa: BLE001 — unavailable profiles skip the MCP check, loudly
+            _logger.warning(
+                "validation.profiles_unavailable_skip", check=self.check_id, exc_info=True,
+            )
             return []
 
         if profile is None:

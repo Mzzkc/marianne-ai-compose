@@ -231,7 +231,7 @@ class SemanticAnalyzer:
 
         try:
             response_text = await self._call_llm(prompt)
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports semantic_analyzer.llm_failed
             _logger.warning(
                 "semantic_analyzer.llm_failed",
                 job_id=job_id,
@@ -447,7 +447,7 @@ Example:
                 severity=severity,
                 job_id=job_id,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports semantic_analyzer.anomaly_store_failed
             _logger.warning(
                 "semantic_analyzer.anomaly_store_failed",
                 exc_info=True,

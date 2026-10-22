@@ -96,7 +96,7 @@ class RemedyRegistry:
                 diagnosis = remedy.diagnose(context)
                 if diagnosis is not None:
                     applicable.append((remedy, diagnosis))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — structured logger reports healing.remedy_diagnose_raised
                 # Individual remedy failures shouldn't block finding others,
                 # but we must record them so the HealingReport doesn't show
                 # "NO ACTION NEEDED" when a remedy actually crashed.

@@ -1735,7 +1735,7 @@ class PluginCliBackend(Backend):
                         return
                     try:
                         callback(stream_name, chunk)
-                    except Exception:
+                    except Exception:  # noqa: BLE001 — structured logger reports plugin_cli_output_callback_failed
                         _logger.debug(
                             "plugin_cli_output_callback_failed",
                             instrument=self._profile.name,

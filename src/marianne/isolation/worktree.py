@@ -507,7 +507,7 @@ class GitWorktreeManager:
                     check=False,
                 )
                 branch_name = stdout
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — structured logger reports worktree.branch_lookup_failed
                 _logger.warning(
                     "worktree.branch_lookup_failed",
                     worktree_path=str(worktree_path),
@@ -572,7 +572,7 @@ class GitWorktreeManager:
             try:
                 await self._run_git("branch", "-D", branch_name, check=False)
                 _logger.info("branch_deleted", branch=branch_name)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — structured logger reports branch_deletion_failed
                 _logger.warning("branch_deletion_failed", branch=branch_name, error=str(e))
 
         _logger.info("worktree_removed", path=str(worktree_path))
@@ -636,7 +636,7 @@ class GitWorktreeManager:
         """
         try:
             _, stdout, _ = await self._run_git("worktree", "list", "--porcelain", check=False)
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports lock_stale_check_failed
             _logger.debug("lock_stale_check_failed", path=str(worktree_path), exc_info=True)
             return False
 

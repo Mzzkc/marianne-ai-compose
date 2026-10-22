@@ -347,7 +347,7 @@ class ProcessGroupManager:
                     pgid=pgid,
                     child_count=child_count,
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001 — structured logger reports atexit_cleanup_failed
             # atexit handlers must not raise — but log for post-mortem debugging
             _logger.warning("atexit_cleanup_failed", exc_info=True)
 

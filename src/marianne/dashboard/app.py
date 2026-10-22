@@ -91,7 +91,8 @@ def _create_daemon_client() -> DaemonClient | None:
         from marianne.daemon.detect import _resolve_socket_path
 
         return DaemonClient(_resolve_socket_path(None))
-    except Exception:
+    except Exception:  # noqa: BLE001 — dashboard starts with reduced functionality when IPC setup fails
+        _logger.warning("dashboard.daemon_client_unavailable", exc_info=True)
         return None
 
 
@@ -292,7 +293,7 @@ def create_app(
                 get_daemon_client().is_daemon_running(),
                 timeout=DASHBOARD_DAEMON_PROBE_TIMEOUT_SECONDS,
             )
-        except Exception as e:  # probe failure must degrade, not lie or crash
+        except Exception as e:  # noqa: BLE001 — structured logger reports health_check.conductor_probe_failed; probe failure must degrade, not lie or crash
             _logger.warning("health_check.conductor_probe_failed", error=str(e))
         return {
             "status": "healthy" if conductor_up else "degraded",

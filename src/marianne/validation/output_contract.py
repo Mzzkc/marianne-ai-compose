@@ -6,8 +6,11 @@ from collections import Counter
 from typing import Any
 
 from marianne.core.config import JobConfig
+from marianne.core.logging import get_logger
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.runner import create_default_checks
+
+_logger = get_logger("validation.output_contract")
 
 
 def structural_summary(config: JobConfig) -> dict[str, Any]:
@@ -39,6 +42,10 @@ def class_summary(config: JobConfig) -> dict[str, Any]:
     provenance contract — whether or not the score uses a class. ``used`` and
     ``per_sheet`` are populated only when a class is named. All state comes
     from the one loader; this never re-resolves layers.
+
+    If profile or class-map loading raises, log
+    ``validation.profiles_unavailable_skip`` at WARNING and return all four
+    lists empty. That fallback does not certify successful class resolution.
     """
     summary: dict[str, Any] = {"layers": [], "used": [], "per_sheet": [], "failures": []}
     try:
@@ -50,7 +57,10 @@ def class_summary(config: JobConfig) -> dict[str, Any]:
 
         profiles = load_all_profiles()
         class_map = load_class_map(profile_names=set(profiles))
-    except Exception:
+    except Exception:  # noqa: BLE001 — preserve the summary shape when class state is unavailable
+        _logger.warning(
+            "validation.profiles_unavailable_skip", check="class_summary", exc_info=True,
+        )
         return summary
 
     for record in class_map.layers:

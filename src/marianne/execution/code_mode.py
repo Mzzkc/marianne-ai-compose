@@ -426,7 +426,8 @@ def _truncate_output(data: bytes) -> str:
         data = data[-_MAX_OUTPUT_BYTES:]
     try:
         return data.decode("utf-8", errors="replace")
-    except Exception:
+    except Exception:  # noqa: BLE001 — execution result remains reportable when output decoding fails
+        _logger.warning("code_mode.output_decode_failed", exc_info=True)
         return "<binary output>"
 
 

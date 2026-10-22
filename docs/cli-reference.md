@@ -648,6 +648,12 @@ cannot make an invalid score pass. `--strict` ignores suppressed warnings.
 The JSON keys `valid`, `error_count`, `warning_count`, `info_count`, `issues`,
 and `rendering` retain their meanings; `summary` and `suppressed` are additive.
 
+Dependency-loading failures may separately log
+`validation.profiles_unavailable_skip` at WARNING level while affected checks
+skip or use reduced information. These log events do not themselves affect
+`--strict`, issue counts, or `validate.suppress`. Repair the reported failure
+and validate again; see [validation dependency failures](configuration-reference.md#validation-dependency-failures).
+
 #### Examples
 
 ```bash

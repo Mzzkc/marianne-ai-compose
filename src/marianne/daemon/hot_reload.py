@@ -133,7 +133,7 @@ class ConfigWatcher:
             self._snapshot = settled  # re-baseline either way (no re-fire loop)
             try:
                 result = await self._reload_fn("watcher")
-            except Exception:
+            except Exception:  # noqa: BLE001 — structured logger reports watcher.reload_raised
                 # The reload itself is fail-closed; a raising callback must
                 # never kill the watcher.
                 _logger.warning("watcher.reload_raised", exc_info=True)

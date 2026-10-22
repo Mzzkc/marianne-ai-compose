@@ -178,7 +178,7 @@ class MCPProxyService:
                     tool_count=len(conn.tools),
                 )
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — structured logger reports mcp_server_start_failed
                 _logger.error(
                     "mcp_server_start_failed",
                     server=config.name,
@@ -235,7 +235,7 @@ class MCPProxyService:
 
                 _logger.debug("mcp_server_stopped", server=name)
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — structured logger reports mcp_server_stop_error
                 _logger.warning(
                     "mcp_server_stop_error",
                     server=name,
@@ -276,7 +276,7 @@ class MCPProxyService:
             if current_time - conn.last_tool_refresh > self.tool_cache_ttl:
                 try:
                     await self._refresh_tools(conn)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 — structured logger reports tool_refresh_failed
                     _logger.warning(
                         "tool_refresh_failed",
                         server=name,
