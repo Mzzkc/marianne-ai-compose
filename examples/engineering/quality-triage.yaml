@@ -375,7 +375,10 @@ prompt:
     ```bash
     #!/bin/bash
     set -euo pipefail
-    cd "$(git rev-parse --show-toplevel)"
+    # The project root is baked in at generation time, never discovered from
+    # the caller's directory: `git rev-parse --show-toplevel` from the solver's
+    # workspace found the Marianne checkout, not the target.
+    cd "{{ project_root }}"
     # [discovered command from 01-discovery.md]
     ```
 
