@@ -322,6 +322,11 @@ prompt:
     # Both commands run from project_root.
     test_command: "[CHANGE THIS: e.g., pytest tests/ -x, npm test, cargo test]"
     integration_test_command: "[CHANGE THIS: e.g., pytest tests/integration/, npm run test:e2e]"
+    # The branch in project_root that the unit loop commits each DONE unit
+    # on (created from HEAD on the first pass). The rewrite is never left as
+    # an untracked tree: hoard-mill's 17 units sat uncommitted for three
+    # iterations and clamonacc's first eight the same.
+    rewrite_branch: "rewrite/codebase-rewrite"
     # The target specification. Every analysis stage (1-3) reads it before
     # judging what "needs rewriting": a design that drops a module, or adds a
     # capability with no source module, changes the candidate list — a
@@ -602,6 +607,19 @@ prompt:
     `{{ workspace }}/04-rewrite-plan.md` to DONE (or PARTIAL / BLOCKED
     with the concrete blocker: the failing test and its message).
 
+    **Step 3b — Commit the unit.** A DONE unit is a commit in
+    `{{ project_root }}` (a PARTIAL or BLOCKED unit is not): the work of a
+    pass must survive the pass. On the first pass create the branch
+    `{{ rewrite_branch }}` from the current HEAD; every pass commits on it.
+    Stage only this unit's files (never `git add -A`), with the message
+    `rewrite(<unit id>): <unit name> — <target language>, <N> tests green`.
+    ```bash
+    cd {{ project_root }} && git rev-parse --verify -q {{ rewrite_branch }} >/dev/null \
+      || git checkout -q -b {{ rewrite_branch }}
+    cd {{ project_root }} && git checkout -q {{ rewrite_branch }} && git add <this unit's paths> \
+      && git commit -q -m "rewrite(<unit id>): <unit name> — ..."
+    ```
+
     **Step 4 — Marker, only when the plan is finished.** If and only if
     every unit's row now reads DONE:
     ```bash
@@ -847,6 +865,11 @@ validations:
     condition: "sheet_num == 6"
     stage: 2
     description: "Each unit pass ran its tests before writing code"
+  - type: command_succeeds
+    command: 'if grep -qE "### Status: DONE" "{workspace}/06-migration-log.md"; then cd "{project_root}" && git log --oneline "{rewrite_branch}" 2>/dev/null | grep -qE "^[0-9a-f]+ rewrite\("; else true; fi'
+    condition: "sheet_num == 6"
+    stage: 2
+    description: "A DONE unit is a rewrite(<unit>) commit on the rewrite branch"
 
   # ── Sheet 7: Unit Validation ───────────────────────────────────────────
   - type: file_exists
