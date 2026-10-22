@@ -1,174 +1,132 @@
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║              CODEBASE REWRITE — Iterative Language/Framework Migration      ║
+# ║        CODEBASE REWRITE — coverage-first, behaviour-bound, refined          ║
 # ║                                                                             ║
 # ║  Patterns: Cathedral Construction + CEGAR Loop + Commissioning Cascade      ║
+# ║            + Rashomon refinement (critics on different models)              ║
 # ║                                                                             ║
-# ║  WHY these three patterns compose for codebase rewrites:                    ║
+# ║  A rewrite is only as safe as the oracle that checks it, so the oracle is   ║
+# ║  built first and has four tiers:                                            ║
 # ║                                                                             ║
-# ║  Cathedral Construction provides the iterative build loop. A codebase       ║
-# ║  rewrite isn't a single pass — it's multiple iterations of analyze,         ║
-# ║  rewrite, validate, review. Self-chaining with inherited workspace          ║
-# ║  carries forward state across iterations. Stage 9's CONTINUE/COMPLETE       ║
-# ║  decision gates the loop.                                                   ║
+# ║    coverage   the SOURCE is covered to `coverage_floor` (default 90%) by    ║
+# ║               tests before anything is rewritten; a shortfall is closed by  ║
+# ║               characterization tests written against the source and        ║
+# ║               committed on their own                                        ║
+# ║    unit       `test_command`                                                ║
+# ║    integration`integration_test_command`                                    ║
+# ║    functional `functional_test_command` (black box: CLI, wire, HTTP)        ║
+# ║    differential the same inputs through `source_run_command` and            ║
+# ║               `target_run_command`; outputs must agree                      ║
 # ║                                                                             ║
-# ║  CEGAR Loop provides progressive refinement. Stage 2 (coarse analysis)      ║
-# ║  identifies ALL potential rewrite candidates cheaply. Stage 3 (triage)      ║
-# ║  verifies which candidates are REAL vs FALSE_POSITIVE before expensive      ║
-# ║  rewrite work begins. Stage 5 (candidate gate) is the CEGAR termination    ║
-# ║  check — it verifies REAL candidates exist before committing to the         ║
-# ║  expensive build stage.                                                     ║
+# ║  After behaviour is complete, a bounded refinement loop improves the new    ║
+# ║  code: three critics on different models (idiom, spec, structural          ║
+# ║  fidelity to the source), then a refiner that keeps only edits the whole   ║
+# ║  oracle still passes. Matching the source's decomposition is rewarded in   ║
+# ║  the final scorecard, never required over a test, a spec rule or an idiom. ║
 # ║                                                                             ║
-# ║  Commissioning Cascade provides multi-scope validation. Unit tests          ║
-# ║  (fast, isolated) run first at stage 7. Integration tests (cross-module)    ║
-# ║  run next at stage 8. Quality review (semantic judgment) runs last at       ║
-# ║  stage 9. Staged fail-fast: if unit tests fail, skip integration.           ║
-# ║                                                                             ║
-# ║  This is NOT Echelon Repair — all candidates get the same rewrite           ║
-# ║  treatment. There's no tier routing by difficulty.                           ║
-# ║                                                                             ║
-# ║  This is NOT Fan-out + Synthesis — each iteration is sequential.            ║
-# ║  Parallelism occurs ACROSS iterations via self-chaining.                    ║
-# ║                                                                             ║
-# ║  Execution Flow (9 stages per iteration, fully sequential):                 ║
-# ║                                                                             ║
-# ║    Stage 1: Reconnaissance   → map codebase, dependencies, complexity       ║
-# ║         |                                                                   ║
-# ║    Stage 2: Coarse Analysis  → broad scan for rewrite candidates            ║
-# ║         |                                                                   ║
-# ║    Stage 3: Triage           → verify REAL vs FALSE_POSITIVE (CEGAR)        ║
-# ║         |                                                                   ║
-# ║    Stage 4: Decomposition    → units, each with the tests that bind it      ║
-# ║         |                                                                   ║
-# ║    Stage 5: Candidate Gate   → verify REAL candidates exist (CEGAR gate)    ║
-# ║         |                                                                   ║
-# ║    Stage 6: Unit Loop        → one unit per pass: adapt its tests, then     ║
-# ║         |                      write code to pass them (skip if CONVERGED)  ║
-# ║    Stage 7: Unit Validation  → run unit tests (Commissioning tier 1)        ║
-# ║         |                                                                   ║
-# ║    Stage 8: Integration      → run integration tests (Commissioning tier 2) ║
-# ║         |                                                                   ║
-# ║    Stage 9: Quality Review   → CONTINUE or COMPLETE (Cathedral gate +       ║
-# ║         |                      Commissioning acceptance)                    ║
-# ║    (sheet-9 trigger self-chains; next sheet 1 skips on COMPLETE)            ║
-# ║                                                                             ║
-# ║  Instruments are bound per role on the movements (capability classes        ║
-# ║  from your classes.yaml, so the score is portable):                         ║
-# ║    strong    — recon, decomposition, triage: stages 1, 3, 4                 ║
-# ║    fast      — coarse scan, gate, test runs: stages 2, 5, 7, 8              ║
-# ║    workhorse — the unit loop's edit/test cycles: stage 6                    ║
-# ║    review    — quality judgment and the iteration decision: stage 9         ║
+# ║  Stages (one iteration):                                                    ║
+# ║    1  Reconnaissance       map modules, deps, spec drops/adds               ║
+# ║    2  Coverage Baseline    measure source coverage (follows subprocesses)   ║
+# ║    3  Characterize         LOOP: tests against the SOURCE until the floor   ║
+# ║    4  Oracle Inventory     classify tests per tier; differential corpus     ║
+# ║    5  Decomposition        units bound to tests + the structure to mirror   ║
+# ║    6  Gate                 PROCEED / CONVERGED                              ║
+# ║   ┌ behaviour_round LOOP (7-9) until every tier is green (cap 3)            ║
+# ║   │ 7  Unit Loop           inner LOOP: one unit per pass, red → green       ║
+# ║   │ 8  Oracle ×4           unit / integration / functional / differential   ║
+# ║   └ 9  Behaviour Gate      all green + target coverage ≥ floor, else        ║
+# ║                             reopen the failing units                        ║
+# ║   10  Refinement Baseline  metrics + structure map before refining          ║
+# ║   ┌ refine_pass LOOP (11-12) until critics converge (count = passes)        ║
+# ║   │ 11 Critique ×3         idiom / spec / structural fidelity (spread)      ║
+# ║   └ 12 Refine              apply, full oracle per commit, revert red        ║
+# ║   13  Final Review         hard gates + scorecard; CONTINUE or COMPLETE     ║
+# ║   (sheet 13's trigger self-chains; a COMPLETE marker ends the chain)        ║
 # ║                                                                             ║
 # ║  Usage:                                                                     ║
 # ║    1. Copy this score next to the project you are rewriting                 ║
-# ║    2. Edit prompt.variables (search [CHANGE THIS]); project_root is the     ║
-# ║       checkout the rewrite edits — the workspace holds only the ledgers     ║
+# ║    2. Set prompt.variables (search [CHANGE THIS]); project_root is the      ║
+# ║       checkout the rewrite edits — the workspace holds only the ledgers    ║
 # ║    3. mzt start && mzt run codebase-rewrite.yaml --var project_root=/abs    ║
 # ║    4. mzt status codebase-rewrite --watch                                   ║
-# ║    The sheet-9 trigger chains the next iteration by itself (the score      ║
-# ║    names itself relative to its own path); the chain stops when the       ║
-# ║    review writes COMPLETE, or at concert.max_chain_depth.                  ║
 # ║                                                                             ║
-# ║  Output (per iteration):                                                    ║
-# ║    workspace/                                                               ║
-# ║      01-reconnaissance.md       — Module inventory and dependencies         ║
-# ║      02-candidates.yaml         — Rewrite candidates with classification    ║
-# ║      03-triage.yaml             — Verified verdicts per candidate           ║
-# ║      04-rewrite-plan.md        — Units in loop order, each with its tests   ║
-# ║      05-gate-status.yaml        — PROCEED/CONVERGED gate decision           ║
-# ║      06-migration-log.md       — One section per unit pass (red → green)    ║
-# ║      06-units-done.txt         — Written only when every unit is DONE       ║
-# ║      07-unit-test-results.md    — Unit test outcomes                       ║
-# ║      08-integration-results.md  — Integration test outcomes                ║
-# ║      09-quality-review.md       — Quality assessment + iteration gate      ║
+# ║  Output (per iteration, in the workspace):                                  ║
+# ║    01-reconnaissance.md   02-coverage.yaml    03-characterization-log.md    ║
+# ║    04-oracle.md           04-differential/    05-rewrite-plan.md            ║
+# ║    06-gate-status.yaml    07-migration-log.md 08-oracle-<tier>.md           ║
+# ║    09-behaviour-gate.md   10-refine-baseline.md                             ║
+# ║    11-critique-<lens>.md  12-refine-log.md    13-final-review.md            ║
 # ║                                                                             ║
-# ║  Sheets: 9 per iteration (stage 6 loops, up to 8 passes)                    ║
-# ║  Time: ~1-4 h per iteration | Cost: ~$5-40, loop-bounded (cost_limit_usd)   ║
-# ║  Expected iterations: 1-3 for small codebases, 2-5 for medium (50-200 files)║
+# ║  Sheets: 18 per iteration (13 stages; stage 8 ×4, stage 11 ×3)              ║
+# ║  Time: ~2-8 h per iteration | Cost: loop-bounded (cost_limit_usd per loop)  ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 name: codebase-rewrite
 description: >
-  Generic codebase rewrite with iterative refinement. Cathedral Construction
-  provides the iteration loop, CEGAR Loop provides progressive analysis
-  (coarse scan, triage, gate), the unit loop rewrites one decomposed unit
-  per pass by adapting its existing tests first and writing code to pass
-  them, and Commissioning Cascade provides multi-scope validation (unit,
-  integration, acceptance).
+  Coverage-first codebase rewrite. The source is covered to a floor before
+  anything is rewritten; units are rewritten test-first inside a loop that
+  repeats until unit, integration, functional and differential tiers are all
+  green; a bounded refinement loop then improves the new code under the same
+  oracle, with critics on different models scoring idiom, spec conformance
+  and structural fidelity to the source.
 
 workspace: ../../workspaces/codebase-rewrite
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# INSTRUMENT CONFIGURATION
+# INSTRUMENTS — bound per role (capability classes from your classes.yaml)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Score default; every movement below binds its own role (see `movements`).
 instrument: workhorse
 instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 1200
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# MOVEMENTS — named stages visible in `mzt status`
-# ═══════════════════════════════════════════════════════════════════════════════
+instruments:
+  # The three refinement critics must not share one model's blind spot:
+  # `spread` gives each voice a different head of the chain, `balance` starts
+  # it on the least-loaded entry when two are busy.
+  critic:
+    chain: [codex-cli, claude-code, opencode]
+    select: [spread, balance]
 
-# Instruments are bound per role: recon and decomposition want the strongest
-# reasoner, scanning and test runs want a fast one, the unit loop wants a
-# tool-driven workhorse, and the review wants a judge.
 movements:
-  1:
-    name: Reconnaissance
-    instrument: strong
-    instrument_config: {timeout_seconds: 900}
-  2:
-    name: Coarse Analysis
-    instrument: fast
-    instrument_config: {timeout_seconds: 600}
-  3:
-    name: Triage
-    instrument: strong
-    instrument_config: {timeout_seconds: 1200}
-  4:
-    name: Decomposition
-    instrument: strong
-    instrument_config: {timeout_seconds: 900}
-  5:
-    name: Candidate Gate
-    instrument: fast
-    instrument_config: {timeout_seconds: 300}
-  6:
-    name: Unit Loop
-    instrument: workhorse
-    instrument_config: {timeout_seconds: 2400}
-  7:
-    name: Unit Validation
-    instrument: fast
-    instrument_config: {timeout_seconds: 900}
-  8:
-    name: Integration Validation
-    instrument: fast
-    instrument_config: {timeout_seconds: 900}
-  9:
-    name: Quality Review
-    instrument: review
-    instrument_config: {timeout_seconds: 900}
+  1:  {name: Reconnaissance,        instrument: strong,    instrument_config: {timeout_seconds: 900}}
+  2:  {name: Coverage Baseline,     instrument: fast,      instrument_config: {timeout_seconds: 1800}}
+  3:  {name: Characterize,          instrument: workhorse, instrument_config: {timeout_seconds: 2400}}
+  4:  {name: Oracle Inventory,      instrument: strong,    instrument_config: {timeout_seconds: 1200}}
+  5:  {name: Decomposition,         instrument: strong,    instrument_config: {timeout_seconds: 1200}}
+  6:  {name: Gate,                  instrument: fast,      instrument_config: {timeout_seconds: 300}}
+  7:  {name: Unit Loop,             instrument: workhorse, instrument_config: {timeout_seconds: 2400}}
+  8:  {name: Oracle,                instrument: fast,      instrument_config: {timeout_seconds: 1800}}
+  9:  {name: Behaviour Gate,        instrument: strong,    instrument_config: {timeout_seconds: 900}}
+  10: {name: Refinement Baseline,   instrument: fast,      instrument_config: {timeout_seconds: 900}}
+  11: {name: Critique,              instrument: critic,    instrument_config: {timeout_seconds: 1200}}
+  12: {name: Refine,                instrument: workhorse, instrument_config: {timeout_seconds: 2400}}
+  13: {name: Final Review,          instrument: review,    instrument_config: {timeout_seconds: 1200}}
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SHEET CONFIGURATION — 9 stages, fully sequential
+# SHEETS AND FLOW
 # ═══════════════════════════════════════════════════════════════════════════════
 
 sheet:
   size: 1
-  total_items: 9
+  total_items: 13
+  fan_out:
+    8: 4    # oracle tiers: unit, integration, functional, differential
+    11: 3   # critics: idiom, spec, structure
   descriptions:
-    1: "Analyze codebase structure and map rewrite scope"
-    2: "Broad scan for modules needing rewrite"
-    3: "Verify candidates: REAL need vs FALSE_POSITIVE"
-    4: "Decompose verified candidates into units, each bound to its tests"
-    5: "Gate check: verify REAL candidates exist before expensive rewrite"
-    6: "Unit loop: adapt the next unit's tests, then write code to pass them"
-    7: "Run unit tests against rewritten code"
-    8: "Run integration tests"
-    9: "Review quality, decide CONTINUE or COMPLETE"
+    1: "Map the source, its dependencies and the specification's drops/adds"
+    2: "Measure source coverage the way the tests actually reach the code"
+    3: "Characterization pass: cover the next under-covered module against the source"
+    4: "Classify every test by tier and build the differential input corpus"
+    5: "Decompose into units bound to tests and to the source structure they mirror"
+    6: "Gate: PROCEED or CONVERGED"
+    7: "Unit loop: adapt the next unit's tests, then write code to pass them"
+    8: "Run one oracle tier against the rewrite"
+    9: "Behaviour gate: every tier green and target coverage at the floor"
+    10: "Record refinement baseline metrics and the structure map"
+    11: "Critique the rewrite through one lens"
+    12: "Refine: apply the critique, keep only edits the whole oracle passes"
+    13: "Final review: hard gates, scorecard, CONTINUE or COMPLETE"
   dependencies:
     2: [1]
     3: [2]
@@ -178,28 +136,46 @@ sheet:
     7: [6]
     8: [7]
     9: [8]
+    10: [9]
+    11: [10]
+    12: [11]
+    13: [12]
 
-  # Unit loop: sheet 6 repeats, one unit per pass, until the pass that
-  # completes the last unit writes the marker (or the cap hits). At cap
-  # without marker the loop ends with a warning and stage 9 decides
-  # CONTINUE, so the next iteration picks up the remaining units.
   loops:
-    6:
+    # Characterization: one under-covered module per pass until the source
+    # meets the floor. Skipped outright when stage 2 measured it already met.
+    3:
+      index: char_pass
+      until: 'file("03-coverage-met.txt").exists'
+      max_iterations: 6
+      cost_limit_usd: 25.0
+    # Behaviour rounds: rewrite, run every tier, gate. The gate reopens the
+    # units its red tests point at, and the next round's unit loop takes only
+    # those. Nested loops restart the inner loop on each outer round.
+    7-9:
+      index: behaviour_round
+      until: 'file("09-behaviour-green.txt").exists'
+      max_iterations: 3
+      cost_limit_usd: 45.0
+    7:
       index: unit_pass
-      until: 'file("06-units-done.txt").exists'
+      until: 'file("07-units-done.txt").exists'
       max_iterations: 8
       cost_limit_usd: 30.0
+    # Refinement: a fixed number of quality passes, ending early when the
+    # critics find nothing worth a pass. `count` with `until` acts as a cap.
+    11-12:
+      index: refine_pass
+      until: 'file("12-refine-converged.txt").exists'
+      count: 4
+      cost_limit_usd: 30.0
 
-  # CEGAR check-termination: skip expensive stages when no REAL candidates.
-  # Exit 0 from grep = pattern found = skip the stage.
-  # Chain terminator: a COMPLETE decision from the previous iteration ends the
-  # Cathedral loop at the next job (zero prompt cost). A skip does NOT cascade:
-  # the baton treats an intentional skip as satisfying its dependents, so every
-  # sheet carries the marker test — otherwise sheets 2-9 run for real and the
-  # sheet-9 trigger chains again (chain3 of the hoard-mill proof did exactly
-  # that, 2026-10-22, and was cancelled by hand).
+  # Cathedral loop: the review's success submits the next iteration on the
+  # same workspace. A COMPLETE review writes .rewrite-complete, every sheet of
+  # the next iteration skips on it (a skip does not cascade, so each sheet
+  # carries the test), the review is skipped, and no trigger fires.
   triggers:
-    9:
+    13:
       on_success:
         - concert:
             score: "codebase-rewrite.yaml"
@@ -207,72 +183,60 @@ sheet:
             fresh: true
 
   skip_when:
-    1:
-      command: 'test -f "{workspace}/.rewrite-complete"'
-      description: "Chain complete — the previous iteration's review decided COMPLETE"
-      timeout_seconds: 10
-    2:
-      command: 'test -f "{workspace}/.rewrite-complete"'
-      description: "Chain complete — skip"
-      timeout_seconds: 10
+    1:  {command: 'test -f "{workspace}/.rewrite-complete"', description: "Chain complete", timeout_seconds: 10}
+    2:  {command: 'test -f "{workspace}/.rewrite-complete"', description: "Chain complete", timeout_seconds: 10}
     3:
-      command: 'test -f "{workspace}/.rewrite-complete"'
-      description: "Chain complete — skip"
+      command: 'test -f "{workspace}/.rewrite-complete" || grep -q "^floor_met: true" "{workspace}/02-coverage.yaml"'
+      description: "Chain complete, or the source already meets the coverage floor"
       timeout_seconds: 10
-    4:
-      command: 'test -f "{workspace}/.rewrite-complete"'
-      description: "Chain complete — skip"
-      timeout_seconds: 10
-    5:
-      command: 'test -f "{workspace}/.rewrite-complete"'
-      description: "Chain complete — skip"
-      timeout_seconds: 10
-    6:
-      command: 'test -f "{workspace}/.rewrite-complete" || grep -q "status: CONVERGED" "{workspace}/05-gate-status.yaml"'
-      description: "Chain complete, or no REAL candidates remain — skip rewrite"
-      timeout_seconds: 10
+    4:  {command: 'test -f "{workspace}/.rewrite-complete"', description: "Chain complete", timeout_seconds: 10}
+    5:  {command: 'test -f "{workspace}/.rewrite-complete"', description: "Chain complete", timeout_seconds: 10}
+    6:  {command: 'test -f "{workspace}/.rewrite-complete"', description: "Chain complete", timeout_seconds: 10}
     7:
-      command: 'test -f "{workspace}/.rewrite-complete" || grep -q "status: CONVERGED" "{workspace}/05-gate-status.yaml"'
-      description: "Chain complete, or no rewrite occurred — skip unit tests"
+      command: 'test -f "{workspace}/.rewrite-complete" || grep -q "status: CONVERGED" "{workspace}/06-gate-status.yaml"'
+      description: "Chain complete, or no REAL candidates remain"
       timeout_seconds: 10
     8:
-      command: 'test -f "{workspace}/.rewrite-complete" || grep -q "status: CONVERGED" "{workspace}/05-gate-status.yaml" || grep -qE "\*\*Results:\*\*\s*FAIL" "{workspace}/07-unit-test-results.md"'
-      description: "Chain complete, no rewrite, or unit tests failed (fail-fast) — skip integration tests"
+      command: 'test -f "{workspace}/.rewrite-complete" || grep -q "status: CONVERGED" "{workspace}/06-gate-status.yaml"'
+      description: "Chain complete, or nothing was rewritten"
       timeout_seconds: 10
     9:
+      command: 'test -f "{workspace}/.rewrite-complete" || grep -q "status: CONVERGED" "{workspace}/06-gate-status.yaml"'
+      description: "Chain complete, or nothing was rewritten"
+      timeout_seconds: 10
+    # Never refine red code: refinement runs only once the behaviour gate
+    # wrote its green marker.
+    10:
+      command: 'test -f "{workspace}/.rewrite-complete" || ! test -f "{workspace}/09-behaviour-green.txt"'
+      description: "Chain complete, or behaviour is not green — nothing to refine"
+      timeout_seconds: 10
+    11:
+      command: 'test -f "{workspace}/.rewrite-complete" || ! test -f "{workspace}/09-behaviour-green.txt"'
+      description: "Chain complete, or behaviour is not green"
+      timeout_seconds: 10
+    12:
+      command: 'test -f "{workspace}/.rewrite-complete" || ! test -f "{workspace}/09-behaviour-green.txt"'
+      description: "Chain complete, or behaviour is not green"
+      timeout_seconds: 10
+    13:
       command: 'test -f "{workspace}/.rewrite-complete"'
       description: "Chain complete — skip the review, so its trigger never fires"
       timeout_seconds: 10
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# CROSS-SHEET CONTEXT — workspace files carry state across stages
-# ═══════════════════════════════════════════════════════════════════════════════
+# The four oracle tiers and the three critics run side by side.
+parallel:
+  enabled: true
+  max_concurrent: 4
 
 cross_sheet:
   auto_capture_stdout: true
   max_output_chars: 3000
   lookback_sheets: 3
-  capture_files:
-    - "{{ workspace }}/*.md"
-    - "{{ workspace }}/*.yaml"
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# CATHEDRAL CONSTRUCTION — self-chaining iteration loop
-# ═══════════════════════════════════════════════════════════════════════════════
-#
-# After all 9 stages complete, the score re-submits itself with fresh: true.
-# The next iteration's Reconnaissance stage reads the inherited workspace to
-# plan what to rewrite next. Stage 9's CONTINUE/COMPLETE decision determines
-# whether to continue. max_chain_depth: 10 provides a hard stop.
-#
-# IMPORTANT: Set job_path to the ABSOLUTE path of this score file.
-# Relative paths resolve from the daemon's CWD, not the score's directory.
 
 workspace_lifecycle:
   archive_on_fresh: true
   max_archives: 10
-  # The COMPLETE marker must outlive the fresh archive, or the next iteration
-  # could never see it and the chain would only stop at max_chain_depth.
+  # The COMPLETE marker and the coverage evidence must outlive the archive.
   preserve_patterns:
     - ".iteration"
     - ".marianne-*"
@@ -280,22 +244,11 @@ workspace_lifecycle:
     - "archive/**"
     - ".worktrees/**"
     - ".rewrite-complete"
+    - "04-differential/**"
 
 concert:
   enabled: true
   max_chain_depth: 10
-
-# Cathedral Construction loop, as a sheet trigger (see sheet.triggers below):
-# the sheet-9 trigger submits this same score as the next iteration, named
-# relative to this file, so nothing absolute has to be edited in (the old
-# `on_success: run_job` needed an absolute job_path). The chain ends
-# structurally: when the review writes COMPLETE, the next iteration's sheet 1
-# skips at dispatch (sheet.skip_when below), a skipped sheet carries no
-# success, so no further trigger fires and that job completes green.
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# RETRY AND STALE DETECTION
-# ═══════════════════════════════════════════════════════════════════════════════
 
 retry:
   max_retries: 3
@@ -311,629 +264,638 @@ stale_detection:
 
 prompt:
   variables:
-    # The checkout the rewrite edits. ABSOLUTE path; set it per run with
-    # `--var project_root=/abs` (chained iterations inherit it) rather than
-    # editing it in. The workspace holds only this score's ledgers.
+    # The checkout the rewrite edits. ABSOLUTE path, set per run with
+    # `--var project_root=/abs` (chained iterations inherit it).
     project_root: "[CHANGE THIS: ABSOLUTE path to the project checkout]"
-    source_language: "[CHANGE THIS: e.g., JavaScript, Python 2, Java 8]"
-    target_language: "[CHANGE THIS: e.g., TypeScript, Python 3, Kotlin]"
+    source_language: "[CHANGE THIS: e.g., Python 3]"
+    target_language: "[CHANGE THIS: e.g., Rust, Go, TypeScript]"
     source_dir: "src"
     test_dir: "tests"
-    # Both commands run from project_root.
-    test_command: "[CHANGE THIS: e.g., pytest tests/ -x, npm test, cargo test]"
-    integration_test_command: "[CHANGE THIS: e.g., pytest tests/integration/, npm run test:e2e]"
-    # The branch in project_root that the unit loop commits each DONE unit
-    # on (created from HEAD on the first pass). The rewrite is never left as
-    # an untracked tree: hoard-mill's 17 units sat uncommitted for three
-    # iterations and clamonacc's first eight the same.
+    # Every command runs from project_root through `bash -c`.
+    test_command: "[CHANGE THIS: unit tier, e.g. cargo test, go test ./..., pytest tests/unit]"
+    integration_test_command: "[CHANGE THIS: integration tier, e.g. pytest tests/integration]"
+    # Black-box tier: drives the built program the way a user or another
+    # program does (CLI, stdin/stdout, wire, HTTP). Leave "" only when the
+    # project has no such surface; the oracle then records the tier SKIPPED.
+    functional_test_command: ""
+    # Coverage contract: each command prints the TOTAL LINE COVERAGE PERCENT
+    # as a bare number on its last line (e.g. `91.4`). It must follow the
+    # code the way the tests reach it: a suite that runs the program as a
+    # subprocess needs subprocess coverage (Python: COVERAGE_PROCESS_START),
+    # or the number is 0 and the floor is meaningless.
+    source_coverage_command: "[CHANGE THIS: e.g. coverage run -m pytest -q >/dev/null; coverage report --format=total]"
+    target_coverage_command: "[CHANGE THIS: e.g. cargo llvm-cov --summary-only | awk '/TOTAL/{print $10+0}']"
+    coverage_floor: 90
+    # Differential contract: each command reads ONE input on stdin and writes
+    # its result to stdout; the exit code is part of the result. The same
+    # input through both must give the same stdout and exit code, unless the
+    # input is listed in 04-differential/intended-differences.txt with the
+    # specification rule that changes it.
+    source_run_command: "[CHANGE THIS: e.g. python -m mytool]"
+    target_run_command: "[CHANGE THIS: e.g. ./target/release/mytool]"
+    # The branch in project_root every commit lands on (created from HEAD by
+    # the first sheet that commits): characterization tests, rewritten units,
+    # refinements. Never an untracked tree.
     rewrite_branch: "rewrite/codebase-rewrite"
-    # The target specification. Every analysis stage (1-3) reads it before
-    # judging what "needs rewriting": a design that drops a module, or adds a
-    # capability with no source module, changes the candidate list — a
-    # rewrite planned from the source alone re-implements what the design
-    # removed (clamonacc: the design dropped inotify; a blind reconnaissance
-    # scheduled its 886-line port anyway). Point at a design document here
-    # when one exists.
+    # The target specification. Every analysis stage reads it: a module it
+    # drops is not a rewrite candidate; a capability it adds has no source
+    # module. Point at a design document when one exists.
     improvement_specs: |
       - Modernize API patterns
       - Add type safety where applicable
       - Improve error handling
-      - Update deprecated dependencies
+    oracle_tiers: ["unit", "integration", "functional", "differential"]
+    critic_lenses: ["idiom and simplicity", "specification conformance", "structural fidelity to the source"]
 
   template: |
-    {# ── Macros ─────────────────────────────────────────────────────────── #}
-
     {% macro write_to(filename) %}
     ## Output
-    Write your findings to `{{ workspace }}/{{ filename }}`.
-    Ensure the file is complete, well-structured, and self-contained.
+    Write `{{ workspace }}/{{ filename }}`, complete and self-contained.
     {% endmacro %}
-
-    {% macro read_file(filename) %}
-    Read `{{ workspace }}/{{ filename }}`.
+    {% macro branch_setup() %}
+    Commit on `{{ rewrite_branch }}` in `{{ project_root }}` (create it from
+    HEAD if it does not exist). Stage only the files you changed, never
+    `git add -A`.
+    ```bash
+    cd {{ project_root }} && (git rev-parse --verify -q {{ rewrite_branch }} >/dev/null \
+      || git checkout -q -b {{ rewrite_branch }}) && git checkout -q {{ rewrite_branch }}
+    ```
     {% endmacro %}
-
-    {# ── Stage 1: Reconnaissance (Cathedral: plan-iteration) ─────────── #}
 
     {% if stage == 1 %}
-    # Reconnaissance — Codebase Analysis
+    # Reconnaissance
 
-    Analyze the codebase at `{{ project_root }}/{{ source_dir }}` (tests in
-    `{{ project_root }}/{{ test_dir }}`) for migration from
-    **{{ source_language }}** to **{{ target_language }}**. The project is
-    edited in place there; this workspace holds only the ledgers.
+    Rewrite target: **{{ source_language }} → {{ target_language }}**.
+    Source in `{{ project_root }}/{{ source_dir }}`, tests in
+    `{{ project_root }}/{{ test_dir }}`. The project is edited in place; this
+    workspace holds only ledgers. If `13-final-review.md` exists, this is a
+    later iteration: read it first and plan only what remains.
 
-    If previous iteration files exist in the workspace (01-reconnaissance.md,
-    09-quality-review.md), read them first — this is a subsequent Cathedral
-    Construction iteration. Focus on what REMAINS to be rewritten.
-
-    ## Tasks
-
-    1. **Inventory** all source files with approximate line counts
-    2. **Map dependencies** — imports, function calls, class inheritance
-    3. **Identify external dependencies** and their {{ target_language }} equivalents
-    4. **Assess complexity** per module: simple (1) / moderate (2-3) / complex (4-5)
-    5. **Check existing test coverage** — which modules have tests, how the
-       tests reach the code (import, CLI subprocess, HTTP), and whether they
-       can drive a {{ target_language }} implementation unchanged or need
-       adapting
-    6. **Check prior iteration progress** — which modules were already rewritten?
-
-    The rewrite must honour this target specification. Read it before the
-    inventory and let it shape the recommended order and what "needs
-    rewriting" means: a module the specification drops is not a rewrite
-    candidate, and a capability it introduces has no source module to map —
-    name both explicitly.
+    The specification below shapes everything: a module it drops is not a
+    candidate, a capability it adds has no source module. Name both.
     {{ improvement_specs }}
+
+    1. Inventory every source file with line counts.
+    2. Map dependencies: imports, calls, inheritance. Record the module and
+       public-function structure; later stages try to mirror it.
+    3. Map external dependencies to {{ target_language }} equivalents.
+    4. Rate complexity per module, 1 to 5.
+    5. Describe how the tests reach the code: in-process import, subprocess,
+       stdin/stdout, HTTP. This decides how coverage must be measured and
+       which tests can drive the {{ target_language }} build unchanged.
+    6. Note prior-iteration progress, if any.
 
     {{ write_to("01-reconnaissance.md") }}
-    Include: module inventory table, dependency graph, complexity ratings,
-    external dependency mapping, test coverage, recommended rewrite order,
-    and (if applicable) prior iteration progress summary.
-
-    {# ── Stage 2: Coarse Analysis (CEGAR: coarse-check) ─────────────── #}
 
     {% elif stage == 2 %}
-    # Coarse Analysis — Rewrite Candidate Identification
+    # Coverage Baseline
 
-    {{ read_file("01-reconnaissance.md") }}
-
-    Classify against the target specification, not the source alone. A
-    module the specification drops is SKIP with "dropped by specification"
-    as its challenge; a capability it adds with no source module is a
-    REWRITE candidate whose `module` names the target path it will live at,
-    with "new per specification" as its challenge.
-    {{ improvement_specs }}
-
-    Scan ALL modules and classify each:
-    - **REWRITE**: Full translation to {{ target_language }} needed
-    - **ADAPT**: Minor updates only (API changes, deprecations)
-    - **SKIP**: Already compatible, already rewritten, or trivially convertible
-
-    For each candidate, note:
-    - Difficulty rating (1-5)
-    - Specific challenges (pattern changes, API differences, type mismatches)
-    - Risks (no tests, complex dependencies, shared state)
-
-    {{ write_to("02-candidates.yaml") }}
-    Structure:
-    ```yaml
-    candidates:
-      - module: "path/to/module"
-        classification: REWRITE
-        difficulty: 3
-        challenges: ["callback-to-async conversion", "no type hints"]
-        risks: ["no existing tests", "used by 4 other modules"]
-      - module: "path/to/other"
-        classification: SKIP
-        difficulty: 1
-        challenges: []
-        risks: []
-    summary:
-      total_modules: 25
-      rewrite_count: 12
-      adapt_count: 5
-      skip_count: 8
+    Measure the SOURCE's line coverage before anything is rewritten:
+    ```bash
+    cd {{ project_root }} && bash -c {{ source_coverage_command | tojson }}
     ```
+    The last line is the total percent. If it reads 0 or near 0 while the
+    tests pass, the command is not following how the tests reach the code
+    (see 01-reconnaissance.md, item 5). Fix the measurement, not the number,
+    and say in the report what you changed and why.
 
-    Be aggressive — over-classify rather than miss candidates.
-    Stage 3 (Triage) will filter false positives.
+    Then measure per module and list each module below the floor of
+    {{ coverage_floor }}% with its uncovered lines.
 
-    {# ── Stage 3: Triage (CEGAR: triage-findings) ───────────────────── #}
+    {{ write_to("02-coverage.yaml") }}
+    ```yaml
+    source_coverage_percent: 88.4      # the command's last line, verbatim
+    floor: {{ coverage_floor }}
+    floor_met: false                   # true when percent >= floor
+    measured_with: "the exact command"
+    modules:
+      - path: "src/pkg/mod.py"
+        percent: 61.0
+        uncovered: ["mod.py:40-58", "mod.py:102"]
+    ```
 
     {% elif stage == 3 %}
-    # Triage — Verify Rewrite Candidates
+    # Characterization — pass {{ loops.char_pass }}
 
-    {{ read_file("01-reconnaissance.md") }}
-    {{ read_file("02-candidates.yaml") }}
+    The source is below the {{ coverage_floor }}% floor. Each pass covers the
+    next under-covered module from `{{ workspace }}/02-coverage.yaml`
+    {% if loops.char_pass > 1 %}(read `{{ workspace }}/03-characterization-log.md`
+    first and continue where it stopped){% endif %}.
 
-    For EACH candidate classified as REWRITE or ADAPT, read the actual
-    source code and verify: is this a REAL need or a FALSE_POSITIVE
-    (simpler than the coarse scan suggested)?
+    Write **characterization tests against the {{ source_language }} source**:
+    they pin what the code does today, including odd behaviour. They are the
+    oracle the rewrite will be held to, so:
+    - Prefer the boundary the rewrite will keep (CLI, stdin/stdout, public
+      API, wire format) over internals: a boundary test converts to drive the
+      {{ target_language }} build, an internal one is thrown away.
+    - Every test must pass against the source now. A test you cannot make
+      pass is a finding, not a test: record it.
+    - Never change source code here.
 
-    Be skeptical. Coarse analysis consistently over-classifies because it
-    reads module signatures, not implementations. A module that LOOKS like
-    it needs rewriting may already be compatible.
+    {{ branch_setup() }}
+    Commit the tests as `test(<module>): characterize — <N> tests`.
 
-    Verify against the target specification as well as the source: a
-    candidate the specification drops is FALSE_POSITIVE with that as the
-    evidence; one it adds stays REAL although no source file backs it.
-    {{ improvement_specs }}
-
-    For each candidate:
-    1. Read the source file
-    2. Check if the {{ target_language }} equivalent is simpler than expected
-    3. Check if an automated tool could handle the conversion
-    4. Assess whether the coarse difficulty rating was accurate
-
-    {{ write_to("03-triage.yaml") }}
-    Structure:
-    ```yaml
-    triage_results:
-      - module: "path/to/module"
-        original_classification: REWRITE
-        verdict: REAL
-        evidence: "Contains complex callback nesting with no direct async equivalent"
-        revised_difficulty: 4
-      - module: "path/to/other"
-        original_classification: REWRITE
-        verdict: FALSE_POSITIVE
-        evidence: "Only uses standard library calls that have 1:1 equivalents"
-        revised_difficulty: 1
-    summary:
-      real_count: 8
-      false_positive_count: 4
-      total_triaged: 12
+    Re-measure with the stage-2 command. If the total is at or above the
+    floor, write the marker (it ends this loop):
+    ```bash
+    echo "coverage met: <percent>" > {{ workspace }}/03-coverage-met.txt
     ```
 
-    {# ── Stage 4: Decomposition (CEGAR: refine-or-report) ──────────── #}
+    Append to `{{ workspace }}/03-characterization-log.md`:
+    `## Pass {{ loops.char_pass }} — <module>`, tests added, coverage before
+    → after, commit hash, behaviours that surprised you.
 
     {% elif stage == 4 %}
-    # Decomposition — Units Bound to Their Tests
+    # Oracle Inventory
 
-    {{ read_file("01-reconnaissance.md") }}
-    {{ read_file("03-triage.yaml") }}
+    Read 01-reconnaissance.md, 02-coverage.yaml and (if present)
+    03-characterization-log.md.
 
-    Decompose the modules with verdict: REAL into **units** the unit loop
-    (stage 6) can finish one per pass. Ignore FALSE_POSITIVE modules.
+    1. Classify every test into **unit**, **integration** or **functional**.
+       For each: how it reaches the code, and whether it can drive the
+       {{ target_language }} build unchanged, needs its harness ported, or
+       must be rewritten.
+    2. Build the differential corpus in `{{ workspace }}/04-differential/inputs/`:
+       one file per input, fed on stdin to both
+       `{{ source_run_command }}` and `{{ target_run_command }}`. Cover every
+       public behaviour, the error paths and the edge cases the tests use.
+       When the project ships language-neutral fixtures (input + expected
+       output files), copy them in.
+    3. List in `{{ workspace }}/04-differential/intended-differences.txt`
+       (one input filename per line, then `# <spec rule>`) every input whose
+       output the specification deliberately changes. Leave it empty if none.
+    4. Run each corpus input through `{{ source_run_command }}` now, and
+       record that the source accepts the corpus.
 
-    A unit is the smallest piece that can be rewritten and proven on its
-    own: a module, or a cluster of functions behind one interface. Each
-    unit is bound to the tests that prove it — existing tests from
-    `{{ project_root }}/{{ test_dir }}` first, new tests only where none
-    exist. The tests are the specification; the rewrite is done when they
-    pass against the {{ target_language }} code, not when the code "looks
-    complete".
-
-    Ordering rules:
-    1. Dependency leaves first (units nothing else depends on)
-    2. Within one level: the unit with the best existing tests first
-    3. Group functions that share an interface into one unit
-
-    For each unit:
-    - **Scope:** source files/functions it covers
-    - **Interface:** what callers see (signatures, CLI flags, wire format)
-      — the interface the rewritten unit must keep so its tests still bind
-    - **Tests:** existing test files/cases that cover it, and for each
-      whether it runs unchanged against {{ target_language }} or needs
-      adapting (and how: swap the entrypoint, port the harness, port the
-      assertions). Name any behaviour with NO test; the loop writes a
-      test for it before writing code.
-    - **Acceptance command:** the narrowed test command that proves this
-      unit alone (from `{{ test_command }}`, narrowed to its tests)
-    - **{{ target_language }} patterns** to apply, and expected output files
-    - **Effort:** lines, complexity
-
-    Additional improvement specifications to apply during rewrite:
-    {{ improvement_specs }}
-
-    {{ write_to("04-rewrite-plan.md") }}
-    Begin with a table (unit, scope, tests, acceptance command, status
-    PENDING) in loop order, then the per-unit plans.
-
-    {# ── Stage 5: Candidate Gate (CEGAR: check-termination) ─────────── #}
+    {{ write_to("04-oracle.md") }}
+    Include the per-test classification table, the corpus size by category,
+    and the commands each tier runs.
 
     {% elif stage == 5 %}
-    # Candidate Gate — CEGAR Termination Check
+    # Decomposition — units bound to tests and to structure
 
-    {{ read_file("03-triage.yaml") }}
-    {{ read_file("04-rewrite-plan.md") }}
+    Read 01-reconnaissance.md and 04-oracle.md.
+    {{ improvement_specs }}
 
-    Verify whether REAL rewrite candidates exist and require work this
-    iteration. Read the triage results and the rewrite plan.
+    Split the work into **units**: the smallest piece that can be rewritten
+    and proven alone. Order dependency leaves first; within a level, the
+    best-tested unit first.
 
-    Write `{{ workspace }}/05-gate-status.yaml` with this exact structure:
-    ```yaml
-    status: PROCEED
-    real_count: 8
-    false_positive_count: 4
-    planned_modules: 8
-    gate_reason: "8 REAL candidates require rewrite work"
-    ```
+    For each unit:
+    - **Scope:** source files and functions.
+    - **Interface:** what callers see. The rewrite keeps it, so its tests bind.
+    - **Mirrors:** the source module and functions this unit corresponds to,
+      and the {{ target_language }} module/function names that keep that
+      correspondence. Mirroring the source structure is rewarded in the final
+      review; deviate when the specification or a {{ target_language }} idiom
+      requires it, and say which.
+    - **Tests:** the tests that prove it, by tier, and how each is adapted.
+    - **Acceptance command:** the narrowed command that proves this unit.
 
-    Rules:
-    - If `real_count > 0` AND the rewrite plan lists modules to process:
-      set `status: PROCEED`
-    - If `real_count == 0` OR all REAL candidates were already handled
-      in prior iterations: set `status: CONVERGED`
-
-    If CONVERGED, stages 6-8 (rewrite, unit tests, integration tests)
-    will be skipped automatically. Stage 9 (Quality Review) will still
-    run to finalize the iteration decision.
-
-    {{ write_to("05-gate-status.yaml") }}
-
-    {# ── Stage 6: Unit Loop (Cathedral: build; one unit per pass) ───── #}
+    {{ write_to("05-rewrite-plan.md") }}
+    Begin with a table: unit, scope, mirrors, tests, acceptance command,
+    status PENDING.
 
     {% elif stage == 6 %}
-    # Unit Loop — Pass {{ loops.unit_pass }} of 8 max
+    # Gate
 
-    You are unit pass **{{ loops.unit_pass }}**. The conductor re-runs
-    this sheet until the pass that completes the last unit writes the
-    marker (or the pass/cost cap is hit). Each pass takes the NEXT unit in
-    `04-rewrite-plan.md` whose status is not DONE.
-
-    {{ read_file("04-rewrite-plan.md") }}
-    {% if loops.unit_pass > 1 %}
-    Read `{{ workspace }}/06-migration-log.md` — the previous passes'
-    sections. Continue from the first unit that is not DONE; never redo a
-    DONE unit.
-    {% endif %}
-
-    **Pass start — clear the loop marker (it proves THIS pass finished the
-    plan):**
-    ```bash
-    rm -f {{ workspace }}/06-units-done.txt
+    Read 05-rewrite-plan.md. Write `{{ workspace }}/06-gate-status.yaml`:
+    ```yaml
+    status: PROCEED        # CONVERGED when no unit needs work
+    units_total: 8
+    units_pending: 8
+    gate_reason: "8 units planned"
     ```
-
-    Work in `{{ project_root }}`. Write {{ target_language }} files
-    alongside the originals; do NOT delete originals until the unit's
-    tests pass against the rewrite.
-
-    **Step 1 — Tests first (red).** Take the unit's tests from the plan.
-    Adapt the ones that need it (entrypoint, harness, assertions) so they
-    drive the {{ target_language }} implementation, and write tests for
-    the behaviours the plan marked untested. Run the unit's acceptance
-    command: it must FAIL for the right reason (missing implementation),
-    not for a harness error. Record the red run.
-
-    **Step 2 — Code to pass them (green).** Translate the unit from
-    {{ source_language }} to {{ target_language }}, keeping the interface
-    the plan names. Apply the improvement specifications. Run the unit's
-    acceptance command until it passes. Do not widen scope to other units.
-
-    **Step 3 — Prove, then record.** Run the acceptance command one final
-    time and paste its tail. Then update the unit's row in
-    `{{ workspace }}/04-rewrite-plan.md` to DONE (or PARTIAL / BLOCKED
-    with the concrete blocker: the failing test and its message).
-
-    **Step 3b — Commit the unit.** A DONE unit is a commit in
-    `{{ project_root }}` (a PARTIAL or BLOCKED unit is not): the work of a
-    pass must survive the pass. On the first pass create the branch
-    `{{ rewrite_branch }}` from the current HEAD; every pass commits on it.
-    Stage only this unit's files (never `git add -A`), with the message
-    `rewrite(<unit id>): <unit name> — <target language>, <N> tests green`.
-    ```bash
-    cd {{ project_root }} && git rev-parse --verify -q {{ rewrite_branch }} >/dev/null \
-      || git checkout -q -b {{ rewrite_branch }}
-    cd {{ project_root }} && git checkout -q {{ rewrite_branch }} && git add <this unit's paths> \
-      && git commit -q -m "rewrite(<unit id>): <unit name> — ..."
-    ```
-
-    **Step 4 — Marker, only when the plan is finished.** If and only if
-    every unit's row now reads DONE:
-    ```bash
-    date -u +"units done %Y-%m-%dT%H:%M:%SZ" > {{ workspace }}/06-units-done.txt
-    ```
-    Never write it by hand for a plan with PENDING, PARTIAL or BLOCKED
-    rows — it is the conductor's only loop evidence.
-
-    **Output:** append to `{{ workspace }}/06-migration-log.md` (keep the
-    previous passes' sections):
-
-    ```markdown
-    ## Pass {{ loops.unit_pass }} — <unit name> — <date>
-    ### Tests adapted / written
-    | Test | Change | Reason |
-    ### Red run
-    [tail of the acceptance command before the rewrite]
-    ### Rewrite
-    [files written, interface kept, improvements applied]
-    ### Green run
-    [tail of the acceptance command after the rewrite]
-    ### Status: DONE | PARTIAL | BLOCKED (<concrete blocker>)
-    ```
-
-    {# ── Stage 7: Unit Validation (Commissioning: unit-check) ────────── #}
+    `units_pending` counts the plan's rows whose status is not DONE.
 
     {% elif stage == 7 %}
-    # Unit Validation — Commissioning Cascade Tier 1
+    # Unit Loop — round {{ loops.behaviour_round }}, pass {{ loops.unit_pass }}
 
-    Run the unit test suite against the rewritten code:
+    Take the NEXT unit in `{{ workspace }}/05-rewrite-plan.md` whose status is
+    PENDING (a later round only has the units the behaviour gate reopened;
+    each names the red test that reopened it).
+    {% if loops.unit_pass > 1 or loops.behaviour_round > 1 %}
+    Read `{{ workspace }}/07-migration-log.md` and never redo a DONE unit.
+    {% endif %}
 
+    Clear the loop marker first (it proves THIS pass finished the plan):
     ```bash
-    cd {{ project_root }} && {{ test_command }}
+    rm -f {{ workspace }}/07-units-done.txt
     ```
 
-    Capture ALL output. If tests fail, document which tests failed and why.
-    Do NOT fix failures — that's the next iteration's job. Your role is
-    accurate reporting.
+    **1. Tests first (red).** Adapt the unit's tests so they drive the
+    {{ target_language }} code. Run the acceptance command: it must fail for
+    the missing implementation, not for a harness error.
 
-    {{ write_to("07-unit-test-results.md") }}
-    Include:
-    - **Results:** PASS or FAIL
-    - **Summary:** tests run, passed, failed, skipped (with counts)
-    - **Failures:** for each failure — test name, file, error message,
-      which rewritten module is involved
-    - **Coverage notes:** any modules without test coverage
+    **2. Code to pass them (green).** Write the unit in {{ target_language }},
+    keeping its interface and the structure named under **Mirrors** where the
+    specification allows. Apply the specification. Do not widen scope.
 
-    {# ── Stage 8: Integration Validation (Commissioning: integration) ── #}
+    **3. Prove and record.** Run the acceptance command once more and keep its
+    tail. Set the unit's status to DONE, or PARTIAL / BLOCKED with the failing
+    test and its message.
+
+    **4. Commit a DONE unit.**
+    {{ branch_setup() }}
+    Message: `rewrite(<unit>): <name> — {{ target_language }}, <N> tests green`.
+
+    **5. Marker, only when every row reads DONE:**
+    ```bash
+    date -u +"units done %FT%TZ" > {{ workspace }}/07-units-done.txt
+    ```
+
+    Append to `{{ workspace }}/07-migration-log.md`:
+    `## Round {{ loops.behaviour_round }} pass {{ loops.unit_pass }} — <unit>`,
+    with `### Red run`, `### Green run` (command tails), the commit, and
+    `### Status: DONE | PARTIAL | BLOCKED (<blocker>)`.
 
     {% elif stage == 8 %}
-    # Integration Validation — Commissioning Cascade Tier 2
+    {% set tier = oracle_tiers[instance - 1] %}
+    # Oracle — {{ tier }} tier (round {{ loops.behaviour_round }})
 
-    Run the integration test suite:
+    Run ONE tier against the rewrite, from `{{ project_root }}`, and report
+    exactly what it says. Do not fix anything; the gate decides.
 
+    {% if tier == "unit" %}
     ```bash
-    cd {{ project_root }} && {{ integration_test_command }}
+    cd {{ project_root }} && bash -c {{ test_command | tojson }}
     ```
+    {% elif tier == "integration" %}
+    ```bash
+    cd {{ project_root }} && bash -c {{ integration_test_command | tojson }}
+    ```
+    {% elif tier == "functional" %}
+    {% if functional_test_command %}
+    ```bash
+    cd {{ project_root }} && bash -c {{ functional_test_command | tojson }}
+    ```
+    {% else %}
+    No functional command is configured. Write **Results:** SKIPPED and say
+    which black-box surface the project would need tested.
+    {% endif %}
+    {% else %}
+    Feed every file in `{{ workspace }}/04-differential/inputs/` on stdin to
+    both commands and compare stdout and exit code:
+    ```bash
+    cd {{ project_root }}
+    for f in {{ workspace }}/04-differential/inputs/*; do
+      a=$(bash -c {{ source_run_command | tojson }} < "$f" 2>/dev/null; echo "exit=$?")
+      b=$(bash -c {{ target_run_command | tojson }} < "$f" 2>/dev/null; echo "exit=$?")
+      [ "$a" = "$b" ] || echo "DIFF $(basename "$f")"
+    done
+    ```
+    A DIFF is a failure unless that input is listed in
+    `04-differential/intended-differences.txt`.
+    {% endif %}
 
-    Capture ALL output. Focus on cross-module interaction failures that
-    unit tests wouldn't catch — import errors, interface mismatches,
-    runtime type errors at module boundaries.
-
-    {{ write_to("08-integration-results.md") }}
-    Include:
-    - **Results:** PASS or FAIL
-    - **Summary:** tests run, passed, failed, skipped (with counts)
-    - **Integration failures:** for each — which modules interact,
-      what broke at the boundary, root cause
-    - **Regression notes:** anything that worked before the rewrite
-
-    {# ── Stage 9: Quality Review (Cathedral: inspect + Commissioning: acceptance) #}
+    Write `{{ workspace }}/08-oracle-{{ instance }}.md`:
+    - `**Tier:** {{ tier }}`
+    - `**Results:** PASS`, `FAIL` or `SKIPPED`
+    - counts (run, passed, failed, skipped; or inputs, agreed, differed)
+    - every failure with the test or input, the message, and the unit in
+      05-rewrite-plan.md it implicates
 
     {% elif stage == 9 %}
-    # Quality Review — Iteration Gate
+    # Behaviour Gate — round {{ loops.behaviour_round }}
 
-    Read all workspace artifacts:
-    - `{{ workspace }}/04-rewrite-plan.md` — the units and their status rows
-    - `{{ workspace }}/05-gate-status.yaml` — gate decision
-    - `{{ workspace }}/06-migration-log.md` — what was completed (if exists)
-    - `{{ workspace }}/07-unit-test-results.md` — unit test outcomes (if exists)
-    - `{{ workspace }}/08-integration-results.md` — integration outcomes (if exists)
-    - `{{ workspace }}/03-triage.yaml` — all verified candidates
+    Read the four `{{ workspace }}/08-oracle-*.md` reports and measure the
+    rewrite's coverage:
+    ```bash
+    cd {{ project_root }} && bash -c {{ target_coverage_command | tojson }}
+    ```
 
-    Note: stages 6-8 may have been skipped if the candidate gate reported
-    CONVERGED (no REAL candidates remaining). If those files don't exist,
-    check 05-gate-status.yaml for the reason.
+    **Green** means: every tier PASS (functional may be SKIPPED only when no
+    functional command is configured), and target coverage ≥
+    {{ coverage_floor }}%. Then write the marker (it ends the behaviour loop):
+    ```bash
+    echo "behaviour green: round {{ loops.behaviour_round }}, coverage <percent>" > {{ workspace }}/09-behaviour-green.txt
+    ```
 
-    ## Assessment
+    **Not green:** for each failure, find the unit it implicates and set that
+    unit back to PENDING in 05-rewrite-plan.md with the failing test or input
+    named. A unit already reopened in an earlier round becomes BLOCKED with
+    that evidence instead, so no round spins on it. Coverage below the floor
+    reopens the units whose code is uncovered, with "write tests for <lines>".
 
-    1. **Progress:** How many units are DONE vs PARTIAL / BLOCKED / PENDING?
-       (`06-units-done.txt` present means the loop finished the plan.)
-    2. **Quality:** Are rewritten modules clean, idiomatic {{ target_language }}?
-    3. **Test health:** Do tests pass? Any regressions?
-    4. **Blockers:** Anything preventing further progress?
+    {{ write_to("09-behaviour-gate.md") }}
+    Include `**Verdict:** GREEN` or `**Verdict:** RED`, the per-tier table,
+    target coverage, and the units reopened or blocked.
 
-    ## Iteration Decision
+    {% elif stage == 10 %}
+    # Refinement Baseline
 
-    Evaluate and write ONE of these decisions on its own line:
+    Behaviour is green. Before any refinement, record where the code stands:
+    the HEAD commit of `{{ rewrite_branch }}`, the {{ target_language }}
+    linter's findings, code size per module, and the structure map (each
+    {{ target_language }} module and public function, with the source module
+    and function it mirrors, or "none").
 
-    **CONTINUE** — if ANY of these are true:
-    - Any unit is not DONE (the unit loop hit its cap, or a unit is BLOCKED)
-    - Tests are failing on rewritten modules (need fixes next iteration)
-    - Quality issues were found that need another pass
+    {{ write_to("10-refine-baseline.md") }}
+    Start the file with `baseline_commit: <full sha>` on its own line.
 
-    **COMPLETE** — if ALL of these are true:
-    - Every unit is DONE (or gate said CONVERGED), or the only units not
-      DONE are BLOCKED on something this host cannot supply (a privilege,
-      a device, a credential) that another iteration on this host cannot
-      supply either — list each such unit under **Blocked remainder** with
-      what it needs; another iteration would only fail the same way
-    - Unit tests pass (or were skipped due to convergence)
-    - Integration tests pass (or were skipped due to convergence)
-    - Code quality meets {{ target_language }} idioms
+    {% elif stage == 11 %}
+    {% set lens = critic_lenses[instance - 1] %}
+    # Critique — {{ lens }} (refine pass {{ loops.refine_pass }})
 
-    {{ write_to("09-quality-review.md") }}
-    Include: progress summary table, quality assessment, test result summary,
-    blockers (if any), and the CONTINUE or COMPLETE decision with justification.
+    Read 10-refine-baseline.md{% if loops.refine_pass > 1 %} and
+    12-refine-log.md (what earlier passes kept and reverted; do not re-raise a
+    reverted finding){% endif %}. Review the {{ target_language }} code in
+    `{{ project_root }}` through ONE lens: **{{ lens }}**.
 
-    If and only if the decision is COMPLETE, also create the chain stop
-    marker: `touch "{{ workspace }}/.rewrite-complete"`. The next iteration's
-    first sheet reads that file and skips, which ends the chain. Do NOT
-    create it on CONTINUE.
+    {% if instance == 1 %}
+    Idiomatic {{ target_language }}, simpler control flow, dead code, needless
+    allocation or copying, error handling that hides causes. Lint findings
+    count.
+    {% elif instance == 2 %}
+    Check every rule of the specification, met or not, with evidence:
+    {{ improvement_specs }}
+    {% else %}
+    Compare the {{ target_language }} structure with the source's: module
+    boundaries, function boundaries, call graph. Score correspondence 0-100
+    (100 = one-to-one). Propose only moves that cost no idiom and no
+    behaviour: a renamed function, a split or merged module that restores
+    correspondence. Never propose re-creating a structure the specification
+    removed.
+    {% endif %}
 
+    Every finding names a file and line in `{{ project_root }}` as
+    `path:line`, the concrete edit, and why it is better. If nothing is worth
+    changing, write `NO FINDINGS` and why.
+
+    Write `{{ workspace }}/11-critique-{{ instance }}.md` starting with
+    `**Lens:** {{ lens }}`.
+
+    {% elif stage == 12 %}
+    # Refine — pass {{ loops.refine_pass }}
+
+    Read the three `{{ workspace }}/11-critique-*.md` files. Merge them and
+    drop any finding that contradicts a test or the specification. Order the
+    rest: correctness and spec first, then idiom, then structural fidelity.
+
+    {{ branch_setup() }}
+    Apply ONE finding per commit (`refine(pass {{ loops.refine_pass }}): <what>`).
+    After each commit run the whole oracle:
+    ```bash
+    cd {{ project_root }} && bash -c {{ test_command | tojson }} && bash -c {{ integration_test_command | tojson }}
+    ```
+    plus the functional command if configured, and the stage-8 differential
+    loop. Anything red: `git revert --no-edit HEAD` and record why. Every
+    commit you leave on the branch is green on every tier.
+
+    If all three critics wrote NO FINDINGS, or every finding was dropped or
+    reverted, write the marker (it ends the refinement loop):
+    ```bash
+    echo "refinement converged at pass {{ loops.refine_pass }}" > {{ workspace }}/12-refine-converged.txt
+    ```
+
+    Append to `{{ workspace }}/12-refine-log.md`:
+    `## Pass {{ loops.refine_pass }}`, with a table of finding, lens,
+    `Kept <sha>` / `Reverted (<failing tier>)` / `Dropped (<reason>)`.
+
+    {% elif stage == 13 %}
+    # Final Review
+
+    Read every ledger in `{{ workspace }}`.
+
+    **Hard gates** (any one failing means CONTINUE):
+    - `09-behaviour-green.txt` exists, or 06-gate-status.yaml says CONVERGED
+    - target coverage ≥ {{ coverage_floor }}%
+    - every specification rule met (11-critique-2.md)
+    - no unit PENDING or PARTIAL; BLOCKED only when the host cannot supply
+      what it needs (a privilege, a device, a credential) — list each under
+      **Blocked remainder**
+
+    **Scorecard** (reported every iteration; weights sum to 100):
+
+    | Dimension | Weight | Evidence |
+    |---|---|---|
+    | Behavioural equivalence | 40 | differential agreement, all tiers |
+    | Specification conformance | 20 | the spec critic's table |
+    | Idiom and simplicity | 20 | the idiom critic, lint before/after |
+    | Structural fidelity | 20 | the structure critic's 0-100 score |
+
+    Structural fidelity is a reward: losing it to follow the specification or
+    a {{ target_language }} idiom costs those points and nothing else.
+
+    {{ write_to("13-final-review.md") }}
+    Include the gate table, the scorecard with the total, what the refinement
+    passes kept, and the decision **CONTINUE** or **COMPLETE** on its own line.
+
+    If and only if the decision is COMPLETE:
+    `touch "{{ workspace }}/.rewrite-complete"` (it ends the chain).
     {% endif %}
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# VALIDATIONS — staged fail-fast per sheet
+# VALIDATIONS — the report is the musician's account; the commands are the oracle
 #
-# Each validation uses `condition` to target the correct sheet and `stage`
-# for ordering within that sheet's validation run.
-# Stage 1 = coarse checks (file exists). Stage 2 = fine checks (content).
+# `condition` keys on `stage` (fan-out shifts sheet numbers). Validation
+# commands receive each {variable} as ONE shell-quoted word, which is what
+# `bash -c` takes.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 validations:
-  # ── Sheet 1: Reconnaissance ────────────────────────────────────────────
-  - type: file_exists
-    path: "{workspace}/01-reconnaissance.md"
-    condition: "sheet_num == 1"
-    stage: 1
-    description: "Reconnaissance report created"
+  # ── 1 Reconnaissance ───────────────────────────────────────────────────
   - type: command_succeeds
-    command: 'test $(wc -w < "{workspace}/01-reconnaissance.md") -ge 200'
-    condition: "sheet_num == 1"
-    stage: 2
-    description: "Reconnaissance has substantive content (200+ words)"
+    command: 'test $(wc -w < "{workspace}/01-reconnaissance.md") -ge 250'
+    condition: "stage == 1"
+    description: "Reconnaissance is substantive (250+ words)"
 
-  # ── Sheet 2: Coarse Analysis ───────────────────────────────────────────
-  - type: file_exists
-    path: "{workspace}/02-candidates.yaml"
-    condition: "sheet_num == 2"
-    stage: 1
-    description: "Candidates file created"
-  - type: content_contains
-    path: "{workspace}/02-candidates.yaml"
-    pattern: "candidates:"
-    condition: "sheet_num == 2"
-    stage: 2
-    description: "Candidates file has proper YAML structure"
-  - type: content_regex
-    path: "{workspace}/02-candidates.yaml"
-    pattern: "classification: (REWRITE|ADAPT|SKIP)"
-    condition: "sheet_num == 2"
-    stage: 2
-    description: "Candidates have classification labels"
-
-  # ── Sheet 3: Triage ────────────────────────────────────────────────────
-  - type: file_exists
-    path: "{workspace}/03-triage.yaml"
-    condition: "sheet_num == 3"
-    stage: 1
-    description: "Triage results created"
-  # Every triaged candidate carries a verdict and evidence; an empty triage
-  # (every candidate was SKIP) is legitimate and converges at stage 5.
+  # ── 2 Coverage baseline: the recorded percent is what the command prints ──
   - type: command_succeeds
     command: |
-      python3 - "{workspace}/03-triage.yaml" <<'PY'
+      python3 - "{workspace}/02-coverage.yaml" {coverage_floor} <<'PY'
       import sys, yaml
-      t = yaml.safe_load(open(sys.argv[1])) or {}
-      rows = t.get("triage_results") or []
-      assert all(r.get("verdict") in ("REAL", "FALSE_POSITIVE") for r in rows), "bad verdict"
-      assert all(r.get("evidence") for r in rows), "missing evidence"
-      s = t.get("summary") or {}
-      assert s.get("total_triaged", len(rows)) == len(rows), "summary disagrees with rows"
+      d = yaml.safe_load(open(sys.argv[1]))
+      pct, floor = float(d["source_coverage_percent"]), float(sys.argv[2])
+      assert d["floor_met"] is (pct >= floor), "floor_met disagrees with the percent"
+      assert isinstance(d.get("modules"), list), "per-module list missing"
       PY
-    condition: "sheet_num == 3"
-    stage: 2
+    condition: "stage == 2"
+    stage: 1
     timeout_seconds: 30
-    description: "Every triaged candidate has a REAL/FALSE_POSITIVE verdict with evidence (zero rows allowed)"
-
-  # ── Sheet 4: Rewrite Planning ──────────────────────────────────────────
-  - type: file_exists
-    path: "{workspace}/04-rewrite-plan.md"
-    condition: "sheet_num == 4"
-    stage: 1
-    description: "Rewrite plan created"
+    description: "Coverage record is well formed and floor_met agrees with the percent"
   - type: command_succeeds
-    command: 'test $(wc -w < "{workspace}/04-rewrite-plan.md") -ge 100'
-    condition: "sheet_num == 4"
+    command: |
+      cd {project_root} && got=$(bash -c {source_coverage_command} 2>/dev/null | tail -1 | tr -dc '0-9.') \
+      && python3 -c "import sys,yaml; r=float(yaml.safe_load(open(sys.argv[1]))['source_coverage_percent']); g=float(sys.argv[2]); sys.exit(abs(r-g) > 1.0)" "{workspace}/02-coverage.yaml" "$got"
+    condition: "stage == 2"
     stage: 2
-    description: "Rewrite plan has substantive content (100+ words)"
-  - type: content_regex
-    path: "{workspace}/04-rewrite-plan.md"
-    pattern: "(?i)acceptance command"
-    condition: "sheet_num == 4"
-    stage: 2
-    description: "Every unit names the test command that proves it"
+    timeout_seconds: 1800
+    description: "Recorded source coverage matches the coverage command within 1 point"
 
-  # ── Sheet 5: Candidate Gate ────────────────────────────────────────────
-  - type: file_exists
-    path: "{workspace}/05-gate-status.yaml"
-    condition: "sheet_num == 5"
+  # ── 3 Characterization: tests pass against the SOURCE; marker is honest ──
+  - type: command_succeeds
+    command: 'cd {project_root} && git log --oneline {rewrite_branch} 2>/dev/null | grep -qE "^[0-9a-f]+ test\("'
+    condition: "stage == 3"
     stage: 1
-    description: "Gate status file created"
-  - type: content_regex
-    path: "{workspace}/05-gate-status.yaml"
-    pattern: "status: (PROCEED|CONVERGED)"
-    condition: "sheet_num == 5"
+    description: "Characterization tests are committed as test(<module>) on the rewrite branch"
+  - type: command_succeeds
+    command: |
+      if test -f "{workspace}/03-coverage-met.txt"; then
+        cd {project_root} && got=$(bash -c {source_coverage_command} 2>/dev/null | tail -1 | tr -dc '0-9.') \
+        && python3 -c "import sys; sys.exit(float(sys.argv[1]) < float(sys.argv[2]))" "$got" {coverage_floor}
+      fi
+    condition: "stage == 3"
     stage: 2
-    description: "Gate status has valid PROCEED/CONVERGED decision"
-  - type: content_contains
-    path: "{workspace}/05-gate-status.yaml"
-    pattern: "real_count:"
-    condition: "sheet_num == 5"
-    stage: 2
-    description: "Gate status includes REAL candidate count"
+    timeout_seconds: 1800
+    description: "The coverage-met marker is written only when the source really meets the floor"
 
-  # ── Sheet 6: Execute Rewrite ───────────────────────────────────────────
-  - type: file_exists
-    path: "{workspace}/06-migration-log.md"
-    condition: "sheet_num == 6"
+  # ── 4 Oracle inventory: a corpus exists and the source accepts it ───────
+  - type: command_succeeds
+    command: 'test -n "$(ls -A "{workspace}/04-differential/inputs" 2>/dev/null)" && test -f "{workspace}/04-differential/intended-differences.txt"'
+    condition: "stage == 4"
     stage: 1
-    description: "Migration log created"
-  - type: command_succeeds
-    command: 'test $(wc -w < "{workspace}/06-migration-log.md") -ge 50'
-    condition: "sheet_num == 6"
-    stage: 2
-    description: "Migration log documents actual work done"
+    description: "Differential corpus and intended-differences list exist"
   - type: content_regex
-    path: "{workspace}/06-migration-log.md"
-    pattern: "Status: (DONE|PARTIAL|BLOCKED)"
-    condition: "sheet_num == 6"
+    path: "{workspace}/04-oracle.md"
+    pattern: "(?i)\\bunit\\b[\\s\\S]*\\bintegration\\b[\\s\\S]*\\bfunctional\\b"
+    condition: "stage == 4"
     stage: 2
-    description: "Migration log has a per-unit status (partial passes may repeat)"
-  - type: content_regex
-    path: "{workspace}/06-migration-log.md"
-    pattern: "### Red run"
-    condition: "sheet_num == 6"
-    stage: 2
-    description: "Each unit pass ran its tests before writing code"
+    description: "Every test tier is classified"
+
+  # ── 5 Decomposition ─────────────────────────────────────────────────────
   - type: command_succeeds
-    command: 'if grep -qE "### Status: DONE" "{workspace}/06-migration-log.md"; then cd "{project_root}" && git log --oneline "{rewrite_branch}" 2>/dev/null | grep -qE "^[0-9a-f]+ rewrite\("; else true; fi'
-    condition: "sheet_num == 6"
+    command: |
+      python3 - "{workspace}/05-rewrite-plan.md" <<'PY'
+      import re, sys
+      t = open(sys.argv[1]).read()
+      for need in ("acceptance command", "mirrors", "interface"):
+          assert re.search(need, t, re.I), f"plan never names {need!r}"
+      assert re.search(r"\|\s*PENDING\s*\|", t), "no PENDING unit rows"
+      PY
+    condition: "stage == 5"
+    timeout_seconds: 30
+    description: "Every unit names its interface, mirror and acceptance command"
+
+  # ── 6 Gate: the count agrees with the plan ──────────────────────────────
+  - type: command_succeeds
+    command: |
+      python3 - "{workspace}/06-gate-status.yaml" "{workspace}/05-rewrite-plan.md" <<'PY'
+      import re, sys, yaml
+      g = yaml.safe_load(open(sys.argv[1]))
+      rows = re.findall(r"^\|.*\|\s*(PENDING|PARTIAL|BLOCKED|DONE)\s*\|\s*$", open(sys.argv[2]).read(), re.M)
+      pending = sum(1 for r in rows if r != "DONE")
+      assert g["status"] in ("PROCEED", "CONVERGED")
+      assert g["units_pending"] == pending, f"gate says {g['units_pending']}, plan has {pending}"
+      assert (g["status"] == "CONVERGED") == (pending == 0), "status disagrees with the pending count"
+      PY
+    condition: "stage == 6"
+    timeout_seconds: 30
+    description: "Gate decision agrees with the plan's pending units"
+
+  # ── 7 Unit loop ─────────────────────────────────────────────────────────
+  - type: content_regex
+    path: "{workspace}/07-migration-log.md"
+    pattern: "### Red run[\\s\\S]*### Status: (DONE|PARTIAL|BLOCKED)"
+    condition: "stage == 7"
+    stage: 1
+    description: "Each pass ran its tests red before writing code and recorded a status"
+  - type: command_succeeds
+    command: 'if grep -qE "### Status: DONE" "{workspace}/07-migration-log.md"; then cd {project_root} && git log --oneline {rewrite_branch} 2>/dev/null | grep -qE "^[0-9a-f]+ rewrite\("; fi'
+    condition: "stage == 7"
     stage: 2
     description: "A DONE unit is a rewrite(<unit>) commit on the rewrite branch"
 
-  # ── Sheet 7: Unit Validation ───────────────────────────────────────────
-  - type: file_exists
-    path: "{workspace}/07-unit-test-results.md"
-    condition: "sheet_num == 7"
-    stage: 1
-    description: "Unit test results recorded"
-  - type: content_regex
-    path: "{workspace}/07-unit-test-results.md"
-    pattern: "\\*\\*Results:\\*\\*\\s*(PASS|FAIL)"
-    condition: "sheet_num == 7"
-    stage: 2
-    description: "Unit test results contain PASS/FAIL verdict"
-  # The report is the musician's account; the harness is the oracle. The
-  # engine substitutes {test_command} as ONE shell-quoted word, which is
-  # exactly what `bash -c` takes, so the whole command runs with its
-  # arguments. Gate the sheet on the report's verdict matching the harness:
-  # a PASS report over a red suite fails here; a FAIL report over a red suite
-  # is an honest report and passes on to stage 9, which decides CONTINUE
-  # (the skip on stage 8 is the fail-fast the header promises).
+  # ── 8 Oracle: each voice's verdict matches its tier's real exit ─────────
   - type: command_succeeds
-    command: 'if grep -qE "\*\*Results:\*\*\s*PASS" "{workspace}/07-unit-test-results.md"; then cd "{project_root}" && bash -c {test_command}; else cd "{project_root}" && ! bash -c {test_command}; fi'
-    condition: "sheet_num == 7"
-    stage: 3
+    command: 'if grep -qE "\*\*Results:\*\*\s*PASS" "{workspace}/08-oracle-1.md"; then cd {project_root} && bash -c {test_command}; else cd {project_root} && ! bash -c {test_command}; fi'
+    condition: "stage == 8 and instance == 1"
     timeout_seconds: 1800
-    description: "Unit report verdict matches the bound test command's exit in project_root"
-
-  # ── Sheet 8: Integration Validation ────────────────────────────────────
-  - type: file_exists
-    path: "{workspace}/08-integration-results.md"
-    condition: "sheet_num == 8"
-    stage: 1
-    description: "Integration test results recorded"
-  - type: content_regex
-    path: "{workspace}/08-integration-results.md"
-    pattern: "\\*\\*Results:\\*\\*\\s*(PASS|FAIL)"
-    condition: "sheet_num == 8"
-    stage: 2
-    description: "Integration results contain PASS/FAIL verdict"
+    description: "Unit verdict matches the unit command's exit"
   - type: command_succeeds
-    command: 'if grep -qE "\*\*Results:\*\*\s*PASS" "{workspace}/08-integration-results.md"; then cd "{project_root}" && bash -c {integration_test_command}; else cd "{project_root}" && ! bash -c {integration_test_command}; fi'
-    condition: "sheet_num == 8"
-    stage: 3
+    command: 'if grep -qE "\*\*Results:\*\*\s*PASS" "{workspace}/08-oracle-2.md"; then cd {project_root} && bash -c {integration_test_command}; else cd {project_root} && ! bash -c {integration_test_command}; fi'
+    condition: "stage == 8 and instance == 2"
     timeout_seconds: 1800
-    description: "Integration report verdict matches the bound test command's exit in project_root"
-
-  # ── Sheet 9: Quality Review ────────────────────────────────────────────
-  - type: file_exists
-    path: "{workspace}/09-quality-review.md"
-    condition: "sheet_num == 9"
-    stage: 1
-    description: "Quality review created"
-  - type: content_regex
-    path: "{workspace}/09-quality-review.md"
-    pattern: "\\b(CONTINUE|COMPLETE)\\b"
-    condition: "sheet_num == 9"
-    stage: 2
-    description: "Quality review has CONTINUE/COMPLETE iteration decision"
+    description: "Integration verdict matches the integration command's exit"
   - type: command_succeeds
-    command: 'test $(wc -w < "{workspace}/09-quality-review.md") -ge 150'
-    condition: "sheet_num == 9"
+    command: |
+      f="{workspace}/08-oracle-3.md"
+      if [ -z {functional_test_command} ]; then grep -qE "\*\*Results:\*\*\s*SKIPPED" "$f"
+      elif grep -qE "\*\*Results:\*\*\s*PASS" "$f"; then cd {project_root} && bash -c {functional_test_command}
+      else cd {project_root} && ! bash -c {functional_test_command}; fi
+    condition: "stage == 8 and instance == 3"
+    timeout_seconds: 1800
+    description: "Functional verdict matches the functional command (SKIPPED only when none is set)"
+  - type: command_succeeds
+    command: |
+      cd {project_root}; diffs=0
+      for f in "{workspace}"/04-differential/inputs/*; do
+        n=$(basename "$f"); grep -qxF "$n" "{workspace}/04-differential/intended-differences.txt" 2>/dev/null && continue
+        a=$(bash -c {source_run_command} < "$f" 2>/dev/null; echo "exit=$?")
+        b=$(bash -c {target_run_command} < "$f" 2>/dev/null; echo "exit=$?")
+        [ "$a" = "$b" ] || diffs=$((diffs+1))
+      done
+      if grep -qE "\*\*Results:\*\*\s*PASS" "{workspace}/08-oracle-4.md"; then [ "$diffs" -eq 0 ]; else [ "$diffs" -gt 0 ]; fi
+    condition: "stage == 8 and instance == 4"
+    timeout_seconds: 1800
+    description: "Differential verdict matches a real source/target comparison of the corpus"
+
+  # ── 9 Behaviour gate: GREEN only when it is ─────────────────────────────
+  - type: command_succeeds
+    command: |
+      if grep -qE "\*\*Verdict:\*\*\s*GREEN" "{workspace}/09-behaviour-gate.md"; then
+        test -f "{workspace}/09-behaviour-green.txt" \
+        && for i in 1 2 4; do grep -qE "\*\*Results:\*\*\s*PASS" "{workspace}/08-oracle-$i.md" || exit 1; done \
+        && grep -qE "\*\*Results:\*\*\s*(PASS|SKIPPED)" "{workspace}/08-oracle-3.md" \
+        && cd {project_root} && got=$(bash -c {target_coverage_command} 2>/dev/null | tail -1 | tr -dc '0-9.') \
+        && python3 -c "import sys; sys.exit(float(sys.argv[1]) < float(sys.argv[2]))" "$got" {coverage_floor}
+      else
+        ! test -f "{workspace}/09-behaviour-green.txt"
+      fi
+    condition: "stage == 9"
+    timeout_seconds: 1800
+    description: "GREEN means every tier passed and target coverage meets the floor; RED leaves no marker"
+
+  # ── 10 Refinement baseline ──────────────────────────────────────────────
+  - type: command_succeeds
+    command: 'sha=$(sed -n "s/^baseline_commit: *\([0-9a-f]\{40\}\).*/\1/p" "{workspace}/10-refine-baseline.md" | head -1) && test -n "$sha" && cd {project_root} && test "$(git cat-file -t "$sha")" = commit'
+    condition: "stage == 10"
+    description: "Baseline names a real commit"
+
+  # ── 11 Critique: findings point at real code ────────────────────────────
+  - type: command_succeeds
+    command: |
+      f="{workspace}/11-critique-{instance}.md"
+      grep -q "NO FINDINGS" "$f" && exit 0
+      python3 - "$f" {project_root} <<'PY'
+      import os, re, sys
+      refs = re.findall(r"`?([\w./-]+\.\w+):(\d+)", open(sys.argv[1]).read())
+      assert refs, "findings name no path:line"
+      root = sys.argv[2]
+      for path, line in refs:
+          p = path if os.path.isabs(path) else os.path.join(root, path)
+          assert os.path.isfile(p), f"{path} does not exist"
+          assert int(line) <= sum(1 for _ in open(p, errors="replace")), f"{path}:{line} is past the end"
+      PY
+    condition: "stage == 11"
+    timeout_seconds: 60
+    description: "Every finding names a path:line that exists (or the critic wrote NO FINDINGS)"
+
+  # ── 12 Refine: every kept commit is green ───────────────────────────────
+  - type: content_regex
+    path: "{workspace}/12-refine-log.md"
+    pattern: "## Pass \\d+"
+    condition: "stage == 12"
+    stage: 1
+    description: "The pass is logged"
+  - type: command_succeeds
+    command: 'cd {project_root} && git checkout -q {rewrite_branch} && bash -c {test_command} && bash -c {integration_test_command}'
+    condition: "stage == 12"
     stage: 2
-    description: "Quality review has substantive content (150+ words)"
+    timeout_seconds: 1800
+    description: "The rewrite branch is green on unit and integration after refinement"
+
+  # ── 13 Final review: COMPLETE only when the hard gates hold ─────────────
+  - type: command_succeeds
+    command: |
+      f="{workspace}/13-final-review.md"
+      grep -qE "^\s*\**(CONTINUE|COMPLETE)\**\s*$" "$f" || exit 1
+      if grep -qE "^\s*\**COMPLETE\**\s*$" "$f"; then
+        test -f "{workspace}/.rewrite-complete" \
+        && { test -f "{workspace}/09-behaviour-green.txt" || grep -q "status: CONVERGED" "{workspace}/06-gate-status.yaml"; }
+      else
+        ! test -f "{workspace}/.rewrite-complete"
+      fi
+    condition: "stage == 13"
+    timeout_seconds: 30
+    description: "COMPLETE requires green behaviour (or convergence) and writes the marker; CONTINUE does not"

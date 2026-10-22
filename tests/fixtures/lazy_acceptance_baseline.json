@@ -115,16 +115,6 @@
   "rules": "1"
  },
  {
-  "score": "examples/engineering/codebase-rewrite.yaml",
-  "sheet": "2",
-  "rules": "3"
- },
- {
-  "score": "examples/engineering/codebase-rewrite.yaml",
-  "sheet": "5",
-  "rules": "3"
- },
- {
   "score": "examples/engineering/issue-triage.yaml",
   "sheet": "1",
   "rules": "3"
