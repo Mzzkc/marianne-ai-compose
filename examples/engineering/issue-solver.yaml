@@ -330,9 +330,32 @@ prompt:
 
     ```bash
     python3 - <<'PY' > {{ workspace }}/.selected
-    import yaml, sys, pathlib
-    dag = yaml.safe_load(pathlib.Path("{{ triage_workspace }}/issue-dag.yaml").expanduser().read_text())
+    import yaml, sys, pathlib, subprocess
+    dag_path = pathlib.Path("{{ triage_workspace }}/issue-dag.yaml").expanduser()
+    dag = yaml.safe_load(dag_path.read_text())
     resolved = set(dag.get("resolved") or [])
+    # The DAG's `resolved` list is what THIS solver closed. An issue closed by
+    # a human or another process since the triage is still "open" to the DAG;
+    # ask GitHub before spending a run on it, and fold a closed one into
+    # `resolved` so the dependency walk sees it too.
+    closed_since = []
+    for issue in dag["issues"]:
+        num = issue["number"]
+        if num in resolved:
+            continue
+        probe = subprocess.run(
+            ["gh", "issue", "view", str(num), "--repo", "{{ repo }}", "--json", "state", "--jq", ".state"],
+            capture_output=True, text=True, timeout=60,
+        )
+        if probe.returncode == 0 and probe.stdout.strip().upper() == "CLOSED":
+            closed_since.append(num)
+            resolved.add(num)
+    if closed_since:
+        dag["resolved"] = sorted(resolved)
+        tmp = dag_path.with_suffix(".yaml.tmp")
+        tmp.write_text(yaml.safe_dump(dag, sort_keys=False))
+        tmp.replace(dag_path)
+        print(f"CLOSED_SINCE_TRIAGE: {closed_since}", file=sys.stderr)
     candidates = []
     for issue in dag["issues"]:
         num = issue["number"]
