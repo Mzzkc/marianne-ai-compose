@@ -557,6 +557,15 @@ prompt:
        {{ workspace }}/weekly-reviews/${today}-decision.json
     cp {{ workspace }}/weekly-reviews/today-threshold.json \
        {{ workspace }}/weekly-reviews/${today}-threshold.json
+    # The Delphi rounds are review provenance too: next week's run
+    # overwrites the today-* aliases, so each reviewer's R1 and R2 files
+    # get the dated names the header promises.
+    {% for r in reviewers.values() %}
+    cp {{ workspace }}/weekly-reviews/today-round1-{{ r.name }}.md \
+       {{ workspace }}/weekly-reviews/${today}-round1-{{ r.name }}.md
+    cp {{ workspace }}/weekly-reviews/today-round2-{{ r.name }}.md \
+       {{ workspace }}/weekly-reviews/${today}-round2-{{ r.name }}.md
+    {% endfor %}
 
     fermata=$(python3 -c "import json; print(json.load(open('{{ workspace }}/weekly-reviews/today-threshold.json'))['fermata_required'])")
 
@@ -816,6 +825,11 @@ validations:
     condition: "stage == 6"
     stage: 1
     description: "Dated synthesis archived"
+  - type: command_succeeds
+    command: 'today=$(cat "{workspace}/today-date.txt"); for r in opus gemini glm; do test -f "{workspace}/weekly-reviews/${today}-round1-$r.md" && test -f "{workspace}/weekly-reviews/${today}-round2-$r.md" || exit 1; done'
+    condition: "stage == 6"
+    stage: 1
+    description: "Dated R1/R2 reviewer files archived"
   - type: command_succeeds
     command: |
       fermata=$(python3 -c "import json; print(json.load(open('{workspace}/weekly-reviews/today-threshold.json'))['fermata_required'])")
