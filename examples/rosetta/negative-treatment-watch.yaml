@@ -2732,7 +2732,7 @@ prompt:
 validations:
   # ── M1 · canary: the anti-fabrication gate (before any LLM token) ──────────
   - type: command_succeeds
-    command: 'jq -e ''[.probes[].marker_present] | all'' {workspace}/canary/canary-report.json > /dev/null'
+    command: 'jq -e ''([.probes[].probe] | sort) == ["crossref-retracted-marker","pubmed-pubtype","toolchain-venv","wikimedia-pageviews","wikipedia-wikitext"] and ([.probes[].marker_present] | all)'' {workspace}/canary/canary-report.json > /dev/null'
     condition: "stage == 1"
     stage: 1
     description: "All five markers observed — the pinned venv imports, Wakefield RETRACTED title, PubMed pubtype, month-length-aware pageviews, wikitext cite markers"

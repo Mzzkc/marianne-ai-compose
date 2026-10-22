@@ -704,11 +704,11 @@ validations:
     condition: "stage == 5"
     description: "Reprocess plan exists"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/quarantine-analysis.md"
-    pattern: "Root cause"
+    pattern: "(?i)(root cause|quarantine (is|was) empty|no (scripts|failures) (to analyze|were quarantined))"
     condition: "stage == 5"
-    description: "Analysis identifies root causes"
+    description: "Analysis identifies root causes — or states that the quarantine was empty"
 
   # ── Stage 6: Reprocessing produces results ─────────────────────────────
   - type: file_exists

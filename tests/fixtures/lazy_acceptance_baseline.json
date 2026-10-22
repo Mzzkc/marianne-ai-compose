@@ -511,11 +511,6 @@
  },
  {
   "score": "examples/product/invoice-analysis.yaml",
-  "sheet": "1",
-  "rules": "2"
- },
- {
-  "score": "examples/product/invoice-analysis.yaml",
   "sheet": "2",
   "rules": "1"
  },

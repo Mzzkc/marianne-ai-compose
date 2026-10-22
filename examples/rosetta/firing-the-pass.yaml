@@ -2891,7 +2891,7 @@ validations:
       jq -e 'length >= 500 and all(.[]; has("id") and has("utc") and has("local_wall") and .tz == "{tz}")' {workspace}/ephemeris/events.json > /dev/null
       jq -e '[.[] | select(.class == "twilight")] | length >= 50' {workspace}/ephemeris/events.json > /dev/null
       jq -e '[.[] | select(.local_wall | startswith("{dst_fold_local}")) | .local_wall[19:]] | unique | length == 2' {workspace}/ephemeris/events.json > /dev/null
-      jq -e 'all(.[] | select(.class == "shower"); (.detail.note | test("DATE-precision")) and (.detail | has("window_center")) and (.detail | has("moon_illumination_pct")))' {workspace}/ephemeris/events.json > /dev/null
+      jq -e '[.[] | select(.class == "shower")] | length >= 1 and all(.[]; (.detail.note | test("DATE-precision")) and (.detail | has("window_center")) and (.detail | has("moon_illumination_pct")))' {workspace}/ephemeris/events.json > /dev/null
     condition: "stage == 3"
     stage: 2
     description: "Ephemeris: pinned bsp digest, two DST offsets, full event schema with computed twilight, fold-day events carry BOTH offsets, showers are date-precision windows"
@@ -2926,7 +2926,8 @@ validations:
     description: "Anniversaries: every record QID-keyed, month-dated (regex aligned with the >=1900 gate — the original 1xxx-year regex rejected valid 20xx records), property-cited, source-linked"
   - type: command_succeeds
     command: |
-      jq -e '.svg_fonttype == "none"' {workspace}/charts/ready-charts.json > /dev/null
+      set -e
+      jq -e '.svg_fonttype == "none" and (.made | length) >= 1' {workspace}/charts/ready-charts.json > /dev/null
       for f in $(jq -r '.made[]' {workspace}/charts/ready-charts.json); do
         grep -q "<text" "{workspace}/$f" || { echo "no text elements in $f"; exit 1; }
         grep -q "<image" "{workspace}/$f" && { echo "raster embedded in $f"; exit 1; } || true
