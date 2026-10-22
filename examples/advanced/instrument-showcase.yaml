@@ -157,8 +157,10 @@ sheet:
   dependencies:
     2: [1]        # Scan & Classify depends on inventory
     3: [2]        # E1 depends on classification
-    4: [2]        # E2 depends on classification (parallel with E1)
-    5: [2]        # E3 depends on classification (parallel with E1, E2)
+    4: [2, 3]     # E2 consumes E1's NEEDS UPGRADE escalations (AD F4)
+    5: [2, 4]     # E3 consumes E2's escalations; the tiers are a cascade,
+                  # not a fan-out — an escalation with no consumer is a
+                  # finding that silently disappears
     6: [3, 4, 5]  # Synthesis depends on all three echelon tiers
 
   # --- Batch Instrument Assignment ---
@@ -418,12 +420,16 @@ prompt:
     - `{{ output_file("01-project-inventory.md") }}` — project inventory
     - `{{ output_file("02-echelon-manifest.yaml") }}` — structured echelon classification
     - `{{ output_file("02-scan-findings.md") }}` — scan findings with details
+    - `{{ output_file("03-e1-field-results.md") }}` — E1's results; every
+      finding it marked NEEDS UPGRADE is yours too, or E1's escalation
+      goes nowhere
 
     The project is at `{{ target_project }}`.
 
     ## Your Mandate
 
-    For EACH finding classified as E2 in the classification manifest:
+    For EACH finding classified as E2 in the classification manifest, AND
+    each E1 finding marked NEEDS UPGRADE in the E1 results:
 
     1. **Read the source file.** Understand context — what function, what data
        flows through it, what calls it, what it calls.
@@ -472,6 +478,8 @@ prompt:
     - `{{ output_file("01-project-inventory.md") }}` — project inventory
     - `{{ output_file("02-echelon-manifest.yaml") }}` — echelon classification
     - `{{ output_file("02-scan-findings.md") }}` — scan findings
+    - `{{ output_file("04-e2-analysis.md") }}` — E2's analysis; every
+      finding it escalated to E3 is yours, or E2's escalation goes nowhere
 
     The project is at `{{ target_project }}`.
 

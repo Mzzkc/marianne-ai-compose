@@ -208,9 +208,11 @@ prompt:
       gets opened. Show you understand their world. Soft CTA.
     - **Email 2** (Day 3): Proof — how {{ product.name }} solves it. Include one
       concrete example or metric. Stronger CTA.
-    - **Email 3** (Day 7): Urgency — beta closing soon. Social proof
-      (even if hypothetical: "X engineers are already using...").
-      Direct CTA with {{ campaign.landing_url }}.
+    - **Email 3** (Day 7): The reason to act now. Use only what the
+      campaign brief supports — a real deadline, a real capacity limit, a
+      real customer quote — and if the brief gives you none, make the case
+      on the product alone. Never invent a closing date or "X engineers
+      are already using". Direct CTA with {{ campaign.landing_url }}.
 
     For each email:
     - Subject line (and one A/B alternative)

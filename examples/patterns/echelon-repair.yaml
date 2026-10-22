@@ -122,7 +122,9 @@ sheet:
     2: [1]       # Diagnosis depends on inventory
     3: [2]       # E1 field scan depends on diagnosis
     4: [2]       # E2 sustained analysis depends on diagnosis
-    5: [2]       # E3 depot review depends on diagnosis
+    5: [2, 3, 4] # E3 reads field-results.md and sustained-results.md, so it
+                 # waits for E1 and E2 — the prompt said "for lower-echelon
+                 # context" while the DAG let it start alongside them (PA F8)
     6: [3, 4, 5] # Report depends on all three echelons
 
 parallel:

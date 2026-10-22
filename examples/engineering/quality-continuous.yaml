@@ -1242,9 +1242,9 @@ prompt:
     **Step 4: Sync with remote before committing**
     ```bash
     # Check if remote has new commits we don't have
-    git fetch origin main 2>/dev/null
+    git fetch 2>/dev/null
 
-    BEHIND=$(git rev-list HEAD..origin/main --count 2>/dev/null || echo "0")
+    BEHIND=$(git rev-list HEAD..@{upstream} --count 2>/dev/null || echo "0")
     echo "Commits behind remote: $BEHIND"
     ```
 
@@ -1252,7 +1252,7 @@ prompt:
     ```bash
     # Stash staged changes, rebase, re-apply
     git stash
-    git pull --rebase origin main
+    git pull --rebase
     git stash pop
     ```
 
@@ -1277,13 +1277,16 @@ prompt:
        - The file path
        - What OUR quality fix was trying to do (from batch result files)
        - The full conflict markers (`<<<<<<<` ... `>>>>>>>`) verbatim
-       - The remote's intent (from `git log --oneline origin/main -3 -- <file>`)
-    3. Abort to a clean state:
+       - The remote's intent (from `git log --oneline @{upstream} -3 -- <file>`)
+    3. Park the work where nothing is lost, then return to a clean tree:
        ```bash
-       git checkout -- .       # Discard conflict markers
-       git stash drop          # Drop our changes (context saved above)
+       # The stash still holds our changes; keep them on a named branch
+       # instead of dropping them — stage 13 re-applies from here.
+       git checkout -- .                                  # clear markers only
+       git branch "quality/iteration-$(cat {{ workspace }}/.iteration)-conflicts" stash@{0}
+       git stash drop                                     # safe: the branch owns the commit
        ```
-       Now git is clean at remote HEAD. Stage 13 will re-apply intelligently.
+       Now git is clean at remote HEAD and the branch holds our fix.
     4. Skip steps 5-7 below. Set status to "conflicts_pending" in output.
 
     **Step 5: Commit** (skip if conflicts_pending)
@@ -1301,7 +1304,7 @@ prompt:
 
     If push fails due to new remote commits (race condition), pull and retry:
     ```bash
-    git pull --rebase origin main && git push
+    git pull --rebase && git push
     ```
     Do NOT force-push.
 
@@ -1426,7 +1429,7 @@ prompt:
 
     If push fails (race condition):
     ```bash
-    git pull --rebase origin main && git push
+    git pull --rebase && git push
     ```
 
     **Step 6: Verify**
