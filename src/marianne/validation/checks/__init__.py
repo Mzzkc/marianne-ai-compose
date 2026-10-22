@@ -13,6 +13,7 @@ from marianne.validation.checks.best_practices import (
     FormatSyntaxInTemplateCheck,
     JinjaInValidationPathCheck,
     NoValidationsCheck,
+    PlaceholderQuotingCheck,
     SkipWhenSheetRangeCheck,
     VariableShadowingCheck,
 )
@@ -55,6 +56,7 @@ from marianne.validation.checks.jinja import (
 from marianne.validation.checks.paths import (
     AbsoluteHomePathCheck,
     CadenzaOrderingCheck,
+    InjectionSizeCheck,
     PreludeCadenzaFileCheck,
     TemplateFileExistsCheck,
     ValidationPathScopeCheck,
@@ -88,6 +90,7 @@ __all__ = [
     "WorkspaceParentExistsCheck",
     "AbsoluteHomePathCheck",
     "TemplateFileExistsCheck",
+    "InjectionSizeCheck",
     "PreludeCadenzaFileCheck",
     "ValidationPathScopeCheck",
     # Config checks
@@ -113,6 +116,7 @@ __all__ = [
     "ClassChainSummaryCheck",
     # Best-practice checks
     "JinjaInValidationPathCheck",
+    "PlaceholderQuotingCheck",
     "FormatSyntaxInTemplateCheck",
     "NoValidationsCheck",
     "FileExistsOnlyCheck",

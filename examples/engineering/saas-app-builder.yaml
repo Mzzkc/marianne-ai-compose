@@ -488,8 +488,9 @@ prompt:
     - `.env.example` with DATABASE_URL template
     - Instructions for initializing the database
 
-    Use SQLite for development convenience (portable to PostgreSQL
-    for production). The schema must match the contract exactly.
+    The database is `{{ tech_stack.database }}` — that is the contract the
+    other tracks are building against; do not substitute a different engine
+    for convenience. The schema must match the contract exactly.
 
     {% endif %}
 

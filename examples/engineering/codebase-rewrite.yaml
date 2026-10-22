@@ -322,6 +322,13 @@ prompt:
     # Both commands run from project_root.
     test_command: "[CHANGE THIS: e.g., pytest tests/ -x, npm test, cargo test]"
     integration_test_command: "[CHANGE THIS: e.g., pytest tests/integration/, npm run test:e2e]"
+    # The target specification. Every analysis stage (1-3) reads it before
+    # judging what "needs rewriting": a design that drops a module, or adds a
+    # capability with no source module, changes the candidate list — a
+    # rewrite planned from the source alone re-implements what the design
+    # removed (clamonacc: the design dropped inotify; a blind reconnaissance
+    # scheduled its 886-line port anyway). Point at a design document here
+    # when one exists.
     improvement_specs: |
       - Modernize API patterns
       - Add type safety where applicable
@@ -367,6 +374,13 @@ prompt:
        adapting
     6. **Check prior iteration progress** — which modules were already rewritten?
 
+    The rewrite must honour this target specification. Read it before the
+    inventory and let it shape the recommended order and what "needs
+    rewriting" means: a module the specification drops is not a rewrite
+    candidate, and a capability it introduces has no source module to map —
+    name both explicitly.
+    {{ improvement_specs }}
+
     {{ write_to("01-reconnaissance.md") }}
     Include: module inventory table, dependency graph, complexity ratings,
     external dependency mapping, test coverage, recommended rewrite order,
@@ -378,6 +392,13 @@ prompt:
     # Coarse Analysis — Rewrite Candidate Identification
 
     {{ read_file("01-reconnaissance.md") }}
+
+    Classify against the target specification, not the source alone. A
+    module the specification drops is SKIP with "dropped by specification"
+    as its challenge; a capability it adds with no source module is a
+    REWRITE candidate whose `module` names the target path it will live at,
+    with "new per specification" as its challenge.
+    {{ improvement_specs }}
 
     Scan ALL modules and classify each:
     - **REWRITE**: Full translation to {{ target_language }} needed
@@ -428,6 +449,11 @@ prompt:
     Be skeptical. Coarse analysis consistently over-classifies because it
     reads module signatures, not implementations. A module that LOOKS like
     it needs rewriting may already be compatible.
+
+    Verify against the target specification as well as the source: a
+    candidate the specification drops is FALSE_POSITIVE with that as the
+    evidence; one it adds stays REAL although no source file backs it.
+    {{ improvement_specs }}
 
     For each candidate:
     1. Read the source file

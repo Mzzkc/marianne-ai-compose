@@ -93,6 +93,13 @@ prompt:
     {% if stage == 1 %}
     [[ -f {{ workspace }}/02-strategy.md ]]    || { echo "FAIL: bootstrap not run" >&2; exit 1; }
     [[ -f {{ workspace }}/risk-envelope.yaml ]] || { echo "FAIL: risk-envelope.yaml missing" >&2; exit 1; }
+    # Fermata FIRST, before any broker or benchmark call: a pending operator
+    # review halts every execution phase, and the stage-1 validation below is
+    # a backstop, not the guard — it runs after the calls would have.
+    if [[ -f {{ workspace }}/proposals/PENDING-COMPOSER-REVIEW.md ]]; then
+      echo "FERMATA: PENDING-COMPOSER-REVIEW.md exists — halting market-close" >&2
+      exit 1
+    fi
 
     set -e
     today=$(date +%F)

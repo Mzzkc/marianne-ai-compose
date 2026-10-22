@@ -46,16 +46,33 @@ sheet:
   total_items: 10  # Total items = 2 sheets
 
 prompt:
+  variables:
+    # [CHANGE THIS] The work. Ten items, split across two sheets by
+    # `sheet.size` above; each sheet gets its range by index.
+    items:
+      1: "the number 7"
+      2: "the word 'palimpsest'"
+      3: "the year 1969"
+      4: "the color cyan"
+      5: "the chemical symbol Fe"
+      6: "the note A440"
+      7: "the fraction 22/7"
+      8: "the letter Q"
+      9: "the planet Neptune"
+      10: "the unit 'furlong'"
   template: |
-    Process sheet {{ sheet_num }} of {{ total_sheets }}.
-    Items: {{ start_item }} to {{ end_item }}
+    Process sheet {{ sheet_num }} of {{ total_sheets }}: items {{ start_item }} to {{ end_item }}.
 
-    Create a file at {{ workspace }}/sheet{{ sheet_num }}.md summarizing your work.
+    For each item below, write two or three sentences on what it is and one
+    fact about it a reader would not guess:
+    {% for i in range(start_item, end_item + 1) %}
+    - Item {{ i }}: {{ items[i] }}
+    {% endfor %}
 
-    Include in your summary:
-    - Sheet number and item range
-    - Brief description of what was processed
-    - Any notable observations or patterns
+    Create a file at {{ workspace }}/sheet{{ sheet_num }}.md with a top-level
+    heading, then one section per item in the order above, then a closing
+    section "Observations" on any pattern across this sheet's items.
+
 
 retry:
   max_retries: 2

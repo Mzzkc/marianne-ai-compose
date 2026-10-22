@@ -40,7 +40,7 @@ because the HTTP executor has no filesystem tools.
 
 ### prelude-cadenza-example.yaml — Context Injection Workflow
 
-Produces technical documentation through three phases: research (with methodology cadenza) → draft (with shared writing guidelines) → review (with review checklist cadenza). Prelude files inject shared context into all sheets; cadenza files inject phase-specific methodology into specific sheets. Teaches how to give agents consistent background and stage-specific guidance without duplicating content in templates.
+Produces technical documentation through three phases: research (with methodology cadenza) → draft (with shared writing guidelines) → review (with review checklist cadenza). Prelude files inject shared context into all sheets; cadenza files inject phase-specific methodology into specific sheets. The four seed files ship in `assets/prelude-demo/` and are injected from the score's own directory, so the example runs as checked out — edit them in place to make it yours. Teaches how to give agents consistent background and stage-specific guidance without duplicating content in templates.
 
 ### observability-demo.yaml — Monitoring and Debugging
 
@@ -48,7 +48,7 @@ Runs a project health assessment while teaching you Marianne's observability too
 
 ### worktree-isolation.yaml — Parallel Execution Without Conflicts
 
-Three code reviewers (quality, correctness, security) work simultaneously on the same codebase without interfering with each other by executing in isolated git worktrees. Each reviewer gets a private copy of the repo for inspection. Shows how worktree isolation enables true parallel execution when agents need to read or modify shared workspace state.
+Three code reviewers (quality, correctness, security) work simultaneously on the same codebase without touching your working tree: the job runs in one detached git worktree of the repository at `workspace` (parallel sheets share it, which is safe for reviewers that read). The repository gets a private checkout for inspection. Shows how worktree isolation enables true parallel execution when agents need to read or modify shared workspace state.
 
 ## Quick Start
 

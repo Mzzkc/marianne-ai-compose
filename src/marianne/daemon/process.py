@@ -323,9 +323,11 @@ def _check_running_jobs(
             running = ready.get("running_jobs")
             if type(running) is not int or running < 0:
                 return None
+            in_flight = ready.get("in_flight", [])
             return {
                 "running_jobs": running,
                 "job_ids": ready.get("job_ids", []),
+                "in_flight": in_flight if isinstance(in_flight, list) else [],
             }
         except Exception:  # noqa: BLE001 — unreachable conductor leaves running job state unknown
             _logger.debug("conductor.running_jobs_probe_failed", exc_info=True)
@@ -339,6 +341,22 @@ def _check_running_jobs(
     except Exception:  # noqa: BLE001 — probe execution or cleanup failure leaves running job state unknown
         _logger.debug("conductor.running_jobs_probe_cleanup_failed", exc_info=True)
         return None
+
+
+def _format_in_flight(rows: list[dict[str, Any]]) -> list[str]:
+    """One line per in-flight musician: what a drain is waiting on (GH #476)."""
+    lines: list[str] = []
+    for row in rows:
+        instrument = row.get("instrument") or "?"
+        model = row.get("model")
+        elapsed = row.get("elapsed_seconds")
+        where = f"{instrument}/{model}" if model else instrument
+        for_s = f" for {elapsed:.0f}s" if isinstance(elapsed, (int, float)) else ""
+        lines.append(
+            f"  {row.get('job_id', '?')} sheet {row.get('sheet_num', '?')} "
+            f"on {where}{for_s}"
+        )
+    return lines
 
 
 def stop_conductor(
@@ -376,6 +394,7 @@ def stop_conductor(
         raise typer.Exit(1)
 
     # Safety guard: check for running jobs unless --force (#94)
+    in_flight: list[dict[str, Any]] = []
     if not force:
         running_info = _check_running_jobs(socket_path)
         if running_info is None:
@@ -394,21 +413,51 @@ def stop_conductor(
             if not typer.confirm("Proceed with stop?", default=False):
                 typer.echo("Aborted.")
                 raise typer.Exit(1)
+        in_flight = running_info.get("in_flight", [])
 
     sig = signal.SIGKILL if force else signal.SIGTERM
     os.kill(pid, sig)
     typer.echo(
         f"Sent {'SIGKILL' if force else 'SIGTERM'} to Marianne conductor (PID {pid})",
     )
+    if in_flight and not force:
+        # A paused job whose pause is still pending keeps its sheet in
+        # flight; the drain waits for it (up to shutdown_timeout_seconds)
+        # even though running_jobs is 0. Say so before the wait (GH #476).
+        typer.echo(
+            f"Graceful drain is waiting on {len(in_flight)} in-flight sheet(s):"
+        )
+        for line in _format_in_flight(in_flight):
+            typer.echo(line)
+        typer.echo(
+            "A boundary-paused job's in-flight sheet re-runs on resume; the "
+            "drain still gives it the shutdown budget to finish."
+        )
 
     if wait is not None and wait > 0:
         if wait_for_conductor_exit(resolved_pid_file, timeout=wait):
             typer.echo("Marianne conductor stopped")
         else:
+            # Re-probe: during the drain the socket still answers, so the
+            # timeout can name what it is waiting on rather than guess.
+            late = _check_running_jobs(socket_path)
+            still_waiting = late.get("in_flight", []) if late is not None else []
             typer.echo(
                 f"Marianne conductor (PID {pid}) did not exit within "
-                f"{wait:.0f}s. It may still be draining active work. "
-                "Check active scores: mzt status; retry later; or use "
+                f"{wait:.0f}s. It is still draining."
+                + (
+                    f" Waiting on {len(still_waiting)} in-flight sheet(s):"
+                    if still_waiting
+                    else ""
+                )
+            )
+            for line in _format_in_flight(still_waiting):
+                typer.echo(line)
+            typer.echo(
+                "The drain runs up to the conductor's shutdown_timeout_seconds "
+                "(default 300s) and then a few seconds of teardown; a --wait "
+                "budget at or below that is a bounded poll, not the drain's "
+                "length. Check active scores: mzt status; retry later; or use "
                 "mzt stop --force only when you accept orphaning active work."
             )
             raise typer.Exit(1)
@@ -619,6 +668,12 @@ def get_conductor_status(
             lines.append(f"Jobs: [bold]{running_jobs}[/bold] running")
         else:
             lines.append("[dim]No active jobs[/dim]")
+        in_flight_rows = ready.get("in_flight") or []
+        if in_flight_rows:
+            # Musicians still executing — including those of boundary-paused
+            # jobs, which a graceful drain waits on (GH #476).
+            lines.append(f"In flight: [bold]{len(in_flight_rows)}[/bold] sheet(s)")
+            lines.extend(_format_in_flight(in_flight_rows))
 
         # Resources with context
         lines.append("")

@@ -93,6 +93,14 @@ class Sheet(BaseModel):
         min_length=1,
         description="Resolved instrument name, e.g. 'claude-code', 'gemini-cli'",
     )
+    instrument_alias: str = Field(
+        default="",
+        description="The score-level alias (`instruments:` key) this sheet was "
+        "bound through, or '' when bound to a profile or class directly. "
+        "Exposed as {{ instrument_alias }}: a seat census that joins answers "
+        "against a roster of alias names needs the alias, since "
+        "instrument_name is the profile the alias resolved to.",
+    )
     instrument_config: dict[str, Any] = Field(
         default_factory=dict,
         description="Instrument-specific overrides (model, timeout, etc.)",
@@ -198,6 +206,7 @@ class Sheet(BaseModel):
             "total_sheets": total_sheets,
             "workspace": str(self.workspace),
             "instrument_name": self.instrument_name,
+            "instrument_alias": self.instrument_alias,
             # movement/voice vocabulary + legacy stage/instance aliases, from
             # the one shared table (GH #267)
             **positional_template_variables(
@@ -387,9 +396,11 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
         alias_tail: list[AliasEntry] = []
         alias_level_config: dict[str, Any] = {}
         balance_chain = False
+        bound_alias = ""
         if resolved_instrument in config.instruments:
             instrument_def = config.instruments[resolved_instrument]
             alias_name = resolved_instrument
+            bound_alias = alias_name
             if instrument_def.chain is not None:
                 if instrument_def.select and any(
                     m in ("cheapest", "widest") for m in instrument_def.select
@@ -565,6 +576,7 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
                 workspace=config.workspace,
                 score_path=config.source_path,
                 instrument_name=instrument_name,
+                instrument_alias=bound_alias,
                 instrument_config=instrument_config,
                 instrument_fallbacks=resolved_fallbacks,
                 instrument_fallback_configs=fallback_configs,

@@ -81,7 +81,7 @@ def test_successful_readiness_probes_keep_values_and_close_client(
     with structlog.testing.capture_logs() as events:
         assert process._probe_shutting_down(tmp_path / "conductor.sock") is shutting_down
         assert process._check_running_jobs(tmp_path / "conductor.sock") == {
-            "running_jobs": 2, "job_ids": ["a", "b"],
+            "running_jobs": 2, "job_ids": ["a", "b"], "in_flight": [],
         }
     assert ipc.close.await_count == 2
     assert not any(e["event"].endswith("failed") for e in events)

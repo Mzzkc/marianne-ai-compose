@@ -404,6 +404,7 @@ Available in prompts and validation paths (see syntax note below):
 | `fan_count` | `voice_count` | `3` | Total instances in stage |
 | `total_stages` | `total_movements` | `7` | Original stage count |
 | `instrument_name` | | `claude-code` | Resolved instrument for this sheet |
+| `instrument_alias` | | `seat-3` | The `instruments:` alias the sheet was bound through (`""` when bound directly) |
 
 > **New terminology:** `movement`, `voice`, `voice_count`, and `total_movements` are aliases for `stage`, `instance`, `fan_count`, and `total_stages`. Both forms work — use whichever reads better in your score.
 

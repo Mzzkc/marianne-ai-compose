@@ -269,6 +269,86 @@ def _list_json(profiles: dict[str, InstrumentProfile]) -> None:
     output_json(result)
 
 
+class ResolvedRow(TypedDict):
+    """One sheet's binding as `mzt instruments resolve` reports it."""
+
+    sheet: int
+    movement: int
+    voice: int | None
+    bound_through: str
+    profile: str
+    model: str | None
+    fallbacks: list[str]
+
+
+@instruments_app.command(name="resolve")
+def resolve_score(
+    score: Path = typer.Argument(..., help="Score YAML to resolve"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Show, per sheet, the profile and model each instrument binding resolves to.
+
+    Reads the score the way the conductor does at admission — score aliases,
+    capability classes from this machine's class map, per-sheet and
+    instrument_map pins — and prints one row per sheet: the alias (or class)
+    the sheet was bound through, the profile it resolved to, the model, and
+    the fallback chain. This is what a score's diversity claim actually
+    configures; the prose says what the author meant.
+    """
+    from marianne.core.config.job import JobConfig
+    from marianne.core.sheet import build_sheets
+    from marianne.instruments.classes import load_class_map, resolve_job_classes
+
+    try:
+        config = JobConfig.from_yaml(score)
+    except Exception as exc:  # noqa: BLE001 — the score's own error is the answer
+        output_error(f"cannot load {score}: {exc}")
+        raise typer.Exit(1) from exc
+    profile_names = set(_load_all_profiles())
+    try:
+        snapshot = resolve_job_classes(
+            config, profile_names, load_class_map(profile_names=profile_names)
+        )
+    except ValueError as exc:
+        output_error(str(exc))
+        raise typer.Exit(1) from exc
+    sheets = build_sheets(config, classes=snapshot)
+    rows: list[ResolvedRow] = []
+    for sheet in sheets:
+        resolution = sheet.instrument_resolution
+        bound_through = sheet.instrument_alias or (
+            resolution.requested if resolution is not None else ""
+        )
+        model = sheet.instrument_config.get("model")
+        rows.append({
+            "sheet": sheet.num,
+            "movement": sheet.movement,
+            "voice": sheet.voice,
+            "bound_through": bound_through,
+            "profile": sheet.instrument_name,
+            "model": str(model) if model is not None else None,
+            "fallbacks": list(sheet.instrument_fallbacks),
+        })
+    if json_output:
+        output_json({"score": str(score), "sheets": rows})
+        return
+    table = Table(title=f"Resolved bindings — {config.name}", show_header=True,
+                  header_style="bold", padding=(0, 2))
+    for col in ("SHEET", "MOVEMENT", "VOICE", "BOUND THROUGH", "PROFILE", "MODEL", "FALLBACKS"):
+        table.add_column(col, no_wrap=col != "FALLBACKS")
+    for r in rows:
+        table.add_row(
+            str(r["sheet"]), str(r["movement"]),
+            "" if r["voice"] is None else str(r["voice"]),
+            r["bound_through"] or "[dim](direct)[/dim]", r["profile"],
+            r["model"] or "[dim](profile default)[/dim]",
+            ", ".join(r["fallbacks"]) or "[dim]none[/dim]",
+        )
+    console.print(table)
+    distinct = {(r["profile"], r["model"]) for r in rows}
+    console.print(f"{len(rows)} sheets, {len(distinct)} distinct profile+model bindings")
+
+
 @instruments_app.command(name="check")
 def check_instrument(
     name: str = typer.Argument(help="Instrument name to check"),
@@ -385,14 +465,64 @@ _LIVE_SCHEMA: dict[str, object] = {
         # Carries a `$schema` on purpose: a real score's schema usually does,
         # and the probe must fail the way a sheet would if the backend ever
         # stopped stripping it (GH #479).
+        # A discriminated union NESTED under a required property: the shape
+        # real intake schemas take and the API accepts. The refused shape — a
+        # top-level oneOf — is V332's finding at validate time, not a probe:
+        # a probe must pass on a correct profile. A backend that forwards
+        # nested combinators wrongly fails here instead of on a sheet (GH #486).
         "schema": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "type": "object",
-            "properties": {"n": {"type": "integer"}},
-            "required": ["n"],
+            "properties": {
+                "n": {"type": "integer"},
+                "shape": {
+                    "oneOf": [
+                        {
+                            "type": "object",
+                            "properties": {
+                                "kind": {"const": "int"},
+                                "value": {"type": "integer"},
+                            },
+                            "required": ["kind", "value"],
+                            "additionalProperties": False,
+                        },
+                        {
+                            "type": "object",
+                            "properties": {
+                                "kind": {"const": "text"},
+                                "value": {"type": "string"},
+                            },
+                            "required": ["kind", "value"],
+                            "additionalProperties": False,
+                        },
+                    ],
+                },
+            },
+            "required": ["n", "shape"],
         },
     },
 }
+_LIVE_PROMPT = (
+    "Return the number 7 as the value of n, and set shape to the int branch "
+    "with value 7."
+)
+
+
+def _live_structured_ok(output_head: str) -> bool:
+    """The probe's structured answer: n == 7 and the int branch was chosen."""
+    import json as _json
+
+    try:
+        data = _json.loads(output_head)
+    except ValueError:
+        return False
+    return (
+        isinstance(data, dict)
+        and data.get("n") == 7
+        and isinstance(data.get("shape"), dict)
+        and data["shape"].get("kind") == "int"
+        and data["shape"].get("value") == 7
+    )
 
 
 def live_probe(
@@ -476,16 +606,9 @@ def live_probe(
         )
     )
     if schema_capable:
-        schema = _one("Return the number 7 as the value of n.", _LIVE_SCHEMA, "schema")
+        schema = _one(_LIVE_PROMPT, _LIVE_SCHEMA, "schema")
         if schema.get("ok"):
-            import json as _json
-
-            try:
-                schema["structured_ok"] = (
-                    _json.loads(str(schema.get("output_head", ""))) == {"n": 7}
-                )
-            except ValueError:
-                schema["structured_ok"] = False
+            schema["structured_ok"] = _live_structured_ok(str(schema.get("output_head", "")))
             schema["ok"] = bool(schema["structured_ok"])
         ok = ok and bool(schema.get("ok"))
     return {

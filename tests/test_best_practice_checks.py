@@ -25,6 +25,67 @@ from marianne.validation.checks.best_practices import (
 # ============================================================================
 
 
+class TestPlaceholderQuotingCheck:
+    """V333: a {placeholder} is one shell-quoted word (GH #477)."""
+
+    def _issues(self, tmp_path: Path, *commands: str) -> list:
+        from marianne.validation.checks.best_practices import PlaceholderQuotingCheck
+
+        lines = [
+            "name: test-job",
+            "sheet:",
+            "  size: 1",
+            "  total_items: 1",
+            "prompt:",
+            "  template: hi",
+            "  variables:",
+            "    triage_workspace: '~/workspaces/issue-triage'",
+            "    plain: /abs/path",
+            "    cats: a b c",
+            "validations:",
+        ]
+        for command in commands:
+            lines.append("  - type: command_succeeds")
+            lines.append("    command: |")
+            lines.extend("      " + ln for ln in command.splitlines())
+        yaml_content = "\n".join(lines) + "\n"
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text(yaml_content)
+        config = JobConfig.from_yaml(config_path)
+        return PlaceholderQuotingCheck().check(config, config_path, yaml_content)
+
+    def test_array_literal_is_flagged(self, tmp_path: Path) -> None:
+        issues = self._issues(tmp_path, 'cats=({cats}); test "${#cats[@]}" -eq 3')
+        assert [(i.check_id, i.metadata["shape"]) for i in issues] == [("V333", "array_literal")]
+        assert "read -r -a" in (issues[0].suggestion or "")
+
+    def test_read_array_is_the_working_form(self, tmp_path: Path) -> None:
+        issues = self._issues(tmp_path, 'read -r -a xs <<< {cats}; test "${#xs[@]}" -eq 3')
+        assert issues == []
+
+    def test_tilde_default_spliced_into_python_string_is_flagged(self, tmp_path: Path) -> None:
+        issues = self._issues(
+            tmp_path,
+            "python3 -c \"import pathlib; "
+            "pathlib.Path('{triage_workspace}/issue-dag.yaml').expanduser().open()\"",
+        )
+        assert [(i.check_id, i.metadata["shape"], i.metadata["placeholder"]) for i in issues] == [
+            ("V333", "interpreter_splice", "triage_workspace")
+        ]
+        assert "sys.argv" in (issues[0].suggestion or "")
+
+    def test_argv_form_and_bare_defaults_pass(self, tmp_path: Path) -> None:
+        """Passing as argv is the fix; {workspace} and an absolute default are
+        values shlex leaves bare, so splicing them is not the bug."""
+        issues = self._issues(
+            tmp_path,
+            'python3 -c "import sys, pathlib; pathlib.Path(sys.argv[1]).expanduser()" '
+            "{triage_workspace}",
+            "python3 -c \"open('{workspace}/x.md'); open('{plain}/y')\"",
+        )
+        assert issues == []
+
+
 class TestJinjaInValidationPathCheck:
     """Tests for JinjaInValidationPathCheck (V201)."""
 

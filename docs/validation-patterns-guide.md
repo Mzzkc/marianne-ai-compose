@@ -325,6 +325,9 @@ expands). Pass the placeholder as an argument instead:
 (GH #477: `issue-solver` lost four attempts on exactly this before its sheet-12
 checks were rewritten to argv.)
 
+`mzt validate` warns V333 for both shapes — the array literal, and a variable
+whose default needs quoting spliced into a `python3 -c`/`node -e` program.
+
 ### Pitfall 3: Default Timeout Too Short
 
 **Problem:** `command_succeeds` defaults to 3600 seconds (1 hour). Large test suites, builds, or security scans can exceed this.

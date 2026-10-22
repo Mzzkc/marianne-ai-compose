@@ -72,8 +72,12 @@ sheet:
   size: 1
   total_items: 4
   prelude:
+    # The design document is the whole input: a missing or unreadable
+    # file must fail sheet 1 before execution, not run a composer that
+    # invents a design from the prompt alone.
     - file: "{{ doc }}"
       as: context
+      required: true
   dependencies:
     2: [1]
     3: [2]

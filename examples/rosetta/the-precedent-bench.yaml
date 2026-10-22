@@ -161,14 +161,13 @@
 # ║                    the score renders markdown and strips HTML with           ║
 # ║                    its own commissioned stdlib scripts); codex +              ║
 # ║                    OPENAI_API_KEY (the bench seat); claude (briefs,          ║
-# ║                    drafting); ollama daemon serving the reader model;         ║
-# ║                    and an `opencode-gemma` instrument profile — a            ║
-# ║            third-family reader profile the host must provide (a              ║
-# ║            personal opencode profile backed by local ollama works;           ║
-# ║            the score deliberately does not write into                        ║
-# ║            ~/.marianne/ — it probes for the profile and records its          ║
-# ║            model from disk, failing loud with instructions if it is          ║
-# ║            absent). site_url is DERIVED from github_owner/repo_name          ║
+# ║                    drafting); ollama daemon serving the reader model.        ║
+# ║                    The `opencode-gemma` reader seat is a score ALIAS over    ║
+# ║            the shipped opencode profile pinned to ollama/gemma4:26b —        ║
+# ║            no personal profile is required; movement 1 records the           ║
+# ║            model the alias resolves to via `mzt instruments resolve`         ║
+# ║            and fails loud if the alias is missing from this score.           ║
+# ║            site_url is DERIVED from github_owner/repo_name                   ║
 # ║            and movement 1 refuses a mismatched independent value —           ║
 # ║            the cross-tenant trap cannot be configured by accident.           ║
 # ║            Retargeting the CASE LINE is deliberately NOT a --var             ║
@@ -321,6 +320,17 @@ description: "The Precedent Bench proof — a typed-force precedent index over t
 # case line, deployment target, seat matrix and family table are prompt
 # variables; movement 1 writes them to run/bench-config.json and every script
 # reads DISK (never a hardcoded case list). Override with --var github_owner=…
+
+instruments:
+  # The local tier is the shipped opencode profile pinned to an Ollama tag,
+  # as a score alias — no private profile to install. The alias NAME is the
+  # seat; `{{ instrument_alias }}` stamps it and the families table keys on
+  # it. Needs an `ollama` provider in OpenCode's config and the tag pulled.
+  opencode-gemma:
+    profile: opencode
+    config:
+      model: "ollama/gemma4:26b"
+      timeout_seconds: 3600
 
 instrument: strong            # score default; every deterministic movement
 instrument_config:                 # overrides to cli / codex-cli below
@@ -934,13 +944,17 @@ prompt:
     seats = {role: {**probe(t), "family": cfg["families"][t],
                     "family_source": "score-declared table (binary + version output probed mechanically)"}
              for role, t in cfg["seats"].items()}
-    prof = pathlib.Path.home() / ".marianne" / "instruments" / (cfg["seats"]["reader"] + ".yaml")
-    reader_profile = {"path": str(prof), "exists": prof.exists()}
-    if prof.exists():
-        for line in prof.read_text().splitlines():
-            ls = line.strip()
-            if ls.startswith("model:"):
-                reader_profile["model"] = ls.split(":", 1)[1].strip().strip("'\"")
+    # The reader is a score ALIAS (instruments.opencode-gemma) over the shipped
+    # opencode profile; its model is what the conductor resolves for this
+    # score, read from `mzt instruments resolve`, not from a file in ~/.marianne.
+    res = subprocess.run(["mzt", "instruments", "resolve", str(pathlib.Path("{{ score_dir }}") / "the-precedent-bench.yaml"), "--json"],
+                         capture_output=True, text=True, timeout=120)
+    reader_rows = [r for r in json.loads(res.stdout[res.stdout.find("{"):])["sheets"]
+                   if r["bound_through"] == cfg["seats"]["reader"]] if res.returncode == 0 else []
+    reader_profile = {"alias": cfg["seats"]["reader"], "exists": bool(reader_rows)}
+    if reader_rows:
+        reader_profile["profile"] = reader_rows[0]["profile"]
+        reader_profile["model"] = reader_rows[0]["model"]
     sm = {"seats": seats,
           "bench_family": seats["bench"]["family"], "brief_family": seats["brief"]["family"],
           "family_inequality": seats["bench"]["family"] != seats["brief"]["family"],

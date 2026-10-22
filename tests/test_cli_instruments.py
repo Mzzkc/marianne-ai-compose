@@ -73,6 +73,58 @@ def _no_daemon(monkeypatch: pytest.MonkeyPatch) -> None:
 # ---------------------------------------------------------------------------
 
 
+class TestInstrumentsResolve:
+    """``mzt instruments resolve SCORE``: what each sheet's binding resolves to."""
+
+    def test_resolve_reports_alias_profile_model_per_sheet(self, tmp_path) -> None:
+        score = tmp_path / "s.yaml"
+        score.write_text(
+            "name: s\n"
+            f"workspace: {tmp_path / 'ws'}\n"
+            "instruments:\n"
+            "  seat-a: {profile: codex-cli, config: {model: m-a}}\n"
+            "  seat-b: {profile: claude-code, config: {model: m-b}}\n"
+            "instrument: claude-code\n"
+            "sheet: {size: 1, total_items: 3, per_sheet_instruments: {2: seat-a, 3: seat-b}}\n"
+            "prompt: {template: hi}\n"
+        )
+        profiles = {
+            "claude-code": _make_cli_profile("claude-code", "Claude Code", "claude"),
+            "codex-cli": _make_cli_profile("codex-cli", "Codex", "codex"),
+        }
+        with patch(
+            "marianne.cli.commands.instruments._load_all_profiles", return_value=profiles
+        ):
+            result = runner.invoke(app, ["instruments", "resolve", str(score), "--json"])
+        assert result.exit_code == 0, result.output
+        import json as _json
+
+        start = result.output.find("{")
+        rows = _json.loads(result.output[start:])["sheets"]
+        assert [(r["sheet"], r["bound_through"], r["profile"], r["model"]) for r in rows] == [
+            (1, "", "claude-code", None),
+            (2, "seat-a", "codex-cli", "m-a"),
+            (3, "seat-b", "claude-code", "m-b"),
+        ]
+
+    def test_resolve_table_names_distinct_bindings(self, tmp_path) -> None:
+        score = tmp_path / "s.yaml"
+        score.write_text(
+            "name: s\n"
+            f"workspace: {tmp_path / 'ws'}\n"
+            "instrument: claude-code\n"
+            "sheet: {size: 1, total_items: 2}\n"
+            "prompt: {template: hi}\n"
+        )
+        profiles = {"claude-code": _make_cli_profile("claude-code", "Claude Code", "claude")}
+        with patch(
+            "marianne.cli.commands.instruments._load_all_profiles", return_value=profiles
+        ):
+            result = runner.invoke(app, ["instruments", "resolve", str(score)])
+        assert result.exit_code == 0, result.output
+        assert "2 sheets, 1 distinct profile+model bindings" in result.output
+
+
 class TestInstrumentsList:
     """Tests for the ``mzt instruments list`` command."""
 
@@ -499,11 +551,27 @@ class TestInstrumentsCheckLive:
         assert report["plain"]["exit_code"] == 1
 
     def test_schema_mode_proves_structured_output(self, tmp_path) -> None:
-        body = 'cat >/dev/null; echo \'{"type":"result","result":"x","structured_output":{"n":7}}\''
+        body = (
+            'cat >/dev/null; echo \'{"type":"result","result":"x",'
+            '"structured_output":{"n":7,"shape":{"kind":"int","value":7}}}\''
+        )
         profile = _script_profile(tmp_path, "schema", body, schema_flag="--json-schema", fmt="json")
         result, report = self._run(profile)
         assert result.exit_code == 0, result.output
         assert report["schema"]["ok"] is True and report["schema"]["structured_ok"] is True
+
+    def test_schema_mode_fails_when_the_nested_union_is_ignored(self, tmp_path) -> None:
+        """A backend that answers the flat part and drops the nested
+        discriminated union is the GH #486 shape: the old probe passed it."""
+        body = 'cat >/dev/null; echo \'{"type":"result","result":"x","structured_output":{"n":7}}\''
+        profile = _script_profile(tmp_path, "flat", body, schema_flag="--json-schema", fmt="json")
+        result, report = self._run(profile)
+        assert result.exit_code == 1
+        # The backend validates structured_output against the schema, so the
+        # missing required `shape` fails the call before the probe's own
+        # branch check runs; either way the probe reports the schema mode red.
+        assert report["schema"]["ok"] is False
+        assert report["schema"].get("structured_ok") is not True
 
     def test_schema_mode_catches_unread_output_shape(self, tmp_path) -> None:
         """The Claude Code verbose shape before the fix: the flag is declared

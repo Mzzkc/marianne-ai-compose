@@ -24,15 +24,14 @@
 #   3. Review & Polish — evaluates draft against quality criteria
 #      (cadenza: review checklist as context)
 #
-# Setup:
-#   The workspace must contain four seed files before running:
+# Seed files (ship with this score, in assets/prelude-demo/ next to it):
 #     project-context.md       (prelude — injected into all sheets as context)
 #     writing-guidelines.md    (prelude — injected into all sheets as skill)
 #     research-methodology.md  (cadenza — injected into sheet 1 as skill)
 #     review-checklist.md      (cadenza — injected into sheet 3 as context)
-#
-#   Seed files are provided alongside this score. Copy them to your workspace:
-#     cp workspaces/prelude-demo-workspace/*.md /path/to/your/workspace/
+#   They are injected from the score's own directory ({{ score_dir }}), so
+#   nothing has to be copied anywhere first; edit them in place to make the
+#   pipeline yours.
 #
 # Usage:
 #   mzt validate getting-started/prelude-cadenza-example.yaml
@@ -40,8 +39,8 @@
 #
 # Customize:
 #   1. Change `topic`, `audience`, and `scope` variables for your subject
-#   2. Replace project-context.md with your own project background
-#   3. Adjust writing-guidelines.md to match your team's style
+#   2. Replace assets/prelude-demo/project-context.md with your own project background
+#   3. Adjust assets/prelude-demo/writing-guidelines.md to match your team's style
 #   4. The research methodology and review checklist work for most documentation
 #
 # Output:
@@ -84,21 +83,25 @@ sheet:
   #   context — background info, injected AFTER the template body
   #   skill   — methodology/instructions, injected BEFORE the template body
   prelude:
-    - file: "{{ workspace }}/project-context.md"
+    - file: "{{ score_dir }}/assets/prelude-demo/project-context.md"
       as: context
-    - file: "{{ workspace }}/writing-guidelines.md"
+      required: true
+    - file: "{{ score_dir }}/assets/prelude-demo/writing-guidelines.md"
       as: skill
+      required: true
 
   # Cadenzas: injected into SPECIFIC sheets only.
   # Key = sheet number, value = list of injection items.
   # Sheet 1 gets research methodology; Sheet 3 gets review criteria.
   cadenzas:
     1:
-      - file: "{{ workspace }}/research-methodology.md"
+      - file: "{{ score_dir }}/assets/prelude-demo/research-methodology.md"
         as: skill
+        required: true
     3:
-      - file: "{{ workspace }}/review-checklist.md"
+      - file: "{{ score_dir }}/assets/prelude-demo/review-checklist.md"
         as: context
+        required: true
 
 # Cross-sheet context: later phases see earlier phase artifacts
 cross_sheet:

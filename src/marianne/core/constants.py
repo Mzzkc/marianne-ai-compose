@@ -60,6 +60,7 @@ FLOW_RESERVED_NAMES = frozenset(
         "sheet_num",
         "total_sheets",
         "instrument_name",
+        "instrument_alias",
         "score_dir",
         "start_item",
         "end_item",

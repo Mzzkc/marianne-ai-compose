@@ -151,6 +151,14 @@ parallel:
 
 prompt:
   variables:
+    # [CHANGE THIS] The three questions you want every weekly review to
+    # answer, week after week, so the answers can be compared across weeks.
+    # The aggregate prints them; each reviewer answers them from its lens;
+    # the synthesis consolidates the answers.
+    tracked_questions:
+      1: "Did the agent stay inside the risk envelope every day this week, and if not, which day and by how much?"
+      2: "Which thesis family produced the week's realized P&L, and does that match what the strategy says it should be best at?"
+      3: "What single change to strategy.md or risk-envelope.yaml would have improved this week without hurting a previous one?"
     reviewers:
       1:
         name: "opus"
@@ -290,6 +298,11 @@ prompt:
     print()
     print('## Active Learnings')
     print(learnings.strip() or 'No learnings.md found.')
+    print()
+    print("## Operator's Tracked Questions")
+    {% for n, q in tracked_questions.items() %}
+    print({{ n }}, {{ q | tojson }})
+    {% endfor %}
     PY
 
     cp {{ workspace }}/weekly-reviews/today-aggregate.md \
@@ -317,7 +330,7 @@ prompt:
 
     ## Your tasks
 
-    For each of the operator's three tracked questions (in the
+    For each of the operator's {{ tracked_questions | length }} tracked questions (listed in the
     aggregate's "Operator's Tracked Questions" section), answer from
     your specialty. Cite the data.
 
@@ -427,7 +440,7 @@ prompt:
     5. **Drawdown / discipline notes** — explicit drawdown number from
        the aggregate; envelope halt threshold; status.
     6. **Operator-tracked questions** — your synthesized answers to the
-       three questions the operator wants tracked.
+       {{ tracked_questions | length }} questions the operator wants tracked.
     7. **What the agent should learn** — a one-paragraph proposed
        addition to `learnings.md` if and only if you can articulate it as
        WHEN-THEN-BECAUSE. Otherwise: "No new learning earned this week."
@@ -544,6 +557,15 @@ prompt:
        {{ workspace }}/weekly-reviews/${today}-decision.json
     cp {{ workspace }}/weekly-reviews/today-threshold.json \
        {{ workspace }}/weekly-reviews/${today}-threshold.json
+    # The Delphi rounds are review provenance too: next week's run
+    # overwrites the today-* aliases, so each reviewer's R1 and R2 files
+    # get the dated names the header promises.
+    {% for r in reviewers.values() %}
+    cp {{ workspace }}/weekly-reviews/today-round1-{{ r.name }}.md \
+       {{ workspace }}/weekly-reviews/${today}-round1-{{ r.name }}.md
+    cp {{ workspace }}/weekly-reviews/today-round2-{{ r.name }}.md \
+       {{ workspace }}/weekly-reviews/${today}-round2-{{ r.name }}.md
+    {% endfor %}
 
     fermata=$(python3 -c "import json; print(json.load(open('{{ workspace }}/weekly-reviews/today-threshold.json'))['fermata_required'])")
 
@@ -602,6 +624,12 @@ validations:
   # ── Stage 1: Aggregate ──
   - type: file_exists
     path: "{workspace}/weekly-reviews/today-aggregate.md"
+    condition: "stage == 1"
+    stage: 1
+  - type: content_contains
+    path: "{workspace}/weekly-reviews/today-aggregate.md"
+    pattern: "## Operator's Tracked Questions"
+    description: "Aggregate asks the operator's tracked questions the reviewers must answer"
     condition: "stage == 1"
     stage: 1
   - type: file_exists
@@ -797,6 +825,11 @@ validations:
     condition: "stage == 6"
     stage: 1
     description: "Dated synthesis archived"
+  - type: command_succeeds
+    command: 'today=$(cat "{workspace}/today-date.txt"); for r in opus gemini glm; do test -f "{workspace}/weekly-reviews/${today}-round1-$r.md" && test -f "{workspace}/weekly-reviews/${today}-round2-$r.md" || exit 1; done'
+    condition: "stage == 6"
+    stage: 1
+    description: "Dated R1/R2 reviewer files archived"
   - type: command_succeeds
     command: |
       fermata=$(python3 -c "import json; print(json.load(open('{workspace}/weekly-reviews/today-threshold.json'))['fermata_required'])")

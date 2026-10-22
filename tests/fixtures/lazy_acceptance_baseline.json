@@ -130,11 +130,6 @@
   "rules": "3"
  },
  {
-  "score": "examples/engineering/lovable-generator.yaml",
-  "sheet": "1",
-  "rules": "2"
- },
- {
   "score": "examples/engineering/project-roadmap.yaml",
   "sheet": "22",
   "rules": "2"
@@ -512,16 +507,6 @@
  {
   "score": "examples/product/contract-generator.yaml",
   "sheet": "4",
-  "rules": "2"
- },
- {
-  "score": "examples/product/contract-generator.yaml",
-  "sheet": "5",
-  "rules": "3"
- },
- {
-  "score": "examples/product/invoice-analysis.yaml",
-  "sheet": "1",
   "rules": "2"
  },
  {

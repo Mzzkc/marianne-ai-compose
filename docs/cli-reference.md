@@ -604,6 +604,8 @@ code-registry and corpus-sweep tests.
 | WARNING | V330 | An alias `select` modifier has nothing to choose between: fewer than two chain entries, or `cheapest`/`widest` found no model-table row for any entry; the score runs on the authored order |
 | WARNING | V331 | A sheet sets `response_format` on a profile that runs interactively by default (`cli.interactive.enabled_by_default: true`, e.g. claude-code) and does not say `interactive: false`; the interactive backend cannot enforce a schema and dispatch would refuse the sheet (GH #478) |
 | WARNING | V332 | A CLI schema sheet's `response_format` schema has a top-level `oneOf`/`allOf`/`anyOf` or no top-level `type`; Claude Code forwards it as a tool `input_schema`, which the API refuses with 400 (GH #486). Wrap the branches under one required property |
+| WARNING | V333 | A `command_succeeds` command uses a `{placeholder}` in a shape the engine's shell-quoting defeats: a bash array literal `xs=({list})` (one element — use `read -r -a xs <<< {list}`), or a prompt variable whose default needs quoting (`~/path`, a space) spliced inside an interpreter's string literal (`python3 -c "...'{var}/x'..."` keeps the quotes — pass it as an argument and read `sys.argv`). GH #477. |
+| WARNING | V334 | A prelude/cadenza item with `max_bytes` whose static path is already over the cap (measured now; the runtime refuses a required item or drops an optional one at every sheet). GH #474. |
 | WARNING | V311, V322 | Capability classes: part of a used class's chain cannot run here (binary missing, unsupported, local server not serving the profile's model, or unable to enforce the sheet's `response_format`). V311 also warns when a sheet bound straight to a CLI profile (no class) asks for a `json_schema` `response_format` the profile cannot enforce (no `cli.command.json_schema_flag`): every dispatch of those sheets would be refused, and the warning names them — the job starts at the first available entry; when no entry can run here the warning says so and names the install (availability is a fact about this machine, so the score is still admitted); a default-layer class shadowed by a same-named profile; a score alias shadowing a class name |
 | INFO | V011, V104, V110, V218, V225 | Distant unknown field; timeout above 7200 seconds (2 hours); unused variable; ambiguous file reference; mixed fan-out keying |
 | INFO | V205 | All validations are `file_exists` only — nothing checks content |
@@ -1422,6 +1424,37 @@ backed up and written atomically.
 
 These commands manage and inspect available instruments — the AI tools Marianne can use to execute scores. Instruments include CLI tools (Claude Code, Gemini CLI, Codex CLI, Aider, Goose) and HTTP APIs (Anthropic API, Ollama).
 
+### `mzt instruments resolve`
+
+Show, per sheet, what each instrument binding in a score resolves to.
+
+```
+Usage: mzt instruments resolve [OPTIONS] SCORE
+```
+
+Reads the score the way the conductor does at admission — score aliases
+(`instruments:`), capability classes from this machine's class map,
+`per_sheet_instruments` and `instrument_map` pins — and prints one row per
+sheet: what the sheet was bound through (an alias or class name, or
+`(direct)`), the profile it resolved to, the model, and the fallback chain.
+The closing line counts distinct profile+model bindings: a "three
+independent reviewers" fan-out that resolves to one binding is not
+independent, whatever its prose says. Pair with `{{ instrument_alias }}` in
+the score to stamp evidence with the binding name.
+
+#### Options
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--json` | | false | Output as JSON (`{"score": ..., "sheets": [{sheet, movement, voice, bound_through, profile, model, fallbacks}]}`) |
+
+#### Examples
+
+```bash
+mzt instruments resolve examples/engineering/quality-triage.yaml
+mzt instruments resolve my-score.yaml --json | jq '.sheets[] | select(.movement == 4)'
+```
+
 ### `mzt instruments list`
 
 List all available instruments and their readiness status.
@@ -1491,7 +1524,7 @@ Provides detailed information about a single instrument: binary location, capabi
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--json` | | false | Output as JSON |
-| `--live` | | false | Run one real prompt through the same backend the conductor uses, and one schema-mode prompt when the profile declares `json_schema_flag`. Reports pass/fail, wall time and the classification the baton would act on (`INSTRUMENT_UNAVAILABLE`, `RATE_LIMITED`, `TRANSIENT`, …). Readiness proves the binary is on PATH; `--live` proves the profile works against the installed CLI. Exits 1 on failure. Spends one or two model calls |
+| `--live` | | false | Run one real prompt through the same backend the conductor uses, and one schema-mode prompt when the profile declares `json_schema_flag` — its schema carries a `$schema` (GH #479) and a discriminated union nested under a required property (GH #486), the shapes real intake schemas take, and the probe checks the chosen branch came back. Reports pass/fail, wall time and the classification the baton would act on (`INSTRUMENT_UNAVAILABLE`, `RATE_LIMITED`, `TRANSIENT`, …). Readiness proves the binary is on PATH; `--live` proves the profile works against the installed CLI. Exits 1 on failure. Spends one or two model calls |
 | `--model` | | profile default | Model for `--live` |
 | `--timeout` | | 180 | Seconds per `--live` call |
 | `--record DIR` | | | With `--live`: write each call's raw stdout, stderr, exit code and the CLI's `--version` to `DIR/<instrument>/<mode>.*`. Use it to capture parser fixtures from the CLI actually installed (`tests/fixtures/cli_captures/` holds Claude Code's) and re-record after a CLI upgrade |
@@ -1827,7 +1860,7 @@ Usage: mzt stop [OPTIONS]
 
 **Safety guard:** When scores are running, `mzt stop` probes the conductor via IPC to check for active scores. If any are found, it warns with the count and asks for confirmation. The `--force` flag bypasses this check entirely and sends SIGKILL.
 
-With a positive `--wait` budget, the command blocks until the conductor exits (prints `Marianne conductor stopped`) or exits 1 with a message naming the still-draining PID. A graceful drain can take up to `shutdown_timeout_seconds` (default 300s) while running jobs checkpoint — a `--wait` budget shorter than that is a bounded poll, not a guarantee.
+After signalling, the command lists the in-flight sheets the graceful drain will wait on (`<job> sheet <n> on <instrument>/<model> for <elapsed>s`); a boundary-paused job's current sheet is among them until it ends. With a positive `--wait` budget, the command blocks until the conductor exits (prints `Marianne conductor stopped`) or exits 1 with `did not exit within <budget>s. It is still draining.` followed by the sheets a fresh probe says it is still waiting on. A graceful drain can take up to `shutdown_timeout_seconds` (default 300s) plus teardown while running jobs checkpoint — a `--wait` budget shorter than that is a bounded poll, not a guarantee.
 
 ```bash
 # Normal stop (warns if jobs running; signals and returns immediately)
@@ -1889,7 +1922,11 @@ Usage: mzt conductor-status [OPTIONS]
 mzt conductor-status
 ```
 
-When the socket answers, the Resources block shows memory, processes,
+When the socket answers, the Jobs block shows the running count and, when
+any musician is still executing, `In flight: <n> sheet(s)` with one line per
+sheet (job, sheet, instrument/model, elapsed) — the rows a graceful drain
+would wait on, including a boundary-paused job's unfinished sheet (GH #476).
+The Resources block shows memory, processes,
 backpressure, **event loop lag** (how late the loop wakes from a one-second
 sleep, with the 60-second peak) and **host I/O pressure** (`/proc/pressure/io`
 `some`/`full` ten-second averages). When the socket does not answer but the

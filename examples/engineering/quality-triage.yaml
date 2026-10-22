@@ -52,7 +52,8 @@
 #   - Target repo is a git repository
 #   - Tracker fetch/write channel per above (missing channel → empty corpus +
 #     side-report mode, not a hard failure)
-#   - cisco-ai-skill-scanner (auto-installed in stage 3)
+#   - cisco-ai-skill-scanner, whose command is `skill-scanner` (auto-installed
+#     in stage 3 with uv tool / pipx; bare pip is refused on PEP 668 hosts)
 
 name: "quality-triage"
 description: "Language-agnostic code review + triage → unified DAG for issue-solver"
@@ -374,7 +375,10 @@ prompt:
     ```bash
     #!/bin/bash
     set -euo pipefail
-    cd "$(git rev-parse --show-toplevel)"
+    # The project root is baked in at generation time, never discovered from
+    # the caller's directory: `git rev-parse --show-toplevel` from the solver's
+    # workspace found the Marianne checkout, not the target.
+    cd "{{ project_root }}"
     # [discovered command from 01-discovery.md]
     ```
 
@@ -423,17 +427,22 @@ prompt:
     **Step 0: Scanner preflight (install-first, then fail hard).**
 
     ```bash
-    if ! command -v cisco-ai-skill-scanner >/dev/null 2>&1; then
-      echo "cisco-ai-skill-scanner not found. Attempting install..."
-      pip install --quiet cisco-ai-skill-scanner 2>&1 || \
+    # The PyPI distribution is `cisco-ai-skill-scanner`; the command it installs
+    # is `skill-scanner`. A bare `pip install` is refused on every PEP 668 host
+    # (externally-managed-environment), so install as a tool.
+    if ! command -v skill-scanner >/dev/null 2>&1; then
+      echo "skill-scanner not found. Attempting install..."
+      { command -v uv >/dev/null 2>&1 && uv tool install --quiet cisco-ai-skill-scanner 2>&1; } || \
+        { command -v pipx >/dev/null 2>&1 && pipx install --quiet cisco-ai-skill-scanner 2>&1; } || \
         pip install --user --quiet cisco-ai-skill-scanner 2>&1 || \
-        { echo "ERROR: failed to install cisco-ai-skill-scanner. Install it manually: pip install cisco-ai-skill-scanner"; exit 1; }
+        { echo "ERROR: failed to install cisco-ai-skill-scanner. Install it manually: uv tool install cisco-ai-skill-scanner (or pipx)"; exit 1; }
+      export PATH="$HOME/.local/bin:$PATH"
     fi
-    if ! command -v cisco-ai-skill-scanner >/dev/null 2>&1; then
-      echo "ERROR: cisco-ai-skill-scanner still not on PATH after install."
+    if ! command -v skill-scanner >/dev/null 2>&1; then
+      echo "ERROR: skill-scanner still not on PATH after install."
       exit 1
     fi
-    cisco-ai-skill-scanner --version || true
+    skill-scanner --version || true
     ```
 
     If the preflight exits non-zero, STOP. Do not write the sanitized corpus. The
@@ -521,7 +530,7 @@ prompt:
 
     ```bash
     python3 - <<'PY'
-    import json, re, subprocess, yaml, pathlib, tempfile
+    import json, re, shutil, subprocess, yaml, pathlib, tempfile
     raw = json.loads(pathlib.Path("{{ workspace }}/issues/raw-corpus.json").read_text())
 
     # Defense-in-depth: titles and labels flow verbatim into agent prompts AND shell
@@ -538,7 +547,12 @@ prompt:
 
     out = {"issues": []}
     for issue in raw:
-        num = int(issue["number"])
+        # GitHub numbers are ints; Jira/Linear keys (APP-12) and CSV rows
+        # (csv-17) are not, and int() on them killed the whole triage. Keep
+        # an int where the tracker gives one (the solver selects by `#NNN`)
+        # and the tracker's own key otherwise.
+        raw_num = str(issue["number"]).strip()
+        num = int(raw_num) if raw_num.isdigit() else raw_num
         raw_title = issue.get("title") or ""
         raw_body = issue.get("body") or ""
         raw_labels = [l["name"] for l in issue.get("labels") or []]
@@ -547,25 +561,38 @@ prompt:
         title_changed = (title != raw_title)
         scan_text = f"TITLE: {raw_title}\nLABELS: {','.join(raw_labels)}\nBODY:\n{raw_body}"
         verdict, threat = "CLEAN", None
-        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
-            f.write(scan_text); tmp = f.name
+        # skill-scanner scans a DIRECTORY holding a SKILL.md (a file path is
+        # "not a directory", exit 0, no JSON). The issue goes in as that
+        # skill's body under a fixed manifest. Its report always carries
+        # policy notes about the manifest itself (missing license, low
+        # analyzability), so a verdict keys on `is_safe` and the severity
+        # of content findings, never on "any finding at all".
+        tmp = tempfile.mkdtemp(prefix="issue-scan-")
         try:
+            pathlib.Path(tmp, "SKILL.md").write_text(
+                "---\nname: issue-triage-input\n"
+                "description: one GitHub issue, title and body, scanned before any agent reads it\n"
+                "---\n" + scan_text
+            )
             r = subprocess.run(
-                ["cisco-ai-skill-scanner", "scan", tmp, "--lenient", "--format", "json"],
+                ["skill-scanner", "scan", tmp, "--lenient", "--format", "json"],
                 capture_output=True, text=True, timeout=60,
             )
-            if r.returncode != 0:
+            data = json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else None
+            if data is None:
                 verdict, threat = "FLAGGED", "scanner_nonzero_exit"
             else:
-                data = json.loads(r.stdout) if r.stdout.strip() else {}
-                threats = data.get("threats") or data.get("findings") or []
-                if threats:
+                content = [f for f in data.get("findings") or []
+                           if f.get("category") != "policy_violation"]
+                severe = [f for f in content if f.get("severity") in ("HIGH", "CRITICAL")]
+                if data.get("is_safe") is False or severe:
                     verdict = "FLAGGED"
-                    threat = threats[0].get("type") or threats[0].get("category") or "unspecified"
+                    first = (severe or content or [{}])[0]
+                    threat = first.get("category") or first.get("rule_id") or "unspecified"
         except Exception as e:
             verdict, threat = "FLAGGED", f"scanner_error:{type(e).__name__}"
         finally:
-            pathlib.Path(tmp).unlink(missing_ok=True)
+            shutil.rmtree(tmp, ignore_errors=True)
         if verdict == "CLEAN" and title_changed:
             verdict, threat = "FLAGGED", "suspicious_title_chars"
         entry = {"number": num, "title": title, "labels": labels, "scanner_verdict": verdict,
@@ -887,14 +914,14 @@ prompt:
        ```bash
        {% if issue_tracker == "github" %}
        gh issue list --repo "{{ repo }}" --label "{{ local_finding_label }}" \
-         --state all --json number,body,state,title --limit 500 > /tmp/existing.json
+         --state all --json number,body,state,title --limit 500 > {{ workspace }}/.existing-issues.json
        {% elif issue_tracker == "jira" %}
        # jira-cli outputs TSV/JSON. Filter by label. Only run if FETCH_AVAILABLE=1.
        if [ "$FETCH_AVAILABLE" = "1" ]; then
          jira issue list --project "{{ repo }}" --label "{{ local_finding_label }}" \
-           --plain --raw > /tmp/existing.json
+           --plain --raw > {{ workspace }}/.existing-issues.json
        else
-         echo "[]" > /tmp/existing.json
+         echo "[]" > {{ workspace }}/.existing-issues.json
        fi
        {% elif issue_tracker == "linear" %}
        # Linear GraphQL — only run if FETCH_AVAILABLE=1.
@@ -902,12 +929,12 @@ prompt:
          curl -sS -X POST https://api.linear.app/graphql \
            -H "Authorization: $LINEAR_API_KEY" -H "Content-Type: application/json" \
            -d '{"query":"{ issues(filter:{labels:{name:{eq:\"{{ local_finding_label }}\"}}}) { nodes { identifier title description state { name } } } }"}' \
-           > /tmp/existing.json
+           > {{ workspace }}/.existing-issues.json
        else
-         echo '{"data":{"issues":{"nodes":[]}}}' > /tmp/existing.json
+         echo '{"data":{"issues":{"nodes":[]}}}' > {{ workspace }}/.existing-issues.json
        fi
        {% else %}
-       echo "[]" > /tmp/existing.json   # no fetch for issue_tracker=none
+       echo "[]" > {{ workspace }}/.existing-issues.json   # no fetch for issue_tracker=none
        {% endif %}
        ```
        Parse the fingerprint out of each existing issue body (regex on the comment
@@ -1263,10 +1290,10 @@ prompt:
       total_edges: <N>
       tiers: <N>
     issues:
-      - number: <int>
+      - number: <int for GitHub (123); the tracker's key otherwise ("APP-12", "csv-17")>
         title: "<title>"
         tier: <int>               # 1 = no deps; compute from depends_on graph
-        depends_on: [<int>, ...]  # list of issue numbers
+        depends_on: [<id>, ...]   # issue ids, same form as `number`
         edge_strength: "corroborated | uncorroborated | independent"
         evidence: "<brief>"
         scanner_verdict: "CLEAN | FLAGGED"

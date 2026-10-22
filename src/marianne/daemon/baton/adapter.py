@@ -597,6 +597,9 @@ class BatonAdapter:
         self._active_execution_details: dict[
             tuple[str, int], tuple[str, str | None]
         ] = {}
+        # Monotonic dispatch time per live musician, so a drain can say how
+        # long each sheet it is waiting on has been running (GH #476).
+        self._active_started_at: dict[tuple[str, int], float] = {}
         self._baton.set_active_execution_probe(self._is_execution_active)
 
         # Idle-based stale detection (#349/#350). Per-job config captured at
@@ -2877,6 +2880,7 @@ class BatonAdapter:
             effective_instrument,
             state.model,
         )
+        self._active_started_at[(job_id, sheet_num)] = time.monotonic()
         task.add_done_callback(
             lambda t: self._on_musician_done(
                 job_id,
@@ -3440,6 +3444,7 @@ class BatonAdapter:
         self._active_tasks.pop(key, None)
         self._active_dispatch_epochs.pop(key, None)
         self._active_execution_details.pop(key, None)
+        self._active_started_at.pop(key, None)
         # Releasing physical occupancy may make another job dispatchable even
         # when no further musician/timer event is pending. Wake the loop after
         # the task authority is gone; coalescing prevents redundant retries.
@@ -3606,6 +3611,31 @@ class BatonAdapter:
         """Whether adapter task authority says this musician is still live."""
         task = self._active_tasks.get((job_id, sheet_num))
         return task is not None and not task.done()
+
+    def active_musicians(self) -> list[dict[str, Any]]:
+        """Every musician still in flight: job, sheet, instrument, model, elapsed.
+
+        The rows a graceful drain is waiting on (GH #476). Task authority is
+        what counts — a sheet relabelled WAITING on the baton side is still
+        in flight while its task runs.
+        """
+        now = time.monotonic()
+        rows: list[dict[str, Any]] = []
+        for key, task in self._active_tasks.items():
+            if task.done():
+                continue
+            job_id, sheet_num = key
+            details = self._active_execution_details.get(key)
+            started = self._active_started_at.get(key)
+            rows.append({
+                "job_id": job_id,
+                "sheet_num": sheet_num,
+                "instrument": details[0] if details else "",
+                "model": details[1] if details else None,
+                "elapsed_seconds": round(now - started, 1) if started else None,
+            })
+        rows.sort(key=lambda r: (r["job_id"], r["sheet_num"]))
+        return rows
 
     def _build_dispatch_config(self) -> DispatchConfig:
         """Build dispatch limits from live task authority and score policy."""
@@ -4657,6 +4687,7 @@ class BatonAdapter:
             task.cancel(msg=f"adapter shutdown (job={key[0]}, sheet={key[1]})")
         self._active_tasks.clear()
         self._active_execution_details.clear()
+        self._active_started_at.clear()
 
         # Close backend pool
         if self._backend_pool is not None:

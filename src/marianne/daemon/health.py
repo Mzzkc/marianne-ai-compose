@@ -110,6 +110,9 @@ class HealthChecker:
         return {
             "status": "ready" if is_ready else "not_ready",
             "running_jobs": self._manager.running_count,
+            # GH #476: the sheets a drain would wait on, so `mzt stop` and
+            # `mzt conductor-status` can name them.
+            "in_flight": list(getattr(self._manager, "in_flight_sheets", []) or []),
             "memory_mb": round(snapshot.memory_usage_mb, 1),
             "child_processes": snapshot.child_process_count,
             "accepting_work": is_ready,

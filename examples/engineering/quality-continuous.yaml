@@ -279,14 +279,14 @@ prompt:
     Examine the project thoroughly:
     ```bash
     # Map project structure
-    find . -type f \
+    find "{{ project_root }}" -type f \
       -not -path '*/.git/*' -not -path '*/node_modules/*' \
       -not -path '*/target/*' -not -path '*/__pycache__/*' \
       -not -path '*/.quality-workspace/*' \
       | head -60
 
     # Find manifests and build files
-    find . -maxdepth 3 \( \
+    find "{{ project_root }}" -maxdepth 3 \( \
       -name "Cargo.toml" -o -name "package.json" -o -name "pyproject.toml" \
       -o -name "go.mod" -o -name "pom.xml" -o -name "build.gradle" \
       -o -name "Gemfile" -o -name "mix.exs" -o -name "composer.json" \
@@ -437,7 +437,7 @@ prompt:
     **2. Import/Dependency Graph**
     ```bash
     # Find source files and examine dependency patterns
-    find . -type f \( -name "*.py" -o -name "*.rs" -o -name "*.ts" -o -name "*.tsx" \
+    find "{{ project_root }}" -type f \( -name "*.py" -o -name "*.rs" -o -name "*.ts" -o -name "*.tsx" \
       -o -name "*.js" -o -name "*.go" -o -name "*.rb" -o -name "*.java" \) \
       -not -path '*/node_modules/*' -not -path '*/target/*' | head -30
 
@@ -509,7 +509,7 @@ prompt:
     **1. Unit Test Gaps**
     ```bash
     # Count test files (adapt patterns for the project's conventions)
-    find . -type f \( -name "test_*" -o -name "*_test.*" -o -name "*.test.*" \
+    find "{{ project_root }}" -type f \( -name "test_*" -o -name "*_test.*" -o -name "*.test.*" \
       -o -name "*.spec.*" -o -name "*Test.*" -o -name "*_test.rs" \) \
       -not -path '*/node_modules/*' -not -path '*/target/*' | head -30
 
@@ -619,7 +619,7 @@ prompt:
     **2. Complexity Hotspots**
     ```bash
     # Find large files (language-neutral)
-    find . -type f \( -name "*.py" -o -name "*.rs" -o -name "*.ts" -o -name "*.tsx" \
+    find "{{ project_root }}" -type f \( -name "*.py" -o -name "*.rs" -o -name "*.ts" -o -name "*.tsx" \
       -o -name "*.js" -o -name "*.go" \) \
       -not -path '*/node_modules/*' -not -path '*/target/*' \
       -exec wc -l {} \; | sort -rn | head -10
@@ -1242,9 +1242,9 @@ prompt:
     **Step 4: Sync with remote before committing**
     ```bash
     # Check if remote has new commits we don't have
-    git fetch origin main 2>/dev/null
+    git fetch 2>/dev/null
 
-    BEHIND=$(git rev-list HEAD..origin/main --count 2>/dev/null || echo "0")
+    BEHIND=$(git rev-list HEAD..@{upstream} --count 2>/dev/null || echo "0")
     echo "Commits behind remote: $BEHIND"
     ```
 
@@ -1252,7 +1252,7 @@ prompt:
     ```bash
     # Stash staged changes, rebase, re-apply
     git stash
-    git pull --rebase origin main
+    git pull --rebase
     git stash pop
     ```
 
@@ -1277,13 +1277,16 @@ prompt:
        - The file path
        - What OUR quality fix was trying to do (from batch result files)
        - The full conflict markers (`<<<<<<<` ... `>>>>>>>`) verbatim
-       - The remote's intent (from `git log --oneline origin/main -3 -- <file>`)
-    3. Abort to a clean state:
+       - The remote's intent (from `git log --oneline @{upstream} -3 -- <file>`)
+    3. Park the work where nothing is lost, then return to a clean tree:
        ```bash
-       git checkout -- .       # Discard conflict markers
-       git stash drop          # Drop our changes (context saved above)
+       # The stash still holds our changes; keep them on a named branch
+       # instead of dropping them — stage 13 re-applies from here.
+       git checkout -- .                                  # clear markers only
+       git branch "quality/iteration-$(cat {{ workspace }}/.iteration)-conflicts" stash@{0}
+       git stash drop                                     # safe: the branch owns the commit
        ```
-       Now git is clean at remote HEAD. Stage 13 will re-apply intelligently.
+       Now git is clean at remote HEAD and the branch holds our fix.
     4. Skip steps 5-7 below. Set status to "conflicts_pending" in output.
 
     **Step 5: Commit** (skip if conflicts_pending)
@@ -1301,7 +1304,7 @@ prompt:
 
     If push fails due to new remote commits (race condition), pull and retry:
     ```bash
-    git pull --rebase origin main && git push
+    git pull --rebase && git push
     ```
     Do NOT force-push.
 
@@ -1426,7 +1429,7 @@ prompt:
 
     If push fails (race condition):
     ```bash
-    git pull --rebase origin main && git push
+    git pull --rebase && git push
     ```
 
     **Step 6: Verify**
@@ -1546,6 +1549,9 @@ prompt:
     {% endif %}
 
   variables:
+    # [CHANGE THIS] The project under review. Every shell step below runs
+    # from here; the workspace only holds this score's own reports.
+    project_root: "[CHANGE THIS: ABSOLUTE path to the project checkout, e.g. /home/me/src/project]"
     preamble: |
       ╔══════════════════════════════════════════════════════════════════════════╗
       ║              CONTINUOUS QUALITY IMPROVEMENT (GENERIC)                    ║
@@ -1554,6 +1560,10 @@ prompt:
       ║                                                                          ║
       ║  Parallel Expert Reviews → Discovery → Prioritization → Fix → Commit    ║
       ╚══════════════════════════════════════════════════════════════════════════╝
+
+      The project under review is `{{ project_root }}`. Run every shell
+      command from there (`cd "{{ project_root }}"` first); the workspace
+      `{{ workspace }}` is for this score's reports only.
 
       This is a **language-agnostic** quality score. During Stage 1, you
       examined the project and generated runner scripts:
@@ -1989,7 +1999,7 @@ validations:
 
   # Verify commit was created (by stage 12 or stage 13)
   - type: command_succeeds
-    command: "cd {workspace} && git log --oneline -1 --since='30 minutes ago' 2>/dev/null | grep -qE '.'"
+    command: "cd {project_root} && git log --oneline -1 --since='30 minutes ago' 2>/dev/null | grep -qE '.'"
     description: "Recent commit should exist after commit/merge-resolve"
     condition: "stage == 13"
 

@@ -86,6 +86,10 @@ class SheetContext:
     # Resolved instrument name (e.g. "claude-code", "musician-ember"). Exposed
     # as {{ instrument_name }} — a documented core template variable (#336).
     instrument_name: str = ""
+    # The score alias the sheet was bound through ("" when bound directly).
+    # Exposed as {{ instrument_alias }}; stable across fallback, where
+    # instrument_name is the profile that actually ran.
+    instrument_alias: str = ""
     # Fan-out metadata (populated by the baton when fan_out is configured)
     stage: int = 0
     """Logical stage number (1-indexed). 0 = not set, falls back to sheet_num."""
@@ -132,6 +136,7 @@ class SheetContext:
             "workspace": str(self.workspace),
             "score_dir": self.score_dir,
             "instrument_name": self.instrument_name,
+            "instrument_alias": self.instrument_alias,
             # movement/voice vocabulary + legacy stage/instance aliases, from
             # the one shared table (GH #267)
             **positional_template_variables(

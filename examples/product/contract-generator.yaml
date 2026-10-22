@@ -83,6 +83,12 @@ retry:
 prompt:
   variables:
     contract_type: "Software Development Services Agreement"
+    # Flat copies of the party names for the validation gates: a
+    # `{placeholder}` in a validation is a top-level prompt variable, so the
+    # nested `client.name` below cannot be referenced there. Keep these in
+    # step with the parties.
+    client_name: "Meridian Health Systems"
+    provider_name: "CloudForge Solutions"
     client:
       name: "Meridian Health Systems, Inc."
       jurisdiction: "State of California"
@@ -215,15 +221,17 @@ prompt:
 
     1. **Term and Termination** — Duration, renewal, termination for cause
        and convenience, effect of termination.
-    2. **Confidentiality** — Reference the existing NDA, add contract-specific
+    2. **Confidentiality** — Reference any existing NDA named in the special
+       terms (or state that none exists); add contract-specific
        confidentiality obligations.
     3. **Intellectual Property** — Work-for-hire, license grants, pre-existing
        IP, source code escrow terms.
     4. **Limitation of Liability** — Caps, exclusions, carve-outs for
        willful misconduct and IP infringement.
     5. **Indemnification** — Mutual indemnification with standard carve-outs.
-    6. **Regulatory Compliance** — HIPAA requirements, BAA reference,
-       security obligations.
+    6. **Regulatory Compliance** — every regulatory regime the scope or
+       special terms name (for this engagement: {{ special_terms | join('; ') }}),
+       with the security obligations each entails.
     7. **Dispute Resolution** — Based on the analysis's recommendation.
     8. **General Provisions** — Notices, amendments, severability, entire
        agreement, force majeure.
@@ -318,20 +326,20 @@ validations:
     description: "Terms and liability section drafted"
   - type: content_contains
     path: "{workspace}/02-terms.md"
-    pattern: "HIPAA"
+    pattern: "Regulatory Compliance"
     sheet: 4
-    description: "Terms section addresses regulatory compliance"
+    description: "Terms section carries the regulatory-compliance clause"
   - type: file_exists
     path: "{workspace}/contract-final.md"
     sheet: 5
     description: "Assembled contract exists"
   - type: content_contains
     path: "{workspace}/contract-final.md"
-    pattern: "Meridian Health Systems"
+    pattern: "{client_name}"
     sheet: 5
     description: "Final contract names the client"
   - type: content_contains
     path: "{workspace}/contract-final.md"
-    pattern: "CloudForge Solutions"
+    pattern: "{provider_name}"
     sheet: 5
     description: "Final contract names the provider"

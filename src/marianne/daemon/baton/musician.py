@@ -49,6 +49,7 @@ from marianne.core.logging import get_logger
 from marianne.core.sheet import Sheet
 from marianne.core.tokens import estimate_tokens, get_effective_window_size
 from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.prompt import injection_over_max_bytes as _over_max_bytes
 from marianne.daemon.baton.state import AttemptContext
 from marianne.daemon.technique_router import ClassifiedOutput, OutputKind, TechniqueRouter
 from marianne.execution.base import Backend, ExecutionResult, SheetRequestState
@@ -770,6 +771,9 @@ def _resolve_directory_cadenza(
         )
         return
 
+    if _over_max_bytes(item, files, dir_path):
+        return
+
     for file_path in files:
         _inject_single_file(
             item, file_path, injected_context, injected_skills, injected_tools,
@@ -823,6 +827,9 @@ def _resolve_file_injection(
                 "musician.injection.required_file_not_found",
                 extra={"file": str(path), "category": item.as_.value},
             )
+        return
+
+    if _over_max_bytes(item, [path], path):
         return
 
     _inject_single_file(

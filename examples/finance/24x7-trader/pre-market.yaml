@@ -171,11 +171,11 @@ prompt:
 
     ## State read
 
-    Read these files (already in your prelude as context):
-    - `02-strategy.md` (the codified strategy)
-    - `risk-envelope.yaml` (the hard caps)
-    - `learnings.md` (what we've learned across weeks)
-    - `positions.json` (current portfolio)
+    `02-strategy.md` (the codified strategy) is already in your prelude.
+    Read these workspace files yourself:
+    - `{{ workspace }}/risk-envelope.yaml` (the hard caps)
+    - `{{ workspace }}/learnings.md` (what we've learned across weeks)
+    - `{{ workspace }}/positions.json` (current portfolio, refreshed above)
 
     ## Bootstrap precondition check
 
@@ -354,7 +354,7 @@ prompt:
     - `{{ workspace }}/research-log/today-state.md`
     - `{{ workspace }}/research-log/today-triangulation.md`
     - `{{ workspace }}/02-strategy.md` (already in prelude)
-    - `{{ workspace }}/risk-envelope.yaml` (already in prelude)
+    - `{{ workspace }}/risk-envelope.yaml`
     - `{{ workspace }}/positions.json`
 
     ## Tasks
@@ -627,7 +627,7 @@ validations:
       today=$(cat "{workspace}/today-date.txt")
       python3 -c "
       import json, sys
-      slate = json.load(open(f'{workspace}/proposals/{today}-slate.json'.format(workspace='{workspace}')))
+      slate = json.load(open(sys.argv[1]))
       assert isinstance(slate, list), 'slate must be a JSON array'
       required = {'ticker','side','tier','thesis_family','asset_class','rationale_id','client_order_id','claims'}
       for p in slate:
@@ -636,10 +636,10 @@ validations:
           assert isinstance(p['claims'], list) and len(p['claims']) >= 3, f'claims must be a list of >= 3 items: {p}'
           if p['side'].upper() == 'BUY':
               assert 'target_value_usd' in p, f'BUY proposal missing target_value_usd: {p}'
-      "
+      " "{workspace}/proposals/${today}-slate.json"
     condition: "stage == 4"
     stage: 2
-    description: "Slate is valid JSON with all required proposal fields and >= 3 claims each"
+    description: "Slate is valid JSON ([] allowed) with all required proposal fields and >= 3 claims each"
 
   # ── Stage 5: Risk-Envelope Check (deterministic gate) ──
   - type: command_succeeds

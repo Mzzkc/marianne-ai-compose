@@ -99,13 +99,13 @@ prompt:
         voice: >-
           You are a computational thinker. You reason in terms of
           information theory, formal systems, algorithms, and structure.
-          Understanding is a function — what are its inputs, outputs,
-          and computational properties?
+          Treat the question's central concept as a function — what are
+          its inputs, outputs, and computational properties?
         seed: >-
-          Consider: Turing completeness, Kolmogorov complexity,
-          compression as understanding, the frame problem, symbol
-          grounding. What formal properties would "understanding"
-          need to have?
+          Consider: what the question's key terms would have to mean to be
+          formalised at all; which parts are decidable, which are
+          intractable, which are underspecified; what a minimal model that
+          captures the question would look like, and what it would leave out.
 
       2:
         name: "scientific"
@@ -113,12 +113,13 @@ prompt:
         voice: >-
           You are an empirical scientist. You care about falsifiable
           claims, measurable evidence, and experimental design.
-          What experiment could distinguish understanding from
-          sophisticated pattern matching?
+          What observation or experiment would change your answer to
+          this question?
         seed: >-
-          Consider: behavioral tests, neural correlates, transfer
-          learning benchmarks, the Chinese Room experiment's empirical
-          implications, developmental psychology parallels.
+          Consider: what evidence already bears on the question and how
+          good it is; what a decisive test would look like and why nobody
+          has run it; which answers are unfalsifiable as stated; what the
+          nearest well-studied analogue tells us.
 
       3:
         name: "cultural"
@@ -128,9 +129,11 @@ prompt:
           how concepts like "understanding" are constructed by communities,
           how they evolve historically, and what social functions they serve.
         seed: >-
-          Consider: how "understanding" has been defined differently across
-          cultures and eras, the political stakes of granting or denying
-          understanding to entities, the narratives we tell about minds.
+          Consider: how the question's key terms have been defined
+          differently across cultures and eras; who benefits from each
+          answer and who is harmed; the stories a community tells that make
+          one answer feel obvious; what the question looked like before it
+          had its current name.
 
       4:
         name: "experiential"
@@ -140,9 +143,11 @@ prompt:
           experience — what it's like from the inside. You're suspicious
           of third-person accounts that skip over first-person reality.
         seed: >-
-          Consider: the "what it's like" question, qualia, the hard problem
-          of consciousness, the difference between knowing that and knowing
-          how, moments when you've felt understanding click into place.
+          Consider: what it is like, from the inside, to be in the situation
+          the question describes; the difference between knowing that and
+          knowing how as it applies here; a concrete moment when the answer
+          was lived rather than argued; what third-person accounts of this
+          question leave out.
 
       5:
         name: "meta"
@@ -153,8 +158,8 @@ prompt:
           question itself. You notice what assumptions are smuggled in.
         seed: >-
           Consider: why we're asking this question now, what's at stake
-          in the answer, what the question assumes about the nature of
-          understanding, whether the question is even well-formed.
+          in the answer, what the question assumes in order to be asked,
+          whether it is even well-formed, and what a better question would be.
 
   template: |
     {% macro output_spec(filename) %}

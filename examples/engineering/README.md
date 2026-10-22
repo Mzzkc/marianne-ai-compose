@@ -49,7 +49,7 @@ This is **Succession Pipeline** — each stage requires categorically different 
 
 ### codebase-rewrite.yaml
 
-Iterative language or framework migration that applies three composed patterns. Cathedral Construction provides the iterative build loop — multiple iterations of analyze, decompose, rewrite, validate, review, with self-chaining carrying state forward. CEGAR Loop provides progressive refinement — coarse analysis identifies all candidates cheaply, triage verifies which are real before expensive rewrite work begins. The decomposition stage then splits verified candidates into units, each bound to the existing tests that prove it, and a bounded unit loop rewrites one unit per pass: adapt its tests first, then write code until they pass (red → green, per unit). Commissioning Cascade provides multi-scope validation — unit tests (fast, isolated) run first, integration tests (cross-module) next, quality review (semantic judgment) last. The project is edited in place at `project_root` (`--var project_root=/abs`); the workspace holds only the ledgers. Each iteration self-chains until every unit is DONE.
+Iterative language or framework migration that applies three composed patterns. Cathedral Construction provides the iterative build loop — multiple iterations of analyze, decompose, rewrite, validate, review, with self-chaining carrying state forward. CEGAR Loop provides progressive refinement — coarse analysis identifies all candidates cheaply, triage verifies which are real before expensive rewrite work begins. The decomposition stage then splits verified candidates into units, each bound to the existing tests that prove it, and a bounded unit loop rewrites one unit per pass: adapt its tests first, then write code until they pass (red → green, per unit). Commissioning Cascade provides multi-scope validation — unit tests (fast, isolated) run first, integration tests (cross-module) next, quality review (semantic judgment) last. The project is edited in place at `project_root` (`--var project_root=/abs`); the workspace holds only the ledgers. `improvement_specs` is the target specification and every analysis stage reads it: a module the design drops is not a candidate, a capability it adds is one without a source file — point it at a design document when one exists. Each iteration self-chains until every unit is DONE.
 
 ### saas-app-builder.yaml
 
@@ -93,7 +93,7 @@ Output: `examples/workspaces/issue-triage-workspace/issue-dag.yaml` (plus `issue
 4. Update `on_success.job_path` to the absolute path of `issue-solver.yaml` (enables self-chaining)
 5. Run it: `mzt run examples/engineering/issue-solver.yaml`
 
-**Prerequisites:** gh CLI authenticated, `cisco-ai-skill-scanner` installable via pip (auto-installed by triage), issue-triage has been run and produced a DAG.
+**Prerequisites:** gh CLI authenticated, `cisco-ai-skill-scanner` installable as a tool — `uv tool install cisco-ai-skill-scanner` or pipx; its command is `skill-scanner` (auto-installed by triage; a bare `pip install` is refused on PEP 668 hosts), issue-triage has been run and produced a DAG.
 
 **Safety rails:** The solver refuses to push to `main`/`master`/`trunk` unless `ALLOW_PUSH_TO_MAIN=1` is exported. Commit titles are written to a file and committed via `-F` — never interpolated into shell. The DAG is updated atomically before the GitHub issue is closed, so crash-during-close is idempotent on replay.
 

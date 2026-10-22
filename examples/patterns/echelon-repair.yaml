@@ -49,9 +49,9 @@
 # ║  Stage 4, Opus for Stage 5. The pattern supports per-tier instruments.    ║
 # ║                                                                             ║
 # ║  Usage:                                                                     ║
-# ║    cd /path/to/your/project                                                ║
 # ║    mzt start                                                             ║
-# ║    mzt run examples/patterns/echelon-repair.yaml                        ║
+# ║    mzt run examples/patterns/echelon-repair.yaml \                      ║
+# ║        --var target_project=/abs/path/to/your/project                    ║
 # ║    mzt status security-audit                                            ║
 # ║                                                                             ║
 # ║  Output:                                                                    ║
@@ -122,7 +122,9 @@ sheet:
     2: [1]       # Diagnosis depends on inventory
     3: [2]       # E1 field scan depends on diagnosis
     4: [2]       # E2 sustained analysis depends on diagnosis
-    5: [2]       # E3 depot review depends on diagnosis
+    5: [2, 3, 4] # E3 reads field-results.md and sustained-results.md, so it
+                 # waits for E1 and E2 — the prompt said "for lower-echelon
+                 # context" while the DAG let it start alongside them (PA F8)
     6: [3, 4, 5] # Report depends on all three echelons
 
 parallel:
@@ -142,6 +144,11 @@ retry:
   base_delay_seconds: 30
 
 prompt:
+  variables:
+    # [CHANGE THIS] The checkout to audit. Musicians start in the WORKSPACE
+    # (`workspace:` above), never in your shell's directory, so the project
+    # must be named here or per run with --var target_project=/abs/path.
+    target_project: "[CHANGE THIS: ABSOLUTE path to the project checkout, e.g. /home/me/src/project]"
   template: |
     {# ── Macros ─────────────────────────────────────────────────────────── #}
 
@@ -173,7 +180,9 @@ prompt:
     {% macro target_codebase() %}
     ## Target Codebase
 
-    Analyze the codebase at the current working directory (the project root).
+    Analyze the codebase at `{{ target_project }}` (the project root). Your
+    working directory is the audit workspace, not the project: read and scan
+    under `{{ target_project }}`, and record every file path relative to it.
     Focus on source code — ignore test files, documentation, and generated code
     unless they contain security-relevant configuration (e.g., test fixtures
     with hardcoded credentials).

@@ -169,11 +169,10 @@
 # ║                    the two-path proof). Read PREREQUISITES before            ║
 # ║                    running on any host that is not the composer's.            ║
 # ║                                                                                ║
-# ║  TWO-PATH RULE   : Canonical install TODAY: scores/rosetta-corpus/           ║
-# ║                    proof-scores/cathedral-construction.yaml (this            ║
-# ║                    file, post-review rev 2). The examples/rosetta/           ║
-# ║                    copy does NOT exist until the RUN creates it at           ║
-# ║                    sheet 19 (T6), which proves sha256 equality and           ║
+# ║  TWO-PATH RULE   : The score at its installed path and a second copy    ║
+# ║                    the RUN makes at sheet 19 (T6) under                   ║
+# ║                    {{ workspace }}/install/ — never into the repository  ║
+# ║                    that contains this file. T6 proves sha256 equality and ║
 # ║                    mzt-validates each copy FROM ITS INSTALLED PATH.          ║
 # ║                    (Rev 1's header described this run-time outcome           ║
 # ║                    as a present fact — review 3's first finding.             ║
@@ -1391,12 +1390,11 @@ prompt:
     # The original installed score — recorded at C1, preserved across cycles.
     SRC=$(cat "$WS/.score-origin")
     test -f "$SRC"
-    SD=$(dirname "$SRC")
-    if [ "$(basename "$SD")" = "proof-scores" ]; then
-      DEST="$SD/../../../examples/rosetta/cathedral-construction.yaml"
-    else
-      DEST="$SD/../../scores/rosetta-corpus/proof-scores/cathedral-construction.yaml"
-    fi
+    # The second path is INSIDE the workspace: an example must not write
+    # into whatever repository happens to contain it (the Marianne checkout,
+    # when run from this tree). Publishing the proof into the corpus is the
+    # composer's commit, not this run's side effect.
+    DEST="$WS/install/cathedral-construction.yaml"
     mkdir -p "$(dirname "$DEST")"
     cp "$SRC" "$DEST"
     A=$(sha256sum "$SRC" | awk '{print $1}')

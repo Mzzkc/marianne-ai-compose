@@ -403,7 +403,7 @@ prompt:
 
     **Step 5: Claim the issue on GitHub**
     ```bash
-    gh issue comment "$ISSUE_NUM" \
+    gh issue comment "$ISSUE_NUM" --repo "{{ repo }}" \
       --body "Starting automated work on this issue."
     ```
 
@@ -1080,7 +1080,7 @@ prompt:
 
     *Closed automatically.*
     CLOSEEOF
-    if gh issue close "$ISSUE_NUM" --comment "$(cat {{ workspace }}/.close-comment)"; then
+    if gh issue close "$ISSUE_NUM" --repo "{{ repo }}" --comment "$(cat {{ workspace }}/.close-comment)"; then
       echo "CLOSE_STATUS: closed" > {{ workspace }}/.close-status
     else
       # The DAG already marks the issue resolved (the fix is pushed), so the

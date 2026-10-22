@@ -131,6 +131,18 @@ class InjectionItem(BaseModel):
             "should set this true; legacy optional context remains false by default."
         ),
     )
+    max_bytes: int | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Cap on the bytes this item injects (a directory sums its text files). "
+            "Unset = no cap. Over the cap, a required item fails the sheet before "
+            "execution with the measured size, and an optional item is dropped with "
+            "a warning — never silently shipped as an over-sized prompt. A cadenza "
+            "ledger that grows with every sheet (an `active/` directory, a memory "
+            "file) needs this, or the token warning fires only after assembly (GH #474)."
+        ),
+    )
 
     @model_validator(mode="after")
     def exactly_one_source(self) -> InjectionItem:

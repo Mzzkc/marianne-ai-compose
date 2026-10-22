@@ -126,10 +126,10 @@ prompt:
 
     TASKS:
     1. Define key search terms and Boolean operators
-    2. Identify target sources for each of 3 parallel searches:
-       - Academic: Google Scholar, arXiv, ACM DL, IEEE
-       - Industry: Tech blogs, company reports, Stack Overflow surveys
-       - Patents: USPTO, Google Patents
+    2. Identify target sources for each of the {{ search_domains | length }} parallel searches:
+    {% for n, domain in search_domains.items() %}
+       - Voice {{ n }}: {{ domain }}
+    {% endfor %}
     3. Create quality criteria checklist
 
     OUTPUT: Write to {{ workspace }}/01-research-setup.md
@@ -168,11 +168,11 @@ prompt:
     MOVEMENT 3: Cross-Source Synthesis
     =========================================================================
 
-    Synthesize findings from ALL {{ voice_count }} parallel searches.
+    Synthesize findings from ALL {{ search_domains | length }} parallel searches.
 
     Read ALL search outputs:
-    {% for i in range(1, 4) %}
-    - {{ workspace }}/02-search-{{ i }}.md
+    {% for i in search_domains %}
+    - {{ workspace }}/02-search-{{ i }}.md ({{ search_domains[i] }})
     {% endfor %}
 
     TASKS:
