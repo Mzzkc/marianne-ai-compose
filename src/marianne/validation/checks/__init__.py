@@ -13,6 +13,7 @@ from marianne.validation.checks.best_practices import (
     FormatSyntaxInTemplateCheck,
     JinjaInValidationPathCheck,
     NoValidationsCheck,
+    PlaceholderQuotingCheck,
     SkipWhenSheetRangeCheck,
     VariableShadowingCheck,
 )
@@ -113,6 +114,7 @@ __all__ = [
     "ClassChainSummaryCheck",
     # Best-practice checks
     "JinjaInValidationPathCheck",
+    "PlaceholderQuotingCheck",
     "FormatSyntaxInTemplateCheck",
     "NoValidationsCheck",
     "FileExistsOnlyCheck",

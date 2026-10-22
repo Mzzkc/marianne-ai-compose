@@ -41,6 +41,7 @@ from marianne.validation.checks import (
     JinjaUndefinedVariableCheck,
     NoUsableInstrumentCheck,
     NoValidationsCheck,
+    PlaceholderQuotingCheck,
     PreludeCadenzaFileCheck,
     PromptValidationContractCheck,
     RegexPatternCheck,
@@ -251,6 +252,7 @@ def create_default_checks() -> list[ValidationCheck]:
         ClassChainSummaryCheck(),
         # Best-practice checks
         JinjaInValidationPathCheck(),
+        PlaceholderQuotingCheck(),
         FormatSyntaxInTemplateCheck(),
         NoValidationsCheck(),
         FileExistsOnlyCheck(),

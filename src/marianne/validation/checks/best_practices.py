@@ -92,6 +92,115 @@ class JinjaInValidationPathCheck:
         return issues
 
 
+class PlaceholderQuotingCheck:
+    """A ``{placeholder}`` in a command is ONE shell-quoted word (V333).
+
+    The engine substitutes every placeholder with ``shlex.quote(value)``.
+    Two command shapes can never work with that and fail only at runtime,
+    with a value that needs quoting (GH #477):
+
+    - a bash array literal, ``xs=({list})`` — one element, never split;
+    - a placeholder spliced inside an interpreter's string literal,
+      ``python3 -c "open('{workspace}/x')"`` — the shell quotes survive
+      inside the Python string, so ``'~/triage'`` reaches ``expanduser()``
+      with its quotes (issue-solver sheet 12, four attempts lost).
+    """
+
+    _ARRAY = re.compile(r"\w+=\(\s*\{(\w+)\}\s*\)")
+    _INTERPRETER = re.compile(r"(?:python3?|node|perl|ruby)\s+(?:-c|-e)\s")
+    # A placeholder between an opening and a closing quote on ONE line, with
+    # no quote in between: the interpreter sees the shell's quotes as data.
+    _SPLICED = re.compile(r"""(['"])[^'"\n]*\{(\w+)\}[^'"\n]*\1""")
+
+    @staticmethod
+    def _needs_quoting(value: object) -> bool:
+        """shlex wraps this value, so a splice would carry the quotes."""
+        import shlex
+
+        return isinstance(value, str) and shlex.quote(value) != value
+
+    @property
+    def check_id(self) -> str:
+        return "V333"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return (
+            "A {placeholder} in a command is one shell word; array literals and "
+            "interpreter string splices cannot use it"
+        )
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,  # noqa: ARG002 (protocol shape)
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+        # Built-ins ({workspace}, {sheet_num}, ...) are absolute paths or
+        # numbers the engine controls; a splice of one is a splice of a
+        # value shlex leaves bare. Only a prompt variable whose DEFAULT
+        # already needs quoting (`~/x`, a space) is flagged — that is the
+        # value a user who keeps the default runs with.
+        variables = config.prompt.variables if config.prompt is not None else {}
+        risky = {name for name, value in variables.items() if self._needs_quoting(value)}
+        for i, validation in enumerate(config.validations):
+            command = getattr(validation, "command", None)
+            if not command or "{" not in str(command):
+                continue
+            text = str(command)
+            for m in self._ARRAY.finditer(text):
+                line_text = next((ln for ln in text.splitlines() if m.group(0) in ln), m.group(0))
+                issues.append(ValidationIssue(
+                    check_id=self.check_id, severity=self.severity,
+                    message=(
+                        f"Validation rule {i + 1} splits {{{m.group(1)}}} with a bash array "
+                        f"literal: `{m.group(0)}` is one element — the placeholder "
+                        "arrives as one shell-quoted word"
+                    ),
+                    line=find_line_in_yaml(raw_yaml, line_text.strip()),
+                    context=line_text.strip(),
+                    suggestion=f"read -r -a xs <<< {{{m.group(1)}}}",
+                    metadata={"validation_index": str(i), "placeholder": m.group(1),
+                              "shape": "array_literal"},
+                ))
+            if not self._INTERPRETER.search(text):
+                continue
+            # Only the interpreter's own program text matters: the part after
+            # `-c`/`-e`. Shell quoting outside it ("{workspace}/x" as an
+            # argument) is exactly right.
+            program = text[self._INTERPRETER.search(text).end():]  # type: ignore[union-attr]
+            seen: set[str] = set()
+            for m in self._SPLICED.finditer(program):
+                name = m.group(2)
+                if name in seen or name not in risky:
+                    continue
+                seen.add(name)
+                line_text = next((ln for ln in text.splitlines() if m.group(0) in ln), m.group(0))
+                issues.append(ValidationIssue(
+                    check_id=self.check_id, severity=self.severity,
+                    message=(
+                        f"Validation rule {i + 1} splices {{{name}}} into an interpreter "
+                        f"string literal: {line_text.strip()[:100]} — its default "
+                        f"{str(variables[name])[:40]!r} is shell-quoted and keeps the "
+                        "quotes inside the program"
+                    ),
+                    line=find_line_in_yaml(raw_yaml, line_text.strip()),
+                    context=line_text.strip(),
+                    suggestion=(
+                        f"Pass it as an argument and read sys.argv: "
+                        f"`python3 -c \"...sys.argv[1]...\" {{{name}}}`"
+                    ),
+                    metadata={"validation_index": str(i), "placeholder": name,
+                              "shape": "interpreter_splice"},
+                ))
+        return issues
+
+
 class FormatSyntaxInTemplateCheck:
     """Check for format-string syntax in Jinja templates (V202).
 

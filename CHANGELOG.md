@@ -291,6 +291,8 @@ an alias over an existing profile; archive what nothing names.
 
 ### Fixed
 
+- **V333 names the two command shapes that shell-quoted placeholders defeat (GH #477).** A `command_succeeds` command that splits a placeholder with a bash array literal (`xs=({list})` is one element) or splices a prompt variable whose default needs quoting (`~/path`, a space) inside a `python3 -c`/`node -e` string literal now warns at validate time, with the working form in the suggestion. Built-ins and bare defaults are left alone.
+
 - **A self-chain survives `mzt resume --config <copy>`, and a refused chain is logged.** The concert trigger decided "this is a self-chain" by comparing the child's path with the parent's `config_path`; after a resume from a copy the parent's path is the copy, so the child resolved to a sibling file, derived the parent's own job id, and was refused as an active duplicate — the 13-sheet issue-solver finished green and chained nothing, with no log line. Identity is now the job id the child would get; a refused submission logs `flow.concert.refused` with the reason, an accepted one `flow.concert.submitted`, both reach the observer stream (`baton.flow.concert_refused` / `concert_submitted`), and the orchestra view shows a refused chain with its reason.
 
 - **A dropped root block warns, not whispers.** A top-level key the schema does not know whose value is a mapping or list (`deliver: {1: {to: …}}` from an unmerged branch) was V011 INFO — hidden unless `mzt validate --verbose` — so a product learned at runtime that nothing had written its output file. It is now V010 WARNING naming the block; a stray scalar stays INFO.
