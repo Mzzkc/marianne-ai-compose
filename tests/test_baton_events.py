@@ -226,6 +226,27 @@ class TestTimerEvents:
         assert event.job_id == "paced"
 
 
+class TestFlowConcertSubmittedObserverEvent:
+    """A refused chain used to leave no event at all: the solver's sheet-13
+    trigger fired, the child was refused as an active duplicate, and nothing
+    outside the flow state recorded it."""
+
+    def test_refused_and_accepted_map_to_distinct_events(self) -> None:
+        from marianne.daemon.baton.events import FlowConcertSubmitted
+
+        refused = to_observer_event(FlowConcertSubmitted(
+            "solver", 1, 0, False, "solver", "Job 'solver' is already active"
+        ))
+        assert refused["event"] == "baton.flow.concert_refused"
+        assert refused["data"]["message"] == "Job 'solver' is already active"
+        accepted = to_observer_event(FlowConcertSubmitted(
+            "solver", 1, 0, True, "solver--chain1--x", None
+        ))
+        assert accepted["event"] == "baton.flow.concert_submitted"
+        assert accepted["data"]["child_job_id"] == "solver--chain1--x"
+
+
+
 class TestEscalationEvents:
     def test_needed_with_options(self) -> None:
         event = EscalationNeeded(

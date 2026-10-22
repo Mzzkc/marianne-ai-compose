@@ -380,6 +380,46 @@ async def test_self_chain_concert_gets_a_lineage_id_instead_of_colliding(
 
 
 @pytest.mark.asyncio
+async def test_self_chain_survives_resume_with_a_config_copy(tmp_path: Path) -> None:
+    """`mzt resume --config <copy>` points the parent's config_path at the copy.
+    The score's trigger names the ORIGINAL file, so the child resolved to a
+    sibling path, derived the parent's own id, and was refused as an active
+    duplicate — the 13-sheet issue-solver chained nothing on 2026-10-22.
+    Identity is the job id the child would get, not the parent's path."""
+    body = (
+        "name: solver\n"
+        f"workspace: {tmp_path / 'ws'}\n"
+        "instrument: cli\n"
+        "sheet:\n  size: 1\n  total_items: 1\n"
+        "prompt:\n  template: sleep 30\n"
+    )
+    original = tmp_path / "solver.yaml"
+    original.write_text(body, encoding="utf-8")
+    copy = tmp_path / "resume" / "solver-resume.yaml"
+    copy.parent.mkdir()
+    copy.write_text(body, encoding="utf-8")
+    (tmp_path / "resume" / "solver.yaml").write_text(body, encoding="utf-8")
+    manager = JobManager(
+        DaemonConfig(pid_file=tmp_path / "conductor.pid", state_db_path=tmp_path / "jobs.db")
+    )
+    await manager.start()
+    try:
+        manager._job_meta["solver"] = JobMeta(
+            job_id="solver",
+            config_path=copy,  # what resume --config left behind
+            workspace=tmp_path,
+            status=DaemonJobStatus.RUNNING,
+            concert_config={"enabled": True, "max_chain_depth": 2},
+        )
+        accepted, child_id, message = await manager._submit_flow_concert("solver", "solver.yaml")
+        assert accepted, message
+        assert child_id is not None and child_id.startswith("solver--chain1--")
+        assert manager._job_meta[child_id].chain_depth == 1
+    finally:
+        await manager.shutdown(graceful=False)
+
+
+@pytest.mark.asyncio
 async def test_resume_no_reload_runs_the_admitted_score_not_the_edited_disk(
     tmp_path: Path,
 ) -> None:

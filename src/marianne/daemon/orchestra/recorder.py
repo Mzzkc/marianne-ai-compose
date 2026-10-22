@@ -50,6 +50,7 @@ ORCHESTRA_EVENTS: frozenset[str] = frozenset({
     "job.paused",
     "job.resumed",
     "job.chained",
+    "job.chain_refused",
     "sheet.dispatched",
     "sheet.ended",
     "sheet.fallback",
@@ -80,6 +81,7 @@ _DIRECT: dict[str, tuple[str, str | None]] = {
     "baton.sheet.retry_scheduled": ("sheet.retry", None),
     "rate_limit.active": ("sheet.retry", "rate_limited"),
     "baton.flow.trigger_fired": ("job.chained", None),
+    "baton.flow.concert_refused": ("job.chain_refused", None),
 }
 
 
@@ -111,6 +113,10 @@ def project_event(event: ObserverEvent) -> OrchestraEvent | None:
         dst = data.get("to_instrument")
         if isinstance(src, str) and isinstance(dst, str):
             note = f"{src} -> {dst}"
+    elif kind == "job.chain_refused":
+        reason = data.get("message")
+        if isinstance(reason, str) and reason:
+            note = reason
     elif kind == "job.chained":
         # Only a concert action is a chain; other trigger actions are not shown.
         actions = data.get("actions")

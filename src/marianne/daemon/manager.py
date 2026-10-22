@@ -1692,8 +1692,16 @@ class JobManager:
         # parent is terminal. Give the self-chained child a lineage id of the
         # recurring-tick shape so admission sees a new job and the depth guard
         # above remains the only bound.
+        # Identity is the JOB ID the child would get, not the parent's file:
+        # after `mzt resume --config <copy>` the parent's config_path is the
+        # copy, so a trigger naming the original score resolves to a sibling
+        # path, derived the parent's own id, and was refused as an active
+        # duplicate — silently ending a 13-sheet solver's chain.
         child_job_id: str | None = None
-        if score_path == parent.config_path.resolve():
+        if (
+            score_path == parent.config_path.resolve()
+            or self._get_job_id(score_path.stem) == parent_job_id
+        ):
             stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
             child_job_id = (
                 f"{sanitize_workspace_name(score_path.stem)}--chain{current_depth + 1}--{stamp}"

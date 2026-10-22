@@ -4402,6 +4402,18 @@ class BatonAdapter:
                 )
             except Exception as exc:  # noqa: BLE001 — callback failure is delivered in FlowConcertSubmitted
                 accepted, child_id, message = False, None, f"{type(exc).__name__}: {exc}"
+        if accepted:
+            _logger.info(
+                "flow.concert.submitted", job_id=job_id, sheet_num=request.sheet_num,
+                chain_id=request.chain_id, child_job_id=child_id,
+            )
+        else:
+            # A refused chain is the end of a self-chaining engagement; it
+            # must be visible without reading the flow state by hand.
+            _logger.warning(
+                "flow.concert.refused", job_id=job_id, sheet_num=request.sheet_num,
+                chain_id=request.chain_id, child_job_id=child_id, reason=message,
+            )
         self._baton.inbox.put_nowait(FlowConcertSubmitted(
             job_id, request.chain_id, request.cursor, accepted, child_id, message,
             event_generation=job.event_generation,

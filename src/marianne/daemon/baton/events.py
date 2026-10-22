@@ -782,6 +782,15 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                                      for action in event.actions]},
                 "timestamp": event.timestamp,
             }
+        case FlowConcertSubmitted():
+            return {
+                "job_id": event.job_id, "sheet_num": 0,
+                "event": "baton.flow.concert_submitted" if event.accepted
+                else "baton.flow.concert_refused",
+                "data": {"chain_id": event.chain_id, "child_job_id": event.child_job_id,
+                         "message": event.message},
+                "timestamp": event.timestamp,
+            }
         case GotoRequested():
             return {
                 "job_id": event.job_id, "sheet_num": event.from_sheet,

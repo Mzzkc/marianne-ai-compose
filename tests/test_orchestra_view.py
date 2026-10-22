@@ -50,6 +50,12 @@ class TestProjection:
         assert chained is not None and chained["kind"] == "job.chained"
         goto_only = _ev("baton.flow.trigger_fired", sheet=13, actions=[{"goto": 2}])
         assert project_event(goto_only) is None
+        refused = project_event(_ev(
+            "baton.flow.concert_refused", chain_id=1, child_job_id="solver",
+            message="Job 'solver' is already active",
+        ))
+        assert refused is not None and refused["kind"] == "job.chain_refused"
+        assert refused["note"] == "Job 'solver' is already active"
 
 
 @pytest.mark.asyncio
