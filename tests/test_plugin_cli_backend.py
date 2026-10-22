@@ -24,6 +24,7 @@ from marianne.core.config.instruments import (
     InstrumentProfile,
     ModelCapacity,
 )
+from marianne.execution.instruments.cli_backend import PluginCliBackend
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -38,6 +39,7 @@ def _make_profile(
     output_format: str = "text",
     result_path: str | None = None,
     error_path: str | None = None,
+    error_flag_path: str | None = None,
     extra_flags: list[str] | None = None,
     success_exit_codes: list[int] | None = None,
     rate_limit_patterns: list[str] | None = None,
@@ -89,6 +91,7 @@ def _make_profile(
                 format=output_format,
                 result_path=result_path,
                 error_path=error_path,
+                error_flag_path=error_flag_path,
                 completion_event_type=completion_event_type,
                 input_tokens_path=input_tokens_path,
                 output_tokens_path=output_tokens_path,
@@ -607,3 +610,46 @@ class TestBackendProperties:
         with patch("shutil.which", return_value=None):
             result = await backend.health_check()
         assert result is False
+
+
+class TestJsonErrorFlag:
+    """Opt-in terminal error flags must reject semantic failures at exit zero."""
+
+    def test_error_flag_rejects_exit_zero(self) -> None:
+        profile = _make_profile(
+            output_format="json", error_path="error.message", error_flag_path="is_error",
+        )
+        result = PluginCliBackend(profile)._parse_output(
+            '[{"type":"result","is_error":true,"error":{"message":"refused"}}]',
+            "", exit_code=0,
+        )
+        assert not result.success
+        assert result.error_message == "refused"
+        assert result.error_type == "cli_error"
+
+    def test_error_flag_is_opt_in(self) -> None:
+        profile = _make_profile(output_format="json", result_path="result")
+        result = PluginCliBackend(profile)._parse_output(
+            '{"is_error":true,"result":"existing behavior"}', "", exit_code=0,
+        )
+        assert result.success
+        assert result.stdout == "existing behavior"
+
+    def test_error_flag_requires_boolean_true(self) -> None:
+        profile = _make_profile(
+            output_format="json", result_path="result", error_flag_path="is_error",
+        )
+        for flag in [False, None, "true", 1]:
+            result = PluginCliBackend(profile)._parse_output(
+                json.dumps({"is_error": flag, "result": "valid output"}), "", exit_code=0,
+            )
+            assert result.success
+            assert result.stdout == "valid output"
+
+    def test_error_flag_without_message_has_useful_fallback(self) -> None:
+        profile = _make_profile(output_format="json", error_flag_path="is_error")
+        result = PluginCliBackend(profile)._parse_output(
+            '{"is_error":true}', "", exit_code=0,
+        )
+        assert not result.success
+        assert result.error_message == "CLI reported an error (is_error)"

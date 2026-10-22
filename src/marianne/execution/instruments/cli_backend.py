@@ -1102,6 +1102,18 @@ class PluginCliBackend(Backend):
             try:
                 data = _terminal_json_object(json.loads(stdout))
 
+                # Some CLIs return exit zero for a terminal semantic refusal.
+                # Opt in per profile; only a JSON boolean true is authoritative.
+                if (
+                    output.error_flag_path
+                    and extract_json_path(data, output.error_flag_path) is True
+                ):
+                    is_success = False
+                    error_type = error_type or "cli_error"
+                    error_message = (
+                        f"CLI reported an error ({output.error_flag_path})"
+                    )
+
                 # Extract result
                 if output.result_path and is_success:
                     extracted = extract_json_path(data, output.result_path)

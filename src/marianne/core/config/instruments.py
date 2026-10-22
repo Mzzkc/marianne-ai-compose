@@ -435,6 +435,13 @@ class CliOutputConfig(BaseModel):
         description="JSON dot-path to the error message, e.g. 'error.message'",
     )
 
+    error_flag_path: str | None = Field(
+        default=None,
+        description="JSON-only dot-path to a terminal boolean error flag. "
+        "When exactly true, execution fails even at a successful exit code. "
+        "Unset preserves exit-code-based behavior.",
+    )
+
     # For JSONL format: how to find the completion event
     completion_event_type: str | None = Field(
         default=None,

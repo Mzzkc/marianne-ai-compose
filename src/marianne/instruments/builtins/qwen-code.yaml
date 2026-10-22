@@ -1,0 +1,52 @@
+# Headless contract: Qwen Code v0.12.6, ac30c98a266a6335f8ebc7a9011f266cf6b63f13.
+# Source-derived fixtures and immutable vendor links: tests/fixtures/qwen_code/README.md.
+# No live authenticated execution verified; uses existing client auth/model settings.
+name: qwen-code
+display_name: "Qwen Code"
+description: "Qwen Code headless coding agent (saved OAuth or OpenAI-compatible provider)"
+kind: cli
+capabilities:
+  - tool_use
+  - file_editing
+  - shell_access
+# Defer model choice to Qwen's settings/provider; do not invent prices or capacities.
+models: []
+default_timeout_seconds: 1800
+cli:
+  command:
+    executable: qwen
+    prompt_flag: "-p"
+    model_flag: "--model"
+    auto_approve_flag: "--yolo"
+    output_format_flag: "--output-format"
+    output_format_value: "json"
+    # Saved OAuth credentials remain available through HOME. Other provider
+    # families/custom envKey names require a local profile allowlist override.
+    required_env:
+      - OPENAI_API_KEY
+      - OPENAI_BASE_URL
+      - OPENAI_MODEL
+      - QWEN_MODEL
+  output:
+    format: json
+    result_path: result
+    error_path: error.message
+    error_flag_path: is_error
+    input_tokens_path: usage.input_tokens
+    output_tokens_path: usage.output_tokens
+  errors:
+    success_exit_codes: [0]
+    rate_limit_patterns:
+      - "rate.?limit"
+      - "quota.?exceeded"
+      - "Too Many Requests"
+      - "\\b429\\b"
+    auth_error_patterns:
+      - "unauthorized"
+      - "authentication"
+      - "invalid.?api.?key"
+      - "\\b401\\b"
+    capacity_patterns:
+      - "overloaded"
+      - "service unavailable"
+      - "\\b503\\b"

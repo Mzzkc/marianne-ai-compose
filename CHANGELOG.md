@@ -77,6 +77,10 @@ that no submitted score names and no class chain includes (GH #443). A seat is
 an alias over an existing profile; archive what nothing names.
 
 ### Added
+- **`qwen-code` built-in instrument profile (GH #83).** Qwen Code, Alibaba's coding agent CLI, joins the shipped agent harnesses. The profile runs it headlessly (`--yolo --output-format json`, prompt over stdin) and reads final text plus input/output token usage from the terminal JSON result. Authentication uses the client's saved OAuth credentials or an OpenAI-compatible provider (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `QWEN_MODEL` are the declared `required_env` allowlist; other provider families need a profile override). Without a score model override Qwen's own configured model is used - the profile ships no assumed Qwen model prices or capacities. `--yolo` auto-approves tools including file edits and shell commands: choose the workspace accordingly. The source contract is pinned to Qwen Code v0.12.6; live authenticated execution was not available on the implementation host, so the protocol is documented by source-derived fixtures (`tests/fixtures/qwen_code/`). See the Qwen Code section in the instrument guide.
+
+- **`cli.output.error_flag_path` (GH #83).** Some CLIs return exit zero for a terminal semantic refusal (Qwen Code's `is_error` is one). A profile may now set `error_flag_path` to a JSON dot-path; when it resolves to exactly boolean `true`, the attempt fails as `cli_error` even at a successful exit code. Opt-in and JSON-format-only; unset preserves exit-code-based behavior for every existing profile.
+
 
 - **`workspace_lifecycle.foreign_artifacts: quarantine` (GH #386, second half).** The conductor already named a sheet that wrote a later, non-ancestor sheet's declared artifact; with this setting it also moves the file to `$MARIANNE_SCRATCH/quarantine/sheet-<N>/` as the attempt ends, before any downstream sheet is dispatched, and the warning says where it went. Default stays `warn`. The quarantine lives under the scratch root, so it is cleaned with the job and can never land in a commit.
 

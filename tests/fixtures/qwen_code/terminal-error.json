@@ -1,0 +1,37 @@
+[
+  {
+    "type": "assistant",
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Earlier distractor"
+        }
+      ]
+    },
+    "result": "Not the final answer",
+    "usage": {
+      "input_tokens": 999,
+      "output_tokens": 999
+    }
+  },
+  {
+    "type": "result",
+    "uuid": "00000000-0000-4000-8000-000000000083",
+    "session_id": "fixture-session",
+    "duration_ms": 120,
+    "duration_api_ms": 80,
+    "num_turns": 1,
+    "permission_denials": [],
+    "subtype": "error_during_execution",
+    "is_error": true,
+    "error": {
+      "message": "Unsupported slash command in non-interactive mode"
+    },
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  }
+]

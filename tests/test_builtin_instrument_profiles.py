@@ -41,6 +41,7 @@ class TestBuiltinProfilesExist:
             "antigravity.yaml",
             "claude-code.yaml",
             "gemini-cli.yaml",
+            "qwen-code.yaml",
             "codex-cli.yaml",
             "cline-cli.yaml",
             "aider.yaml",
