@@ -312,6 +312,19 @@ validations:
 
 Marianne automatically shell-quotes `{workspace}` values via `shlex.quote()`, but explicit quotes in your command template ensure safety and readability.
 
+The same quoting applies to every `{placeholder}`, and it is why a placeholder
+must stay a shell word. A value that needs quoting — a `~` path, a space, a
+`$` — arrives as `'~/triage'`, so splicing it inside an interpreter's string
+literal keeps the quotes (`pathlib.Path("'~/triage'/dag.yaml")` never
+expands). Pass the placeholder as an argument instead:
+
+```yaml
+    command: 'python3 -c "import sys, pathlib; pathlib.Path(sys.argv[1]).expanduser()" {triage_workspace}'
+```
+
+(GH #477: `issue-solver` lost four attempts on exactly this before its sheet-12
+checks were rewritten to argv.)
+
 ### Pitfall 3: Default Timeout Too Short
 
 **Problem:** `command_succeeds` defaults to 3600 seconds (1 hour). Large test suites, builds, or security scans can exceed this.

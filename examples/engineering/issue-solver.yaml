@@ -1404,8 +1404,11 @@ validations:
     stage: 2
 
   # DAG integrity after mutation — parse check. Fails if mutation corrupted YAML.
+  # Placeholders arrive as ONE shell-quoted word (GH #477): `~/x` renders as
+  # '~/x', so it must reach Python as an argv element the shell has unquoted,
+  # never spliced into a Python string literal where the quotes survive.
   - type: command_succeeds
-    command: 'python3 -c "import yaml, pathlib; yaml.safe_load(pathlib.Path(\"{triage_workspace}/issue-dag.yaml\").expanduser().open())"'
+    command: 'python3 -c "import sys, yaml, pathlib; yaml.safe_load((pathlib.Path(sys.argv[1]).expanduser() / \"issue-dag.yaml\").open())" {triage_workspace}'
     description: "Triage DAG still parses after Stage 10 mutation"
     condition: "sheet_num == 12"
     stage: 2
@@ -1415,14 +1418,14 @@ validations:
   - type: command_succeeds
     command: |
       python3 -c "
-      import re, yaml
-      sel = open('{workspace}/01-selected-issue.md').read()
+      import re, sys, yaml, pathlib
+      ws, triage = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]).expanduser()
+      sel = (ws / '01-selected-issue.md').read_text()
       m = re.search(r'SELECTED_ISSUE: #(\d+)', sel)
       assert m, 'no selected issue'
-      import pathlib
-      dag = yaml.safe_load(pathlib.Path('{triage_workspace}/issue-dag.yaml').expanduser().open())
+      dag = yaml.safe_load((triage / 'issue-dag.yaml').open())
       assert int(m.group(1)) in (dag.get('resolved') or []), 'issue not in resolved list'
-      "
+      " {workspace} {triage_workspace}
     description: "Selected issue is in the DAG resolved list after close"
     condition: "sheet_num == 12"
     stage: 2
