@@ -78,6 +78,7 @@ from marianne.core.config.workspace import (
 from marianne.core.constants import DEFAULT_INSTRUMENT_NAME, FLOW_RESERVED_NAMES, STATE_DB_FILENAME
 from marianne.core.expressions import ExpressionError, parse_expression
 from marianne.core.validation_condition import check_validation_condition
+from marianne.telemetry.config import TelemetryConfig
 
 
 class InjectionCategory(str, Enum):
@@ -1137,6 +1138,10 @@ class JobConfig(BaseModel):
         default_factory=LearningConfig,
         description="Learning store for this score: outcome memory fed "
         "forward between sheets and runs.",
+    )
+    telemetry: TelemetryConfig = Field(
+        default_factory=TelemetryConfig,
+        description="Default-off community telemetry; requires separate user consent.",
     )
     grounding: GroundingConfig = Field(
         default_factory=GroundingConfig,

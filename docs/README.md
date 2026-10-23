@@ -424,6 +424,7 @@ mkdocs serve
 | [Daemon Guide](docs/daemon-guide.md) | Conductor setup and troubleshooting |
 | [MCP Integration](docs/MCP-INTEGRATION.md) | Model Context Protocol server |
 | [Known Limitations](docs/limitations.md) | What doesn't work and workarounds |
+| [Telemetry](telemetry.md) | Opt-in community telemetry: data policy, consent, export, submission |
 
 ---
 

@@ -1974,6 +1974,111 @@ mzt clear-rate-limits --json
 
 ---
 
+## Telemetry Commands
+
+Optional community telemetry: disabled by default, never automatic. See
+[telemetry.md](telemetry.md) for the data policy. All four commands accept
+`--spool-path PATH` to select a custom spool.
+
+### `mzt telemetry status`
+
+Show current user consent state and staged envelope count. No network access.
+
+```
+Usage: mzt telemetry status [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--spool-path` | | | Inspect a custom score spool |
+
+```bash
+mzt telemetry status
+```
+
+---
+
+### `mzt telemetry consent`
+
+Explicitly grant, revoke, or purge. Consent alone never enables sending.
+
+```
+Usage: mzt telemetry consent [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--grant` | | false | Allow enabled scores to stage telemetry |
+| `--revoke` | | false | Stop collection and future submission |
+| `--purge` | | false | Delete the selected local spool |
+| `--spool-path` | | | Custom spool to purge |
+
+Choose exactly one of `--grant`, `--revoke` (optionally with `--purge`), or
+`--purge`. Revocation persists before any purge and rotates the consent ID;
+re-granting after revocation rotates it again, so records staged under the old
+grant cannot be sent under a new one.
+
+```bash
+mzt telemetry consent --grant
+mzt telemetry consent --revoke --purge
+mzt telemetry consent --purge --spool-path /path/to/custom-spool.jsonl
+```
+
+---
+
+### `mzt telemetry export`
+
+Export staged envelopes for inspection without sending or deleting them.
+
+```
+Usage: mzt telemetry export [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--out` | | | Private JSONL file to write; default is stdout |
+| `--spool-path` | | | Custom score spool |
+
+The destination cannot be a reserved `.lock` filename or overlap the spool or
+consent/control files. Inspect an export before sharing it: the sanitizer scrubs
+paths, usernames, emails, URLs, and credential-shaped strings, but cannot
+guarantee anonymity of arbitrary prose. Purging the spool does not erase exports.
+
+```bash
+mzt telemetry export
+mzt telemetry export --out telemetry-review.jsonl
+```
+
+---
+
+### `mzt telemetry flush`
+
+Submit staged data only with `--push`, an explicit endpoint, and current consent.
+
+```
+Usage: mzt telemetry flush [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--dry-run` | | false | Do not send or prune any data |
+| `--push` | | false | Explicitly allow network submission now |
+| `--endpoint` | | | HTTPS receiver (HTTP allowed on loopback) |
+| `--spool-path` | | | Custom score spool |
+
+`--push` requires `--endpoint`. Plain `flush` (no `--push`) is local-only and
+sends nothing. No redirects, environment proxy configuration, automatic
+retries, or endpoint credentials are used; any HTTP 2xx acknowledges the whole
+batch. Delivery is at least once — receivers should deduplicate envelopes.
+Failures retain unacknowledged records locally and exit nonzero.
+
+```bash
+mzt telemetry flush --dry-run
+mzt telemetry flush --push --endpoint https://your-receiver.example/telemetry
+```
+
+---
+
 ## Configuration Reference
 
 Score configurations are defined in YAML files. Here are the key sections:

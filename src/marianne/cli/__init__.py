@@ -48,6 +48,7 @@ from typing import Annotated
 import typer
 
 from marianne import __version__
+from marianne.cli.commands.telemetry import telemetry_app
 
 # Re-export helpers module for direct access to internal state (conftest.py needs this)
 from . import helpers as helpers
@@ -326,6 +327,7 @@ app.add_typer(conductor_app, name="conductor", rich_help_panel="Conductor")
 
 # Daemon configuration
 app.add_typer(config_app)
+app.add_typer(telemetry_app)
 
 # Instrument management
 app.add_typer(instruments_app)

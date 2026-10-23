@@ -803,6 +803,7 @@ def _make_mock_manager() -> MagicMock:
     manager._resume_via_baton = JobManager._resume_via_baton.__get__(manager)
     manager._set_job_status = JobManager._set_job_status.__get__(manager)
     manager._publish_baton_terminal = JobManager._publish_baton_terminal.__get__(manager)
+    manager._maybe_collect_telemetry = JobManager._maybe_collect_telemetry.__get__(manager)
     manager._checkpoint_writer = None
     # #204: _run/_resume_via_baton now call this staticmethod (no self)
     manager._load_spec_corpus = JobManager._load_spec_corpus
