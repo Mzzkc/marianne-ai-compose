@@ -53,6 +53,7 @@ class TestDiscoverInstruments:
             "claude-code",
             "gemini-cli",
             "qwen-code",
+            "openclaw",
             "antigravity",
             "codex-cli",
             "cline-cli",

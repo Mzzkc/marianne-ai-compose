@@ -60,6 +60,7 @@ An **instrument** is any CLI tool wrapped in a YAML profile. Marianne treats ins
 | `crush`       | Crush — terminal-native AI agent |
 | `opencode`    | OpenCode — OpenRouter + native MCP |
 | `qwen-code`   | Qwen Code CLI — saved OAuth or OpenAI-compatible provider |
+| `openclaw`    | OpenClaw CLI — isolated headless runs with saved client auth |
 
 **Beyond agent harnesses:** any CLI takes a YAML profile. Wrap `pytest` to run validation as a sheet. Wrap `gh` to file issues from a score. Wrap your in-house deploy script. Marianne doesn't care what the binary is — only that it speaks stdin/stdout and returns an exit code.
 

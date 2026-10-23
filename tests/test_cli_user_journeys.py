@@ -83,6 +83,12 @@ class TestSarahsFirstDay:
         assert "configured" in result.stdout.lower()
 
     @pytest.mark.adversarial
+    def test_openclaw_is_listed(self) -> None:
+        result = runner.invoke(app, ["instruments", "list"])
+        assert result.exit_code == 0
+        assert "openclaw" in result.stdout.lower()
+
+    @pytest.mark.adversarial
     def test_init_score_has_meaningful_comments(self, tmp_path: Path) -> None:
         """The generated score has enough comments that Sarah can edit it."""
         runner.invoke(app, ["init", "--path", str(tmp_path)])
