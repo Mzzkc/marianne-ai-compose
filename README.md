@@ -383,6 +383,7 @@ mzt instruments list        # See available instruments
 | `mzt logs <id>` | View or tail log sources |
 | `mzt history <id>` | Execution history from SQLite |
 | `mzt recover <id>` | Re-validate without re-execution |
+| `mzt remediate <id>` | Diagnose failed sheets and propose or apply remedies |
 
 ### Conductor
 

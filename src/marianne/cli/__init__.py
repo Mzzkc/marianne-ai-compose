@@ -114,6 +114,7 @@ from .commands.learning import (
     patterns_list,
     patterns_why,
 )
+from .commands.remediate import remediate
 from .commands.status import _output_status_rich
 from .commands.top import top
 
@@ -306,6 +307,7 @@ app.command(rich_help_panel="Monitoring")(clear)
 app.command(rich_help_panel="Diagnostics")(logs)
 app.command(rich_help_panel="Diagnostics")(errors)
 app.command(rich_help_panel="Diagnostics")(diagnose)
+app.command(rich_help_panel="Diagnostics")(remediate)
 app.command(rich_help_panel="Diagnostics")(history)
 app.command(rich_help_panel="Diagnostics")(doctor)
 # #338: discoverable — a user whose job failed must be able to find recovery.

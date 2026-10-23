@@ -23,8 +23,11 @@ from marianne.healing.remedies.paths import (
     CreateMissingWorkspaceRemedy,
     FixPathSeparatorsRemedy,
 )
+from marianne.healing.remedies.spec_fix import SuggestRecomposeRemedy, SuggestSpecFixRemedy
 
 __all__ = [
+    "SuggestRecomposeRemedy",
+    "SuggestSpecFixRemedy",
     # Base
     "Remedy",
     "RemedyCategory",

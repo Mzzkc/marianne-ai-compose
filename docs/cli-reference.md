@@ -2352,3 +2352,37 @@ mzt logs my-job --level ERROR
 # 5. Try recovery (re-validate without re-execute)
 mzt recover my-job --dry-run
 ```
+
+### `mzt remediate`
+
+Diagnose failed sheets using the same remedy registry and healing coordinator as
+conductor self-healing. The command reads persisted job context and attempt
+history from the authoritative registry; it does not update checkpoint status or
+restart execution.
+
+```bash
+mzt remediate JOB_ID --dry-run
+mzt remediate JOB_ID --sheet 2 --yes
+mzt remediate JOB_ID --json
+```
+
+| Argument / option | Purpose |
+| --- | --- |
+| `JOB_ID` | Registered job identifier |
+| `--workspace`, `-w` | Override the workspace used for remedies and spec loading |
+| `--sheet INT` | Select a single sheet, including a nonterminal sheet with an error |
+| `--yes` | Approve suggested remedies without prompting |
+| `--dry-run` | Preview remedies without applying them or prompting |
+| `--json` | Emit reports as JSON on stdout; confirmation prompts go to stderr |
+
+AUTOMATIC remedies apply unless `--dry-run` is set. SUGGESTED remedies ask for
+confirmation unless `--yes` is set. DIAGNOSTIC remedies provide manual guidance.
+Spec fixes and re-compose are guidance-only proposals in this version: the command
+does not edit specifications or execute re-compose. Config loading and spec corpus
+warnings appear in the report. Applying offline remedies requires a terminal job;
+use `--dry-run` to inspect other jobs. Without a workspace override, the stored
+configuration supplies the workspace.
+
+Use `mzt diagnose` for read-only job reporting and `mzt recover` for validation-based
+recovery. Remediation repairs supported causes or explains the next manual action;
+it does not mark a failed sheet complete.

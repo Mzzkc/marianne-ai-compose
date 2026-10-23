@@ -75,6 +75,46 @@ class ErrorContext:
     raw_config_yaml: str | None = None
     validation_details: list[ValidationDetailDict] = field(default_factory=list)
 
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_checkpoint_sheet(
+        cls,
+        sheet: "SheetState",
+        sheet_num: int,
+        *,
+        workspace: str = "",
+        config_path: str | None = None,
+        config: "JobConfig | None" = None,
+    ) -> "ErrorContext":
+        """Adapt persisted checkpoint fields without relying on baton counters."""
+        history = [dict(entry) for entry in sheet.attempt_history if isinstance(entry, dict)]
+        return cls(
+            error_code=sheet.error_code or "E009",
+            error_message=sheet.error_message or "",
+            error_category=sheet.error_category.value if sheet.error_category else "execution",
+            exit_code=sheet.exit_code,
+            signal=sheet.exit_signal,
+            stdout_tail=sheet.stdout_tail or "",
+            stderr_tail=sheet.stderr_tail or "",
+            workspace=Path(workspace) if workspace else None,
+            working_directory=Path(workspace) if workspace else None,
+            config_path=Path(config_path) if config_path else None,
+            config=config,
+            sheet_number=sheet_num,
+            retry_count=sheet.attempt_count,
+            max_retries=config.retry.max_retries if config else 0,
+            previous_errors=[entry["error_code"] for entry in history
+                             if isinstance(entry.get("error_code"), str)],
+            metadata={
+                "attempt_history": history,
+                "instrument_fallback_history": [
+                    dict(entry) for entry in sheet.instrument_fallback_history
+                    if isinstance(entry, dict)
+                ],
+            },
+        )
+
     @classmethod
     def from_execution_result(
         cls,

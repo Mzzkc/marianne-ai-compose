@@ -178,6 +178,8 @@ class TestRemedyRegistry:
             "create_missing_parent_dirs",
             "fix_path_separators",
             "suggest_jinja_fix",
+            "suggest_spec_fix",
+            "suggest_recompose",
             "diagnose_auth_error",
             "diagnose_missing_cli",
         }
