@@ -17,7 +17,10 @@ history or separate user-modification diff capture.
 
 The sanitizer recursively scrubs paths, home-directory usernames, email addresses,
 URLs, credential fields, tokens, private keys, and credential-shaped strings in
-mapping keys and values, including diagnostic prose. Transport configuration is
+mapping keys and values, including diagnostic prose. A mapping key is treated as
+a credential when any of its `_`, `-` or camelCase segments is a credential word
+(`access_key`, `auth`, `AccessToken`, `session-cookie`); the usage counters
+(`input_tokens`, `token_count`, and so on) are exempt by exact name. Transport configuration is
 excluded from the score payload. Pattern matching cannot guarantee anonymity:
 names or other personal facts in arbitrary prompts and output can remain.
 Inspect an export before deciding to share it. Do not enable collection for

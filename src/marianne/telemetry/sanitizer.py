@@ -13,11 +13,24 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from marianne.core.config import JobConfig
 
-_SENSITIVE_KEY = re.compile(
-    r"^(?:.*[_-])?(?:api[_-]?key|token|password|passwd|secret|credential[s]?|"
-    r"authorization|cookie|private[_-]?key|username|user[_-]?id|email|env|environment)$",
-    re.IGNORECASE,
-)
+# A key is sensitive when ANY of its `_`/`-` separated segments (after
+# splitting camelCase) is one of these words, so `access_key`, `auth`,
+# `access_token_v2` and `AccessKey` all redact, not only keys that END in a
+# sensitive word (the original suffix match let those through).
+_SENSITIVE_SEGMENTS = frozenset({
+    "apikey", "api", "key", "keys", "token", "password", "passwd",
+    "passphrase", "secret", "secrets", "credential", "credentials", "auth",
+    "authorization", "access", "cookie", "private", "username",
+    "user", "userid", "email", "env", "environment",
+})
+# Usage counters are what telemetry exists to report; they carry the word
+# "token" but hold integers, not credentials. Exact names only.
+_COUNTER_KEYS = frozenset({
+    "token_count", "tokens_used", "input_tokens", "output_tokens",
+    "total_input_tokens", "total_output_tokens", "estimated_tokens",
+})
+_SEGMENT_SPLIT = re.compile(r"[_\-\s.]+")
+_CAMEL_SPLIT = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 _REDACTIONS = (
     (re.compile(
         r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----.*?"
@@ -29,8 +42,12 @@ _REDACTIONS = (
     (re.compile(r"(?<![\w])(?:~[^/\s]*[/\\]|/)[^\s\"'<>]*"), "[PATH]"),
     (re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE), "[EMAIL]"),
     (re.compile(r"\bBearer\s+[^\s\"'<>]+", re.IGNORECASE), "[SECRET]"),
+    # `name = value` / `"name": value` / `'name': 'value'` where the name
+    # carries a sensitive word anywhere. An optional closing quote may sit
+    # between the name and the separator (JSON and Python dict literals).
     (re.compile(
-        r"\b(?:[\w-]*(?:token|password|secret|api[_-]?key|credential)[\w-]*)"
+        r"\b(?:[\w-]*(?:token|password|passwd|passphrase|secret|api[_-]?key|"
+        r"credential|auth|access[_-]?key|private[_-]?key)[\w-]*)[\"']?"
         r"\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s\"',;}]+)", re.IGNORECASE,
     ), "[SECRET]"),
     (re.compile(r"\b(?:sk-|gh[pousr]_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]+"), "[SECRET]"),
@@ -62,8 +79,11 @@ def _sanitize(value: Any) -> Any:
 
 
 def _sensitive_key(key: str) -> bool:
-    normalized = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", key)
-    return _SENSITIVE_KEY.fullmatch(normalized) is not None
+    normalized = _CAMEL_SPLIT.sub("_", key).lower()
+    if normalized in _COUNTER_KEYS:
+        return False
+    segments = [seg for seg in _SEGMENT_SPLIT.split(normalized) if seg]
+    return any(seg in _SENSITIVE_SEGMENTS for seg in segments)
 
 
 def sanitize_score(score: JobConfig | dict[str, Any]) -> dict[str, Any]:

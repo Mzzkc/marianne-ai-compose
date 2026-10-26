@@ -67,3 +67,20 @@ def test_private_keys_and_quoted_credentials_removed() -> None:
     encoded = json.dumps(result)
     for secret in ("short-private-key", "multi word secret", "short-token", "short-key"):
         assert secret not in encoded
+
+
+def test_quoted_secret_names_and_any_sensitive_segment_redact() -> None:
+    """Review of the #146 merge: a closing quote before the separator and a
+    sensitive word that is not the key's last segment both slipped through."""
+    from marianne.telemetry.sanitizer import _sensitive_key, _text
+
+    assert _text("'password': 'hunter2'") == "'[SECRET]"
+    assert _text('"api_key": "sk-live-abc123"') == '"[SECRET]'
+    assert _text("auth: supersecret") == "[SECRET]"
+    assert _text("passphrase=opensesame") == "[SECRET]"
+    for key in ("access_key", "auth", "access_token_v2", "AccessKey", "session-cookie"):
+        assert _sensitive_key(key), key
+    for key in ("timeout_seconds", "sheet_num", "model", "instrument", "name", "outcome",
+                "token_count", "input_tokens", "total_output_tokens", "InputTokens"):
+        assert not _sensitive_key(key), key
+    assert _text("timeout_seconds: 1800") == "timeout_seconds: 1800"
