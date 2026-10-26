@@ -11,6 +11,8 @@ These scores automate software development workflows — from solving GitHub iss
 | [issue-solver](issue-solver.yaml) | Consumes the triage DAG, self-chains through solvable issues, plans phased implementation, executes with parallel quality review, commits and ships | 13 | Succession Pipeline, Fan-out + Synthesis, Read-and-React | 2-8h/iter | ~$40-100/iter |
 | [quality-continuous](quality-continuous.yaml) | Language-agnostic quality pipeline — parallel expert reviews, batched fixes by difficulty, commits and files GitHub issues for next iteration | 16 | Immune Cascade, Fan-out + Synthesis | 10-15h | ~$50-130 |
 | [score-composer](score-composer.yaml) | Reads a design document and generates a runnable Marianne score with implementation tasks, validations, and dependencies | 4 | Succession Pipeline | 1-2h | ~$10-20 |
+| [spec-forge](spec-forge.yaml) | Concept → intake, five blind domain lenses, a parts breakdown, one spec and integration doc per part, three-family review with mutual-find triage and bounded repair, then a stakeholder brief held in FERMATA for approval | 20 (+ loop) | Reconnaissance Pull → Rashomon Gate → Constraint Propagation Sweep → Fan-out + Synthesis | 45-90m | loop-bounded |
+| [design-to-orchestra](design-to-orchestra.yaml) | Approved specs → repertoire survey, per-part casting, one build score per part, an integration score and a fleet; every generated score gated by `mzt validate` (no errors or warnings but V311), the composing release checker with a lock, a fleet-membership check and a two-family verdict before it hands over RUN.md | 23 (+ loop) | Reconnaissance Pull → Fan-out + Synthesis → The Etiquette Law → Rashomon Gate | 1-2h | loop-bounded |
 | [project-roadmap](project-roadmap.yaml) | Audits any project from seven analytical frames, triangulates the findings and produces a prioritized roadmap with milestones, a task list, a Mermaid timeline and a slide deck | 24 | Immune Cascade → Rashomon Gate → Sugya Weave → Fan-out + Synthesis | 40-60m | ~$15-28 |
 | [codebase-rewrite](codebase-rewrite.yaml) | Coverage-first language/framework migration: cover the source to a floor, rewrite test-bound units until unit, integration, functional and differential tiers all pass, then refine under the same oracle with critics on different models | 18 (+ loops) | Cathedral Construction + CEGAR Loop + Commissioning Cascade + Rashomon refinement | 2-8h/iter | loop-bounded |
 | [saas-app-builder](saas-app-builder.yaml) | Full-stack application generator with contract-first parallel builds and validation gates | 8 | Prefabrication + Shipyard Sequence + Commissioning Cascade | 2-6h | ~$10-30 |
@@ -46,6 +48,23 @@ This is **Immune Cascade** — cheap broad scanning (expert reviews) identifies 
 Transforms design documents into executable implementation scores. Given a design doc, it produces a structured analysis identifying all deliverables and dependencies, decomposes them into ordered implementation tasks with acceptance criteria, generates a Marianne score YAML where each sheet is one implementation step, validates the score syntax, and produces documentation explaining how to run it.
 
 This is **Succession Pipeline** — each stage requires categorically different methods (analytical reading → decomposition → code generation → syntax validation) and each output becomes the next input substrate. The generated score can then be run to execute the implementation automatically.
+
+### spec-forge.yaml + design-to-orchestra.yaml (concert)
+
+The two halves of taking a rough concept to a running orchestra, in any domain. Both are the shipped machinery behind the conducting skill's concept-to-completion route.
+
+**spec-forge** turns a concept file (and an optional flat directory of stakeholder notes) into specs a team can build from. An intake sheet records the problem, deeper needs (stated or inferred), hard and soft limits, tempo and open questions, each with the assumption it proceeds on. Five lenses (COMP, SCI, CULT, EXP, META) examine the problem in parallel without seeing each other; a breakdown sheet resolves their conflicts into a system design, a `parts.yaml` of up to eight parts in parallel waves, and a decisions log. Each part then gets its own `spec.md` and `integration.md` (empty slots skip at no cost). Three reviewers on three model families review the set; triage keeps the cross-section of their findings: CRITICAL/HIGH findings two families agree on are blockers, real single-family findings are deferred to a polish backlog, unconfirmed outliers are discarded. Blockers loop back through repair and re-review, at most three passes. The last sheet writes a stakeholder brief and holds in FERMATA until `mzt resolve spec-forge <sheet> accept`.
+
+**design-to-orchestra** consumes that `specs/` tree. It surveys the shipped repertoire (examples, Rosetta patterns, primitives, techniques, persistent agents, live instrument classes), casts each part as a team with independent review and generous budgets, and writes one build score per part, an integration score that joins the parts and puts a prototype in front of people, and a `type: fleet` that runs each wave in parallel and integration last. A deterministic `cli` gate runs `mzt validate` on every generated score (any error or warning fails it, except V311, which names an instrument this machine lacks), runs the composing release checker and writes a lock, checks that the fleet names exactly the gated scores and that every part has one, and dry-runs the fleet. Two reviewers on different families then read the scores blind to each other, a verdict sheet keeps the cross-section of their findings, and blockers loop back to composition. Release writes `RUN.md` whose start commands re-verify every lock, so a score edited after review refuses to start, and submits the fleet only when `submit=true`.
+
+```bash
+mzt run examples/engineering/spec-forge.yaml --var concept_file=/abs/concept.md --var context_dir=/abs/context
+mzt resolve spec-forge <sheet> accept
+mzt run examples/engineering/design-to-orchestra.yaml \
+  --var specs_dir=$HOME/workspaces/spec-forge/specs --var project_root=/abs/project
+```
+
+The repair loops end at a cap rather than spinning: spec-forge's last triage pass fails the job honestly if blockers remain, and design-to-orchestra's release refuses an orchestra without `GATE: PASS` and an APPROVE verdict.
 
 ### codebase-rewrite.yaml
 

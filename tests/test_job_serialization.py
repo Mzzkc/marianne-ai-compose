@@ -178,9 +178,11 @@ class TestToYamlRoundTrip:
     )
     def test_example_score_roundtrip(self, example_name: str):
         """Example scores survive to_yaml -> from_yaml_string roundtrip."""
-        example_path = Path(f"examples/{example_name}.yaml")
-        if not example_path.exists():
-            pytest.skip(f"Example {example_name}.yaml not found")
+        # Examples live in category folders; a missing example is a broken
+        # test, not a skip (the flat path silently skipped all ten).
+        matches = sorted(Path("examples").rglob(f"{example_name}.yaml"))
+        assert len(matches) == 1, f"expected one examples/**/{example_name}.yaml, found {matches}"
+        example_path = matches[0]
         original = JobConfig.from_yaml(example_path)
         yaml_str = original.to_yaml()
         restored = JobConfig.from_yaml_string(yaml_str)

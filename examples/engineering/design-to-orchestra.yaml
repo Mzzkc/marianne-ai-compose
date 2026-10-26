@@ -1,0 +1,803 @@
+# design-to-orchestra.yaml
+#
+# Approved design → the orchestra that builds it. The second score of the
+# conducting flow (casting → writing the scores); its input is the specs/
+# tree spec-forge.yaml produces (or any tree with the same shape), its output
+# is a validated, reviewed, lock-checked fleet ready to run.
+#
+# It writes one build score per part, one integration score that joins the
+# parts and puts the prototype in front of people, and a fleet that runs the
+# parts of each wave in parallel and the integration after them. It submits
+# nothing until every generated score passes `mzt validate`, the composing
+# release checker and an independent review on another model family, and
+# then only when `submit: true`.
+#
+# Pattern composition:
+#   Reconnaissance Pull (1) → Fan-out per part (2: casting, 3: composition)
+#   → The Etiquette Law: deterministic gate on every generated score (4)
+#   → Rashomon Gate, spread across families (5) → verdict (6)
+#   → bounded repair (loop 3-6)
+#   → Prefabrication + Commissioning Cascade in the generated orchestra
+#   → fleet submission (7).
+#
+# Flow (7 movements, 23 sheets after fan-out):
+#
+#   1 Repertoire          Marianne examples, Rosetta patterns, primitives,
+#                         techniques and agents that fit this design
+#   2 Casting         x8  per part: who builds, who tests, who reviews, how long
+#   3 Composition     x9  per part: a build score; slot 9: integration + fleet
+#   4 Gate (cli)          per score: strict validate, release checker, lock;
+#                         the fleet: every member exists and is gated
+#   5 Review          x2  two reviewers on different families read the scores
+#   6 Verdict             cross-section of both reviews and the gate
+#        └─ loop 3-6: until review/APPROVED exists, at most 3 passes
+#   7 Release (cli)       writes RUN.md; submits the fleet only if submit: true
+#
+# Inputs:
+#   specs_dir     an approved specs/ tree: 00-system.md, parts.yaml,
+#                 decisions.md, NN-<part>/{spec,integration}.md
+#   project_root  where the work happens (the generated scores mutate it)
+#   context_dir   optional: stakeholder notes, constraints, existing work
+#
+# Output (in the workspace):
+#   01-repertoire.md
+#   casting/NN-<part>.yaml
+#   orchestra/NN-<part>.yaml, orchestra/integration.yaml, orchestra/fleet.yaml
+#   orchestra/NN-<part>.lock.json, orchestra/integration.lock.json
+#   04-gate.txt, review/orchestra-{1,2}-pass{P}.md, review/orchestra-verdict.yaml
+#   RUN.md — the exact commands to start, watch and steer the orchestra
+#
+# Run it from this repository (the gate calls the composing skill's scripts
+# beside it):
+#   mzt validate examples/engineering/design-to-orchestra.yaml
+#   mzt run examples/engineering/design-to-orchestra.yaml \
+#     --var specs_dir=$HOME/workspaces/spec-forge/specs \
+#     --var project_root=/abs/project \
+#     --var tempo=standard
+#   Read RUN.md, then start the fleet it names (or set --var submit=true).
+#
+# Strictness: every generated score must pass `mzt validate --strict` except
+# for V311 (a chain entry this machine cannot run), which is a fact about the
+# venue, not the score; the gate reports it and moves on.
+#
+# Time: ~60-120 min. Cost depends on part count; nothing it writes runs
+# until the fleet is submitted.
+
+name: "design-to-orchestra"
+description: "Approved specs → per-part build scores, an integration score and a fleet, each validated, reviewed and locked"
+
+# Workspace auto-derives to ~/workspaces/design-to-orchestra (#58).
+
+instrument: strong
+instrument_config:
+  timeout_seconds: 3600
+
+instruments:
+  reviewer:
+    chain: [codex-cli, claude-code, antigravity]
+    select: [spread, balance]
+    config:
+      timeout_seconds: 3600
+
+movements:
+  1:
+    name: "Repertoire"
+    instrument: high-context     # reads a lot: examples, corpus, primitives
+  2:
+    name: "Casting"
+    instrument: strong
+  3:
+    name: "Composition"
+    instrument: strong
+  4:
+    name: "Gate"
+    instrument: cli
+    instrument_fallbacks: []
+  5:
+    name: "Review"
+    instrument: reviewer
+  6:
+    name: "Verdict"
+    instrument: strong
+  7:
+    name: "Release"
+    instrument: cli
+    instrument_fallbacks: []
+
+sheet:
+  size: 1
+  total_items: 7
+  fan_out:
+    2: 8
+    3: 9
+    5: 2
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+    7: [6]
+
+  # The deterministic gate and release never fall back to a model: a failed
+  # command must stay failed (The Etiquette Law). Sheets 19 and 23 are
+  # movements 4 and 7 after fan-out (1 + 8 casting + 9 composition = 18;
+  # review voices are 20-21, the verdict 22).
+  per_sheet_fallbacks:
+    19: []
+    23: []
+
+  # The approved design reaches every sheet.
+  prelude:
+    - file: "{{ specs_dir }}/00-system.md"
+      as: context
+      required: true
+    - file: "{{ specs_dir }}/parts.yaml"
+      as: context
+      required: true
+    - file: "{{ specs_dir }}/decisions.md"
+      as: context
+      required: true
+
+  # Casting and composition slots beyond the part count skip at dispatch.
+  # Composition slot 9 is the integration score and always runs. The count
+  # is the parsed length of parts.yaml; an unreadable file runs the slot and
+  # its validation fails loudly.
+  skip_when:
+    2:
+      command: 'python3 -c "import sys,yaml; n=len(yaml.safe_load(open(sys.argv[1])) or []); sys.exit(0 if n < int(sys.argv[2]) else 1)" {specs_dir}/parts.yaml {instance}'
+      description: "No part in this casting slot"
+    3:
+      command: 'test {instance} -ne 9 && python3 -c "import sys,yaml; n=len(yaml.safe_load(open(sys.argv[1])) or []); sys.exit(0 if n < int(sys.argv[2]) else 1)" {specs_dir}/parts.yaml {instance}'
+      description: "No part in this composition slot"
+
+  # Compose, gate, review, decide; repeat until the verdict sheet's
+  # validation writes review/APPROVED. Passes 2+ change only what the
+  # verdict names. At the cap the verdict gate fails the job rather than
+  # releasing an unapproved orchestra. No cost cap on the span: ending the
+  # loop on cost would skip that gate.
+  loops:
+    3-6:
+      index: pass_no
+      until: 'file("review/APPROVED").exists'
+      max_iterations: 3
+
+parallel:
+  enabled: true
+  max_concurrent: 9
+  stagger_delay_ms: 500
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 12000
+  lookback_sheets: 0
+  capture_files:
+    - "{{ workspace }}/01-repertoire.md"
+    - "{{ workspace }}/04-gate.txt"
+    - "{{ workspace }}/review/orchestra-verdict.yaml"
+
+retry:
+  max_retries: 2
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+workspace_lifecycle:
+  foreign_artifacts: quarantine
+
+prompt:
+  variables:
+    # ─────────────────────────────────────────────
+    # Supply these with --var (or edit them here).
+    # ─────────────────────────────────────────────
+    specs_dir: ""             # REQUIRED. Absolute path to the approved specs/.
+    project_root: ""          # REQUIRED. Absolute path the orchestra builds in.
+    context_dir: ""           # Optional. Flat dir of stakeholder/venue notes.
+    tempo: "standard"         # rapid | standard | thorough
+    submit: "false"           # "true" submits the fleet after release
+    marianne_root: "{{ score_dir }}/../.."
+    composing_scripts: "{{ score_dir }}/../../plugins/marianne/skills/composing/scripts"
+
+  template: |
+    {% macro sources() %}
+    ## Sources
+    - The approved design is injected above: system design, parts list and
+      decisions. Every part's `spec.md` and `integration.md` live under
+      `{{ specs_dir }}/NN-<id>/`. The design is the authority; when it is
+      silent, decide, and record the decision in your output.
+    - The work happens in `{{ project_root }}`. Generated scores mutate it;
+      this score only writes into `{{ workspace }}`.
+    {% if context_dir %}
+    - Read every file in `{{ context_dir }}`: stakeholders, constraints and
+      existing work a person in the room would know.
+    {% endif %}
+    - Tempo is **{{ tempo }}**. rapid: a prototype people can touch first,
+      minor faults recorded for polish; standard: an internal release;
+      thorough: production-grade from the first cut. Tempo changes how many
+      repair passes a score may spend and which faults may ship; it never
+      removes independent review.
+    {% endmacro %}
+
+    {% macro composing_rules() %}
+    ## How every generated score is written
+    These rules come from Marianne's composing and score-authoring skills
+    (`{{ marianne_root }}/plugins/marianne/skills/composing/SKILL.md`,
+    `.../score-authoring/SKILL.md`, `.../docs/ref/essentials.md`,
+    `patterns.md`, `advanced.md`). Read them before writing YAML.
+    - Inject the part's spec, integration doc, the system design and the
+      decisions into every sheet with `prelude` entries (`required: true`).
+      Builders, testers and reviewers all read the same design.
+    - Bind instruments per role with aliases over EXISTING profiles or
+      capability classes (`strong`, `workhorse`, `fast`, `review`,
+      `writing`, `high-context`). Never write a new instrument profile.
+      Review fan-outs use one alias with `select: [spread, balance]` so the
+      voices run on different model families.
+    - Split by context, not by problem type: the builder is one long sheet
+      on a frontier model with the whole part in its context, not a relay
+      of recon → plan → work sheets. Separate sheets exist where a fresh or
+      independent context is the point.
+    - Tests are written by a different sheet (and preferably a different
+      model family) than the implementation. For code: tests first, then
+      implementation until they pass; coverage ≥ 90%; clean lint and static
+      analysis. For documents and other media: deterministic checks on what
+      the artifact states (figures agree across sections, limits met,
+      required sections present, every claim traced to a source) and
+      reviewers who read it as its audience will. Never give a part a gate
+      its medium cannot fail.
+    - Validate outcomes, not effort: every sheet's validations must fail if
+      the goal was not met (run the tests, check coverage, parse the
+      artifact). `file_exists` alone is never enough.
+    - Repair is a bounded `sheet.loops` span (implement → verify → review),
+      with `until` on a file the verification writes and a `max_iterations`
+      set from the tempo (rapid 2, standard 3, thorough 5).
+    - Review findings: classify by the cross-section of model families.
+      CRITICAL/HIGH findings raised by two or more families are blockers and
+      enter the repair loop. Single-family findings are triaged once; real
+      ones not blocking the prototype go to a `deferred.md` for polish.
+    - Budgets: generous. A sheet that runs a full test suite gets
+      `timeout_seconds: 3600` or more; long build sheets 7200+. Enable
+      `stale_detection` with `idle_timeout_seconds: 1800` or more so silent
+      test runs are not killed, and so a hung sheet is caught within half an
+      hour instead of stalling for hours.
+    - Deterministic checks run as `instrument: cli` sheets with
+      `per_sheet_fallbacks: {N: []}`.
+    - Workspaces never equal or contain `project_root`. Use
+      `$MARIANNE_SCRATCH` for clones and worktrees.
+    - A sheet that injects a file an earlier sheet writes must declare it in
+      `<score-stem>.generated-inputs.yaml` beside the score (the format is
+      in `{{ composing_scripts }}/check_score_release.py`), or the release
+      gate refuses the score for a missing injection.
+    - Jinja `{% raw %}{{ }}{% endraw %}` in prompts and injection paths;
+      Python-format `{}` in validations and `skip_when`.
+    {% endmacro %}
+
+    {% if stage == 1 %}
+    # Repertoire — what already exists for this design
+
+    {{ sources() }}
+
+    Do not invent what Marianne already has. Survey, then recommend:
+
+    1. **Examples.** `{{ marianne_root }}/examples/README.md` and each
+       category README. Name the closest scores for each part's `kind` by
+       their path from the repository root, and what to reuse, adapt or
+       reject from each (`examples/engineering/issue-solver.yaml`'s bounded
+       implementation loop, `examples/engineering/codebase-rewrite.yaml`'s
+       four-tier oracle, `examples/engineering/saas-app-builder.yaml`'s
+       contract-first parallel build, `examples/patterns/design-review.yaml`'s
+       spread reviewers, `examples/product/contract-generator.yaml` for
+       documents, `examples/engineering/quality-continuous.yaml` for polish).
+    2. **Patterns.** `{{ marianne_root }}/scores/rosetta-corpus/INDEX.md`,
+       `forces.md` and `selection-guide.md`; then read the full file of each
+       pattern you select under `scores/rosetta-corpus/patterns/`.
+    3. **Primitives.** The real score dialect and its primitives:
+       `scores/rosetta-corpus/archive/rosetta-corpus.md` (section "The Real
+       Dialect"), `{{ marianne_root }}/docs/configuration-reference.md`
+       (loops, triggers, skip_when, fan-out, fleet, techniques). List the
+       primitives this orchestra should use and where.
+    4. **Techniques and agents.** `{{ marianne_root }}/plugins/marianne/techniques/`
+       and `{{ marianne_root }}/plugins/marianne/agent-scores/roster.yaml`.
+       Note which persistent agents fit which parts and which techniques
+       (mateship, coordination, memory-protocol, specialists) they carry.
+       `marianne-agents census` shows who is installed on this machine.
+    5. **Instruments.** Run `mzt instruments classes show` and
+       `mzt instruments list`; record which classes resolve and to what.
+
+    Write `{{ workspace }}/01-repertoire.md` with sections
+    `## Examples`, `## Patterns`, `## Primitives`, `## Techniques and agents`,
+    `## Instruments` and `## Recommendation per part` (one `### <part-id>`
+    each: the shape its build score should take and why).
+
+    {% elif stage == 2 %}
+    # Casting — slot {{ instance }}
+
+    {{ sources() }}
+
+    Read `{{ workspace }}/01-repertoire.md`. Find the part with
+    `slot: {{ instance }}` in the injected parts list, and read its
+    `spec.md` and `integration.md`.
+
+    Decide who does this work and how it is proven. Most parts need a team:
+    a builder, a separate test author, two or more reviewers on different
+    families, sometimes a researcher.
+
+    Split by context, not by problem type. On a frontier model, one
+    long-running builder that keeps the whole part in one context usually
+    beats a relay of recon → plan → work sheets that lose context at every
+    handoff. Give the builder its own seat for as long as the part needs
+    (hours, not minutes). Use separate sheets only where a separate context
+    is the point: tests written blind to the implementation, reviewers on
+    other families, independent research paths, parallel parts, and
+    deterministic checks.
+
+    Prefer existing persistent agents whose role fits (their memory and
+    mateship let them pick up loose work); use ephemeral musicians through
+    capability classes otherwise. When it is unclear how to break the part
+    into sheets, cast a persistent agent's lifecycle to loop on the part
+    through its cadenza directory instead (`shape: agent-lifecycle`).
+
+    Write `{{ workspace }}/casting/<NN>-<id>.yaml` (NN = slot, two digits):
+
+    ```yaml
+    part: <id>
+    shape: score              # score | agent-lifecycle
+    base_example: examples/engineering/issue-solver.yaml   # closest shipped score, or none
+    patterns: [prefabrication, commissioning-cascade]      # rosetta pattern files used
+    roles:
+      - role: builder
+        cast: workhorse       # capability class, alias over an existing profile, or agent:<id>
+        why: "long tool-driven edit/test cycles"
+      - role: test-author
+        cast: strong
+        why: "writes the tests before the builder starts, different family"
+      - role: reviewer
+        cast: review          # spread across families
+        voices: 3
+    review_methods: [tdd, coverage-90, static-analysis, semantic-review]
+    human_review: "prototype demo after wave 1"   # or none
+    budgets:
+      build_sheet_timeout_seconds: 7200
+      verify_sheet_timeout_seconds: 3600
+      repair_max_iterations: 3
+      idle_timeout_seconds: 1800
+    techniques: [mateship, coordination]
+    ```
+
+    {% elif stage == 3 and instance < 9 %}
+    # Composition — build score for slot {{ instance }}, pass {{ pass_no }}
+
+    {{ sources() }}
+
+    {{ composing_rules() }}
+
+    Read `{{ workspace }}/01-repertoire.md`, your part's casting file in
+    `{{ workspace }}/casting/`, and the part's `spec.md` and
+    `integration.md`. Read the base example the casting names in full.
+
+    {% if pass_no > 1 %}
+    Repair pass {{ pass_no }}. Read `{{ workspace }}/04-gate.txt` and
+    `{{ workspace }}/review/orchestra-verdict.yaml`. Fix only what they name
+    for your score. If nothing is named for it, leave it unchanged.
+    {% endif %}
+
+    Write `{{ workspace }}/orchestra/<NN>-<id>.yaml`: a complete, runnable
+    Marianne score that builds this part in `{{ project_root }}` to its
+    acceptance criteria, following the casting. Name it `<id>-build` and use
+    an absolute workspace under `{{ workspace }}/runs/<id>`. It must:
+
+    - deliver the part's `## Prototype cut` first and prove it, then the rest;
+    - run the part's review methods with authors and reviewers separated;
+    - end with a verification sheet whose validations re-run the real checks
+      (tests, coverage, lint, the part's integration checks against its
+      contracts) and fail if any is red;
+    - write `{{ workspace }}/runs/<id>/deferred.md` with every finding the
+      repair loop chose not to fix, for the polish phase.
+
+    If the casting's shape is `agent-lifecycle`, write instead a short
+    score that prepares the agent's cadenza directory with the part's spec,
+    integration doc and acceptance checks and runs the verification sheet,
+    and record the `marianne-agents engage` command for the agent in a
+    comment at the top of the file.
+
+    {% elif stage == 3 and instance == 9 %}
+    # Composition — integration score and fleet, pass {{ pass_no }}
+
+    {{ sources() }}
+
+    {{ composing_rules() }}
+
+    Read `{{ workspace }}/01-repertoire.md`, every file in
+    `{{ workspace }}/casting/`, and every part's `integration.md`.
+
+    {% if pass_no > 1 %}
+    Repair pass {{ pass_no }}. Read `{{ workspace }}/04-gate.txt` and
+    `{{ workspace }}/review/orchestra-verdict.yaml`. Fix only what they name
+    for the integration score or the fleet.
+    {% endif %}
+
+    Write two files:
+
+    1. `{{ workspace }}/orchestra/integration.yaml` — a score named
+       `<project>-integration` that joins the built parts in
+       `{{ project_root }}`: runs every part's integration checks, the whole
+       test suite once, coverage and static analysis; puts the prototype in
+       front of people (a runnable demo, a deployed preview, a rendered
+       document, whatever fits the medium) and writes
+       `{{ workspace }}/runs/integration/handoff.md` saying how to try it;
+       and gathers every part's `deferred.md` into
+       `{{ workspace }}/runs/integration/polish-backlog.md`. It ends with a
+       review by two families and a verdict file. Failed integration checks
+       route back to the owning part through a bounded repair loop.
+
+    2. `{{ workspace }}/orchestra/fleet.yaml` — a `type: fleet` config.
+       Member paths are relative to the fleet file. Each wave in the parts
+       list is a group; group N+1 `depends_on` group N; integration is the
+       last group, depending on every wave:
+
+       ```yaml
+       name: <project>-orchestra
+       type: fleet
+       scores:
+         - path: 01-ingest.yaml
+           group: wave-1
+         - path: integration.yaml
+           group: integration
+       groups:
+         wave-1: {depends_on: []}
+         integration: {depends_on: [wave-1]}
+       ```
+
+       Agent-lifecycle parts are started with their `engage` command, not
+       through the fleet; list them in a comment at the top of fleet.yaml.
+
+    {% elif stage == 4 %}
+    set -uo pipefail
+    ws="{{ workspace }}"
+    orch="$ws/orchestra"
+    scripts="{{ composing_scripts }}"
+    project="{{ project_root }}"
+    specs="{{ specs_dir }}"
+    out="$ws/04-gate.txt"
+    {
+      echo "gate pass {{ pass_no }} $(date -u +%FT%TZ)"
+      fail=0
+      if [ -z "$project" ] || [ ! -d "$project" ]; then
+        echo "FAIL project_root is unset or not a directory: '$project'"; fail=1
+      fi
+      if [ ! -f "$scripts/check_score_release.py" ]; then
+        echo "FAIL release checker not found at $scripts (run this score from the Marianne repository)"; fail=1
+      fi
+      gated=""
+      for score in "$orch"/*.yaml; do
+        name=$(basename "$score")
+        case "$name" in fleet.yaml|*.generated-inputs.yaml) continue ;; esac
+        [ -f "$score" ] || { echo "FAIL no generated scores in $orch"; fail=1; break; }
+        lock="${score%.yaml}.lock.json"
+        mzt validate "$score" --json > "$score.validate.json" 2> "$score.validate.err"
+        verdict=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); bad=[i['check_id'] for i in d.get('issues',[]) if i.get('severity') in ('error','warning') and i.get('check_id')!='V311']; print('ok' if d.get('valid') and not bad else 'bad:' + ','.join(bad or ['invalid']))" "$score.validate.json" 2>/dev/null || echo "bad:unparseable")
+        if [ "$verdict" = "ok" ]; then
+          echo "PASS validate $name"
+        else
+          echo "FAIL validate $name ($verdict)"
+          mzt validate "$score" 2>&1 | sed 's/^/    /' | tail -40
+          fail=1
+          continue
+        fi
+        if python3 "$scripts/check_score_release.py" "$score" --project-root "$project" --lock "$lock" --write-lock > "$score.release.txt" 2>&1; then
+          echo "PASS release+lock $name"
+          gated="$gated $name"
+        else
+          echo "FAIL release $name"; sed 's/^/    /' "$score.release.txt" | tail -40; fail=1
+        fi
+      done
+      # The fleet must name exactly the gated scores, every part must have a
+      # build score, and every member path must exist next to the fleet.
+      if python3 - "$orch" "$specs/parts.yaml" "$gated" <<'PY'
+    import sys, yaml, pathlib
+    orch, parts_file, gated = pathlib.Path(sys.argv[1]), sys.argv[2], set(sys.argv[3].split())
+    parts = yaml.safe_load(open(parts_file))
+    fleet = yaml.safe_load((orch / "fleet.yaml").read_text())
+    assert fleet.get("type") == "fleet", "fleet.yaml is not a type: fleet document"
+    members = [s["path"] for s in fleet.get("scores", [])]
+    missing = [m for m in members if not (orch / m).is_file()]
+    assert not missing, f"fleet members that do not exist: {missing}"
+    expected = {f"{p['slot']:02d}-{p['id']}.yaml" for p in parts} | {"integration.yaml"}
+    absent = sorted(n for n in expected if not (orch / n).is_file())
+    assert not absent, f"parts without a generated score: {absent}"
+    ungated = sorted(set(members) - gated)
+    assert not ungated, f"fleet members that did not pass the gate: {ungated}"
+    lifecycle = sorted(n for n in expected - set(members) if "marianne-agents engage" not in (orch / n).read_text())
+    assert not lifecycle, f"scores neither in the fleet nor started by engage: {lifecycle}"
+    groups = {s.get("group") for s in fleet["scores"]}
+    assert "integration" in groups, "integration must be its own last group"
+    PY
+      then
+        echo "PASS fleet membership"
+      else
+        echo "FAIL fleet membership"; fail=1
+      fi
+      if mzt run "$orch/fleet.yaml" --dry-run > "$orch/fleet.dry-run.txt" 2>&1; then
+        echo "PASS fleet dry-run"
+      else
+        echo "FAIL fleet dry-run"; sed 's/^/    /' "$orch/fleet.dry-run.txt" | tail -40; fail=1
+      fi
+      if [ "$fail" -eq 0 ]; then echo "GATE: PASS"; else echo "GATE: FAIL"; fi
+    } > "$out" 2>&1
+    cat "$out"
+    exit 0
+
+    {% elif stage == 5 %}
+    # Orchestra review — voice {{ instance }} of {{ fan_count }}, pass {{ pass_no }}
+
+    {{ sources() }}
+
+    You are an independent reviewer on a different model family from the
+    other voice, and you cannot see its review. Read
+    `{{ workspace }}/04-gate.txt` first. Then read every score in
+    `{{ workspace }}/orchestra/` against the design and the castings.
+
+    {% if instance == 1 %}
+    Focus: **will this orchestra deliver the design?** Does every part's
+    acceptance criterion have a validation that fails when it is unmet? Are
+    tests authored separately from implementation? Do the prototype cut and
+    the human handoff happen early? Does integration actually join the
+    contracts the integration docs name? Do the gates fit each part's
+    medium (code gates on code, document checks on documents)?
+    {% else %}
+    Focus: **will it run, finish and not stall?** Timeouts and idle
+    detection sized for the real work; bounded repair loops; per-role
+    instruments over existing profiles; no deterministic check that can
+    fall back to a model; parallel waves where the design allows; nothing
+    that writes into `~/.marianne/instruments/`; workspaces outside the
+    project root.
+    {% endif %}
+
+    Write `{{ workspace }}/review/orchestra-{{ instance }}-pass{{ pass_no }}.md`
+    with one `### F<n>` heading per finding and these plain lines:
+
+    ```
+    Severity: HIGH
+    Score: 01-ingest.yaml
+    What: the defect, concretely
+    Fix: the smallest change that resolves it
+    ```
+
+    Severity is one of CRITICAL, HIGH, MEDIUM, LOW. If you find nothing
+    worth reporting, write the single line `NO FINDINGS`.
+
+    {% elif stage == 6 %}
+    # Orchestra verdict — pass {{ pass_no }} of at most 3
+
+    Read `{{ workspace }}/04-gate.txt`,
+    `{{ workspace }}/review/orchestra-1-pass{{ pass_no }}.md` and
+    `{{ workspace }}/review/orchestra-2-pass{{ pass_no }}.md`, then the
+    scores the findings point at. The two reviews come from different model
+    families. Classify every finding:
+
+    - **BLOCKER** — every FAIL line in the gate; every CRITICAL or HIGH
+      finding both reviewers raised (same defect, possibly different words);
+      and any single-reviewer CRITICAL you confirm in the score text.
+    - **DEFERRED** — real, but it does not stop the orchestra delivering
+      the prototype at tempo `{{ tempo }}`. Append each to
+      `{{ workspace }}/review/orchestra-deferred.md` as a `- ` bullet.
+    - **DISCARDED** — a single-family finding you could not confirm. One
+      line why.
+
+    Write `{{ workspace }}/review/orchestra-verdict.yaml` (overwrite), with
+    `verdict:` unquoted at the start of its line:
+
+    ```yaml
+    pass: {{ pass_no }}
+    verdict: APPROVE      # APPROVE only when the gate passed and no blockers remain
+    blockers:
+      - score: 01-ingest.yaml
+        fix: "..."
+    ```
+
+    Do not write `review/APPROVED` yourself; the score writes it from your
+    verdict.
+    {% if pass_no >= 3 %}
+    This is the last allowed pass. If blockers remain, write REWORK honestly.
+    {% endif %}
+
+    {% elif stage == 7 %}
+    set -euo pipefail
+    ws="{{ workspace }}"
+    orch="$ws/orchestra"
+    grep -q '^GATE: PASS' "$ws/04-gate.txt"
+    test -f "$ws/review/APPROVED"
+    {
+      echo "# Running the orchestra"
+      echo
+      echo "Generated $(date -u +%FT%TZ) from \`{{ specs_dir }}\`."
+      echo
+      echo "Every score below passed \`mzt validate\` with no errors or"
+      echo "warnings (V311, an instrument this machine lacks, excepted), the"
+      echo "composing release checker with a lock, and a two-family review."
+      echo
+      echo "## Start"
+      echo
+      echo "Each lock was written at the gate; verifying it here refuses a"
+      echo "score edited since it was reviewed. Any FAIL stops the start."
+      echo
+      echo '```bash'
+      echo "set -euo pipefail"
+      for score in "$orch"/*.yaml; do
+        case "$(basename "$score")" in fleet.yaml|*.generated-inputs.yaml) continue ;; esac
+        echo "python3 {{ composing_scripts }}/check_score_release.py $score --project-root {{ project_root }} --lock ${score%.yaml}.lock.json"
+      done
+      echo "mzt run $orch/fleet.yaml"
+      grep -h '^# *marianne-agents engage' "$orch"/*.yaml 2>/dev/null | sed 's/^# *//' || true
+      echo '```'
+      echo
+      echo "## Watch"
+      echo
+      echo '```bash'
+      echo "mzt status          # every score in the orchestra"
+      echo "mzt top             # live resource view"
+      echo '```'
+      echo
+      echo "## Deferred for polish"
+      echo
+      cat "$ws/review/orchestra-deferred.md" 2>/dev/null || echo "(none)"
+    } > "$ws/RUN.md"
+    if [ "{{ submit }}" = "true" ]; then
+      sed -n '/^```bash$/,/^```$/p' "$ws/RUN.md" | sed '1d;$d' > "$ws/start.sh"
+      bash "$ws/start.sh"
+      echo "SUBMITTED $(date -u +%FT%TZ)" >> "$ws/RUN.md"
+    fi
+    cat "$ws/RUN.md"
+    {% endif %}
+
+validations:
+  # Repertoire: grounded in the real corpus, not invented.
+  - type: content_regex
+    path: "{workspace}/01-repertoire.md"
+    pattern: "(?s)## Examples.*## Patterns.*## Primitives.*## Techniques and agents.*## Instruments.*## Recommendation per part"
+    condition: "stage == 1"
+    description: "Repertoire has every section"
+  - type: command_succeeds
+    command: |
+      python3 - {workspace}/01-repertoire.md {score_dir} <<'PY'
+      import re, sys, pathlib
+      text, root = open(sys.argv[1]).read(), pathlib.Path(sys.argv[2]).parent.parent
+      cited = set(re.findall(r"examples/[a-z0-9_/-]+\.yaml", text))
+      patterns = set(re.findall(r"patterns/[a-z0-9-]+\.md", text))
+      assert cited, "cites no shipped example score"
+      assert patterns, "cites no rosetta pattern file"
+      missing = [c for c in cited if not (root / c).exists()]
+      missing += [p for p in patterns if not (root / "scores/rosetta-corpus" / p).exists()]
+      assert not missing, f"cites files that do not exist: {missing}"
+      PY
+    condition: "stage == 1"
+    stage: 2
+    description: "Every cited example and pattern exists"
+
+  # Casting: one well-formed casting file per part slot.
+  - type: command_succeeds
+    command: |
+      python3 - {workspace} {specs_dir} {instance} <<'PY'
+      import sys, yaml, pathlib
+      ws, specs, slot = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), int(sys.argv[3])
+      part = next(p for p in yaml.safe_load(open(specs / "parts.yaml")) if p["slot"] == slot)
+      c = yaml.safe_load(open(ws / "casting" / f"{slot:02d}-{part['id']}.yaml"))
+      assert c["part"] == part["id"], "casting names the wrong part"
+      assert c["shape"] in ("score", "agent-lifecycle"), "shape"
+      roles = {r["role"] for r in c["roles"]}
+      assert len(c["roles"]) >= 2, "a part needs a team, not a soloist"
+      assert any("review" in r for r in roles), "no reviewer cast"
+      assert c["budgets"]["idle_timeout_seconds"] >= 1800, "idle timeout too short for silent test runs"
+      PY
+    condition: "stage == 2"
+    description: "Casting is well-formed, cast as a team with independent review"
+
+  # Composition: each generated score parses as a Marianne score and is not
+  # a toy: it injects the design, has a bounded repair loop and gates on
+  # something stronger than file existence.
+  - type: command_succeeds
+    command: |
+      python3 - {workspace} {specs_dir} {instance} <<'PY'
+      import sys, yaml, pathlib
+      ws, specs, slot = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), int(sys.argv[3])
+      if slot == 9:
+          path = ws / "orchestra" / "integration.yaml"
+          fleet = yaml.safe_load(open(ws / "orchestra" / "fleet.yaml"))
+          assert fleet.get("type") == "fleet" and fleet.get("scores"), "fleet.yaml is not a fleet"
+      else:
+          part = next(p for p in yaml.safe_load(open(specs / "parts.yaml")) if p["slot"] == slot)
+          path = ws / "orchestra" / f"{slot:02d}-{part['id']}.yaml"
+      s = yaml.safe_load(open(path))
+      sheet = s.get("sheet", {})
+      assert sheet.get("prelude"), f"{path.name}: the design is not injected"
+      assert sheet.get("loops"), f"{path.name}: no bounded repair loop"
+      types = {v.get("type") for v in s.get("validations", [])}
+      assert "command_succeeds" in types, f"{path.name}: no executed validation"
+      PY
+    condition: "stage == 3"
+    description: "Generated score injects the design, loops boundedly and runs real checks"
+
+  # Gate: the cli sheet always exits 0 so the review sees every failure at
+  # once. The report must be this pass's, and every generated score must
+  # carry a PASS or FAIL verdict in it (a stub report names none).
+  - type: content_regex
+    path: "{workspace}/04-gate.txt"
+    pattern: "GATE: (PASS|FAIL)"
+    condition: "stage == 4"
+    description: "Gate report is complete"
+  - type: command_succeeds
+    command: |
+      python3 - {workspace} {pass_no} <<'PY'
+      import re, sys, pathlib
+      ws, this_pass = pathlib.Path(sys.argv[1]), sys.argv[2]
+      report = (ws / "04-gate.txt").read_text()
+      assert report.startswith(f"gate pass {this_pass} "), "gate report is not from this pass"
+      scores = sorted(p.name for p in (ws / "orchestra").glob("*.yaml")
+                      if p.name != "fleet.yaml" and not p.name.endswith(".generated-inputs.yaml"))
+      unjudged = [s for s in scores if not re.search(rf"^(PASS|FAIL) validate {re.escape(s)}\b", report, re.M)]
+      assert scores and not unjudged, f"scores the gate did not judge: {unjudged or 'none generated'}"
+      assert re.search(r"^(PASS|FAIL) fleet membership$", report, re.M), "fleet membership not checked"
+      PY
+    condition: "stage == 4"
+    stage: 2
+    description: "Gate judged every generated score and the fleet this pass"
+
+  # Reviews: plain labels are asked for; tolerate bold/backticked labels.
+  - type: content_regex
+    path: "{workspace}/review/orchestra-{instance}-pass{pass_no}.md"
+    pattern: "(?si)(### F\\d+.*[`*]*Severity[`*]*:[`*]*\\s*(CRITICAL|HIGH|MEDIUM|LOW)|^\\s*NO FINDINGS\\s*$)"
+    condition: "stage == 5"
+    description: "Review records findings with severities (or NO FINDINGS)"
+
+  # Verdict: parsed, consistent with the gate, and the only writer of the
+  # review/APPROVED marker that ends the loop and admits release. The last
+  # pass fails the job if it is still REWORK.
+  - type: command_succeeds
+    command: |
+      python3 - {workspace} {pass_no} <<'PY'
+      import sys, yaml, pathlib
+      ws, this_pass = pathlib.Path(sys.argv[1]), int(sys.argv[2])
+      v = yaml.safe_load((ws / "review/orchestra-verdict.yaml").read_text())
+      assert v["pass"] == this_pass, "verdict is not for this pass"
+      assert v["verdict"] in ("APPROVE", "REWORK"), "verdict must be APPROVE or REWORK"
+      blockers = v.get("blockers") or []
+      gate_pass = "GATE: PASS" in (ws / "04-gate.txt").read_text()
+      assert v["verdict"] != "APPROVE" or (gate_pass and not blockers), \
+          "APPROVE requires GATE: PASS and no blockers"
+      assert v["verdict"] != "REWORK" or blockers, "REWORK must name its blockers"
+      marker = ws / "review/APPROVED"
+      if v["verdict"] == "APPROVE":
+          marker.write_text(f"pass {this_pass}\n")
+      elif marker.exists():
+          marker.unlink()
+      PY
+    condition: "stage == 6"
+    description: "Verdict is consistent with the gate"
+  - type: command_succeeds
+    command: 'test {pass_no} -lt 3 || test -f {workspace}/review/APPROVED'
+    condition: "stage == 6"
+    stage: 2
+    description: "Orchestra approved within the pass budget"
+
+  # Release: only an approved, gated orchestra is handed over, and its start
+  # commands must actually pass on the scores as they stand now.
+  - type: content_regex
+    path: "{workspace}/RUN.md"
+    pattern: "(?s)## Start.*mzt run .*fleet\\.yaml.*## Watch"
+    condition: "stage == 7"
+    description: "RUN.md names the fleet and how to watch it"
+  - type: command_succeeds
+    command: |
+      python3 - {workspace} <<'PY'
+      import re, subprocess, sys, pathlib
+      ws = pathlib.Path(sys.argv[1])
+      assert (ws / "review/APPROVED").is_file(), "orchestra not approved"
+      assert re.search(r"^GATE: PASS$", (ws / "04-gate.txt").read_text(), re.M), "gate did not pass"
+      start = (ws / "RUN.md").read_text().split("## Start", 1)[1]
+      block = start.split("```bash\n", 1)[1].split("\n```", 1)[0]
+      checks = "\n".join(line for line in block.splitlines() if not line.startswith("mzt run "))
+      subprocess.run(["bash", "-euo", "pipefail", "-c", checks], check=True)
+      PY
+    condition: "stage == 7"
+    stage: 2
+    description: "Approved, gated, and every lock still verifies"

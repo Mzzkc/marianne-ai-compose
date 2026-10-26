@@ -1,0 +1,619 @@
+# spec-forge.yaml
+#
+# Concept → specs and designs a team can build from. The first score of the
+# conducting flow (intake → breakdown); its output is the input of
+# design-to-orchestra.yaml, the score that writes the orchestra.
+#
+# Works for any domain. "Code" is one kind of part; a campaign, a grant
+# application or a curriculum decomposes the same way, with deliverables and
+# review methods that fit the medium.
+#
+# Pattern composition:
+#   Reconnaissance Pull (1) → Rashomon Gate over five domain frames (2)
+#   → Constraint Propagation Sweep + Decision Propagation (3)
+#   → Fan-out per part (4) → Rashomon Gate, spread across model families (5)
+#   → mutual-find triage (6) → bounded repair + reevaluation (loop 4-6)
+#   → stakeholder brief (7) → human approval, a FERMATA on sheet 7.
+#
+# Flow (7 movements, 20 sheets after fan-out):
+#
+#   1 Intake              problem, limits, deeper needs, tempo, open questions
+#   2 Domain lenses   x5  COMP | SCI | CULT | EXP | META, each blind to the others
+#   3 Breakdown           system design, parts list, parallel waves, decisions
+#   4 Part specs      x8  one spec + one integration doc per part (empty slots skip)
+#   5 Review          x3  three reviewers on three model families (spread)
+#   6 Triage              mutual finds are blockers; single-family finds are notes
+#        └─ loop 4-6: until review/verdict.yaml says APPROVE, at most 3 passes
+#   7 Stakeholder brief   the design laid out against the deeper needs;
+#                         the score then holds for the composer's decision
+#
+# Output (in the workspace):
+#   01-intake.md, 02-lens-{comp,sci,cult,exp,meta}.md
+#   specs/00-system.md, specs/parts.yaml, specs/decisions.md
+#   specs/NN-<part>/spec.md + specs/NN-<part>/integration.md
+#   review/{N}-pass{P}.md, review/verdict.yaml, review/deferred.md
+#   07-stakeholder-brief.md
+#
+# Run it:
+#   1. Write the concept to a file (a paragraph is enough; more is better).
+#   2. Optionally fill a context directory with anything a person in the room
+#      would know: stakeholders.md, constraints.md, existing-work.md, prior
+#      designs. Flat directory; every file in it is read.
+#   3. mzt validate examples/engineering/spec-forge.yaml
+#   4. mzt run examples/engineering/spec-forge.yaml \
+#        --var concept_file=/abs/concept.md \
+#        --var context_dir=/abs/context \
+#        --var tempo=standard
+#   5. The score pauses in FERMATA on its last sheet. Read
+#      07-stakeholder-brief.md, then:
+#        mzt resolve spec-forge <last-sheet> accept   # approve the design
+#        mzt resolve spec-forge <last-sheet> retry    # after editing the specs
+#      `mzt status spec-forge` shows the sheet number.
+#   6. Feed specs/ to design-to-orchestra.yaml.
+#
+# tempo: rapid | standard | thorough. It sets how many review passes the loop
+# may spend and what a part must prove before a prototype ships; it never
+# weakens the review itself. Rapid tolerates more recorded minor faults.
+#
+# Time: ~45-90 min standard. Review voices run on three vendor families, so the
+# `reviewer` chain needs at least two installed (`mzt instruments list`).
+
+name: "spec-forge"
+description: "Concept → reviewed specs, part designs and integration docs, held for stakeholder approval"
+
+# Workspace auto-derives to ~/workspaces/spec-forge (#58).
+
+instrument: strong
+instrument_config:
+  timeout_seconds: 3600
+
+# Bound per role. Lenses want breadth and disagreement; breakdown and triage
+# want the strongest reasoning; part specs are long careful writing; review
+# voices must not share a blind spot.
+instruments:
+  lens:
+    chain: [claude-code, codex-cli, antigravity]
+    select: [cycle, balance]
+    config:
+      timeout_seconds: 2400
+  reviewer:
+    chain: [codex-cli, claude-code, antigravity]
+    select: [spread, balance]
+    config:
+      timeout_seconds: 3600
+
+movements:
+  1:
+    name: "Intake"
+    instrument: strong
+  2:
+    name: "Domain Lenses"
+    instrument: lens
+  3:
+    name: "Breakdown"
+    instrument: strong
+  4:
+    name: "Part Specs"
+    instrument: writing
+  5:
+    name: "Review"
+    instrument: reviewer
+  6:
+    name: "Triage"
+    instrument: strong
+  7:
+    name: "Stakeholder Brief"
+    instrument: writing
+
+sheet:
+  size: 1
+  total_items: 7
+  fan_out:
+    2: 5
+    4: 8
+    5: 3
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+    7: [6]
+
+  # Everything a person in the room would know reaches every sheet.
+  prelude:
+    - file: "{{ concept_file }}"
+      as: context
+      required: true
+
+  # Part slots beyond the breakdown's part count skip at dispatch, at no cost.
+  # The count is the parsed length of specs/parts.yaml (the stage-3 gate has
+  # already proved it is a 1..8 list); an unreadable file runs the slot, and
+  # the slot's own validation then fails loudly instead of skipping silently.
+  skip_when:
+    4:
+      command: 'python3 -c "import sys,yaml; n=len(yaml.safe_load(open(sys.argv[1])) or []); sys.exit(0 if n < int(sys.argv[2]) else 1)" {workspace}/specs/parts.yaml {instance}'
+      description: "No part in this slot"
+
+  # Review and repair: write the part specs, review them on three families,
+  # triage; repeat until the triage writes review/APPROVED. Passes 2+ revise
+  # only what the triage names. The marker is written by sheet 6's own
+  # validation from the parsed verdict, so prose inside a REWORK verdict can
+  # never end the loop. At the cap the loop ends and sheet 6's gate fails
+  # the job honestly instead of handing an unapproved design to the composer.
+  # No cost cap on the span: a cap that ends the loop early would skip that
+  # gate and surface only at stage 7.
+  loops:
+    4-6:
+      index: pass_no
+      until: 'file("review/APPROVED").exists'
+      max_iterations: 3
+
+  # The composer approves the design. Sheet 7 holds in FERMATA until
+  # `mzt resolve spec-forge <sheet> accept` (or retry after edits).
+  triggers:
+    7:
+      on_success:
+        - escalate: >-
+            Specs ready for stakeholder review: read 07-stakeholder-brief.md,
+            then `mzt resolve` accept to approve or retry after editing specs/.
+
+parallel:
+  enabled: true
+  max_concurrent: 8
+  stagger_delay_ms: 500
+
+cross_sheet:
+  auto_capture_stdout: false
+  max_output_chars: 12000
+  lookback_sheets: 0
+  capture_files:
+    - "{{ workspace }}/01-intake.md"
+    - "{{ workspace }}/specs/00-system.md"
+    - "{{ workspace }}/specs/decisions.md"
+    - "{{ workspace }}/review/verdict.yaml"
+
+retry:
+  max_retries: 2
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+prompt:
+  variables:
+    # ─────────────────────────────────────────────
+    # Supply these with --var (or edit them here).
+    # ─────────────────────────────────────────────
+    concept_file: ""          # REQUIRED. Absolute path to the concept/brief.
+    context_dir: ""           # Optional. Flat dir of stakeholder/venue notes.
+    project_root: ""          # Optional. Existing project to build on.
+    tempo: "standard"         # rapid | standard | thorough
+
+    lenses:
+      1:
+        id: comp
+        frame: "COMP — structure, logic, dependencies, data and control flow, what must be computed or decided"
+      2:
+        id: sci
+        frame: "SCI — evidence and falsifiability: what is known, what is assumed, what must be measured, what would prove the solution wrong"
+      3:
+        id: cult
+        frame: "CULT — people and meaning: who uses this, who maintains it, who pays for it, which norms, institutions and prior work it must respect"
+      4:
+        id: exp
+        frame: "EXP — felt quality: what it is like to use, to receive, to maintain; where friction, hesitation or delight will live"
+      5:
+        id: meta
+        frame: "META — what the request is not saying: the question behind the question, framing errors, what everyone in the room is likely to miss"
+
+    reviewer_focus:
+      1: "Buildability and integration: can independent teams build each part from its spec alone and have the parts meet? Are interfaces, data shapes and ownership explicit?"
+      2: "Deeper needs and acceptance: does the design answer the problem and the stakeholders' unstated needs? Are acceptance criteria observable, and do the limits and tempo actually shape the design?"
+      3: "Failure and maintenance: what breaks first, what is hard to change, what a new maintainer cannot understand, where quality is not baked in (modularity, tests, review method, coverage)."
+
+  template: |
+    {% macro sources() %}
+    ## Sources
+    - The concept is injected above. It is the authority on what was asked.
+    {% if context_dir %}
+    - Read every file in `{{ context_dir }}`. It holds what a person in the
+      room would know: stakeholders, constraints, prior designs, existing work.
+      Weight it heavily; it outranks your assumptions.
+    {% endif %}
+    {% if project_root %}
+    - An existing project lives at `{{ project_root }}`. Build on what it
+      already uses. Read its README, layout and conventions before proposing
+      anything that contradicts them.
+    {% endif %}
+    - Tempo is **{{ tempo }}**. rapid = a usable prototype soon, more minor
+      faults tolerated and recorded; standard = an internal release; thorough
+      = production-grade from the first cut.
+    {% endmacro %}
+
+    {% if stage == 1 %}
+    # Intake — what actually needs to be solved
+
+    {{ sources() }}
+
+    Write `{{ workspace }}/01-intake.md` with exactly these sections:
+
+    ## Problem
+    The problem in one paragraph, in the stakeholders' terms. Then the
+    problem underneath it, if different.
+
+    ## Stakeholders and deeper needs
+    Each stakeholder, what they asked for, and what they need beyond what
+    they said. Mark each deeper need as STATED or INFERRED, and cite what in
+    the sources supports an inference.
+
+    ## Limits
+    Every limit the work must stay inside: time, money, people, skills,
+    platforms, data, legal, ethical, maintenance. Mark each HARD or SOFT.
+    Limits change; say which ones look likely to move.
+
+    ## Tempo
+    How fast this must be usable and what that buys. Say what fault
+    tolerance the tempo implies: which faults may ship in the first cut and
+    be recorded for polish, and which never may.
+
+    ## Success
+    Observable acceptance: what someone could check to know this worked.
+
+    ## Open questions
+    Questions only a stakeholder can answer, most consequential first, each
+    with the assumption the design will make if nobody answers. Never block
+    on these: assume, record, and continue.
+
+    {% elif stage == 2 %}
+    {% set lens = lenses[instance] %}
+    # Domain lens {{ instance }} of {{ fan_count }} — {{ lens.id | upper }}
+
+    {{ sources() }}
+
+    Read `{{ workspace }}/01-intake.md`. Then examine the whole problem through
+    one frame only:
+
+    **{{ lens.frame }}**
+
+    The other four lenses run in parallel and you cannot see them. Do not
+    try to be balanced; be deep in your frame. Write
+    `{{ workspace }}/02-lens-{{ lens.id }}.md` with:
+
+    ## What this frame sees
+    The shape of the solution as this frame reveals it.
+
+    ## Requirements this frame adds
+    Concrete requirements the intake missed, each one testable.
+
+    ## Risks this frame sees
+    What will go wrong if this frame is ignored.
+
+    ## Questions for the other frames
+    Where this frame needs an answer only another frame can give.
+
+    {% elif stage == 3 %}
+    # Breakdown — the system design and its parts
+
+    {{ sources() }}
+
+    Read `{{ workspace }}/01-intake.md` and all five
+    `{{ workspace }}/02-lens-*.md`. Where the lenses converge, that is the
+    shape of the solution. Where they conflict, decide, and record why.
+
+    Design for change: modular parts with explicit interfaces, so that
+    humans can maintain and extend each part without understanding the
+    whole. Bake quality in from the start: each part names its review
+    method (for code: TDD by a separate agent, coverage ≥ 90%, clean static
+    analysis; for other media: the equivalent proof that it works).
+
+    Write three files:
+
+    1. `{{ workspace }}/specs/00-system.md` — the system design: purpose,
+       architecture or structure, the parts and how they connect, shared
+       contracts (interfaces, data shapes, formats, voice, brand — whatever
+       the parts must agree on), non-goals, and how the whole is accepted.
+
+    2. `{{ workspace }}/specs/parts.yaml` — the parts list, at most 8, in
+       this shape (design-to-orchestra.yaml parses it):
+
+       ```yaml
+       - id: ingest            # lowercase, digits and '-' only
+         title: "Email ingest"
+         slot: 1               # 1..N, in this order; becomes specs/01-ingest/
+         wave: 1               # parts in the same wave build in parallel
+         depends_on: []        # ids whose CONTRACT this part consumes
+         kind: code            # code | content | research | design | data | ops
+         review: [tdd, static-analysis, semantic]   # how this part is proven
+         prototype: true       # part of the first thing humans can touch
+       ```
+
+       Prefer one wave: a part that only needs another part's contract can
+       build against the contract in parallel. Use a later wave only when a
+       part needs another part's finished output.
+
+    3. `{{ workspace }}/specs/decisions.md` — every load-bearing decision,
+       one per `## D<n>: <title>` heading, with the alternatives considered
+       and why this one, so downstream agents cannot unknowingly contradict
+       it.
+
+    {% elif stage == 4 %}
+    # Part spec — slot {{ instance }}, pass {{ pass_no }}
+
+    {{ sources() }}
+
+    Read `{{ workspace }}/specs/parts.yaml` and find the part with
+    `slot: {{ instance }}`. Read `{{ workspace }}/specs/00-system.md` and
+    `{{ workspace }}/specs/decisions.md`.
+
+    {% if pass_no > 1 %}
+    This is repair pass {{ pass_no }}. Read `{{ workspace }}/review/verdict.yaml`.
+    Fix only the blockers it assigns to your part (and any system-level
+    blocker that changes your part). Do not rewrite what was not flagged.
+    If nothing is assigned to your part, leave the files unchanged.
+    {% endif %}
+
+    Write two files in `{{ workspace }}/specs/<NN>-<id>/` where NN is the
+    slot number zero-padded to two digits:
+
+    **spec.md** — a builder could deliver this part from this file and the
+    system design alone:
+    - `## Purpose`, `## Scope` and `## Non-goals`
+    - `## Interfaces` — what it offers and consumes, exactly
+    - `## Behaviour` — what it does, including failure and edge cases
+    - `## Acceptance` — observable checks, each one a thing a reviewer or a
+      test can run
+    - `## Review method` — how this part is proven (its `review:` list made
+      concrete: test layout and coverage target, reviewer lenses, human
+      review points)
+    - `## Prototype cut` — what the first usable version includes and what
+      waits for polish
+
+    **integration.md** — how this part fits the larger system:
+    - `## Depends on` and `## Consumed by`, naming contracts, not just parts
+    - `## Integration checks` — the checks that prove the joins work
+    - `## Change impact` — what else must change if this part's contract does
+
+    {% elif stage == 5 %}
+    # Review voice {{ instance }} of {{ fan_count }}, pass {{ pass_no }}
+
+    You are an independent reviewer. Two other reviewers on different model
+    families review the same specs in parallel; you cannot see them.
+
+    Focus: **{{ reviewer_focus[instance] }}**
+
+    Read `{{ workspace }}/01-intake.md`, every file in `{{ workspace }}/specs/`
+    and every part directory beneath it. Judge the specs as a set.
+
+    Write `{{ workspace }}/review/{{ instance }}-pass{{ pass_no }}.md`. Each
+    finding gets its own `### F<n>` heading and these plain lines (no bold,
+    no backticks around the labels):
+
+    ```
+    Severity: HIGH
+    Where: specs/01-ingest/spec.md, ## Interfaces
+    What: the defect, concretely
+    Why it matters: the consequence for the build or the stakeholders
+    Fix: the smallest change that resolves it
+    ```
+
+    Severity is one of CRITICAL, HIGH, MEDIUM, LOW.
+
+    CRITICAL means the parts cannot be built or will not integrate, or the
+    design misses a stated need. HIGH means a reasonable builder would ship
+    something wrong. Do not inflate severity, and do not report taste as a
+    defect. If you find nothing worth reporting, write the single line
+    `NO FINDINGS` instead.
+
+    {% elif stage == 6 %}
+    # Triage — pass {{ pass_no }} of at most 3
+
+    Read the three reviews for this pass:
+    `{{ workspace }}/review/1-pass{{ pass_no }}.md`,
+    `{{ workspace }}/review/2-pass{{ pass_no }}.md`,
+    `{{ workspace }}/review/3-pass{{ pass_no }}.md`.
+    Then read the specs the findings point at.
+
+    The three reviews come from three model families. Agreement between
+    families is evidence; a finding only one family raised is more likely
+    to be noise or that model's blind spot. Classify every finding:
+
+    - **BLOCKER** — raised at CRITICAL or HIGH by at least two reviewers
+      (same defect, possibly different words), or raised by one reviewer
+      and confirmed by you in the spec text as making a part unbuildable or
+      a stated need unmet. Blockers must be fixed before approval.
+    - **DEFERRED** — real, but it does not block the first usable version
+      at tempo `{{ tempo }}`. It is recorded for the polish phase.
+    - **DISCARDED** — a single-family finding you could not confirm, taste,
+      or already addressed. Say why in one line.
+
+    Write `{{ workspace }}/review/deferred.md` (append; keep earlier passes)
+    with every DEFERRED finding as a `- ` bullet naming the part.
+
+    Write `{{ workspace }}/review/verdict.yaml` (overwrite) in exactly this
+    shape, with `verdict:` unquoted at the start of its line:
+
+    ```yaml
+    pass: {{ pass_no }}
+    verdict: APPROVE        # APPROVE when no blockers remain, else REWORK
+    blockers:               # empty list on APPROVE
+      - id: B1
+        part: ingest        # a part id, or "system"
+        raised_by: [1, 3]   # reviewer numbers
+        fix: "..."
+    deferred_count: 4
+    discarded_count: 2
+    ```
+
+    Do not write `review/APPROVED` yourself; the score writes it from your
+    verdict.
+
+    {% if pass_no >= 3 %}
+    This is the last allowed pass. If blockers remain, write REWORK honestly;
+    the composer decides what happens next. Never approve to end the loop.
+    {% endif %}
+
+    {% elif stage == 7 %}
+    # Stakeholder brief
+
+    {{ sources() }}
+
+    Read `{{ workspace }}/01-intake.md`, `{{ workspace }}/specs/` (all of it),
+    `{{ workspace }}/review/verdict.yaml` and `{{ workspace }}/review/deferred.md`.
+
+    Write `{{ workspace }}/07-stakeholder-brief.md` for the people who will
+    approve this design. Lead with what they care about, in their words, not
+    the specs' structure:
+
+    ## What you asked for, and what we heard underneath
+    ## What we will build
+    The parts in plain language, what each one does for them, and what they
+    can put their hands on first (the prototype cut) and when.
+    ## Decisions we made for you
+    The load-bearing decisions from specs/decisions.md they should check.
+    ## What we are deliberately not doing yet
+    The deferred findings and non-goals, honestly.
+    ## Questions only you can answer
+    From the intake's open questions, with the assumption we made for each.
+    ## How to approve
+    One line: approve as is, or say what to change.
+
+    Keep it under 1200 words. No jargon a stakeholder would not use.
+    {% endif %}
+
+validations:
+  # Intake
+  - type: content_regex
+    path: "{workspace}/01-intake.md"
+    pattern: "(?s)## Problem.*## Stakeholders and deeper needs.*## Limits.*## Tempo.*## Success.*## Open questions"
+    condition: "stage == 1"
+    description: "Intake has every required section in order"
+  - type: command_succeeds
+    command: |
+      python3 - {workspace}/01-intake.md <<'PY'
+      import re, sys
+      text = open(sys.argv[1]).read()
+      limits = text.split("## Limits", 1)[1].split("\n## ", 1)[0]
+      marks = re.findall(r"\b(HARD|SOFT)\b", limits)
+      assert len(marks) >= 2, "every limit is classified HARD or SOFT"
+      PY
+    condition: "stage == 1"
+    stage: 2
+    description: "Limits are classified hard or soft"
+
+  # Lenses: instance N writes the Nth lens file (comp, sci, cult, exp, meta).
+  - type: command_succeeds
+    command: |
+      python3 - {workspace} {instance} <<'PY'
+      import sys, pathlib
+      lens = ["comp", "sci", "cult", "exp", "meta"][int(sys.argv[2]) - 1]
+      text = (pathlib.Path(sys.argv[1]) / f"02-lens-{lens}.md").read_text()
+      for h in ("## What this frame sees", "## Requirements this frame adds", "## Risks this frame sees"):
+          assert h in text, f"02-lens-{lens}.md missing {h}"
+      PY
+    condition: "stage == 2"
+    description: "Lens report has its sections"
+
+  # Breakdown: the parts list parses, ids are unique, slots are 1..N, every
+  # dependency names a real part, and waves are positive integers. The file
+  # must also use one `- id:` line per part, the shape the downstream
+  # design-to-orchestra slot gates read.
+  - type: file_exists
+    path: "{workspace}/specs/00-system.md"
+    condition: "stage == 3"
+    description: "System design written"
+  - type: command_succeeds
+    command: |
+      python3 - {workspace}/specs/parts.yaml <<'PY'
+      import re, sys, yaml
+      raw = open(sys.argv[1]).read()
+      parts = yaml.safe_load(raw)
+      assert isinstance(parts, list) and 1 <= len(parts) <= 8, "1..8 parts required"
+      assert len(re.findall(r"(?m)^- id:", raw)) == len(parts), "one '- id:' line per part, at the start of each entry"
+      ids = [p["id"] for p in parts]
+      assert len(ids) == len(set(ids)), "duplicate part ids"
+      assert all(re.fullmatch(r"[a-z0-9-]+", i) for i in ids), "bad part id"
+      assert sorted(p["slot"] for p in parts) == list(range(1, len(parts) + 1)), "slots must be 1..N"
+      for p in parts:
+          assert isinstance(p.get("wave"), int) and p["wave"] >= 1, f"{p['id']}: wave"
+          assert set(p.get("depends_on", [])) <= set(ids), f"{p['id']}: unknown dependency"
+          assert p.get("review"), f"{p['id']}: review method required"
+      PY
+    condition: "stage == 3"
+    stage: 2
+    description: "parts.yaml is a well-formed parts list"
+  - type: content_regex
+    path: "{workspace}/specs/decisions.md"
+    pattern: "## D\\d+:"
+    condition: "stage == 3"
+    stage: 2
+    description: "Decisions are recorded"
+
+  # Part specs: the slot's part directory holds both documents with the
+  # sections builders and reviewers depend on.
+  - type: command_succeeds
+    command: |
+      python3 - {workspace} {instance} <<'PY'
+      import re, sys, yaml, pathlib
+      ws, slot = pathlib.Path(sys.argv[1]), int(sys.argv[2])
+      part = next(p for p in yaml.safe_load(open(ws / "specs/parts.yaml")) if p["slot"] == slot)
+      d = ws / "specs" / f"{slot:02d}-{part['id']}"
+      spec, integ = (d / "spec.md").read_text(), (d / "integration.md").read_text()
+      for h in ("## Interfaces", "## Behaviour", "## Acceptance", "## Review method", "## Prototype cut"):
+          assert h in spec, f"spec.md missing {h}"
+      for h in ("## Depends on", "## Consumed by", "## Integration checks"):
+          assert h in integ, f"integration.md missing {h}"
+      assert len(spec.split()) >= 300, "spec.md too thin to build from"
+      PY
+    condition: "stage == 4"
+    description: "Part spec and integration doc are complete"
+
+  # Review: plain labels are asked for; tolerate bold/backticked labels a
+  # reviewer may still add.
+  - type: content_regex
+    path: "{workspace}/review/{instance}-pass{pass_no}.md"
+    pattern: "(?si)(### F\\d+.*[`*]*Severity[`*]*:[`*]*\\s*(CRITICAL|HIGH|MEDIUM|LOW)|^\\s*NO FINDINGS\\s*$)"
+    condition: "stage == 5"
+    description: "Review records findings with severities (or NO FINDINGS)"
+
+  # Triage: the verdict parses and is consistent with itself. APPROVE means
+  # no blockers. A valid APPROVE writes review/APPROVED, which ends the loop
+  # and admits stage 7; any other verdict removes it. The last pass fails
+  # the job if it is still REWORK.
+  - type: command_succeeds
+    command: |
+      python3 - {workspace}/review {pass_no} <<'PY'
+      import sys, yaml, pathlib
+      review, this_pass = pathlib.Path(sys.argv[1]), int(sys.argv[2])
+      v = yaml.safe_load((review / "verdict.yaml").read_text())
+      assert v["pass"] == this_pass, "verdict is not for this pass"
+      assert v["verdict"] in ("APPROVE", "REWORK"), "verdict must be APPROVE or REWORK"
+      blockers = v.get("blockers") or []
+      assert (v["verdict"] == "APPROVE") == (not blockers), "APPROVE iff no blockers"
+      for b in blockers:
+          assert b.get("part") and b.get("fix"), "every blocker names a part and a fix"
+      marker = review / "APPROVED"
+      if v["verdict"] == "APPROVE":
+          marker.write_text(f"pass {this_pass}\n")
+      elif marker.exists():
+          marker.unlink()
+      PY
+    condition: "stage == 6"
+    description: "Verdict is well-formed and self-consistent"
+  - type: command_succeeds
+    command: 'test {pass_no} -lt 3 || test -f {workspace}/review/APPROVED'
+    condition: "stage == 6"
+    stage: 2
+    description: "Blockers resolved within the pass budget"
+
+  # Stakeholder brief
+  - type: content_regex
+    path: "{workspace}/07-stakeholder-brief.md"
+    pattern: "(?s)## What you asked for.*## What we will build.*## Decisions we made for you.*## What we are deliberately not doing yet.*## Questions only you can answer.*## How to approve"
+    condition: "stage == 7"
+    description: "Stakeholder brief has every section"
+  - type: command_succeeds
+    command: 'test -f {workspace}/review/APPROVED'
+    condition: "stage == 7"
+    stage: 2
+    description: "Only an approved design reaches the stakeholders"

@@ -872,6 +872,12 @@
       },
       "parse": "ok"
     },
+    "venue:examples/engineering/design-to-orchestra.yaml": {
+      "issues": {
+        "V325": 2
+      },
+      "parse": "ok"
+    },
     "venue:examples/engineering/issue-solver.yaml": {
       "issues": {
         "V325": 4
@@ -918,6 +924,12 @@
       "issues": {
         "V110": 1,
         "V325": 1
+      },
+      "parse": "ok"
+    },
+    "venue:examples/engineering/spec-forge.yaml": {
+      "issues": {
+        "V325": 2
       },
       "parse": "ok"
     },
