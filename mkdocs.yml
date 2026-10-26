@@ -93,6 +93,7 @@ nav:
       - Score Writing Guide: score-writing-guide.md
       - Configuration Reference: configuration-reference.md
       - Limitations: limitations.md
+      - Telemetry: telemetry.md
   - Reference:
       - CLI Reference: cli-reference.md
       - Marianne Technical Reference: marianne-reference.md

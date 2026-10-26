@@ -1,0 +1,32 @@
+{
+  "ok": true,
+  "status": "ok",
+  "final": "Created greeting.py.",
+  "payloads": [
+    {
+      "text": "intermediate distractor",
+      "isCommentary": true
+    },
+    {
+      "text": "Created greeting.py."
+    }
+  ],
+  "usage": {
+    "input": 100,
+    "output": 50,
+    "total": 150
+  },
+  "model": "configured-model",
+  "provider": "configured-provider",
+  "sessionId": "synthetic-session",
+  "result": "wrong result path",
+  "meta": {
+    "usage": {
+      "input": 999,
+      "output": 999
+    }
+  },
+  "error": {
+    "message": "distractor error path"
+  }
+}

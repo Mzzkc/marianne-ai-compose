@@ -156,6 +156,41 @@ If validations pass, the sheet is marked as complete. This is useful when:
 - A transient error caused failure after files were created
 - A rate limit killed the process after output was written
 
+### `mzt remediate` — Diagnose and Repair Failed Sheets
+
+When a sheet fails for a cause the conductor's remedies know about (a missing
+workspace, wrong path separators), use `mzt remediate` to diagnose and repair it
+offline using the same remedy registry and healing coordinator as conductor
+self-healing:
+
+```bash
+# Preview what remediation would do, without applying or prompting
+mzt remediate my-score --dry-run
+
+# Remediate a specific sheet (works even on a nonterminal sheet that has an error)
+mzt remediate my-score --sheet 6
+
+# Apply remedies, approving suggested ones without prompting
+mzt remediate my-score --yes
+```
+
+AUTOMATIC remedies apply unless `--dry-run` is set. SUGGESTED remedies ask for
+confirmation unless `--yes` is set. DIAGNOSTIC remedies provide manual guidance —
+spec fixes and re-compose are guidance-only proposals in this version: the command
+does not edit specifications or execute a re-compose.
+
+The command reads persisted job context and attempt history; it does not update
+checkpoint status or restart execution. After applying remedies it reports
+`Remediation finished. No retry was scheduled.` — re-run the score to pick up
+repaired state. Applying offline remedies requires a terminal job (FAILED,
+COMPLETED, or CANCELLED); use `--dry-run` to inspect any other job. Without a
+`--workspace` override, the stored configuration supplies the workspace.
+
+`mzt recover` and `mzt remediate` answer different questions: recover asks
+"was the work actually done despite the error?" and re-validates without
+re-executing; remediate asks "what was broken, and can a known fix be applied
+offline?" Use `mzt diagnose` first to understand the failure.
+
 ---
 
 ## Understanding Error Codes

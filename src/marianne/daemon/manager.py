@@ -88,6 +88,7 @@ from marianne.daemon.types import (
 )
 from marianne.instruments.classes import ClassMap, load_class_map, resolve_job_classes
 from marianne.instruments.registry import InstrumentRegistry
+from marianne.telemetry import TelemetryCollector
 from marianne.utils.time import utc_now
 
 _logger = get_logger("daemon.manager")
@@ -6290,6 +6291,31 @@ class JobManager:
         fragments = await asyncio.to_thread(_load)
         return spec.model_copy(update={"fragments": fragments})
 
+    async def _maybe_collect_telemetry(
+        self, job_id: str, config: ConcreteJobConfig, status: DaemonJobStatus,
+    ) -> None:
+        """Stage terminal live outcomes without affecting the execution result.
+
+        The baton mutates these SheetState objects directly, including retries,
+        validation diagnostics and learning metadata. No second outcome store
+        or execution-layer factory is needed. All disk consent reads are fresh.
+        """
+        if not config.telemetry.enabled:
+            return
+        try:
+            live = self._live_states.get(job_id)
+            if live is None:
+                return
+            sheets = [sheet.model_dump(mode="json") for sheet in live.sheets.values()]
+            # Collection does flock + fsync; keep it off the event loop like
+            # the other disk work in this module (the #243 contract).
+            await asyncio.to_thread(
+                lambda: TelemetryCollector().collect(config, status.value, sheets)
+            )
+        except Exception:  # noqa: BLE001 - optional telemetry must never fail a job
+            # Do not include payloads or filesystem exception text in logs.
+            _logger.warning("telemetry.collection_failed", job_id=job_id)
+
     async def _publish_baton_terminal(
         self, job_id: str, status: DaemonJobStatus,
     ) -> None:
@@ -6593,6 +6619,7 @@ class JobManager:
             # Update job-level status so mzt status agrees with mzt list.
             baton_final = DaemonJobStatus.COMPLETED if all_success else DaemonJobStatus.FAILED
             await self._publish_baton_terminal(job_id, baton_final)
+            await self._maybe_collect_telemetry(job_id, config, baton_final)
 
             # Publish completion event
             await adapter.publish_job_event(
@@ -6957,6 +6984,7 @@ class JobManager:
             # Update job-level status across all three stores.
             resume_final = DaemonJobStatus.COMPLETED if all_success else DaemonJobStatus.FAILED
             await self._publish_baton_terminal(job_id, resume_final)
+            await self._maybe_collect_telemetry(job_id, config, resume_final)
 
             await self._baton_adapter.publish_job_event(
                 job_id,

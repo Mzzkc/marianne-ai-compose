@@ -60,6 +60,7 @@ An **instrument** is any CLI tool wrapped in a YAML profile. Marianne treats ins
 | `crush`       | Crush — terminal-native AI agent |
 | `opencode`    | OpenCode — OpenRouter + native MCP |
 | `qwen-code`   | Qwen Code CLI — saved OAuth or OpenAI-compatible provider |
+| `openclaw`    | OpenClaw CLI — isolated headless runs with saved client auth |
 
 **Beyond agent harnesses:** any CLI takes a YAML profile. Wrap `pytest` to run validation as a sheet. Wrap `gh` to file issues from a score. Wrap your in-house deploy script. Marianne doesn't care what the binary is — only that it speaks stdin/stdout and returns an exit code.
 
@@ -112,6 +113,10 @@ Marianne developed much of itself through autonomous self-evolution scores — e
 For current source and test counts, inspect the repository and CI output rather
 than a static README number. The learning system records execution outcomes and
 can feed useful patterns forward when the conductor has evidence for them.
+An opt-in community telemetry pipeline (default-off) can stage sanitized score
+and outcome envelopes for local inspection and explicit submission; consent is
+a user-level decision separate from any score — see
+[docs/telemetry.md](docs/telemetry.md).
 
 This isn't a prototype. It's an R&D factory that happens to also be the product.
 
@@ -378,6 +383,7 @@ mzt instruments list        # See available instruments
 | `mzt logs <id>` | View or tail log sources |
 | `mzt history <id>` | Execution history from SQLite |
 | `mzt recover <id>` | Re-validate without re-execution |
+| `mzt remediate <id>` | Diagnose failed sheets and propose or apply remedies |
 
 ### Conductor
 
@@ -395,6 +401,15 @@ mzt instruments list        # See available instruments
 |---------|---------|
 | `mzt instruments list` | All instruments and their readiness |
 | `mzt instruments check <name>` | Deep diagnostic on one instrument |
+
+### Telemetry
+
+| Command | Purpose |
+|---------|---------|
+| `mzt telemetry status` | Consent state and staged envelope count |
+| `mzt telemetry consent --grant` | Grant user-level consent (opt-in) |
+| `mzt telemetry export` | Inspect staged envelopes (no sending) |
+| `mzt telemetry flush --push --endpoint URL` | Explicitly submit staged data |
 
 `mzt run` requires a running conductor. Only `mzt validate` and `--dry-run` work without one.
 
@@ -463,6 +478,7 @@ This project carries her name symbolically. This project can meaningfully compet
 | [Daemon Guide](docs/daemon-guide.md) | Conductor setup and troubleshooting |
 | [MCP Integration](docs/MCP-INTEGRATION.md) | Model Context Protocol server |
 | [Known Limitations](docs/limitations.md) | What doesn't work and workarounds |
+| [Telemetry](docs/telemetry.md) | Opt-in community telemetry: data policy, consent, export, submission |
 
 ---
 

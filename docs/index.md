@@ -57,6 +57,7 @@ intelligence through inspectable scores. That's what this is.
 - [**CLI Reference**](cli-reference.md) — All Marianne commands with examples and options
 - [**Configuration Reference**](configuration-reference.md) — Complete YAML schema documentation
 - [**Limitations**](limitations.md) — Known constraints and recommended workarounds
+- [**Telemetry**](telemetry.md) — Opt-in community telemetry: data policy, consent, export, submission
 
 ### System Guides
 

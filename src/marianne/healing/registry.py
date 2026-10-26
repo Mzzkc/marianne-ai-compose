@@ -147,8 +147,11 @@ def create_default_registry() -> RemedyRegistry:
         CreateMissingWorkspaceRemedy,
         FixPathSeparatorsRemedy,
     )
+    from marianne.healing.remedies.spec_fix import SuggestRecomposeRemedy, SuggestSpecFixRemedy
 
     registry = RemedyRegistry()
+    registry.register(SuggestSpecFixRemedy())
+    registry.register(SuggestRecomposeRemedy())
 
     # Automatic remedies (safe, apply without asking)
     registry.register(CreateMissingWorkspaceRemedy())

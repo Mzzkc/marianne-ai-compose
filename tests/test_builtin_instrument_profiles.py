@@ -42,6 +42,7 @@ class TestBuiltinProfilesExist:
             "claude-code.yaml",
             "gemini-cli.yaml",
             "qwen-code.yaml",
+            "openclaw.yaml",
             "codex-cli.yaml",
             "cline-cli.yaml",
             "aider.yaml",
