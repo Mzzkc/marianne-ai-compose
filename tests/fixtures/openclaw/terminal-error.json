@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "status": "error",
+  "final": "",
+  "payloads": [],
+  "model": null,
+  "provider": null,
+  "sessionId": "synthetic-error",
+  "error": {
+    "message": "All model fallback candidates failed",
+    "kind": "fallback_exhausted"
+  }
+}

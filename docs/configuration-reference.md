@@ -47,6 +47,7 @@ and constraints are extracted directly from the Pydantic v2 config models in
 - [ai_review](#ai_review)
 - [logging](#logging)
 - [feedback](#feedback)
+- [telemetry](#telemetry)
 - [State and Misc](#state-and-misc)
 - [DaemonConfig (Conductor)](#daemonconfig-conductor)
   - [Hot Reload](#hot-reload)
@@ -1455,6 +1456,33 @@ explicitly opts in.
 | `enabled` | `bool` | `false` | Execute agent-generated code blocks in a sandbox |
 | `require_sandbox` | `bool` | `false` | Refuse to run code mode when bwrap is unavailable (fail-closed); default runs unsandboxed with a loud V304 warning |
 | `timeout_seconds` | `float` | `30.0` | Maximum wall-clock time for a single code block |
+
+---
+
+## telemetry
+
+*Source: `src/marianne/telemetry/config.py` — `TelemetryConfig`*
+
+Default-off community telemetry. A score block alone collects nothing: the user
+must also grant user-global consent with `mzt telemetry consent --grant`.
+Consent lives in `~/.marianne/telemetry-consent.json`, outside score YAML, and
+score settings can never grant it. With both enabled, the daemon stages one
+sanitized JSONL envelope (score config, job status, sheet outcomes) when a job
+completes or fails. See [telemetry.md](telemetry.md) for the data policy,
+sanitizer scope, inspection, submission, and revocation.
+
+| Field | Type | Default | Constraints | Description |
+|-------|------|---------|-------------|-------------|
+| `enabled` | `bool` | `false` | | Opt this score into local telemetry staging. Without separate user consent, no data is collected. |
+| `spool_path` | `Path \| None` | `None` | | Custom JSONL spool for this score (default: `~/.marianne/telemetry.jsonl`). Cannot be a reserved `.lock` filename or overlap consent/control files. |
+| `endpoint` | `str \| None` | `None` | | Reserved: no runtime reader. Submission endpoint is chosen per flush via `mzt telemetry flush --push --endpoint`. |
+| `submit_mode` | `"local_only" \| "push"` | `"local_only"` | | Reserved: no runtime reader. Collection is local regardless; sending happens only through the explicit flush command. |
+
+```yaml
+telemetry:
+  enabled: true
+  spool_path: ./my-review-spool.jsonl
+```
 
 ---
 

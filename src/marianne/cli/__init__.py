@@ -48,6 +48,7 @@ from typing import Annotated
 import typer
 
 from marianne import __version__
+from marianne.cli.commands.telemetry import telemetry_app
 
 # Re-export helpers module for direct access to internal state (conftest.py needs this)
 from . import helpers as helpers
@@ -113,6 +114,7 @@ from .commands.learning import (
     patterns_list,
     patterns_why,
 )
+from .commands.remediate import remediate
 from .commands.status import _output_status_rich
 from .commands.top import top
 
@@ -305,6 +307,7 @@ app.command(rich_help_panel="Monitoring")(clear)
 app.command(rich_help_panel="Diagnostics")(logs)
 app.command(rich_help_panel="Diagnostics")(errors)
 app.command(rich_help_panel="Diagnostics")(diagnose)
+app.command(rich_help_panel="Diagnostics")(remediate)
 app.command(rich_help_panel="Diagnostics")(history)
 app.command(rich_help_panel="Diagnostics")(doctor)
 # #338: discoverable — a user whose job failed must be able to find recovery.
@@ -326,6 +329,7 @@ app.add_typer(conductor_app, name="conductor", rich_help_panel="Conductor")
 
 # Daemon configuration
 app.add_typer(config_app)
+app.add_typer(telemetry_app)
 
 # Instrument management
 app.add_typer(instruments_app)

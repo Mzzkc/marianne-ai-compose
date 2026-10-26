@@ -1972,6 +1972,111 @@ mzt clear-rate-limits --json
 
 ---
 
+## Telemetry Commands
+
+Optional community telemetry: disabled by default, never automatic. See
+[telemetry.md](telemetry.md) for the data policy. All four commands accept
+`--spool-path PATH` to select a custom spool.
+
+### `mzt telemetry status`
+
+Show current user consent state and staged envelope count. No network access.
+
+```
+Usage: mzt telemetry status [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--spool-path` | | | Inspect a custom score spool |
+
+```bash
+mzt telemetry status
+```
+
+---
+
+### `mzt telemetry consent`
+
+Explicitly grant, revoke, or purge. Consent alone never enables sending.
+
+```
+Usage: mzt telemetry consent [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--grant` | | false | Allow enabled scores to stage telemetry |
+| `--revoke` | | false | Stop collection and future submission |
+| `--purge` | | false | Delete the selected local spool |
+| `--spool-path` | | | Custom spool to purge |
+
+Choose exactly one of `--grant`, `--revoke` (optionally with `--purge`), or
+`--purge`. Revocation persists before any purge and rotates the consent ID;
+re-granting after revocation rotates it again, so records staged under the old
+grant cannot be sent under a new one.
+
+```bash
+mzt telemetry consent --grant
+mzt telemetry consent --revoke --purge
+mzt telemetry consent --purge --spool-path /path/to/custom-spool.jsonl
+```
+
+---
+
+### `mzt telemetry export`
+
+Export staged envelopes for inspection without sending or deleting them.
+
+```
+Usage: mzt telemetry export [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--out` | | | Private JSONL file to write; default is stdout |
+| `--spool-path` | | | Custom score spool |
+
+The destination cannot be a reserved `.lock` filename or overlap the spool or
+consent/control files. Inspect an export before sharing it: the sanitizer scrubs
+paths, usernames, emails, URLs, and credential-shaped strings, but cannot
+guarantee anonymity of arbitrary prose. Purging the spool does not erase exports.
+
+```bash
+mzt telemetry export
+mzt telemetry export --out telemetry-review.jsonl
+```
+
+---
+
+### `mzt telemetry flush`
+
+Submit staged data only with `--push`, an explicit endpoint, and current consent.
+
+```
+Usage: mzt telemetry flush [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--dry-run` | | false | Do not send or prune any data |
+| `--push` | | false | Explicitly allow network submission now |
+| `--endpoint` | | | HTTPS receiver (HTTP allowed on loopback) |
+| `--spool-path` | | | Custom score spool |
+
+`--push` requires `--endpoint`. Plain `flush` (no `--push`) is local-only and
+sends nothing. No redirects, environment proxy configuration, automatic
+retries, or endpoint credentials are used; any HTTP 2xx acknowledges the whole
+batch. Delivery is at least once — receivers should deduplicate envelopes.
+Failures retain unacknowledged records locally and exit nonzero.
+
+```bash
+mzt telemetry flush --dry-run
+mzt telemetry flush --push --endpoint https://your-receiver.example/telemetry
+```
+
+---
+
 ## Configuration Reference
 
 Score configurations are defined in YAML files. Here are the key sections:
@@ -2245,3 +2350,37 @@ mzt logs my-job --level ERROR
 # 5. Try recovery (re-validate without re-execute)
 mzt recover my-job --dry-run
 ```
+
+### `mzt remediate`
+
+Diagnose failed sheets using the same remedy registry and healing coordinator as
+conductor self-healing. The command reads persisted job context and attempt
+history from the authoritative registry; it does not update checkpoint status or
+restart execution.
+
+```bash
+mzt remediate JOB_ID --dry-run
+mzt remediate JOB_ID --sheet 2 --yes
+mzt remediate JOB_ID --json
+```
+
+| Argument / option | Purpose |
+| --- | --- |
+| `JOB_ID` | Registered job identifier |
+| `--workspace`, `-w` | Override the workspace used for remedies and spec loading |
+| `--sheet INT` | Select a single sheet, including a nonterminal sheet with an error |
+| `--yes` | Approve suggested remedies without prompting |
+| `--dry-run` | Preview remedies without applying them or prompting |
+| `--json` | Emit reports as JSON on stdout; confirmation prompts go to stderr |
+
+AUTOMATIC remedies apply unless `--dry-run` is set. SUGGESTED remedies ask for
+confirmation unless `--yes` is set. DIAGNOSTIC remedies provide manual guidance.
+Spec fixes and re-compose are guidance-only proposals in this version: the command
+does not edit specifications or execute re-compose. Config loading and spec corpus
+warnings appear in the report. Applying offline remedies requires a terminal job;
+use `--dry-run` to inspect other jobs. Without a workspace override, the stored
+configuration supplies the workspace.
+
+Use `mzt diagnose` for read-only job reporting and `mzt recover` for validation-based
+recovery. Remediation repairs supported causes or explains the next manual action;
+it does not mark a failed sheet complete.

@@ -1,0 +1,52 @@
+# Headless contract: OpenClaw v2026.10.1, e178c39e9aae3fa440735217f9aef9574f286677.
+# Source-derived fixtures: tests/fixtures/openclaw/README.md. No live auth verified.
+# agent exec defaults to full shell execution policy; use a trusted workspace.
+name: openclaw
+display_name: "OpenClaw"
+description: "OpenClaw isolated headless coding agent using saved client configuration"
+kind: cli
+capabilities:
+  - tool_use
+  - file_editing
+  - shell_access
+models: []
+default_timeout_seconds: 600
+cli:
+  command:
+    executable: openclaw
+    subcommand: agent
+    # Upstream explicitly inherits these parent options in the exec action.
+    output_format_flag: "--json"
+    model_flag: "--model"
+    timeout_flag: "--timeout"
+    prompt_flag: "--message-file"
+    prompt_via_stdin: true
+    stdin_sentinel: "-"
+    extra_flags:
+      - exec
+    # HOME exposes saved auth. Provider environment keys require a local override.
+    required_env:
+      - OPENCLAW_CONFIG_PATH
+      - OPENCLAW_STATE_DIR
+  output:
+    format: json
+    result_path: final
+    error_path: error.message
+    input_tokens_path: usage.input
+    output_tokens_path: usage.output
+  errors:
+    success_exit_codes: [0]
+    rate_limit_patterns:
+      - "rate.?limit"
+      - "quota.?exceeded"
+      - "Too Many Requests"
+      - "\\b429\\b"
+    auth_error_patterns:
+      - "unauthorized"
+      - "authentication"
+      - "invalid.?api.?key"
+      - "\\b401\\b"
+    capacity_patterns:
+      - "overloaded"
+      - "service unavailable"
+      - "\\b503\\b"

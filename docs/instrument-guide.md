@@ -49,6 +49,7 @@ startup:
 |------|------|------|
 | `claude-code` | Claude Code CLI | `claude login` |
 | `qwen-code` | Qwen Code CLI (`qwen`) | Saved Qwen OAuth or OpenAI-compatible API credentials |
+| `openclaw` | OpenClaw CLI (`openclaw agent exec`) | Saved client config and credentials |
 | `gemini-cli` | Google Gemini CLI | `GOOGLE_API_KEY` or `gcloud auth` |
 | `codex-cli` | OpenAI Codex CLI | `OPENAI_API_KEY or CODEX_API_KEY` |
 | `antigravity` | Google Antigravity CLI (`agy`), Gemini CLI's successor; tmux-interactive by default, print mode delivers the prompt as one stream-json line on stdin | Existing Google account/API configuration |
@@ -122,6 +123,59 @@ model. The source contract is pinned to v0.12.6; live authenticated execution
 was unavailable on the implementation host. Source-derived fixtures and their
 [immutable vendor references](../tests/fixtures/qwen_code/README.md) document the
 verified protocol separately from live access.
+
+### OpenClaw
+
+Install the pinned client (`npm install -g openclaw@2026.10.1`) using its
+supported Node.js range (`>=24.16.0 <25 || >=26.1.0`), then complete
+`openclaw onboard` before running a score. This profile uses your saved client
+configuration and authentication through HOME; `OPENCLAW_CONFIG_PATH` and
+`OPENCLAW_STATE_DIR` overrides are passed explicitly. Other provider environment
+keys require a local `cli.command.required_env` override. Provider access and
+billing depend on your account; config files and saved credential stores remain
+accessible to the client.
+
+Select `instrument: openclaw` directly or use a named per-sheet model override:
+
+```yaml
+name: openclaw-example
+workspace: ./workspaces/openclaw-example
+instrument: openclaw
+instruments:
+  coder:
+    profile: openclaw
+    config:
+      model: your-provider-model
+sheet:
+  size: 1
+  total_items: 2
+  per_sheet_instruments:
+    1: coder
+prompt:
+  template: "Review the code and write findings for sheet {{ sheet_num }}."
+```
+
+The generated command is `openclaw agent --json --message-file - exec` with
+optional parent `--model` and `--timeout` flags. Upstream explicitly inherits
+these options in `exec`. Prompts use stdin (UTF-8, upstream limit 4 MiB), avoiding
+argv limits. Each turn uses temporary state and the sheet workspace as cwd;
+it does not contact a Gateway or deliver messages to channels. Without a model
+override, OpenClaw chooses its configured model. The native timeout is 600
+seconds unless Marianne supplies a per-attempt deadline.
+
+**Workspace safety:** exec defaults to the coding tool profile, workspace-only
+filesystem tools and full shell execution policy without an approval channel.
+Explicit client sandbox/tool policies take precedence. Use a trusted workspace
+and inspect your OpenClaw configuration; shell execution can have effects beyond
+filesystem tools' workspace restriction.
+
+Final text comes from `final`, tokens from `usage.input` / `usage.output` when
+available, and errors from `error.message`. Exit 0 means success, 1 error, 2
+timeout. This profile advertises tool use, file editing and shell access; it has
+no Marianne schema enforcement, MCP injection or interactive-mode contract.
+The contract is pinned to v2026.10.1; live authenticated execution was not
+verified on this host. See the [synthetic fixtures and immutable upstream
+references](../tests/fixtures/openclaw/README.md) for the verified source contract.
 
 ### The `instrument:` Field
 

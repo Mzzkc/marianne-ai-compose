@@ -365,6 +365,7 @@ mzt instruments list        # See available instruments
 | `mzt logs <id>` | View or tail log sources |
 | `mzt history <id>` | Every attempt from the checkpoint: instrument, outcome, exit code, cause |
 | `mzt recover <id>` | Re-validate without re-execution |
+| `mzt remediate <id>` | Diagnose failed sheets and propose or apply remedies |
 
 ### Conductor
 
@@ -424,6 +425,7 @@ mkdocs serve
 | [Daemon Guide](docs/daemon-guide.md) | Conductor setup and troubleshooting |
 | [MCP Integration](docs/MCP-INTEGRATION.md) | Model Context Protocol server |
 | [Known Limitations](docs/limitations.md) | What doesn't work and workarounds |
+| [Telemetry](telemetry.md) | Opt-in community telemetry: data policy, consent, export, submission |
 
 ---
 

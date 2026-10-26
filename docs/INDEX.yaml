@@ -62,6 +62,8 @@ top_level_docs:
   purpose: Score authoring guide
 - name: troubleshooting-guide.md
   purpose: Operational troubleshooting guide
+- name: telemetry.md
+  purpose: Opt-in community telemetry data policy, consent, export, and submission
 - name: validation-patterns-guide.md
   purpose: Validation authoring patterns
 directories:

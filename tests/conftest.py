@@ -234,7 +234,9 @@ def reset_logging_state() -> Generator[None, None, None]:
 
 
 @pytest.fixture(autouse=True)
-def reset_global_learning_store() -> Generator[None, None, None]:
+def reset_global_learning_store(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> Generator[None, None, None]:
     """Reset the global learning store singleton before each test.
 
     This prevents test isolation issues where one test's use of get_global_store()
@@ -244,9 +246,24 @@ def reset_global_learning_store() -> Generator[None, None, None]:
     Fixes F-527: Test isolation gaps in test_global_learning.py where tests fail
     in full suite due to global singleton state pollution but pass in isolation.
     """
-    # Import the module to access the global variable
+    # A fresh singleton still opens the host's persistent database unless its
+    # default path is isolated too. Manager completion promotes patterns and
+    # dispatch reads them: host data can block these integration tests, and
+    # test outcomes must never be written into the developer's learning store.
+    import marianne.daemon.learning_hub as hub_module
     import marianne.learning.store as store_module
+    import marianne.learning.store.base as base_module
 
+    isolated_db = tmp_path / "global-learning.db"
+    # These are the only two modules that read DEFAULT_GLOBAL_STORE_PATH at
+    # call time (learning/store/base.py and daemon/learning_hub.py); a third
+    # such reader would need its own setattr here or it would silently keep
+    # hitting the host database.
+    monkeypatch.setattr(base_module, "DEFAULT_GLOBAL_STORE_PATH", isolated_db)
+    monkeypatch.setattr(hub_module, "DEFAULT_GLOBAL_STORE_PATH", isolated_db)
+
+    # Explicit db_path arguments remain untouched; multiple managers within
+    # one test share this real database so restart/persistence coverage holds.
     # Reset to None before test
     store_module._global_store = None
 
