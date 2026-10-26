@@ -52,6 +52,23 @@ def _state() -> CheckpointState:
     )
 
 
+def test_attempt_number_survives_a_resume(tmp_path: Path) -> None:
+    """GH #492: the recorded number is the persisted count, not a transient list."""
+    sheet = SheetState(sheet_num=1)
+    sheet.attempt_count = 1  # dispatch sets this before the attempt runs
+    sheet.record_attempt(_attempt(1, ok=False, exit_code=1, message="first"))
+    # A resume reloads the checkpoint, which drops attempt_results.
+    reloaded = SheetState.model_validate_json(sheet.model_dump_json())
+    assert reloaded.attempt_results == []
+    reloaded.attempt_count = 2
+    reloaded.record_attempt(_attempt(1, ok=True, exit_code=0))
+    assert [e["attempt"] for e in reloaded.attempt_history] == [1, 2]
+    rows = execution_history_records(
+        CheckpointState(job_id="j", job_name="j", total_sheets=1, sheets={1: reloaded})
+    )
+    assert sorted(r["attempt_num"] for r in rows) == [1, 2]
+
+
 def test_attempt_records_carry_the_exit_code() -> None:
     entries = _state().sheets[1].attempt_history
     assert [e["exit_code"] for e in entries] == [1, 0]

@@ -919,8 +919,12 @@ class SheetState(BaseModel):
         self.execution_duration_seconds = result.duration_seconds
         import datetime as _dt
 
+        # The attempt number is the sheet's persisted count, which dispatch
+        # sets before the attempt runs. ``attempt_results`` is transient
+        # (excluded from the checkpoint), so its length restarted at 1 after
+        # every resume while the sheet kept counting (GH #492).
         self.attempt_history.append({
-            "attempt": len(self.attempt_results),
+            "attempt": self.attempt_count or len(self.attempt_results),
             "instrument": getattr(result, "instrument_name", None) or self.instrument_name,
             "model": self.instrument_model,
             "duration_seconds": round(float(result.duration_seconds), 3),
