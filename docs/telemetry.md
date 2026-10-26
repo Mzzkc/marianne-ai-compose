@@ -44,12 +44,12 @@ Then opt individual scores in:
 ```yaml
 telemetry:
   enabled: true
-  submit_mode: local_only
 ```
 
 Consent alone does not enable a score. Score settings cannot grant user consent.
-Collection is local even if a score sets `submit_mode: push`: v1 sending occurs
-only through the explicit flush command. No daemon background task uploads data.
+Collection is always local: `submit_mode` and `endpoint` are reserved keys the
+schema accepts and no runtime reads, so setting them changes nothing; v1 sending
+occurs only through the explicit flush command. No daemon background task uploads data.
 
 ## Inspect, export, and submit
 
