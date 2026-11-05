@@ -457,7 +457,12 @@ prompt:
 
     {{ write_to("05-rewrite-plan.md") }}
     Begin with a table: unit, scope, mirrors, tests, acceptance command,
-    status PENDING.
+    status. The status column is the LAST column and holds exactly one bare
+    word: `PENDING`, `PARTIAL`, `BLOCKED` or `DONE` (no bold, no parenthetical;
+    put the iteration or the blocker in the tests column or below the table).
+    The gates read that cell with a regex, so `**PENDING**` or `DONE (iter 1)`
+    counts as no status at all. A unit an earlier iteration finished reads
+    DONE; everything else starts PENDING.
 
     {% elif stage == 6 %}
     # Gate
@@ -778,7 +783,11 @@ validations:
       t = open(sys.argv[1]).read()
       for need in ("acceptance command", "mirrors", "interface"):
           assert re.search(need, t, re.I), f"plan never names {need!r}"
-      assert re.search(r"\|\s*PENDING\s*\|", t), "no PENDING unit rows"
+      rows = [l for l in t.splitlines() if re.match(r"^\|\s*U\d+", l)]
+      assert rows, "no unit rows (a unit row starts with `| U<n>`)"
+      bad = [l for l in rows if not re.search(r"\|\s*(PENDING|PARTIAL|BLOCKED|DONE)\s*\|\s*$", l)]
+      assert not bad, "status cell must be one bare word (PENDING/PARTIAL/BLOCKED/DONE), got: " + bad[0][-60:]
+      assert any(re.search(r"\|\s*PENDING\s*\|\s*$", l) for l in rows), "no PENDING unit rows"
       PY
     condition: "stage == 5"
     timeout_seconds: 30
