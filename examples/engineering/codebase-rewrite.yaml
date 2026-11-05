@@ -698,8 +698,13 @@ prompt:
     cd {{ project_root }} && bash -c {{ test_command | tojson }} && bash -c {{ integration_test_command | tojson }}
     ```
     plus the functional command if configured, and the stage-8 differential
-    loop. Anything red: `git revert --no-edit HEAD` and record why. Every
-    commit you leave on the branch is green on every tier.
+    loop. Anything red: rerun the red tier ONCE on the same commit and, if
+    it is red again, `git revert --no-edit HEAD` and record why. A tier that
+    is red once and green on the rerun is a venue flake: keep the commit,
+    record the flake with the input or test that flickered, and name it in
+    the final review; a flake that recurs across commits is a harness
+    defect to fix on its own commit before refining further. Every commit
+    you leave on the branch is green on every tier.
 
     If all three critics wrote NO FINDINGS, or every finding was dropped or
     reverted, write the marker (it ends the refinement loop):
