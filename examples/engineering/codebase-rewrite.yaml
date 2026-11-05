@@ -665,6 +665,15 @@ prompt:
     {% elif instance == 2 %}
     Check every rule of the specification, met or not, with evidence:
     {{ improvement_specs }}
+
+    Work rule by rule, not file by file: FIRST write the table (one row per
+    rule: rule, MET/UNMET/PARTIAL, the one `path:line` that proves it) to
+    the report, THEN expand only the UNMET and PARTIAL rows into findings.
+    One citation per rule is enough; the refiner and the final review read
+    the table, not an audit. The sheet has a fixed wall; a report that is
+    still being researched when it falls is lost (this lens hit the wall
+    twice on the clamonacc proof while the other two lenses finished in
+    minutes).
     {% else %}
     Compare the {{ target_language }} structure with the source's: module
     boundaries, function boundaries, call graph. Score correspondence 0-100
