@@ -688,6 +688,15 @@ score includes comments explaining every field — edit it with your task, then
 run it. This is the first-run path for an install with no repository checkout:
 `examples/` is not in the wheel, `mzt init` needs nothing but the package.
 
+The starter binds the `strong` class. On a machine where no CLI agent is
+ready and a loopback OpenAI-compatible server is (a local model server with
+an `http` profile that `mzt instruments check` reports ready), the starter
+binds that profile instead, with `instrument_fallbacks: []` and
+`cross_sheet.auto_capture_stdout`, because an `http` profile answers but has
+no filesystem: its sheets pass replies forward, not files. The output says
+which instrument the starter was bound to (`--json` carries it as
+`instrument`).
+
 #### Arguments
 
 | Argument | Required | Description |

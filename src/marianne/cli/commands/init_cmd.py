@@ -103,8 +103,86 @@ validations:
 """
 
 
-def _generate_starter_score(name: str) -> str:
+_LOCAL_SERVER_STARTER_TEMPLATE = """\
+# {name}.yaml — a starter score for a machine whose only ready instrument is
+# a local OpenAI-compatible server (the `{instrument}` profile).
+#
+# An http profile answers but has no filesystem, so this score passes each
+# sheet's reply to the next through cross_sheet capture instead of files.
+# For a score whose sheets must write files, run a CLI agent over the same
+# server (see docs/local-server-quickstart.md).
+#
+# Run:
+#   mzt validate {name}.yaml
+#   mzt start && mzt run {name}.yaml
+#   mzt status {name}
+#
+# Docs: https://github.com/Mzzkc/marianne-ai-compose
+
+name: {name}
+description: "A starter score on a local model server — edit this with your task"
+
+workspace: ./workspaces/{name}
+
+# The local server, bound directly. `mzt instruments check {instrument}` shows
+# its readiness and which model it serves.
+instrument: {instrument}
+instrument_fallbacks: []
+instrument_config:
+  timeout_seconds: 600
+
+# One item per sheet; total_items is the number of sheets.
+sheet:
+  total_items: 2
+
+# Each sheet's reply reaches the next sheet as {{{{ previous_outputs }}}}.
+cross_sheet:
+  auto_capture_stdout: true
+
+prompt:
+  template: |
+    {{% if sheet_num == 1 %}}
+    Summarise, in one paragraph, a design for a small command-line todo app.
+    {{% else %}}
+    Earlier output:
+    {{{{ previous_outputs }}}}
+
+    Turn that summary into three numbered implementation tasks.
+    {{% endif %}}
+"""
+
+
+def _ready_local_http_profile() -> str | None:
+    """The name of a ready loopback http profile, when no CLI agent is ready.
+
+    A first run on a machine with nothing but a local model server (GH #494)
+    gets a starter that can actually play: the shipped starter binds the
+    `strong` class, which no http profile can serve.
+    """
+    try:
+        from marianne.instruments.availability import probe_profile
+        from marianne.instruments.loader import load_all_profiles
+
+        profiles = load_all_profiles()
+    except Exception:  # noqa: BLE001 — a profile-load failure keeps the shipped starter
+        return None
+    cli_ready = any(
+        p.kind == "cli" and p.name != "cli" and probe_profile(p).state == "ready"
+        for p in profiles.values()
+    )
+    if cli_ready:
+        return None
+    for name in sorted(profiles):
+        profile = profiles[name]
+        if profile.kind == "http" and probe_profile(profile).state == "ready":
+            return name
+    return None
+
+
+def _generate_starter_score(name: str, local_instrument: str | None = None) -> str:
     """Generate a starter score YAML with comments."""
+    if local_instrument:
+        return _LOCAL_SERVER_STARTER_TEMPLATE.format(name=name, instrument=local_instrument)
     return _STARTER_SCORE_TEMPLATE.format(name=name)
 
 
@@ -201,8 +279,11 @@ def init(
     workspaces_dir = target / "workspaces"
     workspaces_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate and write starter score
-    score_content = _generate_starter_score(name)
+    # Generate and write starter score. On a machine whose only ready
+    # instrument is a local model server, the starter binds that server
+    # (GH #494); otherwise it binds the `strong` class as before.
+    local_instrument = _ready_local_http_profile()
+    score_content = _generate_starter_score(name, local_instrument)
     score_file.write_text(score_content)
 
     # Setup owns only an absent user layer; a later init never rewrites edits.
@@ -223,6 +304,7 @@ def init(
             "name": name,
             "score_file": str(score_file),
             "target_path": str(target),
+            "instrument": local_instrument or "strong",
         })
     else:
         console.print(
@@ -232,6 +314,12 @@ def init(
             f"  Created: [bold]{name}.yaml[/bold]"
             "        (starter score — edit with your task)"
         )
+        if local_instrument:
+            console.print(
+                f"  Bound to: [bold]{local_instrument}[/bold]"
+                "        (the only ready instrument is a local model server;"
+                " the starter passes replies between sheets, not files)"
+            )
         console.print(
             "  Created: [bold].marianne/[/bold]"
             "              (project config directory)"

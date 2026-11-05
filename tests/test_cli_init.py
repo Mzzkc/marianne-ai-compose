@@ -496,3 +496,71 @@ class TestInitPositionalArgument:
         assert result.exit_code == 0
         # --name flag should take precedence
         assert (tmp_path / "flag-name.yaml").exists()
+
+
+# ---------------------------------------------------------------------------
+# A machine whose only ready instrument is a local model server (GH #494)
+# ---------------------------------------------------------------------------
+
+
+class TestInitOnALocalServerOnlyMachine:
+    """The shipped starter binds `strong`, which no http profile can serve;
+    with nothing but a ready local server the starter binds that server and
+    passes replies between sheets instead of files."""
+
+    def _profiles(self, ready_http: bool, ready_cli: bool) -> dict[str, object]:
+        from marianne.core.config.instruments import HttpProfile, InstrumentProfile
+
+        local = InstrumentProfile(
+            name="localbox", display_name="Local box", kind="http",
+            default_model="m",
+            http=HttpProfile(base_url="http://127.0.0.1:18080/v1",
+                             endpoint="/chat/completions", schema_family="openai"),
+        )
+        from marianne.instruments.loader import load_all_profiles
+
+        builtins = load_all_profiles()
+        return {"localbox": local, "claude-code": builtins["claude-code"], "cli": builtins["cli"]}
+
+    def test_binds_the_ready_local_server_when_no_cli_agent_is_ready(
+        self, tmp_path: Path, monkeypatch,
+    ) -> None:
+        import yaml
+
+        from marianne.cli.commands import init_cmd
+        from marianne.instruments.availability import ProfileProbe
+
+        profiles = self._profiles(ready_http=True, ready_cli=False)
+        monkeypatch.setattr("marianne.instruments.loader.load_all_profiles", lambda: profiles)
+        monkeypatch.setattr(
+            "marianne.instruments.availability.probe_profile",
+            lambda p: (
+                ProfileProbe("ready") if p.kind == "http"
+                else ProfileProbe("unavailable", "no binary")
+            ),
+        )
+        monkeypatch.setattr(init_cmd, "write_user_classes", lambda **kw: None, raising=False)
+        result = runner.invoke(app, ["init", "--path", str(tmp_path), "--json"])
+        assert result.exit_code == 0, result.output
+        config = yaml.safe_load((tmp_path / "my-score.yaml").read_text())
+        assert config["instrument"] == "localbox"
+        assert config["instrument_fallbacks"] == []
+        assert config["cross_sheet"]["auto_capture_stdout"] is True
+        assert "previous_outputs" in config["prompt"]["template"]
+
+    def test_keeps_the_strong_starter_when_a_cli_agent_is_ready(
+        self, tmp_path: Path, monkeypatch,
+    ) -> None:
+        import yaml
+
+        from marianne.instruments.availability import ProfileProbe
+
+        profiles = self._profiles(ready_http=True, ready_cli=True)
+        monkeypatch.setattr("marianne.instruments.loader.load_all_profiles", lambda: profiles)
+        monkeypatch.setattr(
+            "marianne.instruments.availability.probe_profile", lambda p: ProfileProbe("ready"),
+        )
+        result = runner.invoke(app, ["init", "--path", str(tmp_path)])
+        assert result.exit_code == 0, result.output
+        config = yaml.safe_load((tmp_path / "my-score.yaml").read_text())
+        assert config["instrument"] == "strong"
