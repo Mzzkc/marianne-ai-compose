@@ -734,11 +734,21 @@ prompt:
     bash {{ triage_workspace }}/project-harness/test.sh
     ```
 
+    **Step 4: A harness failure is a verdict only after isolation.** Run
+    each failing test alone (`pytest <nodeid>` or the harness equivalent)
+    before ruling. A test that passes alone and touches no file in the
+    diff is a load or ordering flake of the venue, not this change: record
+    it under "environment" with the isolated result, and do not let it set
+    the verdict. A test that fails alone, or whose file the diff touches,
+    is the change's and sets FAIL. (On 5 Nov 2026 a full run at load 12
+    failed two timed tests that passed alone in 15 s; the review ruled
+    FAIL on them.)
+
     **Output to:** `{{ workspace }}/05-review-functional.md`
 
     Include: changes reviewed (correctness assessment), tests written,
-    issues found (with severity), test results, and an explicit PASS or
-    FAIL verdict line.
+    issues found (with severity), test results with each harness failure's
+    isolated result, and an explicit PASS or FAIL verdict line.
 
     {% elif instance == 2 %}
     {# ═══════════════ E2E / SMOKE REVIEW ═══════════════ #}
