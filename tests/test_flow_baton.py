@@ -370,3 +370,75 @@ async def test_terminal_write_over_fermata_releases_escalation_ownership(
     assert checkpoint.flow.pause_reason is None
     if terminal_event != "cancel_job":  # cancel deregisters the job entirely
         assert baton.is_job_complete("j")
+
+
+# --------------------------------------------------------------------------
+# A cap reached on the pass that met `until` ends condition_met (the clamonacc
+# proof, 5 Nov 2026: the behaviour round went GREEN on the pass that took it
+# over its $45 cap and was recorded cost_limit_exceeded, so status said "the
+# until was not met" over a met goal).
+# --------------------------------------------------------------------------
+
+
+async def test_until_met_on_the_capped_pass_ends_condition_met() -> None:
+    checkpoint = _checkpoint()
+    baton = BatonCore()
+    baton.register_job(
+        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        loops={"1": LoopConfig(until="loop.pass >= 2", count=2, index="pass")},
+    )
+    await baton.handle_event(_result(0))
+    assert checkpoint.flow.loops["1"].iteration == 2
+    await baton.handle_event(_result(1))
+    assert checkpoint.flow.loops["1"].completed_reason == "condition_met"
+    assert baton.is_job_complete("j")
+
+
+async def test_cap_reached_with_until_unmet_still_ends_on_the_cap() -> None:
+    checkpoint = _checkpoint()
+    baton = BatonCore()
+    baton.register_job(
+        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        loops={"1": LoopConfig(until="loop.pass >= 99", count=2, index="pass")},
+    )
+    await baton.handle_event(_result(0))
+    await baton.handle_event(_result(1))
+    assert checkpoint.flow.loops["1"].completed_reason == "count_reached"
+    assert baton.is_job_complete("j")
+
+
+async def test_file_until_met_when_the_cap_is_reached_ends_condition_met() -> None:
+    checkpoint = _checkpoint()
+    baton = BatonCore()
+    baton.register_job(
+        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        loops={"1": LoopConfig(until='file("green.txt").exists', count=1, index="pass")},
+    )
+    await baton.handle_event(_result(0))
+    run = checkpoint.flow.loops["1"]
+    assert run.phase == "awaiting_facts" and run.pending_cap_reason == "count_reached"
+    await baton.handle_event(LoopFactsReady(
+        job_id="j", span="1", request_id=run.facts_request_id or 0,
+        files={"green.txt": FileFacts(True, True, "behaviour green")},
+    ))
+    assert run.completed_reason == "condition_met"
+    assert run.pending_cap_reason is None
+    assert baton.is_job_complete("j")
+
+
+async def test_file_until_unmet_when_the_cap_is_reached_ends_on_the_cap() -> None:
+    checkpoint = _checkpoint()
+    baton = BatonCore()
+    baton.register_job(
+        "j", checkpoint.sheets, {}, flow_state=checkpoint.flow,
+        loops={"1": LoopConfig(until='file("green.txt").exists', count=1, index="pass")},
+    )
+    await baton.handle_event(_result(0))
+    run = checkpoint.flow.loops["1"]
+    await baton.handle_event(LoopFactsReady(
+        job_id="j", span="1", request_id=run.facts_request_id or 0,
+        files={"green.txt": FileFacts(False, False, "")},
+    ))
+    assert run.completed_reason == "count_reached"
+    assert run.iteration == 1
+    assert baton.is_job_complete("j")

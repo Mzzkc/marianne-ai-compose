@@ -1813,9 +1813,11 @@ $0 pricing) leaves `max_iterations` as the only bound, and V228 names it. Any er
 incompatible comparison, division by zero, an arithmetic result out of range)
 ends the loop with `condition_error` and fails the span's last sheet with E999
 and a message naming the expression; it never leaves the loop mid-decision.
-When an `until` condition remains false at a cap, the loop
-ends with a warning and the job proceeds; use a validation for a required
-artifact. Loop spans may be separate or nested, and index names must be unique.
+`until` is evaluated before the caps at every boundary: a loop whose goal is
+met on the same pass that reaches `count`, `max_iterations` or
+`cost_limit_usd` ends `condition_met`. When an `until` condition remains
+false at a cap, the loop ends on that cap with a warning and the job
+proceeds; use a validation for a required artifact. Loop spans may be separate or nested, and index names must be unique.
 Use `{{ loops.pass_no }}` or `{{ pass_no }}` in prompts, `{pass_no}` in validations
 scoped to the loop, and `loop.pass_no` in expressions. A global validation
 cannot use a loop index that is unavailable on another sheet.

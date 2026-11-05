@@ -20,6 +20,15 @@ class LoopRunState(BaseModel):
     cost_baseline_usd: float = Field(default=0.0, ge=0, description="Cost at loop start.")
     iteration_started_at: float | None = Field(default=None, description="Current iteration start.")
     facts_request_id: int | None = Field(default=None, description="Outstanding facts request.")
+    pending_cap_reason: str | None = Field(
+        default=None,
+        description=(
+            "A cap (count, max_iterations, cost_limit_usd) reached at this boundary "
+            "while a file-fact `until` is still being fetched: applied only when the "
+            "facts say the condition is unmet, so a loop whose goal was met on its "
+            "last pass ends condition_met."
+        ),
+    )
 
 
 class TriggerChainState(BaseModel):

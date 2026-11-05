@@ -253,26 +253,34 @@ class FlowEngine:
             for sheet in members
         )
         reason: str | None = None
-        if failed:
-            reason = "range_failed"
-        elif all(sheet.status == SheetStatus.SKIPPED for sheet in members):
-            reason = "skipped"
-        elif config.count is not None and run.iteration >= config.count:
-            reason = "count_reached"
+        # A cap reached at this boundary. It is consulted only AFTER `until`:
+        # a loop whose goal was met on its last pass ends condition_met, so
+        # the status hint ("the until was not met") stays true (the clamonacc
+        # proof, 5 Nov 2026: the behaviour round went GREEN on the pass that
+        # took it over its cost cap and was recorded as cost_limit_exceeded).
+        cap_reason: str | None = None
+        if config.count is not None and run.iteration >= config.count:
+            cap_reason = "count_reached"
         elif run.iteration >= config.max_iterations:
-            reason = "max_iterations"
+            cap_reason = "max_iterations"
         elif (
             config.cost_limit_usd is not None
             and sum(sheet.total_cost_usd for sheet in members) - run.cost_baseline_usd
             > config.cost_limit_usd
         ):
-            reason = "cost_limit_exceeded"
+            cap_reason = "cost_limit_exceeded"
+        if failed:
+            reason = "range_failed"
+        elif all(sheet.status == SheetStatus.SKIPPED for sheet in members):
+            reason = "skipped"
         elif config.until is not None:
             expr = parse_expression(config.until)
             if expr.references().files:
-                # The adapter must furnish file facts off-loop before decision.
+                # The adapter must furnish file facts off-loop before decision;
+                # the cap waits for the answer.
                 run.phase = "awaiting_facts"
                 run.facts_request_id = self.state.next_facts_id
+                run.pending_cap_reason = cap_reason
                 self.state.next_facts_id += 1
                 return
             try:
@@ -288,6 +296,8 @@ class FlowEngine:
                 members[-1].status = SheetStatus.FAILED
                 members[-1].error_message = f"Flow condition {config.until!r}: {exc}"
                 members[-1].error_code = "E999"
+        if reason is None:
+            reason = cap_reason
         if reason is not None:
             run.phase = "completed"
             run.completed_reason = reason
@@ -350,6 +360,7 @@ class FlowEngine:
         if run is None or run.phase != "awaiting_facts" or run.facts_request_id != request_id:
             return False
         run.facts_request_id = None
+        cap_reason, run.pending_cap_reason = run.pending_cap_reason, None
         config = self.plan.loops[span]
         if error is None and config.until is not None:
             try:
@@ -364,6 +375,12 @@ class FlowEngine:
                     run.phase = "completed"
                     run.completed_reason = "condition_met"
                     self._emit_loop_completed(span, run, "condition_met")
+                    return True
+                if cap_reason is not None:
+                    # The goal is unmet and a cap was reached at this boundary.
+                    run.phase = "completed"
+                    run.completed_reason = cap_reason
+                    self._emit_loop_completed(span, run, cap_reason)
                     return True
                 run.phase = "running"
                 self._iterate_loop(sheets, span, run)
