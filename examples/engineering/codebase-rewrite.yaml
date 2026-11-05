@@ -912,8 +912,10 @@ validations:
   - type: command_succeeds
     command: |
       cd {project_root}; diffs=0
+      intended=$(sed -e 's/#.*//' -e 's/[[:space:]]*$//' "{workspace}/04-differential/intended-differences.txt" 2>/dev/null | grep -v '^$')
       for f in "{workspace}"/04-differential/inputs/*; do
-        n=$(basename "$f"); grep -qxF "$n" "{workspace}/04-differential/intended-differences.txt" 2>/dev/null && continue
+        n=$(basename "$f"); s="${{n%.*}}"
+        printf '%s\n' "$intended" | grep -qxF -e "$n" -e "$s" && continue
         a=$(bash -c {source_run_command} < "$f" 2>/dev/null; echo "exit=$?")
         b=$(bash -c {target_run_command} < "$f" 2>/dev/null; echo "exit=$?")
         [ "$a" = "$b" ] || diffs=$((diffs+1))
