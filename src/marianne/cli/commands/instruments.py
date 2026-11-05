@@ -133,6 +133,9 @@ def write_classes(
         console.print(content)
     else:
         console.print(f"{path}: {'written' if changed else 'already exists'}")
+        for line in content.splitlines():
+            if line.startswith("# not seated: "):
+                console.print(line[len("# "):])
 
 
 # ---------------------------------------------------------------------------

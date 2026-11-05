@@ -141,6 +141,51 @@ def select_class_chains(probe: dict[str, object]) -> dict[str, list[str]]:
     return selected
 
 
+def explain_hinted_exclusions(probe: dict[str, object]) -> list[str]:
+    """One line per (hinted profile, class) the policy refused, saying why.
+
+    A first-run user who wrote a local ``http`` profile with
+    ``class_hints: {workhorse: first}`` otherwise sees ``workhorse:`` empty
+    and nothing that says an http endpoint has no filesystem (GH #494).
+    """
+    profiles = probe["profiles"]
+    assert isinstance(profiles, dict)
+    lines: list[str] = []
+    for name in sorted(profiles):
+        row = profiles[name]
+        hints = row.get("class_hints") if isinstance(row, dict) else None
+        if not hints:
+            continue
+        caps = set(row["capabilities"])
+        for class_name in sorted(hints):
+            policy = CLASS_POLICIES.get(class_name)
+            if policy is None:
+                lines.append(f"{name}: class '{class_name}' is not a shipped class")
+                continue
+            reason: str | None = None
+            if not row["available"]:
+                reason = "not available on this machine"
+            elif row["execution_status"] != "ready":
+                reason = f"execution_status is {row['execution_status']}"
+            elif row["raw_prompt"] and not policy.allow_raw:
+                reason = "raw-prompt instrument; this class needs an agent harness"
+            elif policy.requires - caps:
+                missing = ", ".join(sorted(policy.requires - caps))
+                reason = f"lacks {missing}"
+                if row.get("kind") == "http":
+                    reason += (
+                        " (an http endpoint answers but has no filesystem; route it "
+                        "through opencode for file-writing classes)"
+                    )
+            elif policy.either and not policy.either & caps:
+                reason = "needs one of " + ", ".join(sorted(policy.either))
+            elif policy.zero_cost and not row["zero_cost"]:
+                reason = "not zero-cost"
+            if reason:
+                lines.append(f"{name}: not seated in '{class_name}': {reason}")
+    return lines
+
+
 def _seat_hinted(order: list[str], class_name: str, profiles: dict[str, Any]) -> list[str]:
     """Splice every profile hinting this class into the policy order.
 

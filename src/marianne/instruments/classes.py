@@ -293,6 +293,7 @@ def write_user_classes(
     """
     from marianne.instruments.class_policy import (
         canonical_probe,
+        explain_hinted_exclusions,
         probe_builtin_profiles,
         select_class_chains,
     )
@@ -309,6 +310,10 @@ def write_user_classes(
     hinted = InstrumentProfileLoader.load_directories([org_dir, venue_dir])
     probe = probe_builtin_profiles(profiles, hinted)
     classes = select_class_chains(probe)
+    # A hinted profile the policy refused is reported in the file's header
+    # comment, so the user sees why `workhorse:` lacks their local server
+    # without reading the policy (GH #494).
+    exclusions = explain_hinted_exclusions(probe)
     body_digest = hashlib.sha256(canonical_json(classes)).hexdigest()
     probe_digest = hashlib.sha256(canonical_probe(probe)).hexdigest()
     data = {
@@ -322,6 +327,12 @@ def write_user_classes(
         "classes": classes,
     }
     content = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
+    if exclusions:
+        header = "".join(f"# not seated: {line}\n" for line in exclusions)
+        content = (
+            "# Hinted profiles the class policy refused (mzt instruments classes write):\n"
+            + header + content
+        )
     parse_classes_file(content)
     if destination.exists() and not force:
         old = parse_classes_file(destination.read_text(encoding="utf-8"))

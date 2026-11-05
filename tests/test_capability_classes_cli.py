@@ -194,6 +194,34 @@ def test_hinted_user_profile_is_seated_where_its_hint_says() -> None:
     assert "opencode-glm" not in select_class_chains(probe)["fast"]
 
 
+def test_classes_write_explains_why_a_hinted_http_profile_is_not_seated() -> None:
+    """GH #494: a local http profile hinted into workhorse was silently
+    dropped; the explainer names the capability it lacks and the route."""
+    from marianne.instruments.class_policy import explain_hinted_exclusions
+
+    probe = {
+        "openrouter_api_key": False,
+        "profiles": {
+            "localbox": _probe_row(
+                kind="http", capabilities=["structured_output"], zero_cost=True,
+                class_hints={"workhorse": ("first", None), "fast": ("first", None),
+                             "cheap": ("first", None)},
+            ),
+            "quiet": _probe_row(class_hints={}),
+            "offline": _probe_row(available=False, class_hints={"fast": ("first", None)}),
+        },
+    }
+    lines = explain_hinted_exclusions(probe)
+    workhorse = [line for line in lines if "'workhorse'" in line]
+    assert len(workhorse) == 1 and workhorse[0].startswith("localbox:")
+    assert "file_editing" in workhorse[0] and "opencode" in workhorse[0]
+    # fast and cheap admit a zero-cost http profile: no line for them.
+    assert not [line for line in lines if "'fast'" in line and line.startswith("localbox")]
+    assert not [line for line in lines if "'cheap'" in line]
+    assert any(line.startswith("offline:") and "not available" in line for line in lines)
+    assert not any(line.startswith("quiet:") for line in lines)
+
+
 def test_unhinted_user_profile_is_never_seated_and_hints_are_parsed() -> None:
     from marianne.core.config.instruments import InstrumentProfile
     from marianne.instruments.class_policy import parse_class_hint, probe_builtin_profiles

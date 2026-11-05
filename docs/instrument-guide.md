@@ -230,6 +230,11 @@ overwriting an existing one. The writer ranks the shipped profiles; a user or
 venue profile joins a generated chain only where its own `class_hints` put it
 (`class_hints: {strong: "after opencode"}` in the profile YAML), so a machine
 with a working GLM or Gemini route gets it into the map without a hand edit.
+A hinted profile still has to pass the class's own probe; when it does not,
+the writer says why in the map's header comment and on the terminal
+(`localbox: not seated in 'workhorse': lacks file_editing, tool_use (an http
+endpoint answers but has no filesystem; route it through opencode for
+file-writing classes)`), so an empty `workhorse:` names its cause.
 
 Class entries may select a `model`, but a score-level or sheet-level model
 cannot override a class primary. Use a score alias or named profile for a
