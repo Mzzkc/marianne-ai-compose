@@ -281,6 +281,37 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
             prompt, self._preamble, tuple(self._prompt_extensions)
         )
 
+    def _cap_max_tokens(self, requested: int, model: str) -> int:
+        """Bound ``max_tokens`` by what the profile says the model can emit.
+
+        The transport default (16,384) is a guess about hosted frontier
+        models. A local server with an 8k context refuses a request whose
+        ``max_tokens`` exceeds it with HTTP 400 before generating anything
+        (PolyStrata, llama-server, and Ollama with ``num_ctx`` all do), so a
+        first score on a small local model failed every sheet. When the bound
+        model's ``ModelCapacity`` declares ``max_output_tokens`` or a
+        ``context_window`` smaller than the request, the smaller figure is
+        sent instead; a profile that declares nothing keeps the request as is.
+        """
+        if self._loaded_profile is None:
+            return requested
+        capacity = next((m for m in self._loaded_profile.models if m.name == model), None)
+        if capacity is None:
+            return requested
+        ceiling: int = min(
+            capacity.max_output_tokens or capacity.context_window, capacity.context_window
+        )
+        if requested <= ceiling:
+            return requested
+        _logger.debug(
+            "openai_compatible_max_tokens_capped",
+            model=model,
+            requested=requested,
+            capped_to=ceiling,
+            reason="max_output_tokens" if capacity.max_output_tokens else "context_window",
+        )
+        return ceiling
+
     @staticmethod
     def _assemble_prompt(
         prompt: str,
@@ -350,9 +381,10 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         requested_model = (
             request.model if request is not None and request.model else self.model
         )
-        requested_max_tokens = (
+        requested_max_tokens = self._cap_max_tokens(
             request.max_tokens if request is not None and request.max_tokens is not None
-            else self.max_tokens
+            else self.max_tokens,
+            requested_model,
         )
         requested_temperature = (
             request.temperature if request is not None and request.temperature is not None

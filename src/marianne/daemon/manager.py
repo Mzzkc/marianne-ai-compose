@@ -2147,6 +2147,38 @@ class JobManager:
 
     # ─── RPC Handlers ─────────────────────────────────────────────────
 
+    def _unloaded_venue_profiles(
+        self, config: ConcreteJobConfig, client_cwd: Path | None
+    ) -> set[str]:
+        """Names the score binds that resolve only to a venue profile beside
+        the caller, when the live registry holds no profile of that name."""
+        if client_cwd is None or self._instrument_registry is None:
+            return set()
+        venue_dir = client_cwd / ".marianne" / "instruments"
+        if not venue_dir.is_dir():
+            return set()
+        _, _, daemon_venue = self.profile_source_paths
+        try:
+            if venue_dir.resolve() == daemon_venue.resolve():
+                return set()
+        except OSError:
+            return set()
+        from marianne.instruments.classes import _instrument_positions
+        from marianne.instruments.loader import InstrumentProfileLoader
+
+        loaded = {profile.name for profile in self._instrument_registry.list_all()}
+        bound = {name for _, name in _instrument_positions(config)}
+        for definition in config.instruments.values():
+            bound.update(entry.profile for entry in definition.entries)
+        missing = {name for name in bound if name not in loaded and name not in config.instruments}
+        if not missing:
+            return set()
+        try:
+            beside = InstrumentProfileLoader.load_directories([venue_dir])
+        except Exception:  # noqa: BLE001 — a broken venue dir is the loader's report, not this gate's
+            return set()
+        return {name for name in missing if name in beside}
+
     async def submit_job(self, request: JobRequest) -> JobResponse:
         """Validate config, create task, return immediately."""
         if self._shutting_down:
@@ -2382,6 +2414,33 @@ class JobManager:
             except ValueError as exc:
                 return JobResponse(
                     job_id=job_id, status="rejected", message=str(exc),
+                )
+
+        # A venue profile beside the score (`<client_cwd>/.marianne/instruments/`)
+        # that this conductor did not load is the first-run wall for anyone
+        # who wrote a local-server profile where the docs say to: the CLI's
+        # validate/check/list saw it from the project directory, the daemon
+        # loaded its venue dir from the directory it was started in, and the
+        # job failed at sheet 1 with E505 "not found in registry. Available:
+        # <every other profile>". Refuse at submit, naming both directories.
+        if isinstance(parsed_config, ConcreteJobConfig) and isinstance(
+            self._instrument_registry, InstrumentRegistry
+        ):
+            unloaded = self._unloaded_venue_profiles(parsed_config, request.client_cwd)
+            if unloaded and request.client_cwd is not None:
+                _, _, daemon_venue = self.profile_source_paths
+                names = ", ".join(f"'{n}'" for n in sorted(unloaded))
+                return JobResponse(
+                    job_id=job_id,
+                    status="rejected",
+                    message=(
+                        f"The score binds {names}, which exists only in "
+                        f"{request.client_cwd / '.marianne' / 'instruments'} and is "
+                        f"not loaded by this conductor (its venue profiles come from "
+                        f"{daemon_venue.resolve()}). Start the conductor from the "
+                        "project directory, or move the profile to "
+                        "~/.marianne/instruments/ and run 'mzt conductor reload'."
+                    ),
                 )
 
         # Resolve relative workspace against client_cwd (working directory fix).

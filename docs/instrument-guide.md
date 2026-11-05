@@ -522,6 +522,15 @@ Model metadata enables cost tracking in `mzt status` and context budget
 calculation. If you omit models, cost tracking shows `$0.00` and context
 budget uses a conservative default.
 
+For an `http` profile the entry also bounds the request: the HTTP executor
+sends `max_tokens` of 16,384 by default (or the sheet's
+`instrument_config.max_tokens`), and caps it at the bound model's
+`max_output_tokens`, or its `context_window` when that is smaller. A local
+server refuses a `max_tokens` above its context with HTTP 400 before
+generating anything (PolyStrata, llama-server and Ollama with a small
+`num_ctx` all do), so declare the real context of a small local model and the
+first sheet runs instead of failing on the transport's guess.
+
 ---
 
 #### `http` — OpenAI-compatible HTTP profiles (`kind: http`)
@@ -545,7 +554,17 @@ The shipped `ollama` profile is the minimal shape (local, unauthenticated). Its
 (`/v1/models`) and report the profile unavailable, naming what is served, when
 the default is missing; set `instrument_config.model` in the score or
 `default_model` in a user copy of the profile to a pulled tag. A local server
-that does not answer at all is a reachability warning (V215), not a model miss.
+that does not answer at all is a reachability warning (V215), not a model miss;
+a loopback server that answers and serves the model makes the chain runnable
+for V215, the same as an installed CLI binary.
+
+A profile in the project's `.marianne/instruments/` is read by `mzt validate`,
+`mzt instruments check` and `mzt instruments list` from the directory you run
+them in, but the conductor loads its venue directory once, from the directory
+`mzt start` was run in. A score that binds a venue profile this conductor never
+loaded is refused at submit, naming both directories: start the conductor from
+the project directory, or put the profile in `~/.marianne/instruments/` and run
+`mzt conductor reload`.
 
 ```yaml
 name: ollama

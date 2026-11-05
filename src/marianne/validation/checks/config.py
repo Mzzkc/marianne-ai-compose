@@ -1101,8 +1101,9 @@ class NoUsableInstrumentCheck:
     This surfaces that BEFORE the run: it resolves the score-level instrument
     chain (primary + fallbacks, through score aliases) and, when no CLI binary
     in it is on PATH, emits an actionable warning pointing at the free paths.
-    HTTP instruments can't be path-checked, so they are noted, not counted as
-    definitely usable. WARNING only — a remote conductor may have more.
+    A local HTTP instrument whose server answers and serves the profile's
+    model counts as usable; a remote or silent one is noted, not counted.
+    WARNING only — a remote conductor may have more.
     """
 
     @property
@@ -1124,7 +1125,10 @@ class NoUsableInstrumentCheck:
         raw_yaml: str,
     ) -> list[ValidationIssue]:
         try:
-            from marianne.instruments.availability import check_profile_available
+            from marianne.instruments.availability import (
+                check_profile_available,
+                probe_profile,
+            )
             from marianne.instruments.classes import load_class_map
             from marianne.instruments.loader import load_all_profiles
 
@@ -1150,6 +1154,7 @@ class NoUsableInstrumentCheck:
 
         cli_installed = 0
         http_count = 0
+        http_ready = 0
         unresolved = 0
         for name in chain:
             alias = config.instruments.get(name)
@@ -1168,9 +1173,14 @@ class NoUsableInstrumentCheck:
                     cli_installed += 1
                 elif prof.kind == "http":
                     http_count += 1
+                    # A loopback server that answers and serves the profile's
+                    # model is as runnable as an installed binary; the probe
+                    # already distinguishes it from an unreachable one.
+                    if probe_profile(prof).state == "ready":
+                        http_ready += 1
 
-        if cli_installed > 0:
-            return []  # at least one installed CLI instrument — the chain can run
+        if cli_installed > 0 or http_ready > 0:
+            return []  # something in the chain can run here
 
         # Nothing installed that we can verify. Guide toward the free paths.
         if http_count > 0:

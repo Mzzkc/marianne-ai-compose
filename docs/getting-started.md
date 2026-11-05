@@ -455,6 +455,10 @@ mzt dashboard --port 3000
 - [Examples](../examples/) — Score configurations across software, research, writing, and planning, with current validation status noted near runnable examples
 - [Marianne Score Playspace](https://github.com/Mzzkc/marianne-score-playspace) — Creative showcase with real output: philosophy, worldbuilding, education, and more
 
+**Run on a local model server:**
+- [Local Server Quickstart](local-server-quickstart.md) — PolyStrata, llama-server, LM Studio, vLLM or Ollama as the instrument, in the order the plumbing needs
+- [Design to Score](design-to-score.md) — the design doc → spec → score → run path without the conducting skill
+
 **Go deeper:**
 - [Daemon Guide](daemon-guide.md) — Conductor architecture, systemd integration, and troubleshooting
 - [Known Limitations](limitations.md) — Constraints and workarounds

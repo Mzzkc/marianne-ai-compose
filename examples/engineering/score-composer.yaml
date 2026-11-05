@@ -116,8 +116,14 @@ prompt:
     # This becomes the workspace for the GENERATED score.
     target_workspace: "../workspaces/impl-workspace"
 
-    # What instrument should the generated score use?
-    target_instrument: "claude-code"
+    # What instrument should the generated score use? A class name
+    # (`workhorse`, `strong`) resolves through ~/.marianne/classes.yaml on the
+    # machine that runs it; a profile name pins one instrument. The generated
+    # score's sheets write files, so the target must be a CLI agent with a
+    # filesystem (claude-code, codex-cli, opencode, …); an `http` profile such
+    # as `ollama` can only answer, so its output lands in cross-sheet
+    # context, not in files that validations can read.
+    target_instrument: "workhorse"
 
     # How aggressive should decomposition be?
     # "fine" = many small sheets (2-5 min each, TDD-strict)

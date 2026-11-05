@@ -593,7 +593,7 @@ code-registry and corpus-sweep tests.
 | WARNING | V203 | No validation rules exist — nothing defines done |
 | WARNING | V206 | Fan-out declared without stage dependencies |
 | WARNING | V212 | A `skip_when` key names a sheet outside the expanded range |
-| WARNING | V215 | No instrument in the score's chain appears installed on this machine |
+| WARNING | V215 | No instrument in the score's chain appears installed on this machine (an installed CLI binary or a loopback HTTP server that serves the profile's model counts as installed) |
 | WARNING | V230 | Flow configuration error rendered from the loader (loops/triggers/goto) with position and hint |
 | ERROR | V233 | A loop `until` names `file("{{ … }}")`: Jinja braces inside a flow file path are kept verbatim, so the file never exists — write the workspace-relative or `{workspace}` validation form |
 | WARNING | V301 | A skill technique's `path` does not exist — the agent would never receive that methodology |

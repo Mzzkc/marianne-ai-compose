@@ -58,6 +58,10 @@ top_level_docs:
   purpose: Project roadmap
 - name: sandbox-free-quickstart.md
   purpose: Sandbox-free first-run path
+- name: local-server-quickstart.md
+  purpose: Any OpenAI-compatible local server (PolyStrata, llama-server, LM Studio, vLLM, Ollama) as an instrument, step by step with the error each skipped step produces
+- name: design-to-score.md
+  purpose: The design doc → specs → scores → run compilation path for users without the conducting skill (spec-forge, design-to-orchestra, score-composer)
 - name: score-writing-guide.md
   purpose: Score authoring guide
 - name: troubleshooting-guide.md

@@ -437,6 +437,8 @@ ruff check src/      # Lint
   [`hello-setup.yaml`](examples/getting-started/hello-setup.yaml) first; it
   discovers an instrument, writes the resolved hello score, and runs it.
 - **Free / local quickstart:** [`docs/sandbox-free-quickstart.md`](docs/sandbox-free-quickstart.md)
+- **Your own local model server:** [`docs/local-server-quickstart.md`](docs/local-server-quickstart.md)
+- **Design doc → score, without the conducting skill:** [`docs/design-to-score.md`](docs/design-to-score.md)
 - **Write your own scores:** [`docs/score-writing-guide.md`](docs/score-writing-guide.md)
   and the [score-authoring skill](plugins/marianne/skills/score-authoring/SKILL.md)
 - **Contributing:** [`CONTRIBUTING.md`](CONTRIBUTING.md)
