@@ -971,3 +971,75 @@ class TestListJobsJsonOutput:
         assert result.exit_code == 1
         # Should contain error info, not a table
         assert "error" in result.stdout.lower() or "conductor" in result.stdout.lower()
+
+
+# ---------------------------------------------------------------------------
+# Loop state and sheet-accumulated cost (clamonacc proof, 5 Nov 2026)
+# ---------------------------------------------------------------------------
+
+
+class TestStatusShowsLoopStateAndAccumulatedCost:
+    """The characterize loop stopped at $26.02 against a $25 cap with its
+    `until` unmet, and status read "$0.00" with no mention of the loop."""
+
+    def _job_with_loop(self) -> CheckpointState:
+        from marianne.core.flow_state import FlowState, LoopRunState
+
+        job = _make_job(total_sheets=4, status=JobStatus.RUNNING)
+        job.sheets[3].total_cost_usd = 26.02
+        job.flow = FlowState(loops={"3": LoopRunState(
+            span="3", index_name="char_pass", iteration=5, phase="completed",
+            completed_reason="cost_limit_exceeded", cost_baseline_usd=0.0,
+        )})
+        return job
+
+    def test_cost_summary_falls_back_to_the_sheets_accumulated_cost(
+        self, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        job = self._job_with_loop()
+        _render_cost_summary(job)
+        out = capsys.readouterr().out
+        assert "$26.02" in out and "(from sheets)" in out
+        assert "$0.00" not in out
+
+    def test_loop_section_names_the_exit_reason_and_the_unmet_until(
+        self, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        from marianne.cli.commands.status import _loop_rows
+
+        job = self._job_with_loop()
+        rows = _loop_rows(job)
+        assert rows == [{
+            "span": "3", "index": "char_pass", "iteration": 5, "phase": "completed",
+            "completed_reason": "cost_limit_exceeded", "spent_usd": 26.02,
+        }]
+        _render_cost_summary(job)
+        out = capsys.readouterr().out
+        assert "Loops" in out
+        assert "cost_limit_exceeded" in out and "5 pass(es)" in out
+        assert "`until` was not met" in out
+
+    def test_a_loop_that_met_its_condition_is_not_flagged(
+        self, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        from marianne.core.flow_state import FlowState, LoopRunState
+
+        job = _make_job(total_sheets=4, status=JobStatus.RUNNING)
+        job.flow = FlowState(loops={"1-2": LoopRunState(
+            span="1-2", index_name="round", iteration=2, phase="completed",
+            completed_reason="condition_met",
+        )})
+        _render_cost_summary(job)
+        out = capsys.readouterr().out
+        assert "condition_met" in out
+        assert "was not met" not in out
+
+    def test_json_carries_loops_and_per_sheet_accumulated_cost(self, tmp_path: Path) -> None:
+        job = self._job_with_loop()
+        job.job_id = "loop-json"
+        _write_state(tmp_path, job)
+        result = runner.invoke(app, ["status", "loop-json", "--workspace", str(tmp_path), "--json"])
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.stdout)
+        assert data["loops"][0]["completed_reason"] == "cost_limit_exceeded"
+        assert data["sheets"]["3"]["total_cost_usd"] == 26.02

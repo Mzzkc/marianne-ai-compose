@@ -952,6 +952,62 @@ def _output_meta_status(meta: dict[str, Any], json_output: bool) -> None:
     )
 
 
+def _loop_rows(job: CheckpointState) -> list[dict[str, Any]]:
+    """One row per ``sheet.loops`` span: iteration, phase, exit reason, spend.
+
+    A loop that ended on ``cost_limit_exceeded`` or ``max_iterations`` left
+    its ``until`` unmet; nothing else in status said so (the clamonacc proof,
+    5 Nov 2026: the characterize loop stopped at $26.02 against a $25 cap
+    with the floor unmet, and status read "$0.00").
+    """
+    flow = getattr(job, "flow", None)
+    loops = getattr(flow, "loops", None) or {}
+    rows: list[dict[str, Any]] = []
+    for span, run in sorted(loops.items(), key=lambda kv: int(str(kv[0]).split("-")[0])):
+        members = [job.sheets[n] for n in _span_sheets(str(span)) if n in job.sheets]
+        spent = sum(getattr(s, "total_cost_usd", 0.0) or 0.0 for s in members) - (
+            run.cost_baseline_usd or 0.0
+        )
+        rows.append({
+            "span": str(span),
+            "index": run.index_name,
+            "iteration": run.iteration,
+            "phase": run.phase,
+            "completed_reason": run.completed_reason,
+            "spent_usd": round(max(spent, 0.0), 4),
+        })
+    return rows
+
+
+def _span_sheets(span: str) -> list[int]:
+    start, _, end = span.partition("-")
+    first = int(start)
+    last = int(end) if end else first
+    return list(range(first, last + 1))
+
+
+def _render_loop_state(job: CheckpointState) -> None:
+    rows = _loop_rows(job)
+    if not rows:
+        return
+    console.print("\n[bold]Loops[/bold]")
+    for row in rows:
+        reason = row["completed_reason"]
+        if row["phase"] == "completed":
+            tone = "green" if reason == "condition_met" else "yellow"
+            state = f"[{tone}]ended: {reason}[/{tone}] after {row['iteration']} pass(es)"
+        else:
+            state = f"pass {row['iteration']} ({row['phase']})"
+        console.print(
+            f"  sheets {row['span']} ({row['index']}): {state}, spent ${row['spent_usd']:.2f}"
+        )
+        if reason in ("cost_limit_exceeded", "max_iterations"):
+            console.print(
+                "    [dim]the loop's `until` was not met; the next stage ran on an "
+                "unfinished span[/dim]"
+            )
+
+
 def _output_status_json(
     job: CheckpointState,
     *,
@@ -1000,6 +1056,8 @@ def _output_status_json(
             sheet_data["execution_duration_seconds"] = sheet.execution_duration_seconds
         if sheet.estimated_cost is not None:
             sheet_data["estimated_cost"] = sheet.estimated_cost
+        if getattr(sheet, "total_cost_usd", 0.0):
+            sheet_data["total_cost_usd"] = round(sheet.total_cost_usd, 4)
         if getattr(sheet, "cost_uncertain", False):
             sheet_data["cost_uncertain"] = True  # #373: $0 = unknown, not free
         if sheet.status == SheetStatus.IN_PROGRESS and sheet.started_at:
@@ -1061,6 +1119,7 @@ def _output_status_json(
                 default=1.0,
             ),
         },
+        "loops": _loop_rows(job),
         "circuit_breaker": cb_state,
         "hook_results_count": len(job.hook_results),
         "hooks_configured": len(
@@ -1808,7 +1867,13 @@ def _render_cost_summary(job: CheckpointState) -> None:
     are disabled, a warning is shown to encourage configuring them.
     """
     has_job_cost = job.total_estimated_cost > 0
-    has_sheet_cost = any(
+    # The baton accumulates every attempt's priced cost on the sheet
+    # (``total_cost_usd``); that is the figure a loop's ``cost_limit_usd`` and
+    # the sheet cost cap read. ``estimated_cost`` is the last attempt's
+    # figure and ``total_estimated_cost`` is only written by a job-level
+    # tracker, so a run that stopped a loop at $26 showed "$0.00" here.
+    sheet_accumulated = sum(getattr(s, "total_cost_usd", 0.0) or 0.0 for s in job.sheets.values())
+    has_sheet_cost = sheet_accumulated > 0 or any(
         s.estimated_cost is not None and s.estimated_cost > 0
         for s in job.sheets.values()
     )
@@ -1863,7 +1928,9 @@ def _render_cost_summary(job: CheckpointState) -> None:
             console.print("  [red]Cost limit reached — score was paused[/red]")
     elif has_sheet_cost:
         # Sum from individual sheets if job-level totals aren't populated
-        total = sum(s.estimated_cost for s in job.sheets.values() if s.estimated_cost)
+        total = sheet_accumulated or sum(
+            s.estimated_cost for s in job.sheets.values() if s.estimated_cost
+        )
         if is_estimated:
             cost_display = f"~${total:.2f} (est.)"
         else:
@@ -1871,6 +1938,8 @@ def _render_cost_summary(job: CheckpointState) -> None:
         console.print(f"  Cost: [yellow]{cost_display}[/yellow] {limit_str} (from sheets)")
     else:
         console.print(f"  Cost: $0.00 {limit_str}")
+
+    _render_loop_state(job)
 
     # #373: distinguish a "cost-uncertain" $0 (instrument had no per-token
     # pricing, so cost was NOT computed) from a genuine $0 — a separate axis
