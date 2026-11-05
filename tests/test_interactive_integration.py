@@ -120,8 +120,17 @@ class TestLaunchPathProcessIdentity:
                 f"pane process {pid} is not its own process-group leader "
                 f"(pgid={pgid}) — a shell wrapper crept into the launch path"
             )
-            # And it really is the command, not a shell
+            # And it really is the command, not a shell. tmux reports the
+            # pane pid as soon as it has forked; the child may not have
+            # exec'd yet, in which case /proc/<pid>/comm still reads
+            # "tmux: server" (CI hit this three times on 5 Nov 2026). Wait
+            # for the exec; a shell wrapper would show as "sh"/"bash", never
+            # as the tmux server for long.
+            deadline = asyncio.get_event_loop().time() + 5.0
             comm = Path(f"/proc/{pid}/comm").read_text().strip()
+            while comm.startswith("tmux") and asyncio.get_event_loop().time() < deadline:
+                await asyncio.sleep(0.05)
+                comm = Path(f"/proc/{pid}/comm").read_text().strip()
             assert comm == "sleep"
         finally:
             await tmux.kill_session("identity-probe")
