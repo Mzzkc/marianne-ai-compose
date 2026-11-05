@@ -678,7 +678,12 @@ The reviewed binding must be between zero and sixty seconds old at both checks;
 the actual argv must select the exact reviewed model once. Drift returns a
 terminal `attempt_route_drift` without spawning the CLI. Configured provider,
 profile and model are command-selection evidence only, not service identity,
-CLI executable-byte attestation, or server-model attestation.
+CLI executable-byte attestation, or server-model attestation. The binding's
+`profile_origin` is `organization` for `~/.marianne/instruments/` and `venue`
+only for a project `.marianne/instruments/` that is not that directory, so the
+same profile file yields the same route identity from every working directory
+(a reviewed route captured in `$HOME` and dispatched from a project directory
+used to drift on origin alone, GH #493).
 
 ### HTTP model-echo evidence
 

@@ -494,11 +494,17 @@ def capture_resolved_instrument_route(
     profile = load_all_profiles(organization_dir=org, venue_dir=venue).get(instrument)
     if profile is None or profile._source_path is None:
         raise ValueError("LOCAL_TRANSPORT_UNVERIFIED: instrument profile is not observable")
+    # GH #493: the venue default is a RELATIVE path, so from $HOME it names
+    # the organization directory itself. Classify the organization layer
+    # first; a profile is "venue" only when its directory is a venue
+    # directory that is not also the organization one, so the same bytes
+    # yield the same origin from every working directory.
     origin: Literal["organization", "venue"] | None = None
-    if profile._source_path.parent == venue.resolve():
-        origin = "venue"
-    elif profile._source_path.parent == org.resolve():
+    source_dir = profile._source_path.parent
+    if source_dir == org.resolve():
         origin = "organization"
+    elif source_dir == venue.resolve():
+        origin = "venue"
     if arm == "local" and origin is None:
         raise ValueError("LOCAL_TRANSPORT_UNVERIFIED: local profile must be registry-visible")
     if loaded_profile is not None and (

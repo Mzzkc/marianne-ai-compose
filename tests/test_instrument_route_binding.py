@@ -2,6 +2,7 @@
 
 import hashlib
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from hypothesis import given
@@ -247,6 +248,33 @@ def test_capture_uses_winning_profile_bytes_and_actual_score_override(tmp_path):
     )
     assert changed.profile_origin == "organization"
     assert loader.route_identity(changed) != loader.route_identity(binding)
+
+
+def test_profile_origin_does_not_depend_on_the_callers_cwd(tmp_path, monkeypatch):
+    """GH #493: the venue default is relative, so from $HOME it IS the
+    organization directory; the same profile must classify the same way from
+    every cwd, or E301 refuses a route that did not change."""
+    from marianne.instruments import loader
+
+    home = tmp_path / "home"
+    org = home / ".marianne" / "instruments"
+    org.mkdir(parents=True)
+    (org / "local.yaml").write_text(
+        "name: local\ndisplay_name: Local\nkind: http\ndefault_model: m\n"
+        "http:\n  base_url: http://127.0.0.1:9000/v1\n  schema_family: openai\n"
+        "  endpoint: /chat/completions\n"
+    )
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    origins = set()
+    for cwd in (home, elsewhere):
+        monkeypatch.chdir(cwd)
+        binding = loader.capture_resolved_instrument_route(
+            "local", {}, now=datetime(2026, 1, 1, tzinfo=UTC)
+        )
+        origins.add(binding.profile_origin)
+    assert origins == {"organization"}
 
 
 @pytest.mark.parametrize("mutation", ["remote", "credentials", "endpoint", "model", "score"])

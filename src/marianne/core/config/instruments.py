@@ -44,7 +44,13 @@ class InstrumentRouteBinding(BaseModel):
     instrument: str = Field(min_length=1, description="Exact score-visible instrument name")
     kind: str = Field(min_length=1, description="Resolved profile executor kind")
     profile_origin: Literal["organization", "venue"] | None = Field(
-        description="Observable winning profile registry, or None for an unobserved origin",
+        description=(
+            "Observable winning profile registry, or None for an unobserved origin. "
+            "`organization` is ~/.marianne/instruments/; `venue` is a project "
+            ".marianne/instruments/ that is not the organization directory, so the "
+            "same profile file classifies the same way from every working directory "
+            "(GH #493)."
+        ),
     )
     profile_file_sha256: str | None = Field(
         pattern=r"^[0-9a-f]{64}$",
