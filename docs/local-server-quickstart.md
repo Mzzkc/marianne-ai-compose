@@ -69,8 +69,7 @@ workspace: ./workspaces/first-local
 instrument: localbox
 instrument_fallbacks: []
 sheet:
-  size: 1
-  total_items: 2
+  total_items: 2        # one item per sheet; `size` defaults to 1
 cross_sheet:
   auto_capture_stdout: true
 prompt:

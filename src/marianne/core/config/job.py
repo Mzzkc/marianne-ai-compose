@@ -363,7 +363,15 @@ class SheetConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    size: int = Field(ge=1, description="Number of items per sheet")
+    size: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Number of items per sheet. Defaults to 1 (one item per sheet), "
+            "which is what every shipped example uses and what `fan_out` and "
+            "`voices` require; set it higher only to batch items into fewer sheets."
+        ),
+    )
     total_items: int = Field(ge=1, description="Total number of items to process")
     start_item: int = Field(default=1, ge=1, description="First item number (1-indexed)")
 

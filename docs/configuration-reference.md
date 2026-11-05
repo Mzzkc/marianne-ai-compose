@@ -382,7 +382,7 @@ Defines how the work is divided into sheets (execution units).
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| `size` | `int` | **required** | `>= 1` | Number of items per sheet |
+| `size` | `int` | `1` | `>= 1` | Number of items per sheet. One item per sheet is the default and what every shipped example uses; `fan_out` and `voices` require it. Set it higher only to batch items into fewer sheets |
 | `total_items` | `int` | **required** | `>= 1` | Total number of items to process |
 | `start_item` | `int` | `1` | `>= 1` | First item number (1-indexed) |
 | `dependencies` | `dict[int, list[int]]` | `{}` | No self-references | Sheet dependency declarations. Map of `sheet_num -> [prerequisites]`. Sheets without entries are independent. |

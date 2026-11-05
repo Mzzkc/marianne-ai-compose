@@ -562,8 +562,7 @@ def _schema_error_hints(error_msg: str) -> list[str]:
             if field == "sheet":
                 hints.append(f"Required field '{field}' is missing. Add a 'sheet' section:")
                 hints.append("  sheet:")
-                hints.append("    size: 10")
-                hints.append("    total_items: 100")
+                hints.append("    total_items: 3    # one sheet per item; size defaults to 1")
             elif field == "prompt":
                 hints.append(f"Required field '{field}' is missing. Add a 'prompt' section:")
                 hints.append("  prompt:")
@@ -615,10 +614,9 @@ def _unknown_field_hints(error_msg: str) -> list[str]:
         # F-523: Provide YAML examples for common structural mistakes
         if field == "sheets":
             hints.append("  Use 'sheet' (singular) with this structure:")
-            hints.append("  sheet: {size: 10, total_items: 100}")
+            hints.append("  sheet: {total_items: 3}")
             hints.append("  sheet:")
-            hints.append("    size: 10")
-            hints.append("    total_items: 100")
+            hints.append("    total_items: 3    # one sheet per item; size defaults to 1")
         elif field == "prompts":
             hints.append("  Use 'prompt' (singular) with this structure:")
             hints.append("  prompt:")
