@@ -144,11 +144,14 @@ sheet:
   loops:
     # Characterization: one under-covered module per pass until the source
     # meets the floor. Skipped outright when stage 2 measured it already met.
+    # Measured: a 1,240-line C module with a subprocess harness spent $26 over
+    # five passes (18% -> 78%); $25 ended that loop twelve points short. Size
+    # the cap for the module, not the default.
     3:
       index: char_pass
       until: 'file("03-coverage-met.txt").exists'
-      max_iterations: 6
-      cost_limit_usd: 25.0
+      max_iterations: 8
+      cost_limit_usd: 60.0
     # Behaviour rounds: rewrite, run every tier, gate. The gate reopens the
     # units its red tests point at, and the next round's unit loop takes only
     # those. Nested loops restart the inner loop on each outer round.
@@ -394,6 +397,24 @@ prompt:
     - Every test must pass against the source now. A test you cannot make
       pass is a finding, not a test: record it.
     - Never change source code here.
+    - A module whose uncovered lines run only with something this host
+      cannot supply (a privilege such as CAP_SYS_ADMIN or root, a device, a
+      credential) is not a target: a loop that chases it spends its budget
+      and ends short. Exclude it where the coverage command reads its
+      configuration (`.coveragerc` omit, `--ignore-filename-regex`, the
+      harness script's own exclusion list), commit that change on its own
+      with the reason in the message, and append the module to
+      `{{ workspace }}/03-excluded.yaml` (create it on first use):
+      ```yaml
+      - path: "src/privileged.c"
+        reason: "fanotify_init needs CAP_SYS_ADMIN; the host runs unprivileged"
+        evidence: "logs/03-pass-2-eperm.txt"
+        commit: "<hash of the exclusion commit>"
+      ```
+      The final review audits every entry: an exclusion for convenience is
+      a CONTINUE. A fake at the boundary (a preload shim that answers the
+      privileged call) is preferred when it lets the module run; exclusion
+      is for what no fake can reach.
 
     {{ branch_setup() }}
     Commit the tests as `test(<module>): characterize — <N> tests`.
@@ -403,6 +424,8 @@ prompt:
     ```bash
     echo "coverage met: <percent>" > {{ workspace }}/03-coverage-met.txt
     ```
+    If this is the last pass the loop allows and the floor is still unmet,
+    say so in the log: the oracle inventory records the shortfall.
 
     Append to `{{ workspace }}/03-characterization-log.md`:
     `## Pass {{ loops.char_pass }} — <module>`, tests added, coverage before
@@ -412,7 +435,15 @@ prompt:
     # Oracle Inventory
 
     Read 01-reconnaissance.md, 02-coverage.yaml and (if present)
-    03-characterization-log.md.
+    03-characterization-log.md and 03-excluded.yaml.
+
+    If `{{ workspace }}/03-coverage-met.txt` is absent and 02-coverage.yaml
+    says `floor_met: false`, the characterization loop ended on its cost
+    cap or pass limit with the floor unmet. The rewrite goes on, but on a
+    thinner oracle, and the report must say so: a section
+    `## Coverage shortfall` with the latest measured percent, the floor,
+    and each module still under it with its uncovered lines. The final
+    review reads that section.
 
     1. Classify every test into **unit**, **integration** or **functional**.
        For each: how it reaches the code, and whether it can drive the
@@ -686,6 +717,13 @@ prompt:
     - no unit PENDING or PARTIAL; BLOCKED only when the host cannot supply
       what it needs (a privilege, a device, a credential) — list each under
       **Blocked remainder**
+    - every entry of 03-excluded.yaml (if present) names something the host
+      cannot supply, with its evidence file present; an exclusion for
+      convenience fails this gate
+    - a `## Coverage shortfall` in 04-oracle.md is reported under
+      **Oracle shortfall** with the modules it left thin; it does not fail
+      the gate by itself, but the behavioural-equivalence score is capped
+      at the measured source coverage percent
 
     **Scorecard** (reported every iteration; weights sum to 100):
 
@@ -762,7 +800,33 @@ validations:
     timeout_seconds: 1800
     description: "The coverage-met marker is written only when the source really meets the floor"
 
+  - type: command_succeeds
+    command: |
+      f="{workspace}/03-excluded.yaml"; test -f "$f" || exit 0
+      python3 - "$f" {project_root} <<'PY'
+      import os, sys, yaml
+      rows = yaml.safe_load(open(sys.argv[1])) or []
+      assert isinstance(rows, list) and rows, "03-excluded.yaml must be a non-empty list"
+      for r in rows:
+          for k in ("path", "reason", "evidence", "commit"):
+              assert str(r.get(k, "")).strip(), f"exclusion missing {k!r}: {r}"
+          assert os.path.exists(os.path.join(sys.argv[2], r["path"])), f"excluded path not in project: {r['path']}"
+      PY
+    condition: "stage == 3"
+    stage: 3
+    timeout_seconds: 30
+    description: "Every excluded module names its path, reason, evidence and the commit that excluded it"
+
   # ── 4 Oracle inventory: a corpus exists and the source accepts it ───────
+  - type: command_succeeds
+    command: |
+      if ! test -f "{workspace}/03-coverage-met.txt" && grep -q "^floor_met: false" "{workspace}/02-coverage.yaml"; then
+        grep -q "^## Coverage shortfall" "{workspace}/04-oracle.md"
+      fi
+    condition: "stage == 4"
+    stage: 1
+    timeout_seconds: 10
+    description: "A characterization loop that ended short of the floor is recorded as a coverage shortfall in the oracle inventory"
   - type: command_succeeds
     command: 'test -n "$(ls -A "{workspace}/04-differential/inputs" 2>/dev/null)" && test -f "{workspace}/04-differential/intended-differences.txt"'
     condition: "stage == 4"
