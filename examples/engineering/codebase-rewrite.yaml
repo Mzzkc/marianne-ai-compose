@@ -675,8 +675,11 @@ prompt:
     {% endif %}
 
     Every finding names a file and line in `{{ project_root }}` as
-    `path:line`, the concrete edit, and why it is better. If nothing is worth
-    changing, write `NO FINDINGS` and why.
+    `path:line`, the concrete edit, and why it is better. The path is the
+    file's path from `{{ project_root }}` with every directory, or absolute
+    (`src/wire/proto.rs:98`, never `proto.rs:98`): the gate resolves each
+    citation to one real file and refuses a bare or ambiguous name. If
+    nothing is worth changing, write `NO FINDINGS` and why.
 
     Write `{{ workspace }}/11-critique-{{ instance }}.md` starting with
     `**Lens:** {{ lens }}`.
@@ -958,9 +961,24 @@ validations:
       refs = re.findall(r"`?([\w./-]+\.\w+):(\d+)", open(sys.argv[1]).read())
       assert refs, "findings name no path:line"
       root = sys.argv[2]
+      # A citation must resolve to ONE file: direct from the root, or by a
+      # unique suffix (critics on some models write `ddd/task.rs:283`). A bare
+      # name that matches several files is refused, with the rule in the message.
+      skip = {".git", "target", "node_modules", "build", "dist", "__pycache__"}
+      by_name = {}
+      for d, dirs, files in os.walk(root):
+          dirs[:] = [x for x in dirs if x not in skip]
+          for name in files:
+              by_name.setdefault(name, []).append(os.path.relpath(os.path.join(d, name), root))
+      hint = "cite the path from the project root with every directory (src/x/y.rs:12), or absolute"
       for path, line in refs:
           p = path if os.path.isabs(path) else os.path.join(root, path)
-          assert os.path.isfile(p), f"{path} does not exist"
+          if not os.path.isfile(p):
+              tail = path.lstrip("./")
+              cands = [r for r in by_name.get(os.path.basename(path), []) if r.endswith(tail)]
+              assert len(cands) != 0, f"{path} does not exist under the project root; {hint}"
+              assert len(cands) == 1, f"{path} is ambiguous ({len(cands)} files end in it); {hint}"
+              p = os.path.join(root, cands[0])
           assert int(line) <= sum(1 for _ in open(p, errors="replace")), f"{path}:{line} is past the end"
       PY
     condition: "stage == 11"
