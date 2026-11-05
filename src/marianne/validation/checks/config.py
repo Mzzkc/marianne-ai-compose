@@ -1209,3 +1209,79 @@ class NoUsableInstrumentCheck:
                 suggestion=suggestion,
             )
         ]
+
+
+class ServedContextCheck:
+    """A local server's live context against the profile's declared one (V234).
+
+    The HTTP executor sizes ``max_tokens`` from the profile's ``context_window``
+    for the bound model; a local server (PolyStrata, llama-server) refuses a
+    request above its real context with HTTP 400 before generating anything
+    (GH #494). Both servers report the loaded model's context as
+    ``default_generation_settings.n_ctx`` on ``GET /props``, so the probe
+    reads it and this check warns when the profile overstates it. Only the
+    score's chain is probed, only loopback servers answer, and a server that
+    does not expose ``/props`` is silent here, not wrong.
+    """
+
+    @property
+    def check_id(self) -> str:
+        return "V234"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return "Warns when a profile's context_window exceeds what its local server serves"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        chain: list[str] = []
+        if config.instrument:
+            chain.append(config.instrument)
+        chain.extend(config.instrument_fallbacks)
+        if not chain:
+            return []
+        try:
+            from marianne.instruments.availability import probe_profile
+            from marianne.instruments.loader import load_all_profiles
+
+            profiles = load_all_profiles()
+        except Exception:  # noqa: BLE001 — a profile load failure skips this check, loudly
+            _logger.warning(
+                "validation.profiles_unavailable_skip", check="V234", exc_info=True,
+            )
+            return []
+        issues: list[ValidationIssue] = []
+        seen: set[str] = set()
+        for name in chain:
+            alias = config.instruments.get(name)
+            profile_name = (alias.profile or name) if alias is not None else name
+            prof = profiles.get(profile_name)
+            if prof is None or prof.kind != "http" or profile_name in seen:
+                continue
+            seen.add(profile_name)
+            probe = probe_profile(prof)
+            if probe.state != "ready" or not probe.context_mismatch:
+                continue
+            issues.append(
+                ValidationIssue(
+                    check_id=self.check_id,
+                    severity=self.severity,
+                    message=probe.context_mismatch,
+                    line=find_line_in_yaml(raw_yaml, name),
+                    context=name,
+                    suggestion=(
+                        f"Set models[].context_window for '{prof.default_model}' in the "
+                        f"'{profile_name}' profile to {probe.served_context}, or raise the "
+                        "server's context; the first request is refused otherwise."
+                    ),
+                )
+            )
+        return issues

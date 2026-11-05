@@ -580,6 +580,7 @@ code-registry and corpus-sweep tests.
 | ERROR | V213 | `interactive: true` set for an instrument without verified interactive support |
 | WARNING | V010 | Unknown field at ANY depth — a whole block at the root (`deliver: {…}`, a list) is a feature the runtime does not implement and warns as such, since the loader drops it and nothing it configures will happen; the curated hint names a working key AT THE SURFACE the mistake sits in: a bare `timeout:` inside `instruments.<alias>.config`, a movement's or a sheet's `instrument_config` names that surface's `timeout_seconds`; inside a `run:` trigger action it names the action's own `timeout_seconds`; only at the root (or beside an action with no timeout of its own) does it name `instrument_config.timeout_seconds` (GH #451) |
 | WARNING | V208, V219–V220, V224, V226, V231–V232, V315 | Built-in shadowing (deprecation); advisory structure and flow risks |
+| WARNING | V234 | A loopback `http` profile in the score's chain declares a `context_window` for its default model larger than the server reports on `GET /props` (`default_generation_settings.n_ctx`, which llama-server and PolyStrata share); the executor would size `max_tokens` to the profile and the first request would be refused with HTTP 400 (GH #494). Quiet when the server does not expose `/props` |
 | WARNING | V228 | A loop's `cost_limit_usd` cannot bind because every route in the span reports no cost — the message names the route and why (raw shell profile, no token paths, no models, or a $0 price); a priced CLI route such as `claude-code` or `codex-cli` DOES report cost and the cap binds (GH #453) |
 | WARNING | V327 | A score sets a reserved key — accepted, but no runtime code reads it; also warns when `movements.<N>.voices` cannot expand with the sheet's size/start settings |
 | WARNING | V328 | Deprecated spelling or key: root `max_wall_seconds` (now `schedule.max_wall_seconds`), `checkpoints:` (now `approvals:`), hook-level `on_failure` (now `if_hook_fails`), root `conductor` |
@@ -1521,7 +1522,7 @@ Check readiness and configuration of a specific instrument.
 Usage: mzt instruments check [OPTIONS] NAME
 ```
 
-Provides detailed information about a single instrument: binary location, capabilities, available models with pricing, and overall readiness. Readiness is the same probe `mzt doctor` uses: a local HTTP instrument is ready only when its server answers and serves the profile's `default_model`; a remote endpoint is reported `unchecked`, which is not a failure (exit 0).
+Provides detailed information about a single instrument: binary location, capabilities, available models with pricing, and overall readiness. Readiness is the same probe `mzt doctor` uses: a local HTTP instrument is ready only when its server answers and serves the profile's `default_model`; a remote endpoint is reported `unchecked`, which is not a failure (exit 0). For a ready local server the check also reads the loaded model's context from `GET /props` (`Context: N tokens (server /props)`, `served_context` in `--json`) and warns when the profile's `context_window` for that model is larger, since the executor would then ask for more than the server has (GH #494; `mzt validate` reports the same as V234).
 
 #### Arguments
 

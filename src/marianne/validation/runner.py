@@ -48,6 +48,7 @@ from marianne.validation.checks import (
     RegexPatternCheck,
     ReservedKeyUseCheck,
     SchemaSheetInteractiveCheck,
+    ServedContextCheck,
     SkipWhenSheetRangeCheck,
     TechniqueMcpInstrumentCheck,
     TechniqueSkillPathCheck,
@@ -240,6 +241,7 @@ def create_default_checks() -> list[ValidationCheck]:
         InstrumentNameCheck(),
         InstrumentFallbackCheck(),
         NoUsableInstrumentCheck(),
+        ServedContextCheck(),
         InteractiveSupportCheck(),
         # Capability-class checks (V-CLS frame; class state via the one loader)
         ClassNameResolutionCheck(),

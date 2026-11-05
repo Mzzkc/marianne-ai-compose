@@ -84,7 +84,7 @@ prompt:
 ```
 
 ```bash
-mzt validate first-local.yaml      # V215 is quiet when the server is reachable
+mzt validate first-local.yaml      # V215 is quiet when the server is reachable; V234 if context_window overstates /props
 mzt start                          # from the directory that holds your profile
 mzt run first-local.yaml
 mzt status first-local --watch
@@ -134,5 +134,6 @@ through the `opencode` recipe above.
 - `mzt instruments classes write` seats a local server only in `fast` and
   `cheap`; `workhorse` on a fresh machine with nothing but a local server
   stays empty and `hello-setup` reports it.
-- The 400 cap reads the profile's `models` entry; a server's live context
-  (`/props` on llama-server and PolyStrata) is not probed yet.
+- The 400 cap reads the profile's `models` entry. `mzt instruments check` and
+  `mzt validate` (V234) compare it with the server's live context from
+  `GET /props`; a server that does not expose `/props` is not checked.

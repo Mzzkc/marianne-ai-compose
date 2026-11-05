@@ -91,6 +91,14 @@ class ProfileProbe:
     state: ProbeState
     reason: str = ""
     binary_path: str | None = None
+    served_context: int | None = None
+    """The context size a loopback server reports for its loaded model
+    (``default_generation_settings.n_ctx`` on ``GET /props``, which llama-server
+    and PolyStrata share), or None when the server does not expose it."""
+    context_mismatch: str = ""
+    """Set when the profile's ``context_window`` for the default model exceeds
+    ``served_context``: the executor would ask for more than the server has and
+    the first request would be refused with HTTP 400 (GH #494)."""
 
     @property
     def runnable(self) -> bool:
@@ -143,7 +151,12 @@ def _probe_http(profile: InstrumentProfile) -> ProfileProbe:
             "unreachable", f"no server answered at {profile.http.base_url}"
         )
     if not profile.default_model or profile.default_model in served:
-        return ProfileProbe("ready")
+        context = served_local_context(profile.http.base_url)
+        return ProfileProbe(
+            "ready",
+            served_context=context,
+            context_mismatch=_context_mismatch(profile, context),
+        )
     shown = ", ".join(served[:6]) + (", …" if len(served) > 6 else "")
     return ProfileProbe(
         "unavailable",
@@ -162,6 +175,47 @@ def _is_loopback(hostname: str | None) -> bool:
         return ipaddress.ip_address(hostname).is_loopback
     except ValueError:
         return False
+
+
+def _context_mismatch(profile: InstrumentProfile, served_context: int | None) -> str:
+    """The profile's declared context against the server's, for the default model."""
+    if served_context is None or not profile.default_model:
+        return ""
+    declared = next(
+        (m.context_window for m in profile.models if m.name == profile.default_model), None
+    )
+    if declared is None or declared <= served_context:
+        return ""
+    base_url = profile.http.base_url if profile.http else ""
+    return (
+        f"profile '{profile.name}' declares context_window {declared:,} for "
+        f"'{profile.default_model}' but the server at {base_url} "
+        f"serves it with {served_context:,}; a request sized to the profile is refused "
+        f"with HTTP 400 — set context_window: {served_context}"
+    )
+
+
+def served_local_context(base_url: str) -> int | None:
+    """The loaded model's context size a loopback server reports on ``GET /props``
+    (``default_generation_settings.n_ctx``: llama-server and PolyStrata agree on
+    that path), or None when the server is remote, silent, keyed, or does not
+    expose it. A 0 (PolyStrata before its engine reports READY) is None too."""
+    parsed = urlparse(base_url)
+    if not _is_loopback(parsed.hostname):
+        return None
+    url = f"{parsed.scheme}://{parsed.netloc}/props"
+    try:
+        with urllib.request.urlopen(url, timeout=_LOCAL_MODEL_PROBE_TIMEOUT_SECONDS) as resp:
+            if int(resp.status) != 200:
+                return None
+            payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+    except (TimeoutError, OSError, urllib.error.URLError, ValueError):
+        return None
+    settings = payload.get("default_generation_settings") if isinstance(payload, dict) else None
+    n_ctx = settings.get("n_ctx") if isinstance(settings, dict) else None
+    if isinstance(n_ctx, bool) or not isinstance(n_ctx, int) or n_ctx <= 0:
+        return None
+    return n_ctx
 
 
 def served_local_models(base_url: str) -> list[str] | None:

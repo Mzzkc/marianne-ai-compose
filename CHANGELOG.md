@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Live context probe for local servers (GH #494).** llama-server and PolyStrata both report the loaded model's context as `default_generation_settings.n_ctx` on `GET /props`. The availability probe now reads it for a ready loopback `http` profile: `mzt instruments check` prints `Context: N tokens (server /props)` (`served_context` in `--json`) and warns when the profile's `context_window` for the default model is larger, and `mzt validate` reports the same mismatch as V234 for the score's chain, because the executor sizes `max_tokens` from the profile and the server refuses a request above its real context with HTTP 400 before generating. A server that does not expose `/props`, or reports 0 while loading, is not checked.
 - **`sheet.stdout_to`: a sheet's full reply as a workspace file (GH #494).** An `http` profile answers but has no filesystem, so its reply reached later sheets only through `cross_sheet` capture and could never meet a `file_exists` or `content_regex` validation. `sheet.stdout_to: {1: design.md}` makes the musician write the whole stdout to that file (workspace-relative or `{workspace}/...`) before validations run; a fanned-out stage gets one file per voice, a failed attempt writes nothing, a path that escapes the workspace is refused with a preflight warning, V004 flags a home-absolute path and V214 a sheet outside the range. The local-server starter `mzt init` writes uses it.
 
 ### Fixed
