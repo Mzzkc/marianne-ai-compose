@@ -67,6 +67,11 @@ mzt telemetry flush --push --endpoint https://your-receiver.example/telemetry
 a custom spool. Exports are JSONL, preserve staged records, and use private file
 permissions. Protect exported copies yourself; spool purge does not erase them.
 
+A selected local spool can also feed the composition corpus:
+`mzt corpus build --sources …,<spool>.jsonl` re-sanitizes every accepted score
+before it enters the corpus and never consults or changes consent. See
+[research/2026-11-05-composition-corpus-groundwork.md](research/2026-11-05-composition-corpus-groundwork.md).
+
 Plain `flush` is local-only and sends nothing. `--dry-run` never sends or prunes.
 Network submission requires `--push`, an explicit HTTPS endpoint (HTTP is allowed
 only on loopback for development), and fresh granted consent. No redirects,

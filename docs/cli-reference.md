@@ -2087,6 +2087,73 @@ mzt telemetry flush --push --endpoint https://your-receiver.example/telemetry
 
 ---
 
+## Corpus Commands
+
+Local composition-corpus groundwork (GH #148): assemble and measure a corpus of
+score-composition examples from explicitly selected sources. Nothing is
+discovered automatically, nothing is sent, consent is never consulted or
+changed, and no model training happens here. See
+[research/2026-11-05-composition-corpus-groundwork.md](research/2026-11-05-composition-corpus-groundwork.md)
+for the schema, trust rules, and what the counters do and do not establish.
+
+### `mzt corpus build`
+
+Write a deduplicated JSONL corpus of `TrainingExample` records to a local file.
+
+```
+Usage: mzt corpus build [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--sources` | | `examples,scores` | Comma-separated score dirs or telemetry JSONL spools |
+| `--output` | | *required* | Destination JSONL file (private local export) |
+
+Directories are read as trusted local input: YAML is preserved byte-for-byte
+(comments and line endings included), nested repositories (including
+rosetta-corpus), symlinks, and `.lock` files are excluded. Telemetry JSONL is
+not trusted: every accepted score passes through the telemetry sanitizer again,
+and malformed or unsupported envelopes are skipped and counted in a warning
+without logging their contents. Deduplication hashes exact output text (no YAML
+normalization); when exact duplicates occur across sources, the repository
+example wins, including its rationale.
+
+The destination is written atomically (temp file + rename, fsync'd) and must
+differ from the sources, the consent state file, and reserved `.lock` names,
+and must not replace a source score. Review the output before sharing it — the
+corpus tooling is local-only and asserts no redistribution or training rights.
+
+```bash
+mzt corpus build --sources examples,scores --output /tmp/composition-corpus.jsonl
+```
+
+---
+
+### `mzt corpus stats`
+
+Count distinct outputs and annotations against the 200-example volume target.
+
+```
+Usage: mzt corpus stats [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--sources` | | `examples,scores` | Comma-separated score dirs or telemetry JSONL spools |
+| `--json` | | false | Emit machine-readable counts |
+
+Reports `total_examples` (after deduplication), `by_source_kind`, `by_category`,
+`annotated` (records carrying a human `rationale`), and `meets_target` against
+`target_volume` (200). Volume alone does not establish diversity, permission,
+or training readiness.
+
+```bash
+mzt corpus stats
+mzt corpus stats --sources examples,/path/to/telemetry.jsonl --json
+```
+
+---
+
 ## Configuration Reference
 
 Score configurations are defined in YAML files. Here are the key sections:

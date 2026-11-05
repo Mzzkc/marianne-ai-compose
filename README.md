@@ -411,6 +411,17 @@ mzt instruments list        # See available instruments
 | `mzt telemetry export` | Inspect staged envelopes (no sending) |
 | `mzt telemetry flush --push --endpoint URL` | Explicitly submit staged data |
 
+### Corpus
+
+| Command | Purpose |
+|---------|---------|
+| `mzt corpus build --output FILE` | Assemble a private local composition corpus (JSONL) |
+| `mzt corpus stats` | Count distinct outputs and annotations against the volume target |
+
+Corpus sources are explicitly selected score directories or telemetry JSONL
+files; nothing is discovered, sent, or trained automatically. See
+[docs/research/2026-11-05-composition-corpus-groundwork.md](docs/research/2026-11-05-composition-corpus-groundwork.md).
+
 `mzt run` requires a running conductor. Only `mzt validate` and `--dry-run` work without one.
 
 ---

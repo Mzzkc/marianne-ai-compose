@@ -137,6 +137,9 @@ directories:
       added: 2026-04-19
     - name: 2026-04-18-marianne-memory-and-unconscious-research-dossier.md
       added: 2026-04-18
+    - name: 2026-11-05-composition-corpus-groundwork.md
+      added: 2026-11-05
+      note: Local composition-corpus groundwork for GH #148 (mzt corpus build/stats, TrainingExample schema v1)
 semantic_index:
   compose:
   - guides/score-composition-guide.md
