@@ -133,6 +133,68 @@ async def test_drain_timeout_logs_the_sheets_it_waited_on(
     await asyncio.gather(musician, return_exceptions=True)
 
 
+@pytest.mark.asyncio
+async def test_drain_ends_a_boundary_paused_sheet_instead_of_waiting_for_it(
+    daemon_config: DaemonConfig,
+) -> None:
+    """GH #476 gap 2: the paused job's in-flight sheet re-runs on resume, so
+    the drain cancels its musician at once and does not spend the budget."""
+    daemon_config.shutdown_timeout_seconds = 10.0
+    mgr = JobManager(daemon_config)
+    await mgr._registry.open()
+    mgr._service = MagicMock()
+
+    paused_musician = asyncio.create_task(_blocked())
+    running_musician = asyncio.create_task(_blocked())
+    adapter = MagicMock()
+    adapter._active_tasks = {
+        ("paused-job", 3): paused_musician,
+        ("running-job", 1): running_musician,
+    }
+    adapter.active_musicians.side_effect = lambda: [
+        {"job_id": job, "sheet_num": n, "instrument": "codex-cli",
+         "model": None, "elapsed_seconds": 5.0}
+        for (job, n), t in adapter._active_tasks.items() if not t.done()
+    ]
+    adapter.shutdown = AsyncMock()
+    adapter._baton = MagicMock()
+    adapter._baton.inbox = MagicMock()
+    mgr._baton_adapter = adapter
+
+    async def _wrapper(musician: asyncio.Task) -> None:
+        try:
+            await musician
+        except asyncio.CancelledError:
+            pass
+
+    mgr._jobs["paused-job"] = asyncio.create_task(_wrapper(paused_musician))
+    mgr._jobs["running-job"] = asyncio.create_task(_wrapper(running_musician))
+    statuses = (("paused-job", DaemonJobStatus.PAUSED), ("running-job", DaemonJobStatus.RUNNING))
+    for job, status in statuses:
+        mgr._job_meta[job] = JobMeta(
+            job_id=job, config_path=Path("/tmp/test.yaml"),
+            workspace=Path("/tmp/workspace"), status=status,
+        )
+
+    async def _finish_running_soon() -> None:
+        await asyncio.sleep(0.2)
+        running_musician.cancel()
+
+    finisher = asyncio.create_task(_finish_running_soon())
+    started = asyncio.get_running_loop().time()
+    with patch("marianne.daemon.manager._logger") as log:
+        await mgr.shutdown(graceful=True)
+    elapsed = asyncio.get_running_loop().time() - started
+    await finisher
+
+    assert paused_musician.cancelled(), "the boundary-paused sheet is ended at once"
+    assert elapsed < 5.0, f"drain waited {elapsed:.1f}s on a sheet that re-runs on resume"
+    ended = [c for c in log.info.call_args_list
+             if c.args[0] == "manager.shutdown_ended_boundary_paused_sheets"]
+    assert ended and ended[0].kwargs["sheets"][0]["job_id"] == "paused-job"
+    assert mgr._job_meta["paused-job"].status == DaemonJobStatus.PAUSED
+
+
 def test_manager_without_adapter_has_nothing_in_flight(daemon_config: DaemonConfig) -> None:
     mgr = JobManager(daemon_config)
     mgr._baton_adapter = None

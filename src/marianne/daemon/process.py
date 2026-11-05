@@ -430,8 +430,8 @@ def stop_conductor(
         for line in _format_in_flight(in_flight):
             typer.echo(line)
         typer.echo(
-            "A boundary-paused job's in-flight sheet re-runs on resume; the "
-            "drain still gives it the shutdown budget to finish."
+            "A boundary-paused job's in-flight sheet is ended at once and "
+            "re-runs on resume; only RUNNING jobs hold the drain."
         )
 
     if wait is not None and wait > 0:

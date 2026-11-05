@@ -5189,6 +5189,25 @@ class JobManager:
 
     # ─── Shutdown ─────────────────────────────────────────────────────
 
+    def _end_boundary_paused_musicians(self) -> list[dict[str, Any]]:
+        """Cancel the in-flight musicians of PAUSED jobs so shutdown does not
+        wait on sheets that re-run on resume anyway (GH #476). Returns the
+        rows ended, in the shape ``active_musicians`` reports."""
+        adapter = self._baton_adapter
+        if adapter is None:
+            return []
+        ended: list[dict[str, Any]] = []
+        for row in adapter.active_musicians():
+            meta = self._job_meta.get(row["job_id"])
+            if meta is None or meta.status != DaemonJobStatus.PAUSED:
+                continue
+            task = adapter._active_tasks.get((row["job_id"], row["sheet_num"]))
+            if task is None or task.done():
+                continue
+            task.cancel(msg="graceful shutdown: boundary-paused sheet re-runs on resume")
+            ended.append(row)
+        return ended
+
     def _is_settled_pause(self, job_id: str) -> bool:
         """A PAUSED job with no musician still in flight on the adapter."""
         meta = self._job_meta.get(job_id)
@@ -5242,6 +5261,19 @@ class JobManager:
             # waiting on it only burns the whole timeout (Pallas 2026-10-21:
             # two restarts each took exactly 300 s with running_jobs=0). It
             # is cancelled below with the rest and stays PAUSED on disk.
+            # GH #476 gap 2: a job paused at a sheet boundary keeps its current
+            # sheet in flight until the musician ends, yet that sheet is
+            # discarded and re-run on resume by design. Waiting the whole
+            # budget for it buys nothing (Pallas 21 Oct and 22 Oct: eight and
+            # four boundary-paused jobs each held a 300 s drain). End those
+            # musicians now; the pause stays on disk and resume re-runs the
+            # sheet. RUNNING jobs still get the full drain.
+            ended = self._end_boundary_paused_musicians()
+            if ended:
+                _logger.info(
+                    "manager.shutdown_ended_boundary_paused_sheets",
+                    sheets=ended,
+                )
             running = [
                 t for job_id, t in self._jobs.items()
                 if not t.done() and not self._is_settled_pause(job_id)

@@ -535,7 +535,11 @@ class DaemonConfig(BaseModel):
     shutdown_timeout_seconds: float = Field(
         default=300.0,
         ge=10.0,
-        description="Max seconds to wait for running jobs during graceful shutdown",
+        description=(
+            "Max seconds to wait for RUNNING jobs during graceful shutdown. A job "
+            "paused at a sheet boundary does not hold it: its in-flight sheet is "
+            "ended at once and re-runs on resume (GH #476)."
+        ),
     )
     monitor_interval_seconds: float = Field(
         default=15.0,
