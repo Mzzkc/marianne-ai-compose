@@ -1429,7 +1429,7 @@ validations:
       cd "{project_root}" || exit 1
       NUM=$(grep -oE '^SELECTED_ISSUE: #[0-9]+' "{workspace}/01-selected-issue.md" | grep -oE '[0-9]+')
       [ -n "$NUM" ] || exit 1
-      git log -1 --format=%B | grep -qE "(\(#$NUM\)|[Rr]esolves #$NUM|[Cc]loses #$NUM|[Ff]ixes #$NUM)\b" || exit 1
+      git log -1 --format=%B | grep -qE "\(#$NUM\)|([Rr]esolves|[Cc]loses|[Ff]ixes) #$NUM\b" || exit 1
       BR=$(git rev-parse --abbrev-ref HEAD)
       UP=$(git for-each-ref --format="%(upstream:short)" "refs/heads/$BR"); [ -n "$UP" ] || exit 1
       git fetch -q origin "$BR" 2>/dev/null || true
