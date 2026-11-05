@@ -367,11 +367,26 @@ prompt:
     if not candidates:
         print("NO_ISSUES_REMAINING")
         sys.exit(0)
-    # Prefer lowest tier, then CLEAN over FLAGGED (a flagged issue's body was
+    # Prefer lowest tier, then the repo's own priority label (P0 < P1 < P2
+    # < P3; unlabelled sorts with P2, so a backlog with no labels is
+    # unchanged), then CLEAN over FLAGGED (a flagged issue's body was
     # redacted by the scanner, so the solver would work from its title alone),
-    # then fewest remaining dependencies in-graph, then lowest number.
+    # then fewest remaining dependencies in-graph, then lowest number. The
+    # labels come from the sanitized corpus; the DAG rows carry none.
+    corpus_labels = {}
+    corpus_path = pathlib.Path("{{ triage_workspace }}/issues/sanitized-corpus.yaml").expanduser()
+    if corpus_path.exists():
+        corpus_doc = yaml.safe_load(corpus_path.read_text()) or {}
+        for row in (corpus_doc.get("issues") if isinstance(corpus_doc, dict) else corpus_doc) or []:
+            if isinstance(row, dict) and "number" in row:
+                corpus_labels[row["number"]] = [str(l) for l in (row.get("labels") or [])]
+    def priority(i):
+        ranks = [int(l[1:]) for l in corpus_labels.get(i["number"], [])
+                 if len(l) == 2 and l[0] == "P" and l[1].isdigit()]
+        return min(ranks) if ranks else 2
     candidates.sort(key=lambda i: (
         i.get("tier", 99),
+        priority(i),
         0 if str(i.get("scanner_verdict", "")).upper() == "CLEAN" else 1,
         len(i.get("depends_on") or []),
         i["number"],
@@ -382,6 +397,7 @@ prompt:
     print(f"TIER: {chosen.get('tier', '?')}")
     print(f"DEPENDS_ON: {chosen.get('depends_on') or []}")
     print(f"SCANNER_VERDICT: {chosen.get('scanner_verdict', 'UNKNOWN')}")
+    print(f"PRIORITY: P{priority(chosen)}" + ("" if corpus_labels.get(chosen["number"]) else " (unlabelled)"))
     print(f"EDGE_STRENGTH: {chosen.get('edge_strength', 'independent')}")
     print(f"EVIDENCE: {chosen.get('evidence', '')}")
     PY
