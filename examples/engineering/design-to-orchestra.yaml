@@ -289,8 +289,11 @@ prompt:
        spread reviewers, `examples/product/contract-generator.yaml` for
        documents, `examples/engineering/quality-continuous.yaml` for polish).
     2. **Patterns.** `{{ marianne_root }}/scores/rosetta-corpus/INDEX.md`,
-       `forces.md` and `selection-guide.md`; then read the full file of each
-       pattern you select under `scores/rosetta-corpus/patterns/`.
+       `forces.md` and `selection-guide.md`; then run
+       `python3 -I {{ marianne_root }}/scores/rosetta-corpus/tools/unproven.py {{ marianne_root }}/scores/rosetta-corpus`
+       (the proof ledger: which patterns a proof has exercised, which none
+       has; the familiar seven are not evidence of fit). Then read the full
+       file of each pattern you select under `scores/rosetta-corpus/patterns/`.
     3. **Primitives.** The real score dialect and its primitives:
        `scores/rosetta-corpus/archive/rosetta-corpus.md` (section "The Real
        Dialect"), `{{ marianne_root }}/docs/configuration-reference.md`
