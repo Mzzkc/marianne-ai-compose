@@ -255,7 +255,11 @@ class ObserverConfig(BaseModel):
     )
     exclude_patterns: list[str] = Field(
         default=[".git/", "__pycache__/", "node_modules/", ".venv/", "*.pyc"],
-        description="Glob patterns for filesystem paths to exclude from observation.",
+        description=(
+            "Glob patterns for filesystem paths to exclude from observation. The "
+            "recorder's own .marianne-observer.jsonl and the .marianne/ and "
+            ".marianne-scratch/ bookkeeping directories are always excluded."
+        ),
     )
     coalesce_window_seconds: float = Field(
         default=2.0,

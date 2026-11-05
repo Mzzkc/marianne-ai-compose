@@ -408,8 +408,19 @@ class ObserverRecorder:
                 pass
             state.file_handle = None
 
+    # The recorder's own timeline file and Marianne's bookkeeping directory
+    # live inside the watched workspace. Reporting the recorder's own append
+    # as a modification, then recording that, fed the file one event every
+    # watch interval for the whole job (89 of 208 events in one run's first
+    # ten minutes were this loop). They are never the musician's work.
+    _OWN_PATHS: frozenset[str] = frozenset({".marianne-observer.jsonl"})
+    _OWN_DIRS: tuple[str, ...] = (".marianne/", ".marianne-scratch/")
+
     def _should_exclude(self, rel_path: str) -> bool:
         """Check if a relative path matches any exclusion pattern."""
+        normalized = rel_path.replace("\\", "/")
+        if normalized in self._OWN_PATHS or normalized.startswith(self._OWN_DIRS):
+            return True
         for pattern in self._config.exclude_patterns:
             # Match against full path
             if fnmatch.fnmatch(rel_path, pattern):

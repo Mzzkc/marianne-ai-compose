@@ -1541,7 +1541,7 @@ Available but rarely need changing:
 | `shutdown_timeout_seconds` | `float` | `300.0` | `>= 10` | Max seconds for graceful shutdown |
 | `monitor_interval_seconds` | `float` | `15.0` | `>= 5` | Interval between resource monitor checks |
 | `max_job_history` | `int` | `1000` | `>= 10` | Completed/failed/cancelled jobs to keep in memory |
-| `observer` | `ObserverConfig` | *(see sub-config)* | | Observer and event bus configuration |
+| `observer` | `ObserverConfig` | *(see sub-config)* | | Observer and event bus configuration. `exclude_patterns` (default `.git/`, `__pycache__/`, `node_modules/`, `.venv/`, `*.pyc`) filters the workspace file events; the recorder's own `.marianne-observer.jsonl` and the `.marianne/` and `.marianne-scratch/` bookkeeping directories are always excluded, so the timeline shows the musician's work, not the recorder's heartbeat |
 | `orchestra` | `OrchestraConfig` | *(see sub-config)* | | Orchestra view: a public-safe fleet timeline, live over IPC and appended daily to `~/.marianne/orchestra/<day>.jsonl` for replay. Keys: `enabled` (true), `persist` (true), `directory`, `ring_size` (2000, `>= 100`), `keep_ended_seconds` (1800). The projection carries score name, sheet, instrument, outcome and time only |
 | `profiler` | `ProfilerConfig` | *(see sub-config)* | | System profiler (strace off by default, GPU probing off by default) |
 | `preflight` | `PreflightConfig` | *(see sub-config)* | | Preflight prompt analysis thresholds. Controls when prompts are warned or rejected based on estimated token count. |

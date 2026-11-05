@@ -69,6 +69,19 @@ class TestPathExclusion:
         recorder = self._make_recorder()
         assert recorder._should_exclude(".git/objects/abc123")
 
+    def test_recorder_never_reports_its_own_timeline_or_marianne_bookkeeping(self) -> None:
+        """The recorder's append to .marianne-observer.jsonl was reported as a
+        modification and recorded, one event per watch interval for the whole
+        job (89 of 208 events in a run's first ten minutes). Its own file and
+        Marianne's bookkeeping directories are excluded whatever the user's
+        patterns say."""
+        recorder = self._make_recorder(exclude_patterns=[])
+        assert recorder._should_exclude(".marianne-observer.jsonl")
+        assert recorder._should_exclude(".marianne/context-receipts/job/sheet-0001.yaml")
+        assert recorder._should_exclude(".marianne-scratch/tmp.txt")
+        assert not recorder._should_exclude("01-reconnaissance.md")
+        assert not recorder._should_exclude("src/marianne-observer-notes.md")
+
     def test_default_excludes_pycache(self) -> None:
         recorder = self._make_recorder()
         assert recorder._should_exclude("src/__pycache__/foo.cpython-312.pyc")
