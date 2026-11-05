@@ -21,6 +21,7 @@ See docs/specs/2026-06-10-interactive-mode-design.md.
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import re
 import shutil
@@ -36,10 +37,13 @@ from marianne.core.logging import get_logger
 from marianne.execution.base import Backend, ExecutionResult, SheetRequestState
 from marianne.execution.instruments.cli_backend import build_instrument_env
 from marianne.execution.instruments.interactive.driver import (
+    DEFAULT_NUDGE_MESSAGE,
+    ContinuationPolicy,
     DriverResult,
     InteractiveSessionDriver,
     StaticNudgePolicy,
 )
+from marianne.execution.instruments.interactive.model_nudge import BackendFactory, ModelNudgePolicy
 from marianne.execution.instruments.interactive.tmux import (
     MIN_TMUX_VERSION,
     SESSION_PREFIX,
@@ -163,6 +167,10 @@ class InteractiveCliBackend(Backend):
         # re-set on every dispatch (and reset by clear_overrides).
         self._max_nudges: int = DEFAULT_MAX_NUDGES
         self._nudge_message: str | None = None
+        self._nudge_policy = "static"
+        self._nudge_instrument: str | None = None
+        self._nudge_timeout_seconds = 30.0
+        self._nudge_backend_factory: BackendFactory | None = None
 
         # Attempt identity — set by the adapter after acquire; consumed
         # (and cleared) by the next execute(). Without it, execute()
@@ -224,14 +232,47 @@ class InteractiveCliBackend(Backend):
         *,
         max_nudges: int | None = None,
         nudge_message: str | None = None,
+        nudge_policy: str | None = None,
+        nudge_instrument: str | None = None,
+        nudge_timeout_seconds: float | None = None,
+        backend_factory: BackendFactory | None = None,
     ) -> None:
         """Apply per-sheet interactive knobs from instrument_config."""
+        if nudge_policy is not None and nudge_policy not in {"static", "model"}:
+            raise ValueError("nudge_policy must be static or model")
+        if nudge_timeout_seconds is not None and (
+            not math.isfinite(nudge_timeout_seconds) or nudge_timeout_seconds <= 0
+        ):
+            raise ValueError("nudge timeout must be finite and > 0")
+        if nudge_instrument is not None and not nudge_instrument.strip():
+            raise ValueError("nudge instrument must be non-empty")
+        if nudge_policy is not None:
+            self._nudge_policy = nudge_policy
+        if nudge_instrument is not None:
+            self._nudge_instrument = nudge_instrument
+        if nudge_timeout_seconds is not None:
+            self._nudge_timeout_seconds = nudge_timeout_seconds
+        if backend_factory is not None:
+            self._nudge_backend_factory = backend_factory
         if max_nudges is not None:
             if max_nudges < 0:
                 raise ValueError(f"max_nudges must be >= 0, got {max_nudges}")
             self._max_nudges = max_nudges
         if nudge_message is not None:
             self._nudge_message = nudge_message
+
+    def _build_nudge_policy(self) -> ContinuationPolicy:
+        message = self._nudge_message or DEFAULT_NUDGE_MESSAGE
+        if self._nudge_policy == "model":
+            if self._nudge_backend_factory is not None and self._nudge_instrument:
+                return ModelNudgePolicy(
+                    backend_factory=self._nudge_backend_factory,
+                    instrument_name=self._nudge_instrument,
+                    timeout_seconds=self._nudge_timeout_seconds,
+                    fallback_message=message,
+                )
+            _logger.warning("interactive_model_nudge_unconfigured", instrument=self._profile.name)
+        return StaticNudgePolicy(message)
 
     def apply_overrides(self, overrides: dict[str, object]) -> None:
         """Apply per-sheet parameter overrides (model)."""
@@ -251,6 +292,10 @@ class InteractiveCliBackend(Backend):
         # Per-sheet knobs and identity never survive into the free list.
         self._max_nudges = DEFAULT_MAX_NUDGES
         self._nudge_message = None
+        self._nudge_policy = "static"
+        self._nudge_instrument = None
+        self._nudge_timeout_seconds = 30.0
+        self._nudge_backend_factory = None
         self._attempt_identity = None
         # W-F3: per-sheet prompt bytes neither — see Backend.set_preamble.
         self._preamble = None
@@ -387,9 +432,7 @@ class InteractiveCliBackend(Backend):
         full_prompt = self._build_prompt(
             prompt, marker, req_preamble, req_extensions
         )
-        policy = StaticNudgePolicy(
-            self._nudge_message,
-        ) if self._nudge_message else StaticNudgePolicy()
+        policy = self._build_nudge_policy()
 
         pane_pid: int | None = None
 

@@ -67,10 +67,21 @@ and constraints are extracted directly from the Pydantic v2 config models in
 | `description` | `str \| None` | `None` | Human-readable description |
 | `workspace` | `Path` | `./workspace` | Output directory. Resolved to absolute path at construction time. |
 | `instrument` | `str \| None` | `None` | Profile, score alias, or capability class. The packaged classes are `strong`, `workhorse`, `fast`, `cheap`, `writing`, `review`, `vision`, `local`, `high-context`, `image`, `video`; the vocabulary is the packaged `classes/default.yaml` itself, and a user (`~/.marianne/classes.yaml`) or venue (`.marianne/classes.yaml`) layer may define ANY further class name or tombstone a packaged one with `null` (GH #433). Run `mzt instruments classes show` to see resolved chains. If unset, defaults to `claude-code`. |
-| `instrument_config` | `InstrumentSettings` | `{}` | Typed per-score overrides. Keys: `timeout_seconds` (sheet execution timeout), `model`, `provider`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`, `max_tokens`, `temperature`, `response_format`. Unknown keys warn as V010/V011; executor support still varies. |
+| `instrument_config` | `InstrumentSettings` | `{}` | Typed per-score overrides. Keys: `timeout_seconds` (sheet execution timeout), `model`, `provider`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`, `interactive_nudge_policy`, `interactive_nudge_instrument`, `interactive_nudge_timeout_seconds`, `max_tokens`, `temperature`, `response_format`. Unknown keys warn as V010/V011; executor support still varies. |
 | `instruments` | `dict[str, InstrumentDef]` | `{}` | Named instrument definitions local to this score. Declares reusable aliases referencing registered instrument profiles with optional overrides. Referenced by name in per-sheet or per-movement `instrument:` fields. See [instruments](#instruments). |
 | `movements` | `dict[int, MovementDef]` | `{}` | Movement declarations. Map of movement number to MovementDef. Each movement can specify a name, instrument, instrument config, and voice count. See [movements](#movements). |
 | `instrument_fallbacks` | `list[str]` | `[]` | Score-level fallback chain. Each profile, alias, or class is expanded in place; a primary class's tail runs before declared fallbacks. See [Instrument Fallbacks](#instrument-fallbacks). |
+
+Interactive continuation defaults to `instrument_config.interactive_nudge_policy: static`.
+Set it to `model` with `instrument_config.interactive_nudge_instrument` naming a
+registered inexpensive headless instrument to generate contextual inputs from
+the idle screen. `instrument_config.interactive_nudge_timeout_seconds` is a
+finite positive per-call limit (default 30 seconds), additionally bounded by
+the sheet deadline. Invalid or failed model replies fall back to
+`interactive_nudge_message`; an unrecoverable decision stops nudging and
+leaves validations to judge the attempt. These settings work at all four
+instrument override scopes. Missing instrument configuration uses static
+continuation with a warning.
 
 ```yaml
 instrument: gemini-cli

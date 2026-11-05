@@ -471,6 +471,28 @@ class BackendPool:
         """Total backends in-flight across all instruments."""
         return sum(self._in_flight.values())
 
+    def create_one_off(
+        self,
+        instrument_name: str,
+        *,
+        model: str | None = None,
+        working_directory: Path | None = None,
+    ) -> Backend:
+        """Create a one-off Backend outside the dispatch-pool lifecycle.
+
+        Public seam for daemon-side services (interactive model nudges)
+        that need an LLM backend without acquiring a dispatch slot.
+        Delegates to ``create_backend_for_instrument`` — the single
+        creation path — so service backends and musician backends can
+        never drift. The caller owns closing the returned backend.
+        """
+        return create_backend_for_instrument(
+            self._registry,
+            instrument_name,
+            model=model,
+            working_directory=working_directory,
+        )
+
     async def close_all(self) -> None:
         """Close all Backend instances and mark the pool as closed.
 

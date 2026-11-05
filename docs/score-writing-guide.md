@@ -301,7 +301,10 @@ keys:
 | `timeout_seconds` | Per-sheet execution timeout (seconds). |
 | `interactive` | Force interactive (tmux-driven) or headless execution. Unset uses the profile default. |
 | `interactive_max_nudges` | Consecutive-idle nudge budget for interactive sheets. |
-| `interactive_nudge_message` | Custom continuation message typed into idle interactive sessions. |
+| `interactive_nudge_message` | Custom continuation message, also used as fallback if a model nudge fails. |
+| `interactive_nudge_policy` | `static` (default) or `model` for screen-aware continuation. |
+| `interactive_nudge_instrument` | Registered headless instrument to call when the policy is `model`. |
+| `interactive_nudge_timeout_seconds` | Finite positive model-call timeout; defaults to 30 seconds, within the sheet deadline. |
 
 Unknown keys are silently ignored — don't rely on keys outside this table.
 

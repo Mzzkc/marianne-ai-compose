@@ -80,8 +80,7 @@ DriverOutcome = Literal[
 class ContinuationContext:
     """What a continuation policy may consult when the agent goes idle.
 
-    Deliberately minimal for V1 (the static policy ignores it); extended
-    only when a real consumer (model-driven policy) lands.
+    The static policy ignores this; model policies consult the idle screen.
     """
 
     nudge_count: int
@@ -90,18 +89,33 @@ class ContinuationContext:
     elapsed_seconds: float
     """Seconds since the prompt was submitted."""
 
+    screen: str = ""
+    """Last rendered idle screen, supplied as untrusted evidence."""
+
+
+@dataclass(frozen=True)
+class NudgeDecision:
+    """An input to send, or a reason the idle session cannot continue.
+
+    Abstain: ``message=None, unrecoverable=False`` means "nothing to send
+    right now" — the driver re-polls without spending nudge budget; the
+    attempt deadline still bounds the loop.
+    """
+
+    message: str | None = None
+    unrecoverable: bool = False
+    reason: str | None = None
+
 
 class ContinuationPolicy(Protocol):
     """Decides what to type when the agent goes idle without finishing.
 
-    V1 ships :class:`StaticNudgePolicy`. V2 will add a model-driven policy
-    (a cheap model reads the screen and decides the next input); V3 is the
-    spec'd conductor agent. The driver owns the nudge budget — policies
-    only produce the message.
+    Static and model-driven policies share this contract. The driver owns
+    the nudge budget; policies produce input or an unrecoverable decision.
     """
 
-    async def next_nudge(self, context: ContinuationContext) -> str:
-        """Return the message to type into the idle session."""
+    async def next_nudge(self, context: ContinuationContext) -> NudgeDecision:
+        """Return input or an unrecoverable signal for the idle session."""
         ...
 
 
@@ -120,9 +134,9 @@ class StaticNudgePolicy:
             raise ValueError("nudge message must be non-empty")
         self._message = message
 
-    async def next_nudge(self, context: ContinuationContext) -> str:
+    async def next_nudge(self, context: ContinuationContext) -> NudgeDecision:
         """Return the configured nudge message."""
-        return self._message
+        return NudgeDecision(message=self._message)
 
 
 @dataclass
@@ -266,7 +280,7 @@ class InteractiveSessionDriver:
             submitted_at = time.monotonic()
 
             # ── DRIVE ─────────────────────────────────────────────────
-            outcome, last_screen, nudges_total = await self._drive(
+            outcome, last_screen, nudges_total, policy_detail = await self._drive(
                 session=session,
                 marker_path=marker_path,
                 deadline=deadline,
@@ -285,7 +299,7 @@ class InteractiveSessionDriver:
             )
             detail: str | None = None
             if outcome == "nudges_exhausted":
-                detail = (
+                detail = policy_detail or (
                     f"agent went idle and did not complete after "
                     f"{nudges_total} nudge(s)"
                 )
@@ -395,10 +409,10 @@ class InteractiveSessionDriver:
         max_nudges: int,
         transcript_path: Path | None,
         on_output: Callable[[str, bytes], None] | None = None,
-    ) -> tuple[DriverOutcome, str, int]:
+    ) -> tuple[DriverOutcome, str, int, str | None]:
         """The poll loop: busy / idle / done / dead until an outcome.
 
-        Returns (outcome, last_screen, total_nudges).
+        Returns (outcome, last_screen, total_nudges, policy_detail).
         """
         cfg = self._config
         busy_res = [re.compile(p) for p in cfg.busy_patterns]
@@ -422,7 +436,7 @@ class InteractiveSessionDriver:
         while True:
             now = time.monotonic()
             if now >= deadline:
-                return "timeout", last_screen, total_nudges
+                return "timeout", last_screen, total_nudges, None
 
             await asyncio.sleep(
                 min(cfg.poll_interval_seconds, max(deadline - now, 0.05)),
@@ -438,14 +452,14 @@ class InteractiveSessionDriver:
             # Done check first — the marker is valid even if the pane has
             # already exited (agent wrote it, then quit).
             if marker_path.is_file():
-                return "completed", last_screen, total_nudges
+                return "completed", last_screen, total_nudges, None
 
             try:
                 screen = await self._tmux.capture_screen(session)
             except TmuxError:
                 if marker_path.is_file():
-                    return "completed", last_screen, total_nudges
-                return "session_lost", last_screen, total_nudges
+                    return "completed", last_screen, total_nudges, None
+                return "session_lost", last_screen, total_nudges, None
             last_screen = screen
 
             # The pane process exited; remain-on-exit kept the pane so tmux
@@ -453,7 +467,7 @@ class InteractiveSessionDriver:
             exit_info = await self._tmux.pane_exit(session)
             if exit_info is not None:
                 if marker_path.is_file():
-                    return "completed", last_screen, total_nudges
+                    return "completed", last_screen, total_nudges, None
                 self._last_pane_exit = exit_info
                 _logger.error(
                     "interactive_pane_exited",
@@ -462,7 +476,7 @@ class InteractiveSessionDriver:
                     exit_signal=exit_info.signal,
                     detail=exit_info.describe(),
                 )
-                return "session_lost", last_screen, total_nudges
+                return "session_lost", last_screen, total_nudges, None
 
             # Transcript growth cap — debug artifact must not eat the disk.
             if transcript_live and transcript_path is not None:
@@ -477,7 +491,7 @@ class InteractiveSessionDriver:
                     session=session,
                     kind=provider_error_kind,
                 )
-                return "provider_error", last_screen, total_nudges
+                return "provider_error", last_screen, total_nudges, None
 
             busy = any(r.search(screen) for r in busy_res)
             work_area = self._work_area(screen)
@@ -498,13 +512,68 @@ class InteractiveSessionDriver:
 
             # Idle: consult the budget, then the policy.
             if consecutive_nudges >= max_nudges or total_nudges >= total_cap:
-                return "nudges_exhausted", last_screen, total_nudges
+                return "nudges_exhausted", last_screen, total_nudges, None
 
             context = ContinuationContext(
                 nudge_count=total_nudges,
                 elapsed_seconds=time.monotonic() - submitted_at,
+                screen=last_screen,
             )
-            message = await policy.next_nudge(context)
+            try:
+                async with asyncio.timeout_at(deadline):
+                    decision = await policy.next_nudge(context)
+            except TimeoutError:
+                # The agent may have completed while the policy call hung
+                # until the attempt deadline — completion wins over the
+                # timeout (functional review F1).
+                if marker_path.is_file():
+                    return "completed", last_screen, total_nudges, None
+                return "timeout", last_screen, total_nudges, None
+            # The agent may have completed while the policy was thinking.
+            if marker_path.is_file():
+                return "completed", last_screen, total_nudges, None
+            if time.monotonic() >= deadline:
+                return "timeout", last_screen, total_nudges, None
+            # The screen may also have changed while the policy was
+            # thinking — a provider-error screen can arrive mid-model-call.
+            # Refresh live evidence before acting on the decision: the
+            # provider error wins over the model's own reply, and work the
+            # agent resumed during the call must not be interrupted by a
+            # stale idle nudge (functional review F2).
+            try:
+                screen = await self._tmux.capture_screen(session)
+            except TmuxError:
+                if marker_path.is_file():
+                    return "completed", last_screen, total_nudges, None
+                return "session_lost", last_screen, total_nudges, None
+            last_screen = screen
+            if marker_path.is_file():
+                return "completed", last_screen, total_nudges, None
+            provider_error_kind = self._provider_error_screen_kind(screen)
+            if provider_error_kind is not None:
+                _logger.warning(
+                    "interactive_provider_error_screen",
+                    session=session,
+                    kind=provider_error_kind,
+                )
+                return "provider_error", last_screen, total_nudges, None
+            if any(r.search(screen) for r in busy_res):
+                # The agent resumed work while the policy was thinking;
+                # drop the stale idle decision and keep watching.
+                continue
+            if decision.unrecoverable:
+                detail = (
+                    "policy declared session unrecoverable: "
+                    + (decision.reason or "no reason supplied")
+                )
+                _logger.warning(
+                    "interactive_policy_unrecoverable", session=session,
+                    reason=decision.reason, total=total_nudges,
+                )
+                return "nudges_exhausted", last_screen, total_nudges, detail
+            if not decision.message:
+                continue
+            message = decision.message
             _logger.info(
                 "interactive_nudge_sent",
                 session=session,
@@ -518,8 +587,8 @@ class InteractiveSessionDriver:
                 # Mid-drive control failure is session-lost, not a startup
                 # problem — keep the outcome label honest.
                 if marker_path.is_file():
-                    return "completed", last_screen, total_nudges
-                return "session_lost", last_screen, total_nudges
+                    return "completed", last_screen, total_nudges, None
+                return "session_lost", last_screen, total_nudges, None
             consecutive_nudges += 1
             total_nudges += 1
             nudged_since_busy = True

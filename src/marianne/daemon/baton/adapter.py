@@ -2979,9 +2979,19 @@ class BatonAdapter:
             )
             raw_max = knobs.get("interactive_max_nudges")
             raw_msg = knobs.get("interactive_nudge_message")
+            raw_policy = knobs.get("interactive_nudge_policy")
+            raw_instrument = knobs.get("interactive_nudge_instrument")
+            raw_timeout = knobs.get("interactive_nudge_timeout_seconds")
             backend.configure_interactive(
                 max_nudges=int(raw_max) if raw_max is not None else None,
                 nudge_message=str(raw_msg) if raw_msg is not None else None,
+                nudge_policy=str(raw_policy) if raw_policy is not None else None,
+                nudge_instrument=str(raw_instrument) if raw_instrument is not None else None,
+                nudge_timeout_seconds=float(raw_timeout) if raw_timeout is not None else None,
+                backend_factory=(
+                    self._backend_pool.create_one_off
+                    if self._backend_pool is not None else None
+                ),
             )
             self._interactive_sheets.setdefault(job_id, set()).add(sheet_num)
         else:

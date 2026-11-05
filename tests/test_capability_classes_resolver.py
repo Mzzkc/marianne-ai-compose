@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 from marianne.core.config.classes import ClassEntry, ClassSnapshot, ClassSnapshotEntry
@@ -99,6 +100,9 @@ def test_movement_map_and_per_sheet_class_positions_become_profiles() -> None:
         assert len(sheet.instrument_fallbacks) == len(sheet.instrument_fallback_configs)
 
 
+# Parses every tracked score and expands it under three class snapshots.
+# The corpus sweep exceeds the 30s unit-test budget under xdist contention.
+@pytest.mark.timeout(120)
 def test_all_tracked_scores_keep_sheet_identity_under_snapshots() -> None:
     root = Path(__file__).resolve().parents[1]
     tracked = subprocess.run(

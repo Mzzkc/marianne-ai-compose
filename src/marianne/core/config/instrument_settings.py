@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
@@ -34,6 +34,16 @@ class InstrumentSettings(BaseModel, Mapping[str, Any]):
     )
     interactive_nudge_message: str | None = Field(
         default=None, description="Message sent when nudging an idle interactive instrument."
+    )
+    interactive_nudge_policy: Literal["static", "model"] | None = Field(
+        default=None, description="Idle continuation policy; static by default."
+    )
+    interactive_nudge_instrument: str | None = Field(
+        default=None, min_length=1, description="Headless instrument used by model continuation."
+    )
+    interactive_nudge_timeout_seconds: float | None = Field(
+        default=None, gt=0, allow_inf_nan=False,
+        description="Maximum seconds per model continuation call.",
     )
     max_tokens: int | None = Field(
         default=None, gt=0, description="Maximum response tokens requested from the instrument."
