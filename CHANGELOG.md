@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`codebase-rewrite` no longer refines an unfinished plan (proving ground, humanize Python→Rust, 9 iterations).** Three defects the proof surfaced: the behaviour gate accepted GREEN with seven of fifteen plan rows still PENDING after the unit loop's eight passes, so refinement and the final review ran on incomplete code and the review refused on bookkeeping; the unit loop took only PENDING rows, so two PARTIAL rows stalled four passes with "no eligible unit"; and the critic sheet's 1,200 s wall cut 18 of 58 claude-code critiques mid-review. The gate now requires every plan row DONE or BLOCKED (its validation checks the plan, not the report), the unit loop takes PARTIAL rows and reconciles any row whose acceptance command is already green at HEAD to DONE before writing code, and the critic wall is 2,400 s.
+
 ### Security
 
 - CLI instrument environments now default to system essentials and explicitly

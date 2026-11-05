@@ -99,7 +99,7 @@ movements:
   8:  {name: Oracle,                instrument: fast,      instrument_config: {timeout_seconds: 1800}}
   9:  {name: Behaviour Gate,        instrument: strong,    instrument_config: {timeout_seconds: 900}}
   10: {name: Refinement Baseline,   instrument: fast,      instrument_config: {timeout_seconds: 900}}
-  11: {name: Critique,              instrument: critic,    instrument_config: {timeout_seconds: 1200}}
+  11: {name: Critique,              instrument: critic,    instrument_config: {timeout_seconds: 2400}}
   12: {name: Refine,                instrument: workhorse, instrument_config: {timeout_seconds: 2400}}
   13: {name: Final Review,          instrument: review,    instrument_config: {timeout_seconds: 1200}}
 
@@ -475,8 +475,17 @@ prompt:
     # Unit Loop — round {{ loops.behaviour_round }}, pass {{ loops.unit_pass }}
 
     Take the NEXT unit in `{{ workspace }}/05-rewrite-plan.md` whose status is
-    PENDING (a later round only has the units the behaviour gate reopened;
-    each names the red test that reopened it).
+    PENDING or PARTIAL (a later round only has the units the behaviour gate
+    reopened; each names the red test that reopened it). A PARTIAL row is
+    work, not a dead end: finish it or write why it is BLOCKED. Never write
+    "no eligible unit" while a row is PENDING or PARTIAL.
+
+    **0. Reconcile first.** Run the unit's acceptance command at HEAD. If it is
+    already green (an earlier pass or a sibling unit covered it), set the row
+    to DONE with that green tail and the commit that made it so, record the
+    pass with `### Red run: not needed, acceptance green at <sha>`, and take
+    the next row in the same pass. Only a red acceptance command earns a
+    rewrite.
     {% if loops.unit_pass > 1 or loops.behaviour_round > 1 %}
     Read `{{ workspace }}/07-migration-log.md` and never redo a DONE unit.
     {% endif %}
@@ -502,7 +511,7 @@ prompt:
     {{ branch_setup() }}
     Message: `rewrite(<unit>): <name> — {{ target_language }}, <N> tests green`.
 
-    **5. Marker, only when every row reads DONE:**
+    **5. Marker, only when every row reads DONE or BLOCKED:**
     ```bash
     date -u +"units done %FT%TZ" > {{ workspace }}/07-units-done.txt
     ```
@@ -568,8 +577,13 @@ prompt:
     ```
 
     **Green** means: every tier PASS (functional may be SKIPPED only when no
-    functional command is configured), and target coverage ≥
-    {{ coverage_floor }}%. Then write the marker (it ends the behaviour loop):
+    functional command is configured), target coverage ≥
+    {{ coverage_floor }}%, and no row of 05-rewrite-plan.md still PENDING or
+    PARTIAL (a green oracle over an unfinished plan is a round that ran out
+    of passes, not a finished rewrite; the next round's unit loop takes the
+    rest). A remaining row whose acceptance command is green at HEAD is
+    reconciled to DONE here, with the commit named. Then write the marker (it
+    ends the behaviour loop):
     ```bash
     echo "behaviour green: round {{ loops.behaviour_round }}, coverage <percent>" > {{ workspace }}/09-behaviour-green.txt
     ```
@@ -840,6 +854,7 @@ validations:
         test -f "{workspace}/09-behaviour-green.txt" \
         && for i in 1 2 4; do grep -qE "\*\*Results:\*\*\s*PASS" "{workspace}/08-oracle-$i.md" || exit 1; done \
         && grep -qE "\*\*Results:\*\*\s*(PASS|SKIPPED)" "{workspace}/08-oracle-3.md" \
+        && ! grep -qE "\|\s*(PENDING|PARTIAL)\s*\|\s*$" "{workspace}/05-rewrite-plan.md" \
         && cd {project_root} && got=$(bash -c {target_coverage_command} 2>/dev/null | tail -1 | tr -dc '0-9.') \
         && python3 -c "import sys; sys.exit(float(sys.argv[1]) < float(sys.argv[2]))" "$got" {coverage_floor}
       else
@@ -847,7 +862,7 @@ validations:
       fi
     condition: "stage == 9"
     timeout_seconds: 1800
-    description: "GREEN means every tier passed and target coverage meets the floor; RED leaves no marker"
+    description: "GREEN means every tier passed, target coverage meets the floor and no plan row is PENDING or PARTIAL; RED leaves no marker"
 
   # ── 10 Refinement baseline ──────────────────────────────────────────────
   - type: command_succeeds
