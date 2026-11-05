@@ -176,19 +176,26 @@ async def test_drain_ends_a_boundary_paused_sheet_instead_of_waiting_for_it(
             workspace=Path("/tmp/workspace"), status=status,
         )
 
-    async def _finish_running_soon() -> None:
-        await asyncio.sleep(0.2)
+    # The drain waits only on the RUNNING job's task. Prove it without a
+    # clock: the running musician ends as soon as the drain has started
+    # waiting (one loop turn later), and the paused musician must already be
+    # cancelled by then; a drain that still waited on the paused sheet would
+    # block here until shutdown_timeout_seconds and the test would fail by
+    # its own deadline, not by a timing bound.
+    async def _end_running_once_drain_waits() -> None:
+        while not paused_musician.cancelled():
+            await asyncio.sleep(0)
         running_musician.cancel()
 
-    finisher = asyncio.create_task(_finish_running_soon())
-    started = asyncio.get_running_loop().time()
+    finisher = asyncio.create_task(_end_running_once_drain_waits())
     with patch("marianne.daemon.manager._logger") as log:
         await mgr.shutdown(graceful=True)
-    elapsed = asyncio.get_running_loop().time() - started
     await finisher
 
     assert paused_musician.cancelled(), "the boundary-paused sheet is ended at once"
-    assert elapsed < 5.0, f"drain waited {elapsed:.1f}s on a sheet that re-runs on resume"
+    exceeded = [c for c in log.warning.call_args_list
+                if c.args[0] == "manager.shutdown_timeout_exceeded"]
+    assert not exceeded, "the drain must not have waited on the paused sheet"
     ended = [c for c in log.info.call_args_list
              if c.args[0] == "manager.shutdown_ended_boundary_paused_sheets"]
     assert ended and ended[0].kwargs["sheets"][0]["job_id"] == "paused-job"
