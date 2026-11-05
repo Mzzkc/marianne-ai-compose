@@ -406,6 +406,20 @@ class SheetConfig(BaseModel):
         ),
     )
 
+    # The reply of a sheet whose instrument has no filesystem (GH #494).
+    stdout_to: dict[int, str] = Field(
+        default_factory=dict,
+        description=(
+            "Per-sheet file for the instrument's full stdout. Map of sheet_num -> "
+            "workspace-relative path (or a {workspace}-prefixed one). The musician "
+            "writes the whole reply there before validations run, so a sheet on an "
+            "`http` profile, which has no filesystem, can still produce a file for "
+            "`file_exists`/`content_regex` and for later sheets; `stdout_tail` keeps "
+            "only the last 500 characters. "
+            "Example: {1: 'design.md', 2: '{workspace}/tasks.md'}"
+        ),
+    )
+
     # Conditional execution (#119, formerly skip_when_command / GH#71).
     # The old expression-based skip_when (GH#13) was never evaluated at
     # runtime — command predicates replaced it under the shorter name.
@@ -763,6 +777,23 @@ class SheetConfig(BaseModel):
                 for sheet_num in expansion.stage_sheets.get(stage, [stage]):
                     expanded_skip_when[sheet_num] = cmd
             self.skip_when = expanded_skip_when
+
+        # Expand stdout_to the same way; a fanned-out stage's voices would
+        # otherwise overwrite one file, so each voice gets its own suffix.
+        if self.stdout_to:
+            expanded_stdout_to: dict[int, str] = {}
+            for stage, target in self.stdout_to.items():
+                voices = expansion.stage_sheets.get(stage, [stage])
+                for sheet_num in voices:
+                    if len(voices) > 1:
+                        stem, dot, ext = target.rpartition(".")
+                        suffixed = dot and "/" not in ext
+                        expanded_stdout_to[sheet_num] = (
+                            f"{stem}-{sheet_num}.{ext}" if suffixed else f"{target}-{sheet_num}"
+                        )
+                    else:
+                        expanded_stdout_to[sheet_num] = target
+            self.stdout_to = expanded_stdout_to
 
         def concrete_span(span: str) -> str:
             first_stage, last_stage = span_bounds(span)

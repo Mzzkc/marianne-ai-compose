@@ -342,6 +342,7 @@ Defines how work is divided into sheets.
 | `dependencies` | dict[int, list[int]] | `{}` | Sheet/stage dependency DAG. See [Fan-Out and Dependencies](#fan-out-and-dependencies). |
 | `fan_out` | dict[int, int] | `{}` | Stage → instance count. See [Fan-Out and Dependencies](#fan-out-and-dependencies). |
 | `skip_when` | dict[int, SkipWhenCommand] | `{}` | Command-based conditional skip rules (#119, formerly `skip_when_command`). Shell command exit 0 = skip, non-zero = run. See [Conditional Sheet Skipping](#conditional-sheet-skipping). |
+| `stdout_to` | dict[int, str] | `{}` | Per-sheet file (workspace-relative or `{workspace}/...`) the musician writes the instrument's full stdout to before validations run. The way a sheet on an `http` profile, which has no filesystem, produces a file. |
 | `prelude` | list[InjectionItem] | `[]` | Shared file injections for ALL sheets. See [Prelude and Cadenza](#prelude-and-cadenza-context-injection). |
 | `cadenzas` | dict[int, list[InjectionItem]] | `{}` | Per-sheet file injections. See [Prelude and Cadenza](#prelude-and-cadenza-context-injection). |
 | `per_sheet_instruments` | dict[int, str] | `{}` | Per-sheet instrument overrides. See [Multi-Instrument Scores](#multi-instrument-scores). |

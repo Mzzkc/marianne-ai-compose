@@ -92,9 +92,12 @@ mzt status first-local --watch
 
 An `http` profile answers; it has no filesystem. Its reply is the sheet's
 stdout, reaches later sheets through `cross_sheet` capture, and is recorded on
-the sheet. A score whose sheets must *write files* (most engineering
-examples, and every score the compiler or `score-composer` generates) needs a
-CLI agent that can edit files. The local way to get one is OpenCode pointed at
+the sheet. To keep the whole reply as a file, name one per sheet with
+`sheet.stdout_to` (`{1: design.md, 2: tasks.md}`): the musician writes it
+before validations run, so a `file_exists` or `content_regex` validation can
+read it and a later sheet can inject it. A score whose sheets must *edit
+files in a project* (most engineering examples, and every score the compiler
+or `score-composer` generates) still needs a CLI agent that can edit files. The local way to get one is OpenCode pointed at
 the same server:
 
 ```json

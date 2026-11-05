@@ -243,6 +243,11 @@ class AbsoluteHomePathCheck:
             if isinstance(cadenzas, dict):
                 for items in cadenzas.values():
                     _scan_items(items, "cadenzas")
+            stdout_to = sheet_cfg.get("stdout_to")
+            if isinstance(stdout_to, dict):
+                for num, target in stdout_to.items():
+                    if isinstance(target, str) and _is_home_absolute(target):
+                        _flag(f"sheet.stdout_to.{num}", target)
 
         prompt_cfg = data.get("prompt")
         if isinstance(prompt_cfg, dict):

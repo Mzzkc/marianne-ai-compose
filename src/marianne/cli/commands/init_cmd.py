@@ -131,11 +131,16 @@ instrument_fallbacks: []
 instrument_config:
   timeout_seconds: 600
 
-# One item per sheet; total_items is the number of sheets.
+# One item per sheet; total_items is the number of sheets. stdout_to keeps
+# each sheet's whole reply as a file in the workspace (the server has no
+# filesystem of its own).
 sheet:
   total_items: 2
+  stdout_to:
+    1: design.md
+    2: tasks.md
 
-# Each sheet's reply reaches the next sheet as {{{{ previous_outputs }}}}.
+# Each sheet's reply also reaches the next sheet as {{{{ previous_outputs }}}}.
 cross_sheet:
   auto_capture_stdout: true
 

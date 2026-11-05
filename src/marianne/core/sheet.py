@@ -173,6 +173,13 @@ class Sheet(BaseModel):
         "to the scratch quarantine before downstream sheets run (`quarantine`).",
     )
 
+    stdout_to: str | None = Field(
+        default=None,
+        description="sheet.stdout_to for this sheet: the workspace-relative (or "
+        "{workspace}-prefixed) file the musician writes the full reply to before "
+        "validations run. None when the score names no file for this sheet.",
+    )
+
     # --- Timeout ---
     timeout_seconds: float = Field(
         default=1800.0,
@@ -597,6 +604,7 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
                 validations=validations,
                 foreign_artifacts=foreign,
                 foreign_artifact_policy=config.workspace_lifecycle.foreign_artifacts,
+                stdout_to=config.sheet.stdout_to.get(sheet_num),
                 timeout_seconds=timeout,
             )
         )

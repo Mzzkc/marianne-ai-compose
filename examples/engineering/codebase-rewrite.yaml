@@ -155,16 +155,19 @@ sheet:
     # Behaviour rounds: rewrite, run every tier, gate. The gate reopens the
     # units its red tests point at, and the next round's unit loop takes only
     # those. Nested loops restart the inner loop on each outer round.
+    # Measured: a 30-unit plan spent $36 over four unit passes (eight units
+    # landed, four left) and ended on a $30 cap; the round cap must cover the
+    # unit cap times the rounds it allows, or round 2 ends before its gate.
     7-9:
       index: behaviour_round
       until: 'file("09-behaviour-green.txt").exists'
       max_iterations: 3
-      cost_limit_usd: 45.0
+      cost_limit_usd: 240.0
     7:
       index: unit_pass
       until: 'file("07-units-done.txt").exists'
-      max_iterations: 8
-      cost_limit_usd: 30.0
+      max_iterations: 12
+      cost_limit_usd: 75.0
     # Refinement: a fixed number of quality passes, ending early when the
     # critics find nothing worth a pass. `count` with `until` acts as a cap.
     11-12:

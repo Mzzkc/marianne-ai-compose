@@ -289,6 +289,14 @@ async def sheet_task(
                 f"{exec_result.stdout}{separator}\n{sandbox_section}"
             )
 
+        # Step 3c: the reply as a file (sheet.stdout_to, GH #494). An http
+        # instrument has no filesystem; the only way its answer can meet a
+        # file validation or reach a later sheet whole is for the musician
+        # to write it. Written before validations so they can read it.
+        stdout_to_warning = _write_stdout_to(sheet, exec_result)
+        if stdout_to_warning:
+            preflight_warnings.append(stdout_to_warning)
+
         # Step 4: Run validations (only if execution succeeded)
         # F-118: pass total_sheets/total_movements for rich context
         val_passed, val_total, val_rate, val_details = await _validate(
@@ -1264,6 +1272,55 @@ async def _validate(
         )
         # Validation engine failure — report as 0% to trigger retry
         return 0, 0, 0.0, {"error": error_text}
+
+
+def resolve_stdout_to(sheet: Sheet) -> Path | None:
+    """The file ``sheet.stdout_to`` names, anchored in the workspace.
+
+    ``{workspace}`` expands as in validations; a relative path is relative to
+    the workspace; a path that escapes the workspace is refused (None) so a
+    score cannot write the reply over an arbitrary file.
+    """
+    if not sheet.stdout_to:
+        return None
+    workspace = sheet.workspace.resolve()
+    raw = sheet.stdout_to.replace("{workspace}", str(workspace))
+    target = Path(raw)
+    if not target.is_absolute():
+        target = workspace / target
+    target = target.resolve()
+    if workspace != target and workspace not in target.parents:
+        return None
+    return target
+
+
+def _write_stdout_to(sheet: Sheet, exec_result: ExecutionResult) -> str | None:
+    """Write the full stdout to ``sheet.stdout_to``; return a warning on refusal.
+
+    Only a successful execution is written: a failed attempt's partial reply
+    must not satisfy a file validation. Credentials are redacted the same way
+    as ``stdout_tail``.
+    """
+    if not sheet.stdout_to:
+        return None
+    target = resolve_stdout_to(sheet)
+    if target is None:
+        return (
+            f"stdout_to {sheet.stdout_to!r} escapes the workspace; the reply was not written"
+        )
+    if not exec_result.success:
+        return None
+    text = redact_credentials(exec_result.stdout or "") or ""
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+    except OSError as exc:
+        return f"stdout_to {sheet.stdout_to!r} could not be written: {exc}"
+    _logger.info(
+        "musician.stdout_to_written",
+        extra={SHEET_NUM_KEY: sheet.num, "path": str(target), "chars": len(text)},
+    )
+    return None
 
 
 def _capture_output(exec_result: ExecutionResult) -> tuple[str, str]:

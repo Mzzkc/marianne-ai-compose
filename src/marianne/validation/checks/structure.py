@@ -72,6 +72,7 @@ class FanOutCoherenceCheck:
         mappings: dict[str, set[int]] = {
             "dependencies": set(sheet.dependencies),
             "skip_when": set(sheet.skip_when),
+            "stdout_to": set(sheet.stdout_to),
             "prompt_extensions": set(sheet.prompt_extensions),
             "per_sheet_instruments": set(sheet.per_sheet_instruments),
             "per_sheet_fallbacks": set(sheet.per_sheet_fallbacks),
