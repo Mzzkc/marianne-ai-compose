@@ -24,7 +24,8 @@ from marianne.execution.instruments.cli_backend import PluginCliBackend
 
 
 @pytest.mark.asyncio
-async def test_concurrent_fan_out_mailbox_exchange(tmp_path, monkeypatch):
+@pytest.mark.parametrize("delay_retention", [False, True])
+async def test_concurrent_fan_out_mailbox_exchange(tmp_path, monkeypatch, delay_retention):
     workspace = tmp_path / "workspace"
     stub = tmp_path / "musician.py"
     stub.write_text('''
@@ -120,10 +121,20 @@ prompt:
   template: Exchange a note with your sibling.
 ''')
     manager = JobManager(config)
+    retention_ready = asyncio.Event()
+    if delay_retention:
+        record_traffic = manager._record_mailbox_traffic
+
+        async def delayed_record_traffic(job_id, workspace):
+            await retention_ready.wait()
+            await record_traffic(job_id, workspace)
+
+        monkeypatch.setattr(manager, "_record_mailbox_traffic", delayed_record_traffic)
     with structlog.testing.capture_logs() as logs:
         try:
             await manager.start()
             response = await manager.submit_job(JobRequest(config_path=score))
+            job_task = manager._jobs[response.job_id]
             deadline = asyncio.get_running_loop().time() + 23
             while asyncio.get_running_loop().time() < deadline:
                 jobs = await manager.list_jobs()
@@ -132,6 +143,10 @@ prompt:
                     break
                 await asyncio.sleep(0.05)
             assert job["status"] == "completed", (job, logs[-20:])
+            retention_ready.set()
+            # Baton status is terminal before managed-task mailbox retention
+            # and scratch cleanup settle. Join that task before inspecting them.
+            await asyncio.wait_for(asyncio.shield(job_task), timeout=5)
             assert max_active == 2
             for sheet in (1, 2):
                 received = json.loads((tmp_path / f"received-{sheet}.json").read_text())
