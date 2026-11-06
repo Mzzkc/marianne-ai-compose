@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,89 @@ from typer.testing import CliRunner
 from marianne.cli import app
 from marianne.core.config.classes import canonical_json
 from marianne.instruments.classes import write_user_classes
+
+
+@pytest.fixture
+def gemini_profile_dirs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, Path, Path]:
+    """Use real shipped CLI profiles and loader; isolate host and binary presence."""
+    from marianne.instruments import loader
+
+    shipped = loader.profile_source_dirs()[0]
+    dirs = tuple(tmp_path / name for name in ("builtins", "user", "venue"))
+    for directory in dirs:
+        directory.mkdir()
+    for name in ("gemini-cli", "claude-code", "codex-cli"):
+        shutil.copyfile(shipped / f"{name}.yaml", dirs[0] / f"{name}.yaml")
+    monkeypatch.setattr(loader, "profile_source_dirs", lambda: dirs)
+    monkeypatch.setattr("shutil.which", lambda name: f"/test/bin/{name}")
+    return dirs
+
+
+def test_gemini_writer_emits_multimodal_and_context_classes_without_enabling_builtin(
+    tmp_path: Path, gemini_profile_dirs: tuple[Path, Path, Path],
+) -> None:
+    """The unsupported shipped Gemini stays excluded while fallbacks are emitted."""
+    _, content, _ = write_user_classes(path=tmp_path / "classes.yaml")
+    classes = yaml.safe_load(content)["classes"]
+    assert classes["high-context"] == ["codex-cli", "claude-code"]
+    assert classes["image"] == ["claude-code", "codex-cli"]
+    assert classes["video"] == ["claude-code"]
+    assert all("gemini-cli" not in chain for chain in classes.values())
+
+
+_LAYER_DIRS = {"user": 1, "venue": 2}
+
+
+@pytest.mark.parametrize("layer", ["user", "venue"])
+@pytest.mark.parametrize(
+    ("status", "vision", "installed", "seated"),
+    [("ready", True, True, True), ("unsupported", True, True, False),
+     ("ready", False, True, False), ("ready", True, False, False)],
+    ids=["ready", "unsupported", "no-vision", "missing-binary"],
+)
+def test_gemini_writer_uses_effective_override_and_keeps_policy_gates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    gemini_profile_dirs: tuple[Path, Path, Path],
+    layer: str, status: str, vision: bool, installed: bool, seated: bool,
+) -> None:
+    """A runnable override is seated; status, vision, and binary gates still apply."""
+    dirs = gemini_profile_dirs
+    profile = yaml.safe_load((dirs[0] / "gemini-cli.yaml").read_text())
+    profile["execution_status"] = status
+    profile["execution_status_detail"] = "Local test configuration"
+    if not vision:
+        profile["capabilities"].remove("vision")
+    (dirs[_LAYER_DIRS[layer]] / "gemini-cli.yaml").write_text(yaml.safe_dump(profile))
+    if not installed:
+        monkeypatch.setattr(
+            "shutil.which", lambda name: None if name == "gemini" else f"/test/bin/{name}",
+        )
+    _, content, _ = write_user_classes(path=tmp_path / "classes.yaml")
+    classes = yaml.safe_load(content)["classes"]
+    assert classes["image"] == (["gemini-cli"] if seated else []) + ["claude-code", "codex-cli"]
+    assert classes["video"] == (["gemini-cli"] if seated else []) + ["claude-code"]
+    # high-context needs no vision but still refuses unsupported or absent CLIs.
+    expected_context = ["codex-cli"]
+    if status == "ready" and installed:
+        expected_context.append("gemini-cli")
+    assert classes["high-context"] == expected_context + ["claude-code"]
+
+
+def test_gemini_writer_venue_override_wins_over_ready_user_override(
+    tmp_path: Path, gemini_profile_dirs: tuple[Path, Path, Path],
+) -> None:
+    dirs = gemini_profile_dirs
+    profile = yaml.safe_load((dirs[0] / "gemini-cli.yaml").read_text())
+    profile["execution_status"] = "ready"
+    (dirs[1] / "gemini-cli.yaml").write_text(yaml.safe_dump(profile))
+    profile["execution_status"] = "unsupported"
+    (dirs[2] / "gemini-cli.yaml").write_text(yaml.safe_dump(profile))
+    _, content, _ = write_user_classes(path=tmp_path / "classes.yaml")
+    classes = yaml.safe_load(content)["classes"]
+    assert classes["image"] == ["claude-code", "codex-cli"]
+    assert all("gemini-cli" not in chain for chain in classes.values())
 
 
 def test_show_json_names_layers_and_entry_availability(

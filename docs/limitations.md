@@ -120,6 +120,23 @@ OpenAI-compatible contract.
 
 Run `mzt instruments list` to see all available instruments and their status.
 
+### Gemini CLI Requires Locally Verified Authentication
+
+The shipped `gemini-cli` remains `execution_status: unsupported`: the default
+individual-tier OAuth path on Pallas returned `UNSUPPORTED_CLIENT` /
+`IneligibleTierError`. A runnable API-key path is available (GH #469): export
+`GEMINI_API_KEY`, copy the full builtin to
+`~/.marianne/instruments/gemini-cli.yaml`, and run
+`mzt instruments check gemini-cli --live`. Only after success, set
+`execution_status: ready` in the local copy and regenerate the class map.
+Google API-key and ADC/gcloud configurations remain alternatives. See the
+[Gemini setup instructions](instrument-guide.md#gemini-cli-authentication-and-readiness).
+
+Doctor recognizes the credential signal; the class writer honors user/venue
+overrides and ranks eligible profiles in `high-context`, `image`, and `video`.
+Neither a declared ready status nor an installed binary proves authentication.
+Without a real credential, live verification remains blocked.
+
 ### Error Classification Is Claude-Tuned
 
 The error classifier (`src/marianne/core/errors/classifier.py`) was originally designed around Claude CLI output patterns. While it handles common rate-limit patterns across providers, edge cases in non-Claude instruments may produce suboptimal error recovery.

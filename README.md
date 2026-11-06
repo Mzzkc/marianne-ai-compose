@@ -52,7 +52,7 @@ An **instrument** is any CLI tool wrapped in a YAML profile. Marianne treats ins
 | Instrument    | What It Wraps |
 |---------------|---------------|
 | `claude-code` | Claude Code CLI — full Musician profile |
-| `gemini-cli`  | Google Gemini CLI |
+| `gemini-cli`  | Google Gemini CLI — ships unsupported (individual-tier OAuth); enable locally via the [API-key readiness path](docs/instrument-guide.md#gemini-cli-authentication-and-readiness) (GH #469) |
 | `codex-cli`   | OpenAI Codex CLI |
 | `aider`       | Aider — AI pair programming |
 | `goose`       | Goose — autonomous coding agent |

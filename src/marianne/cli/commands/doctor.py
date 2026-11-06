@@ -316,7 +316,8 @@ def _format_seconds(seconds: float | None) -> str:
     return f"(clears in {secs}s)"
 
 
-_GOOGLE_AUTH_ENV_VARS = (
+_GEMINI_AUTH_ENV_VARS = (
+    "GEMINI_API_KEY",
     "GOOGLE_API_KEY",
     "GOOGLE_APPLICATION_CREDENTIALS",
     "GOOGLE_CLOUD_PROJECT",
@@ -332,9 +333,9 @@ def _profile_execution_state(profile: InstrumentProfile) -> tuple[str, str | Non
         profile.kind == "cli"
         and profile.cli is not None
         and profile.cli.command.executable == "gemini"
-        and not any(os.environ.get(name) for name in _GOOGLE_AUTH_ENV_VARS)
+        and not any(os.environ.get(name) for name in _GEMINI_AUTH_ENV_VARS)
     ):
-        env_list = ", ".join(_GOOGLE_AUTH_ENV_VARS)
+        env_list = ", ".join(_GEMINI_AUTH_ENV_VARS)
         return (
             "unsupported",
             "Gemini CLI prompt execution is unsupported for the default "

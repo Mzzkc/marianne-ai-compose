@@ -333,7 +333,55 @@ class TestDoctorJsonOutput:
         assert instrument["execution_ready"] is False
         assert instrument["rate_limited"] is False
 
-    def test_json_infers_gemini_executable_unsupported_without_google_auth(
+    @pytest.mark.parametrize("auth_var", ["GEMINI_API_KEY", "GOOGLE_API_KEY"])
+    def test_json_gemini_api_key_auth_keeps_ready_profile_ready(self, auth_var: str) -> None:
+        """Either documented API key is sufficient for a locally enabled profile."""
+        from marianne.core.config.instruments import (
+            CliCommand,
+            CliOutputConfig,
+            CliProfile,
+            InstrumentProfile,
+        )
+
+        profile = InstrumentProfile(
+            name="gemini-cli",
+            display_name="Gemini CLI",
+            kind="cli",
+            execution_status="ready",
+            cli=CliProfile(
+                command=CliCommand(executable="gemini"),
+                output=CliOutputConfig(format="text"),
+            ),
+        )
+        env = dict.fromkeys(
+            ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS",
+             "GOOGLE_CLOUD_PROJECT", "CLOUDSDK_CONFIG"),
+            "",
+        )
+        env[auth_var] = "test-credential"
+        with (
+            patch.dict("os.environ", env, clear=False),
+            patch(
+                "marianne.cli.commands.doctor._check_conductor_status",
+                return_value=("not running", None),
+            ),
+            patch(
+                "marianne.cli.commands.doctor._get_all_profiles",
+                return_value={"gemini-cli": profile},
+            ),
+            patch(
+                "marianne.cli.commands.doctor.probe_profile",
+                return_value=ProfileProbe("ready", binary_path="/usr/bin/gemini"),
+            ),
+        ):
+            result = runner.invoke(app, ["doctor", "--json"])
+
+        assert result.exit_code == 0, result.output
+        instrument = json.loads(result.stdout)["instruments"][0]
+        assert instrument["execution_status"] == "ready"
+        assert instrument["execution_ready"] is True
+
+    def test_json_gemini_api_key_absent_infers_unsupported_without_google_auth(
         self,
     ) -> None:
         """Gemini wrapper profiles inherit the local OAuth-tier block."""
@@ -360,6 +408,7 @@ class TestDoctorJsonOutput:
             patch.dict(
                 "os.environ",
                 {
+                    "GEMINI_API_KEY": "",
                     "GOOGLE_API_KEY": "",
                     "GOOGLE_APPLICATION_CREDENTIALS": "",
                     "GOOGLE_CLOUD_PROJECT": "",

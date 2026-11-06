@@ -1010,6 +1010,7 @@ Validates that your environment is ready to run Marianne scores. Checks Python v
 | Instrument hygiene | User- and venue-layer profiles that no score the conductor has been given names and no class chain includes (GH #443). Reported only, never deleted: a seat is an alias over an existing profile, so a profile nothing names is archived by a person or kept by submitting the score that needs it. `--json` lists them under `unreferenced_profiles`. Skipped before the conductor has ever run. Reads the registry of the conductor the CLI addresses (`--conductor-clone` selects the clone's) |
 | Credential exposure | Ready agent profiles using the explicit `cli.command.inherit_env` opt-out while credential-shaped variables are set (GH #335). Profiles are named without printing values; declare `required_env` or remove the opt-out to clear the warning |
 | Credentials no longer reaching a profile | A ready personal/venue profile with no `required_env`, running an executable a shipped profile authenticates by environment (`claude`, `codex`, `gemini`, `agy`, `goose`), while those variables are set in this environment: since GH #335 they are filtered by default, so the instrument authenticates differently from the shell it was tested in. Declare `required_env` with the variables it reads, or `required_env: []` if it uses its own store |
+| Gemini auth inference | A ready `gemini`-executable CLI profile with none of `GEMINI_API_KEY` (primary, GH #469), `GOOGLE_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`, `CLOUDSDK_CONFIG` set is reported unsupported with a message naming the variables, instead of ready: the default individual-tier OAuth path cannot run a headless prompt. An auth signal is a readiness hint, not proof — verify with `mzt instruments check <profile> --live` (see the instrument guide's Gemini section) |
 
 Every command that answers "can this instrument run here" — `doctor`, `instruments list`, `instruments check`, `instruments classes check` and `classes write` — uses one probe with four states (GH #447):
 
@@ -1430,9 +1431,15 @@ and entry availability. `check` exits 1 for a broken layer or a user configured
 class with no available entry; `check --class strong` also requires that class
 to have an available entry. `write` probes shipped profiles and creates
 `~/.marianne/classes.yaml` with an ordered, model-free chain for each eligible
-class. It preserves an existing file with `--if-absent`, prints a proposal with
-`--dry-run`, and requires `--force` to replace hand edits. Replacements are
-backed up and written atomically.
+class — `strong`, `workhorse`, `fast`, `cheap`, `writing`, `review`, `vision`,
+`local`, `high-context`, `image`, and `video` (the last three seat `gemini-cli`
+once a locally enabled override passes their probe — first in `image` and
+`video`; GH #469). It ranks
+shipped names using their effective same-named user/venue overrides; an
+additional user or venue profile joins a chain only where its own `class_hints`
+put it (see the instrument guide). It preserves an existing file with
+`--if-absent`, prints a proposal with `--dry-run`, and requires `--force` to
+replace hand edits. Replacements are backed up and written atomically.
 
 These commands manage and inspect available instruments — the AI tools Marianne can use to execute scores. Instruments include CLI tools (Claude Code, Gemini CLI, Codex CLI, Aider, Goose) and HTTP APIs (Anthropic API, Ollama).
 

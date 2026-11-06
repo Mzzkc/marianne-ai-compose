@@ -43,6 +43,14 @@ CLASS_POLICIES: dict[str, ClassPolicy] = {
     ),
     "vision": ClassPolicy(("claude-code", "codex-cli"), requires=frozenset({"vision"})),
     "local": ClassPolicy(("ollama",)),
+    # Match the packaged vocabulary's context and multimodal priorities.
+    "high-context": ClassPolicy(
+        ("codex-cli", "antigravity", "gemini-cli", "claude-code", "opencode"),
+    ),
+    "image": ClassPolicy(
+        ("gemini-cli", "claude-code", "codex-cli"), requires=frozenset({"vision"}),
+    ),
+    "video": ClassPolicy(("gemini-cli", "claude-code"), requires=frozenset({"vision"})),
 }
 
 
@@ -69,18 +77,19 @@ def probe_builtin_profiles(
     profiles: dict[str, InstrumentProfile],
     hinted: dict[str, InstrumentProfile] | None = None,
 ) -> dict[str, object]:
-    """Probe shipped profiles — and user/venue profiles that carry ``class_hints``.
+    """Probe effective shipped names and additional profiles with ``class_hints``.
 
-    Called by explicit setup, not show. A user profile with no hint is never
-    seated by the writer (GH #469: ranking a user profile against the shipped
-    order is a decision the profile's author makes, not the writer).
+    Same-named user/venue overrides supply the actual execution contract for
+    shipped names. Additional user names need a hint: their ranking is a
+    decision the profile's author makes, not the writer (GH #469).
     """
     record: dict[str, object] = {}
-    hinted = {
-        name: profile for name, profile in (hinted or {}).items()
-        if profile.class_hints and name not in profiles
+    overrides = hinted or {}
+    profiles = {name: overrides.get(name, profile) for name, profile in profiles.items()}
+    hinted_extras = {
+        name: profile for name, profile in overrides.items() if profile.class_hints
     }
-    for name, profile in sorted({**profiles, **hinted}.items()):
+    for name, profile in sorted({**profiles, **hinted_extras}.items()):
         # The same probe `classes check` applies later (GH #447): a chain the
         # writer emits is one the checker accepts on the same machine. A local
         # server that answers but does not serve the profile's model is NOT
@@ -99,7 +108,7 @@ def probe_builtin_profiles(
             "raw_prompt": profile.raw_prompt,
             "class_hints": {
                 cls: parse_class_hint(hint) for cls, hint in sorted(profile.class_hints.items())
-            } if name in hinted else {},
+            } if name in hinted_extras else {},
         }
     return {
         "profiles": record,

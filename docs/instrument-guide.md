@@ -50,7 +50,7 @@ startup:
 | `claude-code` | Claude Code CLI | `claude login` |
 | `qwen-code` | Qwen Code CLI (`qwen`) | Saved Qwen OAuth or OpenAI-compatible API credentials |
 | `openclaw` | OpenClaw CLI (`openclaw agent exec`) | Saved client config and credentials |
-| `gemini-cli` | Google Gemini CLI | `GOOGLE_API_KEY` or `gcloud auth` |
+| `gemini-cli` | Google Gemini CLI | `GEMINI_API_KEY` (primary), `GOOGLE_API_KEY`, or Google ADC/gcloud configuration; local override and live check required (below) |
 | `codex-cli` | OpenAI Codex CLI | `OPENAI_API_KEY or CODEX_API_KEY` |
 | `antigravity` | Google Antigravity CLI (`agy`), Gemini CLI's successor; tmux-interactive by default, print mode delivers the prompt as one stream-json line on stdin | Existing Google account/API configuration |
 | `cline-cli` | Cline CLI | Provider API key |
@@ -66,6 +66,54 @@ mzt instruments list
 ---
 
 ## Using Instruments in Scores
+
+### Gemini CLI authentication and readiness
+
+The shipped Gemini profile stays `execution_status: unsupported` because the
+default individual-tier OAuth path returned `UNSUPPORTED_CLIENT` /
+`IneligibleTierError` on Pallas. Exporting a key alone does not enable that
+profile. Use `GEMINI_API_KEY` as the primary credential; existing
+`GOOGLE_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`, and
+`CLOUDSDK_CONFIG` configurations remain recognized auth signals. An auth
+signal in `mzt doctor` does not prove the credential works.
+
+From a Marianne source checkout, copy the **entire** shipped profile to the
+user layer. Profiles replace one another by name; a YAML fragment containing
+only `execution_status` does not inherit the builtin's command or models.
+If a local copy already exists, review and edit it instead of overwriting it:
+
+```bash
+export GEMINI_API_KEY='<your Gemini API key>'
+mkdir -p ~/.marianne/instruments
+cp -n src/marianne/instruments/builtins/gemini-cli.yaml ~/.marianne/instruments/gemini-cli.yaml
+uv run mzt instruments check gemini-cli --live
+```
+
+The live check sends a real prompt through the conductor's backend, even
+while the profile is marked unsupported, and spends a model call. Only after
+it succeeds, edit these fields in `~/.marianne/instruments/gemini-cli.yaml`,
+retaining the rest of the copied profile:
+
+```yaml
+execution_status: ready
+execution_status_detail: "API-key prompt execution live-smoke verified on this host."
+```
+
+Then inspect readiness and regenerate the machine's class map:
+
+```bash
+uv run mzt doctor
+uv run mzt instruments classes write --dry-run
+uv run mzt instruments classes write
+uv run mzt instruments classes check
+```
+
+Review the dry run before replacing an existing map. If the writer detects
+hand edits, it requires `--force` and backs up the old map. Same-named local
+overrides are probed and ranked in the shipped `high-context`, `image`, and
+`video` policies; image/video still require `vision`. The writer checks
+binary availability and declared readiness, so run the live check before
+enabling a profile. A failed smoke leaves the local profile unsupported.
 
 ### Qwen Code
 
@@ -226,8 +274,9 @@ refused (V310). Use `mzt
 instruments classes show --json` to inspect the winning layers and `mzt
 instruments classes check` to inspect current availability. `mzt instruments
 classes write --if-absent` creates a machine-specific user map without
-overwriting an existing one. The writer ranks the shipped profiles; a user or
-venue profile joins a generated chain only where its own `class_hints` put it
+overwriting an existing one. The writer ranks shipped names using their
+effective user/venue overrides; an additional user or venue profile name
+joins a generated chain only where its own `class_hints` put it
 (`class_hints: {strong: "after opencode"}` in the profile YAML), so a machine
 with a working GLM or Gemini route gets it into the map without a hand edit.
 A hinted profile still has to pass the class's own probe; when it does not,
@@ -338,7 +387,7 @@ mzt instruments check my-tool
 | `models` | No | List of available models with pricing and context windows |
 | `default_model` | No | Model to use when none specified in the score |
 | `default_timeout_seconds` | No | Default execution timeout (default: 1800) |
-| `class_hints` | No | Where `mzt instruments classes write` seats this profile per class: `{strong: "after opencode", fast: first}` — `first`, `last`, `after <profile>` or `before <profile>`. Only a user or venue profile with a hint is considered by the writer, and it still has to pass the class's capability and availability probe; a named anchor missing from the chain seats it last (GH #469) |
+| `class_hints` | No | Where `mzt instruments classes write` seats this profile per class: `{strong: "after opencode", fast: first}` — `first`, `last`, `after <profile>` or `before <profile>`. Additional user/venue names need a hint; same-named overrides use shipped rankings unless a local hint changes them. All profiles still pass the class's capability and availability probe; a named anchor missing from the chain seats it last (GH #469) |
 
 #### Capability Tags
 

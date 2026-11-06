@@ -6,6 +6,10 @@
 # Auth: Gemini CLI's documented API-key variable is GEMINI_API_KEY. This
 # profile also preserves GOOGLE_API_KEY plus Google ADC/gcloud surfaces for
 # existing direct Google API and cloud-auth configurations.
+# To enable this route, copy the full profile to
+# ~/.marianne/instruments/gemini-cli.yaml, export GEMINI_API_KEY, and run
+# mzt instruments check gemini-cli --live. Only after a successful smoke,
+# set execution_status: ready in that local copy. See docs/instrument-guide.md.
 #
 # SECURITY NOTE: Vendor sandboxing is disabled by default (--sandbox false).
 # Marianne manages workspace isolation at the orchestration layer. Scores
@@ -51,7 +55,7 @@ display_name: "Gemini CLI"
 description: "Google's Gemini CLI with tool use and vision"
 kind: cli
 execution_status: unsupported
-execution_status_detail: "Default individual-tier OAuth prompt execution returns UNSUPPORTED_CLIENT / IneligibleTierError; configure API/gcloud auth and override this profile locally before using it in fleets."
+execution_status_detail: "Default individual-tier OAuth prompt execution returns UNSUPPORTED_CLIENT / IneligibleTierError; export GEMINI_API_KEY (or configure Google ADC/gcloud auth), copy the full profile to ~/.marianne/instruments/gemini-cli.yaml, run mzt instruments check gemini-cli --live, and only after success set execution_status: ready in the local copy before using it in fleets."
 
 capabilities:
   - tool_use
