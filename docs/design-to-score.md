@@ -66,7 +66,12 @@ Output in the workspace: `01-intake.md`, five lens reports, `specs/00-system.md`
 `specs/parts.yaml`, `specs/decisions.md`, one `specs/NN-<part>/{spec,integration}.md`
 per part, the review verdict, `review/deferred.md`, and `07-stakeholder-brief.md`.
 The score stops on its last sheet (a FERMATA) so a person reads the brief
-before anything is built. The approval is yours, not the score's:
+before anything is built. If the repair loop spends every pass with the triage
+still at REWORK, the brief is still written: it opens with `## Not yet
+approved` and the blockers the last pass left, and its approval line says the
+design is NOT approved, so the decision (edit and retry, or accept the
+blockers as the first build's known debt) stays with a person instead of the
+job failing with the specs unread. The approval is yours, not the score's:
 
 ```bash
 mzt resolve spec-forge <sheet> accept     # or reject, and edit the concept

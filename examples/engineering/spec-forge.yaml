@@ -48,6 +48,8 @@
 #      07-stakeholder-brief.md, then:
 #        mzt resolve spec-forge <last-sheet> accept   # approve the design
 #        mzt resolve spec-forge <last-sheet> retry    # after editing the specs
+#      If the review loop spent every pass still in REWORK, the brief opens
+#      with "Not yet approved" and the blockers; the decision is still yours.
 #      `mzt status spec-forge` shows the sheet number.
 #   6. Feed specs/ to design-to-orchestra.yaml.
 #
@@ -139,10 +141,17 @@ sheet:
   # triage; repeat until the triage writes review/APPROVED. Passes 2+ revise
   # only what the triage names. The marker is written by sheet 6's own
   # validation from the parsed verdict, so prose inside a REWORK verdict can
-  # never end the loop. At the cap the loop ends and sheet 6's gate fails
-  # the job honestly instead of handing an unapproved design to the composer.
-  # No cost cap on the span: a cap that ends the loop early would skip that
-  # gate and surface only at stage 7.
+  # never end the loop. At the cap the loop ends with the marker absent and
+  # stage 7 still runs: the brief then opens with the blockers the last pass
+  # left and its approval line says the design is NOT approved, so the person
+  # who decides sees exactly what three passes could not settle (the memory
+  # primitive commission, 6 Nov 2026: three passes each resolved the previous
+  # pass's blockers and found the next layer; a job that failed at the cap
+  # would have withheld the specs from the composer). The job is still not
+  # a success: sheet 7's own gate refuses an unapproved brief that claims
+  # approval, and the FERMATA holds either way.
+  # No cost cap on the span: a cap that ends the loop early would skip the
+  # triage and surface only at stage 7.
   loops:
     4-6:
       index: pass_no
@@ -463,7 +472,17 @@ prompt:
 
     Write `{{ workspace }}/07-stakeholder-brief.md` for the people who will
     approve this design. Lead with what they care about, in their words, not
-    the specs' structure:
+    the specs' structure.
+
+    First check whether `{{ workspace }}/review/APPROVED` exists. If it does
+    not, the review loop spent every pass and the last verdict is still
+    REWORK: open the brief with a section `## Not yet approved: what review
+    could not settle` listing each blocker from verdict.yaml in one plain
+    sentence (part, what is wrong, the fix the triage asked for), and say in
+    `## How to approve` that the design is NOT approved and name the two
+    routes (edit the specs and `mzt resolve ... retry`, or accept the
+    blockers as the first build's known debt). Never describe an unapproved
+    design as approved.
 
     ## What you asked for, and what we heard underneath
     ## What we will build
@@ -577,9 +596,9 @@ validations:
     description: "Review records findings with severities (or NO FINDINGS)"
 
   # Triage: the verdict parses and is consistent with itself. APPROVE means
-  # no blockers. A valid APPROVE writes review/APPROVED, which ends the loop
-  # and admits stage 7; any other verdict removes it. The last pass fails
-  # the job if it is still REWORK.
+  # no blockers. A valid APPROVE writes review/APPROVED, which ends the loop;
+  # any other verdict removes it. A REWORK on the last pass does not fail the
+  # job here: stage 7 writes the brief either way and labels it.
   - type: command_succeeds
     command: |
       python3 - {workspace}/review {pass_no} <<'PY'
@@ -600,12 +619,6 @@ validations:
       PY
     condition: "stage == 6"
     description: "Verdict is well-formed and self-consistent"
-  - type: command_succeeds
-    command: 'test {pass_no} -lt 3 || test -f {workspace}/review/APPROVED'
-    condition: "stage == 6"
-    stage: 2
-    description: "Blockers resolved within the pass budget"
-
   # Stakeholder brief
   - type: content_regex
     path: "{workspace}/07-stakeholder-brief.md"
@@ -613,7 +626,19 @@ validations:
     condition: "stage == 7"
     description: "Stakeholder brief has every section"
   - type: command_succeeds
-    command: 'test -f {workspace}/review/APPROVED'
+    command: |
+      python3 - {workspace} <<'PY'
+      import sys, pathlib, re
+      ws = pathlib.Path(sys.argv[1])
+      brief = (ws / "07-stakeholder-brief.md").read_text()
+      approved = (ws / "review" / "APPROVED").exists()
+      if approved:
+          assert "## Not yet approved" not in brief, "approved design must not carry an unapproved header"
+      else:
+          assert brief.lstrip().startswith("## Not yet approved"), "unapproved design must open with its unresolved blockers"
+          tail = brief.split("## How to approve", 1)[1]
+          assert re.search(r"\bNOT approved\b", tail), "unapproved brief must say so in How to approve"
+      PY
     condition: "stage == 7"
     stage: 2
-    description: "Only an approved design reaches the stakeholders"
+    description: "The brief tells the truth about approval: an unapproved design opens with its blockers and says NOT approved"
