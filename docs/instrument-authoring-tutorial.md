@@ -346,6 +346,12 @@ models:
 default_model: smart-pro
 ```
 
+For a local `http` profile, `context_window` must state the server's real
+context, not the model's paper maximum: `mzt instruments check` reads the
+loaded model's live context from the server's `GET /props`
+(`default_generation_settings.n_ctx`) and warns on a mismatch, and
+`mzt validate` reports the same for the score's chain as V235 (GH #494).
+
 Select a model in your score with `instrument_config`:
 
 ```yaml
