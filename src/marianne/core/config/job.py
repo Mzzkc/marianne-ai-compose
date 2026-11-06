@@ -341,6 +341,13 @@ class MovementDef(BaseModel):
         "and start_item=1, this expands like sheet.fan_out at the same "
         "movement; an explicit fan_out count takes precedence.",
     )
+    produces: list[str] = Field(
+        default_factory=list,
+        description="Files this movement produces, relative to the workspace or "
+        "prefixed with {workspace}. Each fan-out voice declares these outputs; "
+        "use {sheet_num} for a separate file per voice. Declares ownership for "
+        "cadenza ordering and foreign-artifact checks; does not create or validate files.",
+    )
     instrument_fallbacks: list[str] = Field(
         default_factory=list,
         description="Default fallback chain for sheets in this movement. "

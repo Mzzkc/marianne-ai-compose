@@ -7,7 +7,11 @@ from pathlib import Path
 
 from marianne.core.config import JobConfig
 from marianne.core.config.job import InjectionItem
-from marianne.core.producers import dag_ancestors, producer_basenames
+from marianne.core.producers import (
+    dag_ancestors,
+    declared_products_from_config,
+    producer_basenames,
+)
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import (
     find_line_in_yaml,
@@ -102,10 +106,8 @@ class ValidationPathScopeCheck:
 
 
 def _infer_producers(config: JobConfig) -> dict[str, set[int]]:
-    """Map a produced file's basename to the set of sheets declared (via a
-    sheet-gated ``file_exists`` validation) to produce it. The producer
-    proxy lives in ``core.producers`` so the baton shares it (GH #386)."""
-    return producer_basenames(config.validations)
+    """Share movement, stdout and proxy ownership with the baton (#384/#386)."""
+    return producer_basenames(declared_products_from_config(config))
 
 
 class WorkspaceParentExistsCheck:
@@ -424,8 +426,8 @@ class PreludeCadenzaFileCheck:
         """Check prelude and cadenza file/directory paths."""
         issues: list[ValidationIssue] = []
 
-        # Files a stage is declared to produce at runtime (via a sheet-gated
-        # file_exists validation) are not expected on disk now — suppress the
+        # Files a stage is declared to produce at runtime are not expected
+        # on disk now — suppress the
         # not-found warning for them on cadenzas (#137 point 5). Whether they
         # are produced EARLY ENOUGH is V109's job, not this disk check's.
         produced = set(_infer_producers(config))
@@ -514,16 +516,16 @@ class PreludeCadenzaFileCheck:
 class CadenzaOrderingCheck:
     """V109: a cadenza reads a file whose producer runs later (#137).
 
-    No new config — uses three existing signals:
+    Uses three signals:
     - CONSUMER: ``cadenzas`` (which sheet injects/reads which file).
-    - PRODUCER (proxy): a ``file_exists`` validation gated to a sheet is
-      the author declaring that sheet produces the file.
+    - PRODUCER: movement ``produces``, ``stdout_to``, or the sheet-gated
+      ``file_exists`` proxy (in descending ownership priority).
     - ORDER: the dependency DAG (which sheet is guaranteed to run first).
 
     Warns when a cadenza on sheet M reads a file F that some sheet P is
-    declared (via file_exists) to produce, but P is NOT a DAG-ancestor of
+    declared to produce, but P is NOT a DAG-ancestor of
     M — so F is not guaranteed to exist when M's cadenza fires. WARNING
-    only: file_exists is a proxy, so we never false-ERROR a valid score.
+    only: declared output is not proof that a file exists at cadenza time.
     """
 
     @property
@@ -573,7 +575,7 @@ class CadenzaOrderingCheck:
                         message=(
                             f"Sheet {reader_sheet}'s cadenza reads "
                             f"'{item.file}', but the stage that produces it "
-                            f"(sheet {latest}, per its file_exists check) is "
+                            f"(sheet {latest}, per its producer declaration) is "
                             f"not guaranteed to run first — the file may not "
                             f"exist yet when this cadenza fires."
                         ),

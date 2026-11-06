@@ -1179,6 +1179,30 @@ multi-instrument-pipeline: RUNNING (2/3 movements)
 The `voices:` field is shorthand for `fan_out: {N: voices}` — they produce the same
 result.
 
+### Declaring Movement Outputs
+
+A movement can declare the files it writes with `produces:` (GH #384):
+
+```yaml
+movements:
+  2:
+    name: Implementation
+    voices: 3
+    produces:
+      - "{workspace}/implementation-{sheet_num}.md"
+```
+
+Paths are workspace-relative or `{workspace}`-prefixed; `{sheet_num}` expands to
+each concrete sheet number, so every fan-out voice declares its own output. This
+is an ownership declaration, not a guarantee: it neither creates files nor
+verifies success — keep output validations (`file_exists`, `content_regex`, …)
+to check the result. The declaration feeds cadenza ordering and the
+foreign-artifact guard: for the same path, explicit `produces:` takes
+precedence over `sheet.stdout_to`, which takes precedence over a sheet-gated
+`file_exists` proxy; a shared path belongs to every voice that declares it.
+See the [configuration reference](configuration-reference.md#movements) for
+the full field semantics.
+
 ### Named Instrument Definitions
 
 For scores that reference the same instrument configuration in multiple places, declare
@@ -1387,11 +1411,17 @@ validations:
 |-------|------|----------|-------------|
 | `path` | str | yes | File path. Supports `{workspace}`, `{sheet_num}`, `{instance}` placeholders. |
 
-A `file_exists` validation gated to one sheet (`condition: "sheet_num == N"`)
-is also the score's declaration that sheet N **produces** the file. Two
-things read that declaration: `mzt validate` (V108 stops warning that the
-file is missing before the run; V109 warns when a cadenza reads it before
-its producer is guaranteed to have run) and the conductor at run time — a
+Marianne knows which sheet produces a file from three signals, in descending
+ownership priority for the same path: movement `produces:` declarations
+(`movements: {2: {produces: ['{workspace}/report-{sheet_num}.md']}}` — see
+[Movements](#movements-and-multi-instrument-scores)), `sheet.stdout_to`
+capture targets, and — as the legacy proxy — a `file_exists` validation gated
+to one sheet (`condition: "sheet_num == N"`). Independent paths from all
+three are combined into one producer map. Two things read that map:
+`mzt validate` (V108 stops warning that a declared cadenza output is missing
+before the run — prelude inputs must already exist; V109 warns when a cadenza
+reads a file before its producer is guaranteed to have run) and the conductor
+at run time — a
 sheet that writes a file some later, non-ancestor sheet is declared to
 produce gets an `artifact:` warning in `mzt status` / `mzt diagnose`
 (GH #386). A musician that "helpfully" writes the whole downstream pipeline

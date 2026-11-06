@@ -268,6 +268,17 @@ through the same fan-out engine as `sheet.fan_out`: dependencies, voice variable
 and sheet numbering all use the expanded sheets. An explicit `sheet.fan_out`
 count takes precedence for that movement.
 
+Declare the files a movement writes with `produces:`. Paths are workspace-relative
+or `{workspace}`-prefixed; `{sheet_num}` expands to each concrete sheet number,
+so fan-out voices can declare separate outputs. This is an ownership declaration:
+it neither creates files nor verifies success. Keep output validations to check
+the result. For the same path, explicit `produces:` ownership takes precedence
+over `sheet.stdout_to`, which takes precedence over a sheet-gated `file_exists`
+proxy. Independent paths from all three sources are combined. V108 suppresses
+missing-file errors for declared cadenza outputs; V109 still warns if no producer
+is a dependency ancestor. The foreign-artifact guard uses the same ownership map;
+a shared declaration belongs to every voice that declares it.
+
 ```yaml
 movements:
   1:
@@ -276,6 +287,8 @@ movements:
   2:
     name: Implementation
     voices: 3
+    produces:
+      - "{workspace}/implementation-{sheet_num}.md"
     instrument: gemini-cli
     instrument_config:
       model: gemini-2.5-flash
@@ -296,6 +309,7 @@ movements:
 | `instrument` | `str \| None` | `None` | min_length=1 | Instrument for all sheets in this movement. Overrides the score-level `instrument:` but is overridden by per-sheet assignments. Can reference a score-local `instruments:` alias or a registered profile name. |
 | `instrument_config` | `InstrumentSettings` | `{}` | | Typed instrument overrides for this movement; unknown keys warn as V010/V011. |
 | `voices` | `int \| None` | `None` | `>= 1` | Number of parallel voices in this movement. Shorthand for `fan_out: {N: voices}`. |
+| `produces` | `list[str]` | `[]` | | Files this movement writes. Workspace-relative paths support `{workspace}` and `{sheet_num}`; each fan-out voice declares its own expanded outputs. Used for cadenza ordering and foreign-artifact checks; keep validations to check successful output. |
 | `instrument_fallbacks` | `list[str]` | `[]` | | Default fallback chain for sheets in this movement. Overrides score-level `instrument_fallbacks`. |
 
 **Instrument resolution precedence** (highest to lowest):

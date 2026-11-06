@@ -570,7 +570,7 @@ code-registry and corpus-sweep tests.
 | ERROR | V008 | A validation rule is missing the field its type requires |
 | ERROR | V009 | An evolved score references its previous version's paths |
 | ERROR | V012 | Invalid `validate.suppress` entry (unknown code or ERROR-tier code) |
-| ERROR | V105, V108 | Undefined validation variable (declared `prompt.variables`, built-ins and declared loop indices are defined); missing static prelude/cadenza input |
+| ERROR | V105, V108 | Undefined validation variable (declared `prompt.variables`, built-ins and declared loop indices are defined); missing static prelude/cadenza input. Cadenza outputs declared by movement `produces:`, `sheet.stdout_to`, or gated `file_exists` are exempt from V108; prelude inputs must already exist. |
 | ERROR | V209, V214, V216, V217 | Dependency cycle; expanded-sheet incoherence; missing cadenza target; missing or invalid static concert target |
 | ERROR | V210, V211 | Instrument or fallback name cannot resolve to a known profile, score alias, or capability class |
 | ERROR | V221–V223, V227, V229, V233, V312–V314, V316–V317, V320 | Flow load errors and invalid flow references, reported with a code and hint rather than a raw schema trace |
@@ -588,7 +588,7 @@ code-registry and corpus-sweep tests.
 | WARNING | V102 | `\| string` filter applied to a subscript of an int-keyed variable dict |
 | WARNING | V103 | Sheet or instrument timeout outside the reasonable range (V103/V104) |
 | WARNING | V106 | Empty pattern in a `content_contains`/`content_regex` validation, or regex syntax (`[Pp]x`, `A\|B`, `\s`) in a `content_contains` pattern, which is matched as a literal substring |
-| WARNING | V109 | A cadenza reads a file a later sheet produces |
+| WARNING | V109 | A cadenza reads a file without a guaranteed earlier producer. For the same path, movement `produces:` takes precedence over `sheet.stdout_to`, then the gated `file_exists` proxy. Add a dependency on a producer; declarations do not prove that a file exists at cadenza time. |
 | WARNING | V201 | Jinja `{{ }}` syntax inside a validation path or command (they are format strings, never rendered) |
 | WARNING | V202 | Python format-string (`%s`, `{x}`) syntax inside a Jinja template |
 | WARNING | V203 | No validation rules exist — nothing defines done |
