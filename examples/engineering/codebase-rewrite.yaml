@@ -170,11 +170,14 @@ sheet:
       cost_limit_usd: 75.0
     # Refinement: a fixed number of quality passes, ending early when the
     # critics find nothing worth a pass. `count` with `until` acts as a cap.
+    # Measured: each pass reruns the WHOLE oracle per kept commit; two passes
+    # over a 1,240-line C module with ~10 findings each cost $50 (three
+    # critics + refiner), so $30 ended the loop before the critics converged.
     11-12:
       index: refine_pass
       until: 'file("12-refine-converged.txt").exists'
       count: 4
-      cost_limit_usd: 30.0
+      cost_limit_usd: 100.0
 
   # Cathedral loop: the review's success submits the next iteration on the
   # same workspace. A COMPLETE review writes .rewrite-complete, every sheet of
