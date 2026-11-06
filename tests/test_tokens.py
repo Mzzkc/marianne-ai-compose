@@ -501,3 +501,38 @@ class TestEstimateTokensEdgeCases:
         result = estimate_tokens(42)
         assert result > 0
         assert result == math.ceil(len("42") / _CHARS_PER_TOKEN)
+
+
+class TestRegistryModelWindowFallback:
+    """Per-model windows declared in an instrument's registry profile (#85 F1).
+
+    Models absent from the curated ``_MODEL_EFFECTIVE_WINDOWS`` table fall back
+    to the instrument's declared ``ModelCapacity.context_window`` (minus the
+    output reservation), so a selected model's ceiling (e.g. ``qwen3:8b`` at
+    40,960 on ``claude-code-ollama``) actually constrains the effective window.
+    """
+
+    def test_profile_declared_model_window_constrains_instrument_default(self) -> None:
+        # qwen3:8b declares a raw 40,960 window; effective = 40960 - 4096.
+        result = get_effective_window_size(model="qwen3:8b", instrument="claude-code-ollama")
+        assert result == 40_960 - 4_096  # beats the 128K instrument default
+
+    def test_registry_lookup_is_exact_name_match(self) -> None:
+        # A versioned variant not declared on the profile must not match.
+        result = get_effective_window_size(model="qwen3:14b", instrument="claude-code-ollama")
+        assert result == 128_000  # instrument default; no loose prefix matching
+
+    def test_curated_table_beats_registry(self) -> None:
+        # llama3 is in the curated table (6K) even though claude-code-ollama
+        # declares llama3.1:8b at 131,072 — the maintained table wins.
+        result = get_effective_window_size(model="llama3", instrument="claude-code-ollama")
+        assert result == 6_000
+
+    def test_undeclared_model_without_instrument_keeps_default(self) -> None:
+        # No instrument scope → no registry lookup → conservative default path.
+        result = get_effective_window_size(model="qwen3:8b", instrument=None)
+        assert result == _DEFAULT_EFFECTIVE_WINDOW
+
+    def test_registry_model_lookup_never_raises_for_unknown_instrument(self) -> None:
+        result = get_effective_window_size(model="qwen3:8b", instrument="no-such-instrument")
+        assert result == _DEFAULT_EFFECTIVE_WINDOW

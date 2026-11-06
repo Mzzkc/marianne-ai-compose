@@ -2264,10 +2264,19 @@ Run `mzt instruments list` to see all available instruments. Built-in instrument
 | `aider` | CLI | Aider pair programming |
 | `goose` | CLI | Block's Goose agent |
 | `ollama` | HTTP | Local models through Ollama's OpenAI-compatible endpoint |
+| `claude-code-ollama` | CLI | Claude Code harness routed at a local Ollama server |
 
 Retired backend-era names do not resolve. Update old scores to a current CLI
 profile, or use `ollama` when a local OpenAI-compatible text endpoint is the
 right execution surface.
+
+`claude-code-ollama` pins `ANTHROPIC_BASE_URL=http://localhost:11434` and
+local authentication in the child environment. Start `ollama serve`, pull the
+selected model (default `llama3.1:8b`), and install `claude` on PATH first.
+The CLI availability probe checks the binary; it does not check Ollama readiness
+or pull models. `ollama` remains the raw HTTP route. To change the origin, copy
+the profile into `~/.marianne/instruments/` and edit
+`cli.command.env.ANTHROPIC_BASE_URL` (a full `http://host:port` origin, without `/v1`).
 
 ### Validation Types
 

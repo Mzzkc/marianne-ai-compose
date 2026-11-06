@@ -899,11 +899,13 @@ class TestCredentialExposure:
 
         doctor_mod = importlib.import_module("marianne.cli.commands.doctor")
         # Only the one variable this test plants may be present: the host
-        # running the suite may carry the rest of claude-code's set.
+        # running the suite may carry variables from either shipped Claude profile.
         import os
 
         for name in list(os.environ):
-            if name.startswith(("ANTHROPIC_", "CLAUDE_CODE_", "AWS_", "GOOGLE_", "CLOUD_ML_")):
+            if name.startswith((
+                "ANTHROPIC_", "CLAUDE_CODE_", "AWS_", "GOOGLE_", "CLOUD_ML_", "OLLAMA_",
+            )):
                 monkeypatch.delenv(name, raising=False)
         monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "x")
 

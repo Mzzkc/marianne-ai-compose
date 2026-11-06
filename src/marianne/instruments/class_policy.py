@@ -34,7 +34,8 @@ CLASS_POLICIES: dict[str, ClassPolicy] = {
         ("antigravity", "opencode", "crush", "codex-cli", "claude-code"), allow_raw=True
     ),
     "cheap": ClassPolicy(
-        ("ollama", "crush", "opencode", "antigravity"), zero_cost=True, allow_raw=True
+        ("ollama", "claude-code-ollama", "crush", "opencode", "antigravity"),
+        zero_cost=True, allow_raw=True
     ),
     "writing": ClassPolicy(("claude-code", "codex-cli", "antigravity", "opencode")),
     "review": ClassPolicy(
@@ -42,7 +43,7 @@ CLASS_POLICIES: dict[str, ClassPolicy] = {
         either=frozenset({"thinking", "tool_use"}),
     ),
     "vision": ClassPolicy(("claude-code", "codex-cli"), requires=frozenset({"vision"})),
-    "local": ClassPolicy(("ollama",)),
+    "local": ClassPolicy(("ollama", "claude-code-ollama")),
     # Match the packaged vocabulary's context and multimodal priorities.
     "high-context": ClassPolicy(
         ("codex-cli", "antigravity", "gemini-cli", "claude-code", "opencode"),

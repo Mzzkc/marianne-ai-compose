@@ -36,6 +36,15 @@ mzt --version
 
 All options below avoid the sandbox. Pick **one**.
 
+For a local Claude Code agent harness, use `instrument: claude-code-ollama`.
+It requires `claude` on PATH, a running `ollama serve`, and a pulled model
+(`ollama pull llama3.1:8b` for the default). Set `instrument_config.model` to
+another pulled tag if needed. The profile routes Claude Code to
+`http://localhost:11434`; it does not start Ollama or pull models. Its availability
+probe checks only `claude`. See the
+[instrument guide](instrument-guide.md#claude-code-over-local-ollama) for endpoint
+overrides and verification limits.
+
 ### Option A — `opencode` + OpenRouter free tier (recommended, $0, no card)
 
 The fastest zero-cost path. Free-tier OpenRouter models cost $0 and need no

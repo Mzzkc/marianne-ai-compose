@@ -11,6 +11,7 @@ import yaml
 from marianne.core.config.classes import ClassEntry, ClassSnapshot, ClassSnapshotEntry
 from marianne.core.config.job import JobConfig
 from marianne.core.sheet import build_sheets
+from marianne.instruments.class_policy import select_class_chains
 from marianne.instruments.classes import load_class_map
 
 
@@ -146,3 +147,18 @@ def test_all_tracked_scores_keep_sheet_identity_under_snapshots() -> None:
         else:
             assert resolved == original, relative
     assert score_count == len(tracked) - 1
+
+
+@pytest.mark.parametrize("available", [["claude-code-ollama"], ["ollama", "claude-code-ollama"]])
+def test_local_claude_is_seated_after_raw_ollama_in_local_and_cheap(available) -> None:
+    probe = {
+        "openrouter_api_key": False,
+        "profiles": {
+            name: {"available": True, "execution_status": "ready", "capabilities": [],
+                   "zero_cost": True, "raw_prompt": False}
+            for name in available
+        },
+    }
+    selected = select_class_chains(probe)
+    assert selected["local"] == available
+    assert selected["cheap"] == available

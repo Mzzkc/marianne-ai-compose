@@ -39,6 +39,7 @@ The maintained built-ins include:
 |------|------|------|
 | `claude-code` | Claude Code CLI (`claude`) | `claude login` |
 | `ollama` | Local OpenAI-compatible server | Optional local auth |
+| `claude-code-ollama` | Claude Code CLI over local Ollama | Profile-pinned local token |
 
 ### Agent Profiles
 
@@ -584,7 +585,13 @@ models:
 
 Model metadata enables cost tracking in `mzt status` and context budget
 calculation. If you omit models, cost tracking shows `$0.00` and context
-budget uses a conservative default.
+budget uses a conservative default. A declared `context_window` also bounds
+prompt preflight for any profile kind: when an instrument is given alongside
+the model, a model absent from the curated table resolves its effective
+input budget from the profile's declared window minus a 4,096-token output
+reservation (exact model-name match; curated table entries always win), so a
+small-declared model such as `qwen3:8b` (40,960 tokens) is advised against
+oversized prompts even though the instrument default is larger.
 
 For an `http` profile the entry also bounds the request: the HTTP executor
 sends `max_tokens` of 16,384 by default (or the sheet's
@@ -601,6 +608,39 @@ llama-server and PolyStrata share) and warns when the profile declares more;
 `mzt validate` says the same as V235 for the score's chain.
 
 ---
+
+#### Claude Code over local Ollama
+
+Use `instrument: claude-code-ollama` for the Claude Code agent harness with a
+local model: file edits, shell commands, and tool use run through `claude`.
+Use `instrument: ollama` for a raw HTTP prompt without filesystem or shell
+access. The two profiles coexist in the generated `local` and `cheap` chains, with
+`ollama` first and `claude-code-ollama` second.
+
+Install Claude Code (`claude` on PATH), start `ollama serve`, and pull
+`llama3.1:8b` (the default) or `qwen3:8b`. Select a pulled tag with
+`instrument_config.model`. Configure Ollama's context size for your workload;
+profile context windows describe model ceilings, not the running server's
+allocation. The profile does not start the server or download models. Its CLI
+availability probe checks only the binary; a ready probe does not establish
+server connectivity or model presence.
+
+The profile pins `ANTHROPIC_BASE_URL=http://localhost:11434`,
+`ANTHROPIC_AUTH_TOKEN=local`, and an empty `ANTHROPIC_API_KEY` via
+`cli.command.env`. It filters parent cloud-provider switches and credentials.
+For a different origin, copy the builtin to `~/.marianne/instruments/` under the
+same name and edit `cli.command.env.ANTHROPIC_BASE_URL`. You can use
+`"${OLLAMA_HOST}"` there with an exported full HTTP origin; the default profile
+uses the literal localhost URL. Shell-style `${VAR:-default}` is not supported.
+Reload the conductor after changing a profile.
+
+[Ollama's Claude Code integration](https://docs.ollama.com/integrations/claude-code)
+also provides `ollama launch claude` for interactive setup. Marianne invokes
+`claude` directly with the endpoint environment already set. Transport was
+verified with Claude Code 2.1.319 against a local mock Anthropic-compatible
+server on 2026-11-06. Real Ollama model tool calls and schema output remain
+unverified; support depends on the selected model. Vision, streaming, and
+thinking capabilities are not advertised by this profile.
 
 #### `http` — OpenAI-compatible HTTP profiles (`kind: http`)
 

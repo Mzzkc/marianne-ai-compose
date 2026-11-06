@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import httpx
@@ -9,8 +10,9 @@ import pytest
 
 from marianne.core.config.instruments import HttpProfile, InstrumentProfile
 from marianne.daemon.baton.backend_pool import _create_backend_for_profile
+from marianne.execution.instruments.cli_backend import PluginCliBackend
 from marianne.execution.instruments.openai_compat_backend import OpenAICompatibleBackend
-from marianne.instruments.loader import load_all_profiles
+from marianne.instruments.loader import InstrumentProfileLoader, load_all_profiles
 
 
 def _ollama_profile() -> InstrumentProfile:
@@ -85,3 +87,12 @@ def test_http_profile_without_a_selected_model_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="requires a model"):
         _create_backend_for_profile(profile)
+
+
+def test_local_claude_and_raw_ollama_dispatch_to_distinct_backends() -> None:
+    builtins = Path(__file__).resolve().parents[1] / "src/marianne/instruments/builtins"
+    profiles = InstrumentProfileLoader.load_directory(builtins)
+    http_profiles = {name: profile for name, profile in profiles.items() if profile.kind == "http"}
+    assert set(http_profiles) == {"ollama"}
+    assert isinstance(_create_backend_for_profile(profiles["ollama"]), OpenAICompatibleBackend)
+    assert isinstance(_create_backend_for_profile(profiles["claude-code-ollama"]), PluginCliBackend)
