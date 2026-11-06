@@ -227,6 +227,24 @@ class TestCliInstrumentsInspection:
             assert data["served_context"] == 8192
             assert "32,768" in data["context_mismatch"]
 
+    def test_check_json_null_served_context_when_props_not_exposed(self) -> None:
+        # Pins the JSON contract for script consumers: a ready loopback server
+        # that does not expose /props reports served_context: null (the key is
+        # present — "not exposed" is meaningful) and omits context_mismatch.
+        prof = _make_http_profile(name="quiet-box", declared_context=32768)
+        probe = ProfileProbe(state="ready", served_context=None, context_mismatch="")
+
+        with (
+            patch("marianne.cli.commands.instruments.probe_profile", return_value=probe),
+            patch("marianne.cli.commands.instruments.output_json") as mock_output_json,
+        ):
+            instruments_cli._check_json(prof)
+            assert mock_output_json.called
+            data = mock_output_json.call_args[0][0]
+            assert "served_context" in data
+            assert data["served_context"] is None
+            assert "context_mismatch" not in data
+
     def test_check_rich_prints_props_context_line(self) -> None:
         prof = _make_http_profile(name="box", declared_context=32768)
         probe = ProfileProbe(
