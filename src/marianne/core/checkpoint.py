@@ -1369,6 +1369,11 @@ class CheckpointState(BaseModel):
         "Merged into prompt.variables with CLI overriding YAML.",
     )
 
+    mailbox_traffic: dict[str, Any] | None = Field(
+        default=None,
+        description="Body-free per-send metadata retained before scratch inbox cleanup.",
+    )
+
     # Timestamps
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

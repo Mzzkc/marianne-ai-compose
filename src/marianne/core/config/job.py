@@ -486,6 +486,16 @@ class SheetConfig(BaseModel):
         ),
     )
 
+    fan_out_messaging: Literal["file", "none"] = Field(
+        default="file",
+        description=(
+            "Fan-out messaging mode (conceptually fan_out.messaging). "
+            "'file' enables scratch-owned inboxes and polling instructions for "
+            "concurrent siblings; 'none' omits messaging prompt setup. "
+            "A sibling field preserves the existing fan_out stage-to-count mapping."
+        ),
+    )
+
     fan_out_stage_map: dict[int, dict[str, int]] | None = Field(
         default=None,
         description=(

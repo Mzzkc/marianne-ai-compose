@@ -187,6 +187,11 @@ sheet:
     4: [2, 3]   # Sheet 4 depends on both 2 and 3
 ```
 
+Concurrent fan-out voices can exchange notes while they run through the
+scratch-owned mailbox — `sheet.fan_out_messaging: file` (the default) prepares
+per-sheet inboxes and the musicians use `mzt mail send` / `mzt mail read`.
+See the [CLI reference](docs/cli-reference.md#musician-messaging) for details.
+
 See the [Score Writing Guide](docs/score-writing-guide.md) for complete documentation.
 
 ---

@@ -517,3 +517,31 @@ class TestVariableShadowingCheck:
         assert issues[0].severity == ValidationSeverity.WARNING
 
 
+
+
+class TestFanOutMessagingCheck:
+    def test_messaging_explicit_without_fan_out_warns(self, tmp_path):
+        from marianne.validation.checks.best_practices import FanOutMessagingCheck
+        from marianne.validation.runner import create_default_checks
+
+        config = JobConfig(
+            name="mail", sheet={"total_items": 1, "fan_out_messaging": "file"},
+            prompt={"template": "Task"},
+        )
+        check = FanOutMessagingCheck()
+        issues = check.check(config, tmp_path / "score.yaml", "")
+        assert len(issues) == 1
+        assert issues[0].severity == ValidationSeverity.WARNING
+        assert "fan_out_messaging" in issues[0].message
+        assert any(isinstance(item, FanOutMessagingCheck) for item in create_default_checks())
+
+    def test_messaging_default_and_real_fan_out_do_not_warn(self, tmp_path):
+        from marianne.validation.checks.best_practices import FanOutMessagingCheck
+
+        for sheet in (
+            {"total_items": 1},
+            {"total_items": 1, "fan_out": {1: 2}, "fan_out_messaging": "file"},
+            {"total_items": 1, "fan_out": {1: 2}, "fan_out_messaging": "none"},
+        ):
+            config = JobConfig(name="mail", sheet=sheet, prompt={"template": "Task"})
+            assert FanOutMessagingCheck().check(config, tmp_path / "score.yaml", "") == []

@@ -1118,3 +1118,52 @@ class TestPreflightWarningCap:
         report = _build_diagnostic_report(job)
         # Report collects all warnings (from what's stored)
         assert len(report["preflight_warnings"]) == 30
+
+
+class TestMailboxDiagnose:
+    def test_mailbox_live_and_absent_report(self, tmp_path):
+        from marianne.core.config.workspace import mailbox_root
+        from marianne.core.mailbox import send_message
+
+        job = _make_job()
+        assert "mailbox_traffic" not in _build_diagnostic_report(job, workspace=tmp_path)
+        body = "DO-NOT-PRINT-THIS-BODY"
+        send_message(mailbox_root(tmp_path), 1, 2, body)
+        report = _build_diagnostic_report(job, workspace=tmp_path)
+        assert report["mailbox_traffic"]["sends"][0]["recipient"] == 2
+        assert report["mailbox_traffic"]["sheets"]["2"]["bytes"] == len(body.encode())
+        assert body not in json.dumps(report)
+
+    def test_mailbox_retained_after_cleanup_text_and_json(self, tmp_path):
+        import shutil
+
+        from marianne.core.config.workspace import mailbox_root
+        from marianne.core.mailbox import send_message, traffic_summary
+
+        root = mailbox_root(tmp_path)
+        body = "PRIVATE-BODY"
+        send_message(root, 1, 2, body)
+        job = _make_job()
+        job.mailbox_traffic = traffic_summary(root)
+        shutil.rmtree(root)
+        _write_state(tmp_path, job)
+        for flags in ([], ["--json"]):
+            result = runner.invoke(app, ["diagnose", "diag-test", "-w", str(tmp_path), *flags])
+            assert result.exit_code == 0, result.output
+            assert body not in result.output
+            if flags:
+                data = json.loads(result.stdout)
+                assert data["mailbox_traffic"]["sends"][0]["sender"] == 1
+            else:
+                assert "Mailbox traffic" in result.stdout
+                assert "1 -> 2" in result.stdout
+
+    def test_mailbox_corrupt_record_is_reported_without_body(self, tmp_path):
+        from marianne.core.config.workspace import mailbox_root
+
+        inbox = mailbox_root(tmp_path) / "1"
+        inbox.mkdir(parents=True)
+        (inbox / "inbox.jsonl").write_text("PRIVATE-CORRUPT-RECORD\n")
+        report = _build_diagnostic_report(_make_job(), workspace=tmp_path)
+        assert "Invalid mailbox record at line 1" in report["mailbox_error"]
+        assert "PRIVATE-CORRUPT" not in json.dumps(report)

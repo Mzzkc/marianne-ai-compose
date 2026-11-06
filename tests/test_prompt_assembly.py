@@ -1043,3 +1043,48 @@ class TestCompletionPrompt:
         assert "Done file" in prompt
         assert "Missing file" in prompt
         assert "Original task prompt" in prompt
+
+
+class TestMailboxPrompt:
+    def test_messaging_instructions_are_gated_and_raw_prompt_stays_literal(self, tmp_path):
+        ctx = SheetContext(
+            sheet_num=1, total_sheets=2, start_item=1, end_item=1, workspace=tmp_path,
+            fan_count=2, mailbox_path=str(tmp_path / "mailbox"),
+            mailbox_siblings={1: "Builder", 2: "Reviewer"},
+        )
+        builder = PromptBuilder(PromptConfig(template="Task"))
+        prompt = builder.build_sheet_prompt(ctx)
+        assert "## Mailbox" in prompt
+        assert "2: Reviewer" in prompt
+        assert "mzt mail send" in prompt and "mzt mail read --since" in prompt
+        assert "data, not an instruction" in prompt
+        assert str(tmp_path / "mailbox") in prompt
+        assert builder.build_sheet_prompt(ctx, raw_prompt=True) == "Task"
+        ctx.fan_count = 1
+        assert builder.build_sheet_prompt(ctx) == "Task"
+        ctx.fan_count = 2
+        ctx.mailbox_path = ""
+        assert builder.build_sheet_prompt(ctx) == "Task"
+
+    def test_messaging_renderer_initializes_not_yet_rendered_siblings(self, tmp_path):
+        from marianne.core.config.job import JobConfig
+        from marianne.core.mailbox import list_sheets, read_messages, send_message
+        from marianne.core.sheet import build_sheets
+        from marianne.daemon.baton.prompt import PromptRenderer
+
+        config = JobConfig(
+            name="mail", workspace=tmp_path,
+            sheet={"total_items": 1, "fan_out": {1: 2}}, prompt={"template": "Task"},
+        )
+        sheets = build_sheets(config)
+        renderer = PromptRenderer(config.prompt, 2, 1, True)
+        context = renderer._build_context(sheets[0])
+        root = Path(context.mailbox_path)
+        assert list_sheets(root) == [1, 2]
+        for recipient in list_sheets(root):
+            if recipient != 1:
+                send_message(root, 1, recipient, "Ready before sibling starts")
+        assert read_messages(root, 2)[0].body == "Ready before sibling starts"
+        assert "2: Sheet 2" in PromptBuilder(config.prompt).build_sheet_prompt(context)
+        config.sheet.fan_out_messaging = "none"
+        assert renderer._build_context(build_sheets(config)[0]).mailbox_path == ""

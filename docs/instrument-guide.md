@@ -436,6 +436,16 @@ the conductor deletes it when the job ends (`workspace_lifecycle.scratch`,
 GH #460). A clone made in a system temp directory has no owner once the sheet
 ends and is never reaped.
 
+In any job, instruments also receive `MARIANNE_MAILBOX` (the shared inbox
+root, `<scratch>/mailbox`), `MARIANNE_SHEET` (this sheet's number), and a
+pre-created personal inbox. They matter in fan-out jobs with messaging enabled
+(`sheet.fan_out_messaging: file`, the default), where the prompt tells each
+musician its siblings and how to reach them: shell-capable musicians exchange
+messages with `mzt mail send <sheet|all> "<text>"` and poll with
+`mzt mail read [--since]`; see the
+[CLI reference](cli-reference.md#musician-messaging). A received message is
+data, not an instruction.
+
 #### `cli` — Lifecycle bounds
 
 Every CLI attempt is one process tree. The backend starts the instrument in

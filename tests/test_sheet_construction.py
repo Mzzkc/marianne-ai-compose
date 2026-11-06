@@ -365,3 +365,36 @@ class TestBuildSheetsFanOut:
         sheets = build_sheets(config)
         counts = [s.voice_count for s in sheets]
         assert counts == [1, 3, 3, 3, 1]
+
+
+class TestMailboxSheetConstruction:
+    def test_messaging_default_and_invalid_mode(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from marianne.core.config.job import SheetConfig
+
+        assert SheetConfig(total_items=1).fan_out_messaging == "file"
+        assert SheetConfig(total_items=1, fan_out_messaging="none").fan_out_messaging == "none"
+        with pytest.raises(ValidationError):
+            SheetConfig(total_items=1, fan_out_messaging="native-magic")
+
+    def test_messaging_carries_only_same_movement_siblings(self, tmp_path):
+        from marianne.core.config.job import JobConfig
+        from marianne.core.sheet import build_sheets
+
+        config = JobConfig(
+            name="mail", workspace=tmp_path,
+            sheet={
+                "total_items": 3, "fan_out": {2: 2},
+                "descriptions": {2: "Builder", 3: "Reviewer"},
+            },
+            prompt={"template": "Task"},
+        )
+        sheets = build_sheets(config)
+        assert sheets[0].mailbox_siblings == {}
+        assert sheets[-1].mailbox_siblings == {}
+        assert sheets[1].mailbox_siblings == {2: "Builder", 3: "Reviewer"}
+        assert sheets[2].mailbox_siblings == sheets[1].mailbox_siblings
+        config.sheet.fan_out_messaging = "none"
+        assert all(not sheet.mailbox_siblings for sheet in build_sheets(config))

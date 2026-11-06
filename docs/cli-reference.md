@@ -579,7 +579,7 @@ code-registry and corpus-sweep tests.
 | ERROR | V310, V321, V323, V324 | Capability classes: a class-shaped name cannot resolve on this machine (V-CLS-02: vocabulary-only, tombstoned, or a chain with no registered entry — the same chains `mzt run` refuses); an instrument alias names a class as its profile; `instrument_config.model` applied to a class primary; an invalid classes layer file while the score uses a class |
 | ERROR | V213 | `interactive: true` set for an instrument without verified interactive support |
 | WARNING | V010 | Unknown field at ANY depth — a whole block at the root (`deliver: {…}`, a list) is a feature the runtime does not implement and warns as such, since the loader drops it and nothing it configures will happen; the curated hint names a working key AT THE SURFACE the mistake sits in: a bare `timeout:` inside `instruments.<alias>.config`, a movement's or a sheet's `instrument_config` names that surface's `timeout_seconds`; inside a `run:` trigger action it names the action's own `timeout_seconds`; only at the root (or beside an action with no timeout of its own) does it name `instrument_config.timeout_seconds` (GH #451) |
-| WARNING | V208, V219–V220, V224, V226, V231–V232, V315 | Built-in shadowing (deprecation); advisory structure and flow risks |
+| WARNING | V208, V219–V220, V224, V226, V231–V232, V234, V315 | Built-in shadowing (deprecation); advisory structure and flow risks |
 | WARNING | V228 | A loop's `cost_limit_usd` cannot bind because every route in the span reports no cost — the message names the route and why (raw shell profile, no token paths, no models, or a $0 price); a priced CLI route such as `claude-code` or `codex-cli` DOES report cost and the cap binds (GH #453) |
 | WARNING | V327 | A score sets a reserved key — accepted, but no runtime code reads it; also warns when `movements.<N>.voices` cannot expand with the sheet's size/start settings |
 | WARNING | V328 | Deprecated spelling or key: root `max_wall_seconds` (now `schedule.max_wall_seconds`), `checkpoints:` (now `approvals:`), hook-level `on_failure` (now `if_hook_fails`), root `conductor` |
@@ -597,6 +597,7 @@ code-registry and corpus-sweep tests.
 | WARNING | V215 | No instrument in the score's chain appears installed on this machine (an installed CLI binary or a loopback HTTP server that serves the profile's model counts as installed) |
 | WARNING | V230 | Flow configuration error rendered from the loader (loops/triggers/goto) with position and hint |
 | ERROR | V233 | A loop `until` names `file("{{ … }}")`: Jinja braces inside a flow file path are kept verbatim, so the file never exists — write the workspace-relative or `{workspace}` validation form |
+| WARNING | V234 | `sheet.fan_out_messaging` explicitly set without a fan-out group with multiple voices; remove the setting or configure concurrent siblings |
 | WARNING | V301 | A skill technique's `path` does not exist — the agent would never receive that methodology |
 | WARNING | V302 | An MCP technique targets an instrument with no MCP access path (native config or generated bridge) |
 | WARNING | V303 | Folded YAML scalar on a command field (newlines collapse — usually not what the author meant) |
@@ -2357,7 +2358,44 @@ execution time.
 | `MZT_CORS_ORIGINS` | Comma-separated allowed CORS origins | `http://localhost:8080,http://127.0.0.1:8080` |
 | `MZT_CORS_CREDENTIALS` | Allow credentials in CORS requests | `true` |
 | `MZT_DEV` | Enable development mode (permissive CORS) | |
+| `MARIANNE_MAILBOX` | Job mailbox root exported to every CLI and interactive instrument in a job; `mzt mail` resolves it, or derives it from `MARIANNE_SCRATCH/mailbox` | set by the job |
+| `MARIANNE_SCRATCH` | Scratch root for the running sheet; also supplies the mailbox root when `MARIANNE_MAILBOX` is absent | set by the job |
+| `MARIANNE_SHEET` | This sheet's number; identifies the inbox owner for `mzt mail` | set by the job |
 | `ANTHROPIC_API_KEY` | API key for Anthropic API backend | |
+
+
+
+## Musician messaging
+
+Inside a running job, shell-capable instruments can exchange notes through the
+scratch-owned mailbox, independent of harness adapters:
+
+```bash
+mzt mail send 2 "The shared interface is ready"
+mzt mail send all "Review the updated interface before editing"
+mzt mail read
+mzt mail read --since 123
+```
+
+`send` accepts a concrete sheet number or `all` (all initialized inboxes except
+your own). `read` prints JSONL records with `id`, `timestamp`, `sender`,
+`recipient`, and `body`. IDs are opaque, increasing cursors local to your inbox;
+pass the last received ID to `--since` to exclude messages already seen.
+The backends export `MARIANNE_MAILBOX` and `MARIANNE_SHEET`; the CLI can also
+resolve the inbox root from `MARIANNE_SCRATCH/mailbox`. It refuses to guess a job
+or sheet when that context is missing. Messages are data, not instructions.
+Send events record identities and UTF-8 byte counts without message bodies.
+Inbox contents follow the job's scratch cleanup policy; a job that ends in an
+error, timeout, or cancellation keeps its scratch (and with it the inboxes) for
+post-mortem.
+
+`mzt diagnose JOB` includes mailbox traffic (sender, recipient, UTF-8 byte count,
+per-inbox counts, and first/last timestamps); `--json` adds `mailbox_traffic` when
+messages exist. The conductor records each send and its summary when the job
+settles at any terminal status — COMPLETED, FAILED, or CANCELLED — so a job that
+died mid-fan-out still logs every delivered send, and retains this metadata in
+the job checkpoint before scratch cleanup. Message bodies are excluded from
+traffic logs and diagnosis.
 
 ---
 

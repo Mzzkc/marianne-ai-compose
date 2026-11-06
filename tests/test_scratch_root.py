@@ -20,10 +20,13 @@ from marianne.core.config.workspace import (
     WorkspaceLifecycleConfig,
     scratch_root,
 )
+from marianne.execution.base import SheetRequestState
 from marianne.execution.instruments.cli_backend import PluginCliBackend
 
 
-def _profile(*, required_env: list[str] | None = None) -> InstrumentProfile:
+def _profile(
+    *, required_env: list[str] | None = None, inherit_env: bool = False,
+) -> InstrumentProfile:
     return InstrumentProfile(
         name="scratch-cli",
         display_name="Scratch CLI",
@@ -33,7 +36,8 @@ def _profile(*, required_env: list[str] | None = None) -> InstrumentProfile:
         default_model="t",
         cli=CliProfile(
             command=CliCommand(executable="python3", prompt_flag="-c",
-                               prompt_via_stdin=False, required_env=required_env),
+                               prompt_via_stdin=False, required_env=required_env,
+                               inherit_env=inherit_env),
             output=CliOutputConfig(format="text"),
             errors=CliErrorConfig(success_exit_codes=[0]),
         ),
@@ -62,12 +66,18 @@ async def test_plugin_cli_exports_scratch_root_and_creates_it(
 
 
 @pytest.mark.asyncio
-async def test_no_working_directory_exports_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("inherit_env", [False, True])
+async def test_no_working_directory_exports_nothing(
+    monkeypatch: pytest.MonkeyPatch, inherit_env: bool,
+) -> None:
     # Nested Marianne: this process is itself an instrument of an outer job.
     monkeypatch.setenv(SCRATCH_ENV_VAR, "/outer/job/.marianne-scratch")
-    backend = PluginCliBackend(_profile())
+    monkeypatch.setenv("MARIANNE_MAILBOX", "/outer/job/mailbox")
+    monkeypatch.setenv("MARIANNE_SHEET", "99")
+    backend = PluginCliBackend(_profile(inherit_env=inherit_env))
     result = await backend.execute(
-        "import os; print('MARIANNE_SCRATCH' in os.environ)", timeout_seconds=10,
+        "import os; print(any(k in os.environ for k in "
+        "['MARIANNE_SCRATCH', 'MARIANNE_MAILBOX', 'MARIANNE_SHEET']))", timeout_seconds=10,
     )
     assert result.stdout.strip() == "False"
 
@@ -76,7 +86,9 @@ def test_interactive_backend_env_names_the_scratch_root(tmp_path: Path) -> None:
     from marianne.execution.instruments.interactive.backend import InteractiveCliBackend
 
     env = InteractiveCliBackend._scratch_env(tmp_path)
-    assert env == {SCRATCH_ENV_VAR: str(scratch_root(tmp_path))}
+    assert env is not None
+    assert env[SCRATCH_ENV_VAR] == str(scratch_root(tmp_path))
+    assert env["MARIANNE_MAILBOX"] == str(tmp_path / ".marianne-scratch" / "mailbox")
     assert scratch_root(tmp_path).is_dir()
 
 
@@ -119,3 +131,43 @@ async def test_manager_removes_scratch_root_at_terminal_unless_kept(tmp_path: Pa
         meta = JobMeta(job_id="j", config_path=score, workspace=workspace)
         await JobManager._remove_scratch_root(JobManager.__new__(JobManager), "j", meta)
         assert root.exists() is expect_present, policy
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("required_env", [None, ["HOME"]])
+async def test_plugin_cli_mailbox_identity_is_request_local(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, required_env: list[str] | None,
+) -> None:
+    import json
+
+    monkeypatch.setenv("MARIANNE_SHEET", "99")
+    monkeypatch.setenv("MARIANNE_MAILBOX", "/outer/job/mailbox")
+    backend = PluginCliBackend(_profile(required_env=required_env), working_directory=tmp_path)
+    code = ("import json, os; print(json.dumps({k: os.environ.get(k) for k in "
+            "['MARIANNE_SCRATCH', 'MARIANNE_MAILBOX', 'MARIANNE_SHEET']}))")
+    for sheet in (1, 2, None):
+        result = await backend.execute(code, timeout_seconds=10,
+                                       request=SheetRequestState(sheet_num=sheet))
+        assert result.exit_code == 0, result.stderr
+        env = json.loads(result.stdout)
+        assert env["MARIANNE_MAILBOX"] == str(tmp_path / ".marianne-scratch" / "mailbox")
+        assert env["MARIANNE_SHEET"] == (str(sheet) if sheet is not None else None)
+    assert (tmp_path / ".marianne-scratch" / "mailbox" / "1").is_dir()
+
+
+def test_interactive_mailbox_env_drops_outer_identity(tmp_path: Path,
+                                                     monkeypatch: pytest.MonkeyPatch) -> None:
+    from marianne.execution.instruments.interactive.backend import InteractiveCliBackend
+
+    monkeypatch.setenv("MARIANNE_SHEET", "99")
+    monkeypatch.setenv("MARIANNE_MAILBOX", "/outer/job/mailbox")
+    from marianne.core.config.instruments import InteractiveCliConfig
+
+    profile = _profile()
+    assert profile.cli is not None
+    profile.cli.interactive = InteractiveCliConfig(ready_pattern="ready")
+    backend = InteractiveCliBackend(profile, working_directory=tmp_path)
+    env = backend._instrument_env(tmp_path, sheet_num=2)
+    assert env["MARIANNE_SHEET"] == "2"
+    assert env["MARIANNE_MAILBOX"] == str(tmp_path / ".marianne-scratch" / "mailbox")
+    assert "MARIANNE_SHEET" not in backend._instrument_env(tmp_path)

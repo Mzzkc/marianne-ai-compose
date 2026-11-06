@@ -3387,3 +3387,75 @@ class TestShutdownSettledPause:
         mgr._baton_adapter = None
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+
+
+class TestMailboxTraffic:
+    @pytest.mark.parametrize("policy", ["remove", "keep"])
+    async def test_mailbox_logged_and_persisted_before_cleanup(
+        self, manager, sample_config_file, tmp_path, policy,
+    ):
+        from marianne.core.config.workspace import mailbox_root, scratch_root
+        from marianne.core.mailbox import send_message
+
+        sample_config_file.write_text(
+            sample_config_file.read_text() + f"workspace_lifecycle:\n  scratch: {policy}\n"
+        )
+        job_id = "mail-job"
+        await manager._registry.register_job(job_id, sample_config_file, tmp_path)
+        state = CheckpointState(job_id=job_id, job_name="Mail", total_sheets=2)
+        manager._live_states[job_id] = state
+        meta = JobMeta(job_id=job_id, config_path=sample_config_file, workspace=tmp_path)
+        body = "PRIVATE-MESSAGE-NEVER-IN-LOGS-é"
+        send_message(mailbox_root(tmp_path), 1, 2, body)
+        send_message(mailbox_root(tmp_path), 2, 1, "reply")
+        import structlog.testing
+        with structlog.testing.capture_logs() as logs:
+            await manager._remove_scratch_root(job_id, meta)
+            if policy == "keep":
+                await manager._remove_scratch_root(job_id, meta)
+        sends = [entry for entry in logs if entry["event"] == "mailbox.send"]
+        assert {(entry["sender"], entry["recipient"]) for entry in sends} == {(1, 2), (2, 1)}
+        assert len(sends) == 2
+        assert sends[0]["bytes"] in (len(body.encode()), len("reply"))
+        assert body not in json.dumps(logs, ensure_ascii=False)
+        saved = json.loads(await manager._registry.load_checkpoint(job_id))
+        assert len(saved["mailbox_traffic"]["sends"]) == 2
+        assert body not in json.dumps(saved, ensure_ascii=False)
+        assert scratch_root(tmp_path).exists() is (policy == "keep")
+        assert state.mailbox_traffic == saved["mailbox_traffic"]
+
+    async def test_mailbox_absent_emits_no_traffic(self, manager, sample_config_file, tmp_path):
+        import structlog.testing
+
+        meta = JobMeta(job_id="empty", config_path=sample_config_file, workspace=tmp_path)
+        with structlog.testing.capture_logs() as logs:
+            await manager._remove_scratch_root("empty", meta)
+        assert not any(entry["event"].startswith("mailbox.") for entry in logs)
+
+    async def test_mailbox_save_failure_retains_inboxes_and_retries_send_logs(
+        self, manager, sample_config_file, tmp_path, monkeypatch,
+    ):
+        import structlog.testing
+
+        from marianne.core.config.workspace import mailbox_root
+        from marianne.core.mailbox import send_message
+
+        job_id = "mail-failure"
+        await manager._registry.register_job(job_id, sample_config_file, tmp_path)
+        state = CheckpointState(job_id=job_id, job_name="Mail", total_sheets=2)
+        manager._live_states[job_id] = state
+        root = mailbox_root(tmp_path)
+        send_message(root, 1, 2, "body")
+        meta = JobMeta(job_id=job_id, config_path=sample_config_file, workspace=tmp_path)
+        real_save = manager._registry.save_checkpoint
+        monkeypatch.setattr(
+            manager._registry, "save_checkpoint", AsyncMock(side_effect=OSError("disk")),
+        )
+        with pytest.raises(OSError, match="disk"):
+            await manager._remove_scratch_root(job_id, meta)
+        assert root.exists()
+        assert state.mailbox_traffic is None
+        monkeypatch.setattr(manager._registry, "save_checkpoint", real_save)
+        with structlog.testing.capture_logs() as logs:
+            await manager._remove_scratch_root(job_id, meta)
+        assert len([entry for entry in logs if entry["event"] == "mailbox.send"]) == 1

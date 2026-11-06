@@ -88,6 +88,11 @@ class Sheet(BaseModel):
         "without a file (no anchor is better than a bogus one).",
     )
 
+    mailbox_siblings: dict[int, str] = Field(
+        default_factory=dict,
+        description="Same-movement inbox recipients and labels; empty when messaging is disabled.",
+    )
+
     # --- Instrument ---
     instrument_name: str = Field(
         min_length=1,
@@ -585,6 +590,14 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
                 movement=movement,
                 voice=voice,
                 voice_count=voice_count,
+                mailbox_siblings=(
+                    {
+                        num: config.sheet.descriptions.get(num, f"Sheet {num}")
+                        for num, meta in (config.sheet.fan_out_stage_map or {}).items()
+                        if meta["stage"] == movement
+                    }
+                    if voice_count > 1 and config.sheet.fan_out_messaging == "file" else {}
+                ),
                 description=description,
                 workspace=config.workspace,
                 score_path=config.source_path,

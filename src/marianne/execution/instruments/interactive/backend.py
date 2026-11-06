@@ -31,9 +31,15 @@ from collections.abc import Callable
 from pathlib import Path
 
 from marianne.core.config.instruments import InstrumentProfile, InteractiveCliConfig
-from marianne.core.config.workspace import SCRATCH_ENV_VAR, scratch_root
+from marianne.core.config.workspace import (
+    MAILBOX_ENV_VAR,
+    SCRATCH_ENV_VAR,
+    mailbox_root,
+    scratch_root,
+)
 from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger
+from marianne.core.mailbox import SHEET_ENV_VAR
 from marianne.execution.base import Backend, ExecutionResult, SheetRequestState
 from marianne.execution.instruments.cli_backend import build_instrument_env
 from marianne.execution.instruments.interactive.driver import (
@@ -467,7 +473,9 @@ class InteractiveCliBackend(Backend):
                 max_nudges=self._max_nudges,
                 transcript_path=transcript,
                 on_pane_pid=_register_pid,
-                env=self._instrument_env(workspace),
+                env=self._instrument_env(
+                    workspace, sheet_num=request.sheet_num if request is not None else None,
+                ),
                 on_output=self._on_output,
             )
         finally:
@@ -495,7 +503,9 @@ class InteractiveCliBackend(Backend):
         )
         return result
 
-    def _instrument_env(self, workspace: Path) -> dict[str, str]:
+    def _instrument_env(
+        self, workspace: Path, *, sheet_num: int | None = None,
+    ) -> dict[str, str]:
         """Snapshot the shared policy, then add the job-owned scratch root.
 
         Even opt-out profiles pass a complete snapshot to tmux: its server may
@@ -504,19 +514,29 @@ class InteractiveCliBackend(Backend):
         env = build_instrument_env(self._cli.command, self._profile.name)
         if env is None:
             env = dict(os.environ)
-        env.pop(SCRATCH_ENV_VAR, None)
-        env.update(self._scratch_env(workspace) or {})
+        for key in (SCRATCH_ENV_VAR, MAILBOX_ENV_VAR, SHEET_ENV_VAR):
+            env.pop(key, None)
+        env.update(self._scratch_env(workspace, sheet_num=sheet_num) or {})
         return env
 
     @staticmethod
-    def _scratch_env(workspace: Path) -> dict[str, str] | None:
-        """The job's scratch root for the pane environment (GH #460)."""
+    def _scratch_env(
+        workspace: Path, *, sheet_num: int | None = None,
+    ) -> dict[str, str] | None:
+        """Export scratch and MARIANNE_MAILBOX paths for the pane environment."""
         root = scratch_root(workspace)
+        mailbox = mailbox_root(workspace)
         try:
             root.mkdir(parents=True, exist_ok=True)
+            mailbox.mkdir(parents=True, exist_ok=True)
+            if sheet_num is not None:
+                (mailbox / str(sheet_num)).mkdir(exist_ok=True)
         except OSError:
             return None
-        return {SCRATCH_ENV_VAR: str(root)}
+        env = {SCRATCH_ENV_VAR: str(root), MAILBOX_ENV_VAR: str(mailbox)}
+        if sheet_num is not None:
+            env[SHEET_ENV_VAR] = str(sheet_num)
+        return env
 
     async def _ensure_session_gone(self, session: str) -> None:
         """Backend-level final tmux teardown guard.

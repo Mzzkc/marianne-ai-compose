@@ -436,3 +436,12 @@ SCRATCH_ENV_VAR = "MARIANNE_SCRATCH"
 def scratch_root(workspace: Path) -> Path:
     """The per-job scratch root every instrument is told about (GH #460)."""
     return workspace / SCRATCH_DIR_NAME
+
+
+MAILBOX_DIR_NAME = "mailbox"
+MAILBOX_ENV_VAR = "MARIANNE_MAILBOX"
+
+
+def mailbox_root(workspace: Path) -> Path:
+    """The job mailbox is scratch data, removed with the scratch root."""
+    return scratch_root(workspace) / MAILBOX_DIR_NAME

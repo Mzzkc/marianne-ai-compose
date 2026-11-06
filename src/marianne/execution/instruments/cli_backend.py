@@ -37,8 +37,14 @@ from marianne.core.config.instruments import (
     InstrumentProfile,
     validate_openai_response_format,
 )
-from marianne.core.config.workspace import SCRATCH_ENV_VAR, scratch_root
+from marianne.core.config.workspace import (
+    MAILBOX_ENV_VAR,
+    SCRATCH_ENV_VAR,
+    mailbox_root,
+    scratch_root,
+)
 from marianne.core.logging import get_logger
+from marianne.core.mailbox import SHEET_ENV_VAR
 from marianne.execution.base import (
     Backend,
     ExecutionResult,
@@ -870,31 +876,35 @@ class PluginCliBackend(Backend):
         """Build the same fail-closed environment used by interactive launches."""
         return build_instrument_env(self._cli.command, self._profile.name)
 
-    def _scratch_env(self, env: dict[str, str] | None) -> dict[str, str] | None:
-        """Add the job's scratch root to the child's environment (GH #460).
+    def _scratch_env(
+        self, env: dict[str, str] | None, *, sheet_num: int | None = None,
+    ) -> dict[str, str] | None:
+        """Export job-owned scratch/mailbox paths and request-local sheet identity.
 
-        Probe clones, mutants and worktrees an agent makes belong under
-        ``$MARIANNE_SCRATCH`` (``<workspace>/.marianne-scratch``), which the
-        conductor removes when the job ends. Without a working directory
-        there is no job and nothing is exported.
+        MARIANNE_MAILBOX and MARIANNE_SHEET must never bleed from an outer job.
         """
-        if self._working_directory is None:
-            # No job: nothing exported, and nothing INHERITED either. An
-            # instrument that itself runs Marianne (this test suite under the
-            # issue solver) would otherwise hand the outer job's scratch root
-            # to a child that has none.
-            if env is None and SCRATCH_ENV_VAR not in os.environ:
+        owned_vars = (SCRATCH_ENV_VAR, MAILBOX_ENV_VAR, SHEET_ENV_VAR)
+        if self._working_directory is None and env is None:
+            if not any(key in os.environ for key in owned_vars):
                 return None
-            stripped = dict(os.environ) if env is None else dict(env)
-            stripped.pop(SCRATCH_ENV_VAR, None)
-            return stripped
+        merged = dict(os.environ) if env is None else dict(env)
+        for key in owned_vars:
+            merged.pop(key, None)
+        if self._working_directory is None:
+            return merged
         root = scratch_root(self._working_directory)
+        mailbox = mailbox_root(self._working_directory)
         try:
             root.mkdir(parents=True, exist_ok=True)
+            mailbox.mkdir(parents=True, exist_ok=True)
+            if sheet_num is not None:
+                (mailbox / str(sheet_num)).mkdir(exist_ok=True)
         except OSError:
-            return env
-        merged = dict(os.environ) if env is None else dict(env)
+            return merged
         merged[SCRATCH_ENV_VAR] = str(root)
+        merged[MAILBOX_ENV_VAR] = str(mailbox)
+        if sheet_num is not None:
+            merged[SHEET_ENV_VAR] = str(sheet_num)
         return merged
 
     def _schema_conformance_refusal(
@@ -1534,7 +1544,7 @@ class PluginCliBackend(Backend):
                     error_type="attempt_route_drift", error_message=message,
                     model=self._model,
                 )
-        env = self._scratch_env(self._build_env())
+        env = self._scratch_env(self._build_env(), sheet_num=sheet_num)
 
         _logger.info(
             "plugin_cli_execute_start",

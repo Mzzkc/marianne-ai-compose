@@ -6209,6 +6209,30 @@ class JobManager:
                     )
 
                 finally:
+                    # GH #467: terminal settlement must not depend on how
+                    # execution ended. Timeout, cancellation and operational
+                    # errors never reach the normal-return cleanup above, but
+                    # the conductor's log must still record every delivered
+                    # send before the evidence disappears. Only retention
+                    # runs here — scratch removal stays on the normal-return
+                    # path so failed jobs keep their scratch for post-mortem,
+                    # and PAUSED keeps everything for resume. A retention
+                    # failure must not mask the terminal cause, so it warns.
+                    if meta.status in (
+                        DaemonJobStatus.COMPLETED,
+                        DaemonJobStatus.FAILED,
+                        DaemonJobStatus.CANCELLED,
+                    ):
+                        try:
+                            await self._record_mailbox_traffic(
+                                job_id, meta.workspace
+                            )
+                        except Exception:  # noqa: BLE001 — structured logger reports manager.mailbox_traffic_retention_failed
+                            _logger.warning(
+                                "manager.mailbox_traffic_retention_failed",
+                                job_id=job_id,
+                                exc_info=True,
+                            )
                     # Stop observer co-task regardless of outcome
                     await self._stop_observer_and_unregister(job_id)
         finally:
@@ -6287,6 +6311,35 @@ class JobManager:
 
         await self._run_managed_task(job_id, _execute())
 
+    async def _record_mailbox_traffic(self, job_id: str, workspace: Path) -> None:
+        """Durably retain body-free sends before scratch cleanup (GH #467)."""
+        from marianne.core.config.workspace import mailbox_root
+        from marianne.core.mailbox import merge_traffic, traffic_summary
+
+        root = mailbox_root(workspace)
+        if not root.is_dir():
+            return
+        current = await asyncio.to_thread(traffic_summary, root)
+        if not current["sends"]:
+            return
+        live = self._live_states.get(job_id)
+        if live is None:
+            raise RuntimeError(f"Cannot retain mailbox traffic without checkpoint: {job_id}")
+        previous = merge_traffic(live.mailbox_traffic)
+        merged = merge_traffic(previous, current)
+        snapshot = live.model_copy(update={"mailbox_traffic": merged}).model_dump_json()
+        writer = self._checkpoint_writer
+        if writer is not None and writer.running:
+            await writer.write_and_wait(job_id, snapshot)
+        else:
+            await self._registry.save_checkpoint(job_id, snapshot)
+        live.mailbox_traffic = merged
+        for send in merged["sends"]:
+            if send not in previous["sends"]:
+                _logger.info("mailbox.send", job_id=job_id, **send)
+        if merged != previous:
+            _logger.info("mailbox.traffic", job_id=job_id, sheets=merged["sheets"])
+
     async def _remove_scratch_root(self, job_id: str, meta: JobMeta) -> None:
         """Delete ``<workspace>/.marianne-scratch`` at a terminal state (GH #460).
 
@@ -6299,6 +6352,9 @@ class JobManager:
         root = scratch_root(meta.workspace)
         if not root.is_dir():
             return
+        # Acknowledged checkpoint persistence must precede destructive cleanup,
+        # including when scratch is kept and diagnose will read it later.
+        await self._record_mailbox_traffic(job_id, meta.workspace)
         policy = "remove"
         try:
             from marianne.core.config import JobConfig
