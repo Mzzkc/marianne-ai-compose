@@ -435,7 +435,8 @@ prompt:
 
     Append to `{{ workspace }}/03-characterization-log.md`:
     `## Pass {{ loops.char_pass }} — <module>`, tests added, coverage before
-    → after, commit hash, behaviours that surprised you.
+    → after, the full 40-character commit hash (the gate reads it), behaviours
+    that surprised you.
 
     {% elif stage == 4 %}
     # Oracle Inventory
@@ -807,11 +808,21 @@ validations:
     description: "Recorded source coverage matches the coverage command within 1 point"
 
   # ── 3 Characterization: tests pass against the SOURCE; marker is honest ──
+  # THIS pass's commit, not any earlier iteration's: the branch persists across
+  # the chain, so "a test( commit exists" was true before the pass began (the
+  # clamonacc proof's iteration 2 passed eight empty passes on iteration 1's
+  # commits while the musician's quota was exhausted). The log must name the
+  # pass that is being validated.
   - type: command_succeeds
-    command: 'cd {project_root} && git log --oneline {rewrite_branch} 2>/dev/null | grep -qE "^[0-9a-f]+ test\("'
+    command: |
+      cd {project_root} && git log --oneline {rewrite_branch} 2>/dev/null | grep -qE "^[0-9a-f]+ test\(" \
+      && grep -qE "^## Pass {char_pass} " "{workspace}/03-characterization-log.md" \
+      && sha=$(sed -n "/^## Pass {char_pass} /,/^## Pass /p" "{workspace}/03-characterization-log.md" | grep -oE "[0-9a-f]{40}" | head -1) \
+      && test -n "$sha" && git -C {project_root} merge-base --is-ancestor "$sha" {rewrite_branch}
     condition: "stage == 3"
     stage: 1
-    description: "Characterization tests are committed as test(<module>) on the rewrite branch"
+    timeout_seconds: 30
+    description: "This pass is logged under its own `## Pass N` heading and names a commit that is on the rewrite branch"
   - type: command_succeeds
     command: |
       if test -f "{workspace}/03-coverage-met.txt"; then

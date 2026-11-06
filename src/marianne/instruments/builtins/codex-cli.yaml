@@ -180,6 +180,12 @@ cli:
       - "hit your\\s+(?:usage|monthly|weekly|daily)\\s*limit"
       - "purchase\\s+more\\s+credits"
       - "try\\s+again\\s+at\\s+\\d{1,2}:\\d{2}"
+      # Under --json the refusal is the LAST JSONL record on stdout, exit 1,
+      # stderr empty: {"type":"task_complete","error":{"message":"You've hit
+      # your usage limit. ... try again at Nov 11th, 2026 4:24 PM.",
+      # "codex_error_info":"usage_limit_exceeded"}} (6 Nov 2026). The backend
+      # scans that record's error text for jsonl profiles; this names it.
+      - "usage_limit_exceeded"
     auth_error_patterns:
       - "authenticat"
       - "invalid.*api.*key"

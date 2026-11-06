@@ -482,7 +482,7 @@ ppid 1 for hours and saturated the disk; the supervisor is the fix, and the
 | Field | Default | Description |
 |-------|---------|-------------|
 | `success_exit_codes` | `[0]` | Exit codes that indicate success |
-| `rate_limit_patterns` | `[]` | Regex patterns in stderr/stdout indicating rate limiting |
+| `rate_limit_patterns` | `[]` | Regex patterns indicating rate limiting. Scanned against stderr, and for a `json`/`jsonl` output profile also against the error text of the structured stream's terminal record (`error`/`message`/`codex_error_info` keys), never against agent prose: Codex `--json` reports a quota refusal as the last JSONL record on stdout with an empty stderr |
 | `auth_error_patterns` | `[]` | Regex patterns indicating auth failures |
 | `unavailable_patterns` | `[]` | Regex patterns in the harness's own startup refusal meaning it cannot run here at all: no provider configured, provider not found, backend not reachable (GH #389). A match types the attempt `INSTRUMENT_UNAVAILABLE`: the sheet advances its fallback chain on the first attempt without charging a retry, exactly as a missing binary does, instead of running to its timeout per misconfigured entry. The shipped `goose`, `crush` and `opencode` profiles carry their measured refusals (`No provider configured`, `No providers configured`, `Provider not found` / `ProviderModelNotFoundError`). |
 | `capacity_patterns` | `[]` | Regex patterns indicating capacity/overload errors (retried) |

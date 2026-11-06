@@ -351,6 +351,43 @@ def _cli_schema(schema: Any) -> Any:
     return {k: v for k, v in schema.items() if k not in _SCHEMA_META_KEYS}
 
 
+def _structured_error_text(stdout: str) -> str:
+    """The error text a structured CLI stream carries, or "".
+
+    Reads the JSON object (or the LAST JSONL record) on stdout and returns
+    the values of any ``error``/``message``/``codex_error_info`` keys found
+    at its top level or one level down, joined. Agent output in earlier
+    records and in ``agent_message`` items is never included.
+    """
+    stripped = stdout.strip()
+    if not stripped:
+        return ""
+    last = stripped.rsplit("\n", 1)[-1].strip()
+    candidates: list[Any] = []
+    for raw in (last, stripped):
+        try:
+            candidates.append(json.loads(raw))
+            break
+        except json.JSONDecodeError:
+            continue
+    if not candidates or not isinstance(candidates[0], dict):
+        return ""
+    found: list[str] = []
+
+    def walk(obj: dict[str, Any], depth: int) -> None:
+        for key, value in obj.items():
+            if key in ("error", "message", "codex_error_info", "error_info"):
+                if isinstance(value, str):
+                    found.append(value)
+                elif isinstance(value, dict) and depth < 2:
+                    walk(value, depth + 1)
+            elif isinstance(value, dict) and depth < 2:
+                walk(value, depth + 1)
+
+    walk(candidates[0], 0)
+    return "\n".join(found)
+
+
 class PluginCliBackend(Backend):
     """Generic CLI backend driven by an InstrumentProfile.
 
@@ -1309,6 +1346,17 @@ class PluginCliBackend(Backend):
             return False
 
         text = stderr
+        # A structured-output CLI reports its quota refusal INSIDE the
+        # structured stream, not on stderr: codex `--json` ends with one
+        # JSONL record carrying codex_error_info "usage_limit_exceeded" and
+        # exits 1 with nothing on stderr (6 Nov 2026: eight no-op passes in
+        # six seconds, each retried as a plain failure, before anyone read
+        # the record). For a jsonl/json profile the terminal error record is
+        # part of the error channel, so its text joins the scan. Agent prose
+        # in earlier records stays out (GH #189).
+        output = self._cli.output
+        if output is not None and output.format in ("jsonl", "json"):
+            text = f"{stderr}\n{_structured_error_text(stdout)}"
         for pattern in self._cli.errors.rate_limit_patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
