@@ -541,7 +541,7 @@ The libretto is Marianne's project knowledge base, stored in `.marianne/spec/`. 
 
 ## The Rosetta Pattern Corpus
 
-A self-perpetuating discovery engine that finds, validates, and documents orchestration patterns across multiple domains. Not aspirational — a working corpus with 56 patterns across 4 iterations.
+A self-perpetuating discovery engine that finds, validates, and documents orchestration patterns across multiple domains. Not aspirational — a working corpus with 148 patterns across 7 iterations.
 
 ### Structure
 
@@ -554,21 +554,22 @@ scores/rosetta-corpus/
 ├── review-integration.md       # Iteration history
 ├── awaiting.md                 # Patterns awaiting conductor primitives
 ├── questions.md                # Open research questions
-└── patterns/                   # 56 pattern files
+├── tools/                      # unproven.py (proof ledger + usage audit), long_tail_proof.py
+└── patterns/                   # 148 pattern files
     ├── fan-out-synthesis.md
     ├── immune-cascade.md
     ├── mission-command.md
     ├── shipyard-sequence.md
-    └── ... (52 more)
+    └── ... (144 more)
 ```
 
 ### Key Concepts
 
 - **10 Generative Forces:** Why patterns exist — Information Asymmetry, Finite Resources, Partial Failure, Exponential Defect Cost, Producer-Consumer Mismatch, Instrument-Task Fit, Convergence Imperative, Accumulated Signal, Structured Disagreement, Progressive Commitment
 - **11 Generators/Moves:** Structural mechanisms independently invented across 3+ domains
-- **56 Working Patterns:** Each includes core dynamic, when to use, Marianne YAML examples, failure modes, composition relationships
+- **148 Working Patterns:** Each includes core dynamic, when to use, Marianne YAML examples, failure modes, composition relationships
 - **Status markers:** Working (viable today) vs. Aspirational (future capability dependent)
-- **6 Rosetta proof scores** in `scores/rosetta-corpus/proof-scores/` demonstrate patterns in practice
+- **25 proof scores** in `scores/rosetta-corpus/proof-scores/` demonstrate patterns in practice — 19 patterns are ledger-primary, six of them via small offline long-tail proofs (GH #354). Pattern frontmatter's `proof_score:` points at its proof; `tools/unproven.py` is the ledger and `--usage` audits citations in produced score YAML
 
 ---
 
