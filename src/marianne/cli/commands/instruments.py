@@ -723,6 +723,10 @@ def _check_rich(profile: InstrumentProfile) -> None:
             console.print(f"  Auth env var:  {profile.http.auth_env_var}")
         if probe.state == "ready":
             console.print("  Server:        answering, serves the default model [green]✓[/green]")
+            if probe.served_context is not None:
+                console.print(f"  Context:       {probe.served_context:,} tokens (server /props)")
+            if probe.context_mismatch:
+                console.print(f"  [yellow]⚠ {probe.context_mismatch}[/yellow]")
         elif probe.state == "unchecked":
             console.print(f"  Server:        [dim]? unchecked — {probe.reason}[/dim]")
         else:
@@ -794,6 +798,9 @@ def _check_json(profile: InstrumentProfile) -> None:
     elif profile.kind == "http" and profile.http is not None:
         result["endpoint"] = f"{profile.http.base_url}{profile.http.endpoint}"
         result["auth_env_var"] = profile.http.auth_env_var
+        result["served_context"] = probe.served_context
+        if probe.context_mismatch:
+            result["context_mismatch"] = probe.context_mismatch
 
     result["ready"] = found
     result["probe"] = probe.state

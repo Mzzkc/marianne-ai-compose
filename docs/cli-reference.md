@@ -598,6 +598,7 @@ code-registry and corpus-sweep tests.
 | WARNING | V230 | Flow configuration error rendered from the loader (loops/triggers/goto) with position and hint |
 | ERROR | V233 | A loop `until` names `file("{{ … }}")`: Jinja braces inside a flow file path are kept verbatim, so the file never exists — write the workspace-relative or `{workspace}` validation form |
 | WARNING | V234 | `sheet.fan_out_messaging` explicitly set without a fan-out group with multiple voices; remove the setting or configure concurrent siblings |
+| WARNING | V235 | A loopback `http` profile in the score's chain declares a `context_window` for its default model larger than the server reports on `GET /props` (`default_generation_settings.n_ctx`, which llama-server and PolyStrata share); the executor would size `max_tokens` to the profile and the first request would be refused with HTTP 400 (GH #494). Quiet when the server does not expose `/props` |
 | WARNING | V301 | A skill technique's `path` does not exist — the agent would never receive that methodology |
 | WARNING | V302 | An MCP technique targets an instrument with no MCP access path (native config or generated bridge) |
 | WARNING | V303 | Folded YAML scalar on a command field (newlines collapse — usually not what the author meant) |
@@ -1522,7 +1523,7 @@ Check readiness and configuration of a specific instrument.
 Usage: mzt instruments check [OPTIONS] NAME
 ```
 
-Provides detailed information about a single instrument: binary location, capabilities, available models with pricing, and overall readiness. Readiness is the same probe `mzt doctor` uses: a local HTTP instrument is ready only when its server answers and serves the profile's `default_model`; a remote endpoint is reported `unchecked`, which is not a failure (exit 0).
+Provides detailed information about a single instrument: binary location, capabilities, available models with pricing, and overall readiness. Readiness is the same probe `mzt doctor` uses: a local HTTP instrument is ready only when its server answers and serves the profile's `default_model`; a remote endpoint is reported `unchecked`, which is not a failure (exit 0). For a ready local server the check also reads the loaded model's context from `GET /props` (`Context: N tokens (server /props)`, `served_context` in `--json`) and warns when the profile's `context_window` for that model is larger, since the executor would then ask for more than the server has (GH #494; `mzt validate` reports the same as V235).
 
 #### Arguments
 

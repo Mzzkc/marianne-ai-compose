@@ -546,6 +546,11 @@ generating anything (PolyStrata, llama-server and Ollama with a small
 `num_ctx` all do), so declare the real context of a small local model and the
 first sheet runs instead of failing on the transport's guess.
 
+`mzt instruments check <name>` reads the loaded model's context from the
+server's `GET /props` (`default_generation_settings.n_ctx`, the field
+llama-server and PolyStrata share) and warns when the profile declares more;
+`mzt validate` says the same as V235 for the score's chain.
+
 ---
 
 #### `http` — OpenAI-compatible HTTP profiles (`kind: http`)
