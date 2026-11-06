@@ -420,9 +420,16 @@ skipped), the instrument it is playing on, and a beat log underneath. The page
 watches live over SSE and can replay any recorded day at 60× to 6000×.
 
 What it shows is the conductor's **orchestra projection**: score name, sheet
-number, instrument, outcome, timestamp. The projection whitelists both the source
-events and the payload fields it reads, so no workspace path, prompt, error text
-or cost ever reaches the page. That is what makes it the one view safe to put
+number, instrument, outcome, timestamp, and occasionally a short note (an
+instrument fallback transition, a retry's attempt number, or the reason a
+concert chain was refused). The projection whitelists both the source
+events and the payload fields it reads, so no prompt, error text or cost ever
+reaches the page. One caveat on the note: the chain-refusal reason is the
+conductor's own refusal message verbatim, and some refusal causes name the
+child score's filesystem path (for example `child score not found: …`), which
+then appears in the beat log and the replay JSONL. Prompts and output never
+appear; treat that one path-bearing note as known when exposing the page
+publicly. That is what makes it the one view safe to put
 behind a public hostname (mzt.dev): start the dashboard with
 `MZT_PUBLIC_ORCHESTRA=true` and `/orchestra`, its three read-only API routes
 and `/static` are served to every client while every other path keeps the auth

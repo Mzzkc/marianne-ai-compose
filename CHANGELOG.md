@@ -212,7 +212,9 @@ an alias over an existing profile; archive what nothing names.
   on stage, each sheet a cell coloured by state, the instrument it plays on, a
   beat log, live over SSE, with a replay transport for any recorded day. The
   conductor's `OrchestraRecorder` projects EventBus events into a public-safe
-  vocabulary (score, sheet, instrument, outcome, time; nothing else is read),
+  vocabulary (score, sheet, instrument, outcome, time, plus a short note —
+  fallback transitions, retry attempt numbers, and the verbatim chain-refusal
+  reason, which can name the child score's path),
   keeps the fleet snapshot, appends beats to `~/.marianne/orchestra/<day>.jsonl`,
   and serves `daemon.orchestra.snapshot|replay|stream` over IPC. The baton
   adapter now publishes `sheet.dispatched`. `orchestra:` daemon config. A copy
