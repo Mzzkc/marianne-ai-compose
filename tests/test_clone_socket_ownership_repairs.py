@@ -15,6 +15,7 @@ from marianne.daemon.clone import build_clone_config
 from marianne.daemon.config import DaemonConfig, McpPoolConfig, McpServerEntry, SocketConfig
 from marianne.daemon.mcp_socket_bridge import McpSocketBridge
 from marianne.daemon.profiler.models import ProfilerConfig
+from tests.helpers import load_scaled_timeout
 
 
 @pytest.fixture
@@ -245,6 +246,8 @@ def test_default_clone_profiler_is_isolated(
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(load_scaled_timeout(120))
+@pytest.mark.load_sensitive
 async def test_cancelled_start_reaps_upstream_and_releases_socket(
     tmp_path: Path, upstream_command: str
 ) -> None:

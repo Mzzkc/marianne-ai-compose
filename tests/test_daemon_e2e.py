@@ -27,6 +27,7 @@ from marianne.daemon.manager import JobManager
 from marianne.daemon.process import DaemonProcess
 from marianne.daemon.system_probe import SystemProbe
 from marianne.daemon.types import JobRequest, JobResponse
+from tests.helpers import load_scaled_timeout
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -215,6 +216,8 @@ class TestDaemonLifecycle:
         jobs = await client.list_jobs()
         assert jobs == []
 
+    @pytest.mark.timeout(load_scaled_timeout(120))
+    @pytest.mark.load_sensitive
     async def test_graceful_shutdown(self, daemon: tuple[DaemonClient, DaemonConfig]):
         """daemon.shutdown RPC triggers clean daemon exit."""
         client, config = daemon
