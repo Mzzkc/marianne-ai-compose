@@ -257,7 +257,6 @@ def main(argv: list[str]) -> int:
     forwarded_signals: list[dict[str, float | int]] = []
     escalated_to_sigkill = False
     escalated_after_seconds: float | None = None
-    first_signalled_monotonic: float | None = None
     run_started_monotonic = time.monotonic()
 
     while status["exit_code"] is None and status["signal"] is None:
@@ -274,14 +273,14 @@ def main(argv: list[str]) -> int:
                 pass
             if signalled_child_at is None:
                 signalled_child_at = time.monotonic()
-                first_signalled_monotonic = signalled_child_at
         if (signalled_child_at is not None
                 and time.monotonic() - signalled_child_at > _CHILD_GRACE_SECONDS):
             escalated_to_sigkill = True
-            if first_signalled_monotonic is not None:
-                escalated_after_seconds = round(
-                    time.monotonic() - first_signalled_monotonic, 3,
-                )
+            # signalled_child_at is set-once (the first forward) and only
+            # clobbered below, so this measures first-signal→escalation.
+            escalated_after_seconds = round(
+                time.monotonic() - signalled_child_at, 3,
+            )
             try:
                 os.kill(child_pid, signal.SIGKILL)
             except ProcessLookupError:

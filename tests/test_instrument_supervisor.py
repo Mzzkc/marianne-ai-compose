@@ -425,7 +425,11 @@ def test_report_records_forwarded_signals_fast_exit_child(tmp_path: Path) -> Non
         deadline = time.monotonic() + 5
         kids: list[int] = []
         while time.monotonic() < deadline and not kids:
-            kids = [int(line) for line in os.popen(f"pgrep -P {proc.pid}").read().split()]
+            pgrep = subprocess.run(
+                ["pgrep", "-P", str(proc.pid)],
+                capture_output=True, text=True,
+            )
+            kids = [int(line) for line in pgrep.stdout.split()]
             time.sleep(0.02)
         assert kids, "instrument did not start under the supervisor"
         proc.send_signal(signal.SIGTERM)

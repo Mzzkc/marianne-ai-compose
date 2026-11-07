@@ -77,7 +77,9 @@ _SIGNAL_NAMES = {
 }
 # The supervisor's own escalation grace (instrument_supervisor
 # _CHILD_GRACE_SECONDS), quoted in the detail when the report lacks a
-# measured elapsed time.
+# measured elapsed time. Deliberately NOT imported from the supervisor
+# module (underscore-private); tests/test_interactive_mode.py pins this
+# value to _CHILD_GRACE_SECONDS so the two cannot drift silently.
 _ESCALATION_GRACE_FALLBACK_SECONDS = 1.0
 
 DriverOutcome = Literal[
@@ -353,11 +355,20 @@ class InteractiveSessionDriver:
                 )
                 if forensic is not None:
                     detail = f"{detail}; {forensic}"
-                else:
+                elif supervisor_report is None:
                     detail = (
                         f"{detail} (no supervisor report — "
                         "death not observed by the supervisor: external kill, "
                         "or the supervisor died first)"
+                    )
+                else:
+                    # The supervisor outlived the child (it wrote the report)
+                    # yet forwarded nothing — the strongest external-kill
+                    # evidence a report can give. Do NOT call this "no
+                    # supervisor report": the report exists (GH #487 review).
+                    detail = (
+                        f"{detail} (supervisor observed no forwarded signal — "
+                        "death not sent by the supervisor: external kill)"
                     )
                 return DriverResult(
                     outcome=outcome,
@@ -677,8 +688,9 @@ class InteractiveSessionDriver:
         """Human-readable one-liner of what the supervisor observed.
 
         Returns None when the report carries no forwarding history — the
-        caller then states the complementary fact ("no supervisor report /
-        nothing forwarded") which distinguishes an escalation death from an
+        caller then states the complementary fact ("no supervisor report" or
+        "supervisor observed no forwarded signal", by whether a report
+        exists) which distinguishes an escalation death from an
         external kill.
         """
         if report is None:

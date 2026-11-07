@@ -469,7 +469,6 @@ class InteractiveCliBackend(Backend):
         )
 
         start = time.monotonic()
-        supervisor_report: dict[str, object] | None = None
         try:
             driver_result = await self._driver.run(
                 session=session,

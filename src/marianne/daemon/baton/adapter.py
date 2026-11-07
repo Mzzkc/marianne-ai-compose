@@ -1299,7 +1299,7 @@ class BatonAdapter:
 
     @staticmethod
     def _leader_identity_matches(
-        pid: int, pgid: int, recorded_ticks: int | None,
+        pid: int, recorded_ticks: int | None,
     ) -> bool:
         """GH #487 kill-safety: whether ``pid`` is still the tracked leader.
 
@@ -1369,7 +1369,7 @@ class BatonAdapter:
             if entry is None:
                 continue
             _pid, pgid = entry
-            if not self._leader_identity_matches(_pid, pgid, recorded_ticks):
+            if not self._leader_identity_matches(_pid, recorded_ticks):
                 # GH #487: the tracked leader was reaped and the PID now
                 # belongs to a different process — this entry is stale and
                 # its pgid may name an unrelated live group. Never signal

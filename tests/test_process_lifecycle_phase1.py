@@ -1097,10 +1097,10 @@ class TestIdentityGuardedGroupKills:
         from marianne.daemon.baton.adapter import BatonAdapter
 
         # No recorded ticks → proceed.
-        assert BatonAdapter._leader_identity_matches(1, 1, None) is True
+        assert BatonAdapter._leader_identity_matches(1, None) is True
         # Recorded ticks, /proc unreadable now (implausible pid) → proceed
         # (fail open; the entry's process is dead either way).
-        assert BatonAdapter._leader_identity_matches(2**22 + 5, 2**22 + 5, 7) is True
+        assert BatonAdapter._leader_identity_matches(2**22 + 5, 7) is True
 
     @pytest.mark.asyncio
     async def test_leader_identity_matches_positive_match_and_mismatch(self) -> None:
@@ -1114,9 +1114,9 @@ class TestIdentityGuardedGroupKills:
         real_ticks = _proc_start_ticks(my_pid)
         if real_ticks is not None:
             # Positive match
-            assert BatonAdapter._leader_identity_matches(my_pid, my_pid, real_ticks) is True
+            assert BatonAdapter._leader_identity_matches(my_pid, real_ticks) is True
             # Positive mismatch (e.g. recycled PID with different start ticks)
             assert (
-                BatonAdapter._leader_identity_matches(my_pid, my_pid, real_ticks + 99999)
+                BatonAdapter._leader_identity_matches(my_pid, real_ticks + 99999)
                 is False
             )

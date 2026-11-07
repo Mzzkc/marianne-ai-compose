@@ -1693,7 +1693,9 @@ class TestSessionLostSupervisorForensics:
     ) -> None:
         """A report that shows NO forwarded signals (child SIGKILLed from
         outside; supervisor only recorded the death) is stated as such —
-        the strongest external-kill evidence the report can give."""
+        the strongest external-kill evidence the report can give. The
+        wording must NOT claim "no supervisor report": the report exists
+        (GH #487 review synthesis)."""
         from marianne.execution.instruments.interactive.tmux import PaneExit
 
         report_path = tmp_path / "supervisor.json"
@@ -1720,7 +1722,8 @@ class TestSessionLostSupervisorForensics:
         assert result.outcome == "session_lost"
         detail = result.detail or ""
         assert "supervisor forwarded" not in detail
-        assert "no supervisor report" in detail
+        assert "no supervisor report" not in detail
+        assert "supervisor observed no forwarded signal" in detail
         assert result.supervisor_report is not None
 
     async def test_session_lost_multiple_forwarded_signals_sequence(
@@ -1822,6 +1825,22 @@ class TestSessionLostSupervisorForensics:
         summary = InteractiveSessionDriver._summarize_supervisor_forensics(report)
         assert summary is not None
         assert "did not exit within 1.0s, escalated to SIGKILL" in summary
+
+    def test_escalation_grace_fallback_matches_supervisor_grace(self) -> None:
+        """Drift canary: the driver's fallback grace must equal the
+        supervisor's actual escalation grace. The two constants live in
+        different modules (the driver does not import the supervisor's
+        underscore-private _CHILD_GRACE_SECONDS), so this pin is what
+        keeps them from drifting silently (GH #487 review synthesis)."""
+        from marianne.execution.instruments.interactive import (
+            driver as driver_mod,
+        )
+        from marianne.utils import instrument_supervisor as supervisor_mod
+
+        assert (
+            driver_mod._ESCALATION_GRACE_FALLBACK_SECONDS
+            == supervisor_mod._CHILD_GRACE_SECONDS
+        )
 
 
 class TestBackendSupervisorReportWiring:
