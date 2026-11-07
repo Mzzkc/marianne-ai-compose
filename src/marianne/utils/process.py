@@ -36,6 +36,11 @@ def supervised_argv(
     Returns ``command`` unchanged where the supervisor cannot run (not Linux,
     or the subreaper prctl is unavailable). The supervisor runs by its absolute
     file under ``-I`` so nothing in the workspace can shadow it (GH #445).
+
+    ``report_path`` is consumed by interactive attempts (GH #487): the
+    supervisor writes a JSON forensic report there (forwarded-signal
+    history, escalation decision), which the driver surfaces in the
+    ``session_lost`` detail to attribute the pane's death.
     """
     if not subreaper_available():
         return list(command)

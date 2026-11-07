@@ -354,3 +354,117 @@ def test_run_loop_falls_back_to_the_scan_without_the_children_file(monkeypatch) 
     monkeypatch.setattr(sup, "_children_of", lambda pid: calls.append(pid) or [])
     assert sup._run_loop_children(2**22 + 7) == []
     assert calls == [2**22 + 7]
+
+
+# GH #487: the report must carry WHICH signals were forwarded to the child
+# and whether/when the grace escalation fired, so a pane-death SIGKILL is
+# attributable (benign forwarded SIGHUP escalated at 1.0s vs external kill).
+
+# A child that TRAPS SIGTERM and idles: the supervisor forwards the TERM,
+# the child ignores it, and the 1.0s grace escalates to SIGKILL.
+_TRAPPING_CHILD = (
+    "import signal, sys, time\n"
+    "signal.signal(signal.SIGTERM, lambda *a: None)\n"
+    "print('trapping', flush=True)\n"
+    "time.sleep(120)\n"
+)
+
+
+def test_report_records_forwarded_signals_and_escalation(tmp_path: Path) -> None:
+    report = tmp_path / "report.json"
+    proc = subprocess.Popen(
+        [sys.executable, "-I", SUPERVISOR, "--report", str(report),
+         "--", sys.executable, "-c", _TRAPPING_CHILD],
+        start_new_session=True, stdout=subprocess.PIPE, text=True,
+    )
+    try:
+        # Wait for the child to install its TERM handler, then signal the
+        # supervisor (the group leader) exactly like the backend would.
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                if proc.stdout and proc.stdout.readline().startswith("trapping"):
+                    break
+            except (OSError, ValueError):
+                pass
+            time.sleep(0.02)
+        proc.send_signal(signal.SIGTERM)
+        proc.wait(timeout=15)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+
+    payload = json.loads(report.read_text())
+    forwarded = payload["forwarded_signals"]
+    assert isinstance(forwarded, list) and len(forwarded) >= 1, forwarded
+    assert forwarded[0]["signal"] == signal.SIGTERM
+    assert isinstance(forwarded[0]["at_seconds"], (int, float))
+    assert payload["escalated_to_sigkill"] is True
+    assert payload["escalated_after_seconds"] is not None
+    assert payload["escalated_after_seconds"] >= 1.0, (
+        "escalation must be reported at or after the child grace"
+    )
+    # The child died by the supervisor's ESCALATED SIGKILL, and the
+    # supervisor self-re-kills with the child's own fatal signal — so tmux
+    # records SIGKILL. That is exactly the #487 signature: without the
+    # forwarded_signals history the originating SIGTERM is invisible.
+    assert payload["signal"] == signal.SIGKILL
+
+
+def test_report_records_forwarded_signals_fast_exit_child(tmp_path: Path) -> None:
+    """A child that exits promptly on the forwarded signal: history is kept,
+    escalation is False, and the timing keys exist."""
+    report = tmp_path / "report.json"
+    # No TERM handler: the default action ends sleep on the first forward.
+    proc = subprocess.Popen(
+        [sys.executable, "-I", SUPERVISOR, "--report", str(report),
+         "--", "sleep", "60"],
+        start_new_session=True,
+    )
+    try:
+        deadline = time.monotonic() + 5
+        kids: list[int] = []
+        while time.monotonic() < deadline and not kids:
+            pgrep = subprocess.run(
+                ["pgrep", "-P", str(proc.pid)],
+                capture_output=True, text=True,
+            )
+            kids = [int(line) for line in pgrep.stdout.split()]
+            time.sleep(0.02)
+        assert kids, "instrument did not start under the supervisor"
+        proc.send_signal(signal.SIGTERM)
+        assert proc.wait(timeout=10) == -signal.SIGTERM
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+
+    payload = json.loads(report.read_text())
+    forwarded = payload["forwarded_signals"]
+    assert len(forwarded) == 1 and forwarded[0]["signal"] == signal.SIGTERM
+    assert payload["escalated_to_sigkill"] is False
+    assert payload["escalated_after_seconds"] is None
+
+
+def test_clean_exit_report_keeps_forensic_keys(tmp_path: Path) -> None:
+    """GH #487: a clean exit reports empty/false forensic keys, so the
+    report's schema is stable for every consumer."""
+    report = tmp_path / "report.json"
+    result = _run("--report", str(report), "--", "true")
+    assert result.returncode == 0
+    payload = json.loads(report.read_text())
+    assert payload["forwarded_signals"] == []
+    assert payload["escalated_to_sigkill"] is False
+    assert payload["escalated_after_seconds"] is None
+
+
+def test_spawn_error_report_has_stable_forensic_keys(tmp_path: Path) -> None:
+    """GH #487: when the supervisor cannot start the command, the report still
+    contains the stable forensic keys."""
+    report = tmp_path / "report.json"
+    result = _run("--report", str(report), "--", "/nonexistent/binary/path")
+    assert result.returncode == 127
+    payload = json.loads(report.read_text())
+    assert "spawn_error" in payload
+    assert payload["forwarded_signals"] == []
+    assert payload["escalated_to_sigkill"] is False
+    assert payload["escalated_after_seconds"] is None

@@ -435,6 +435,29 @@ JSON output structure:
 
 ---
 
+### JSON output (`--json`)
+
+`--json` is a machine contract on every command that offers it: stdout
+carries only the JSON document — valid UTF-8, ASCII-escaped, emitted
+verbatim (no emoji or markup substitution) — so a consumer can
+`json.load(sys.stdin)` it without an `errors=` policy (issue #495).
+Hostile bytes captured from musicians or subprocesses (a stray `0x97`
+em dash in an output tail, lone surrogates from a mis-decoded stream)
+are neutralized at the capture boundary before they reach state, and the
+JSON writer serializes with `ensure_ascii=True` through a direct stdout
+write that bypasses Rich's rendering pipeline. JSON-format logging
+(`--log-format json`) is pinned to the same ASCII-only serialization.
+
+#### Global JSON guarantees
+
+All `--json` output shares these guarantees (issue #495):
+
+- **Strict UTF-8.** `mzt status <job> --json | python3 -c 'import sys, json; json.load(sys.stdin)'` never raises `UnicodeDecodeError`, whatever a musician's subprocess printed.
+- **ASCII-only serialization.** Output is written with `ensure_ascii=True`; non-ASCII characters in values appear as `\uXXXX` escapes.
+- **Verbatim emission.** The serialized text is written directly to stdout (bypassing Rich's emoji substitution), so the payload a consumer parses is the payload `json.dumps` produced.
+
+The guarantees are enforced by regression tests (`tests/test_json_utf8_contract.py`) that plant hostile bytes (raw `0x97`, lone surrogates) in attempt output and assert the emitted JSON parses strictly.
+
 ### `mzt watch`
 
 Live-tail musician output for a running score (#352).
@@ -570,7 +593,7 @@ code-registry and corpus-sweep tests.
 | ERROR | V008 | A validation rule is missing the field its type requires |
 | ERROR | V009 | An evolved score references its previous version's paths |
 | ERROR | V012 | Invalid `validate.suppress` entry (unknown code or ERROR-tier code) |
-| ERROR | V105, V108 | Undefined validation variable (declared `prompt.variables`, built-ins and declared loop indices are defined); missing static prelude/cadenza input |
+| ERROR | V105, V108 | Undefined validation variable (declared `prompt.variables`, built-ins and declared loop indices are defined); missing static prelude/cadenza input. Cadenza outputs declared by movement `produces:`, `sheet.stdout_to`, or gated `file_exists` are exempt from V108; prelude inputs must already exist. |
 | ERROR | V209, V214, V216, V217 | Dependency cycle; expanded-sheet incoherence; missing cadenza target; missing or invalid static concert target |
 | ERROR | V210, V211 | Instrument or fallback name cannot resolve to a known profile, score alias, or capability class |
 | ERROR | V221–V223, V227, V229, V233, V312–V314, V316–V317, V320 | Flow load errors and invalid flow references, reported with a code and hint rather than a raw schema trace |
@@ -579,7 +602,7 @@ code-registry and corpus-sweep tests.
 | ERROR | V310, V321, V323, V324 | Capability classes: a class-shaped name cannot resolve on this machine (V-CLS-02: vocabulary-only, tombstoned, or a chain with no registered entry — the same chains `mzt run` refuses); an instrument alias names a class as its profile; `instrument_config.model` applied to a class primary; an invalid classes layer file while the score uses a class |
 | ERROR | V213 | `interactive: true` set for an instrument without verified interactive support |
 | WARNING | V010 | Unknown field at ANY depth — a whole block at the root (`deliver: {…}`, a list) is a feature the runtime does not implement and warns as such, since the loader drops it and nothing it configures will happen; the curated hint names a working key AT THE SURFACE the mistake sits in: a bare `timeout:` inside `instruments.<alias>.config`, a movement's or a sheet's `instrument_config` names that surface's `timeout_seconds`; inside a `run:` trigger action it names the action's own `timeout_seconds`; only at the root (or beside an action with no timeout of its own) does it name `instrument_config.timeout_seconds` (GH #451) |
-| WARNING | V208, V219–V220, V224, V226, V231–V232, V315 | Built-in shadowing (deprecation); advisory structure and flow risks |
+| WARNING | V208, V219–V220, V224, V226, V231–V232, V235, V315 | Built-in shadowing (deprecation); advisory structure and flow risks |
 | WARNING | V234 | A loopback `http` profile in the score's chain declares a `context_window` for its default model larger than the server reports on `GET /props` (`default_generation_settings.n_ctx`, which llama-server and PolyStrata share); the executor would size `max_tokens` to the profile and the first request would be refused with HTTP 400 (GH #494). Quiet when the server does not expose `/props` |
 | WARNING | V228 | A loop's `cost_limit_usd` cannot bind because every route in the span reports no cost — the message names the route and why (raw shell profile, no token paths, no models, or a $0 price); a priced CLI route such as `claude-code` or `codex-cli` DOES report cost and the cap binds (GH #453) |
 | WARNING | V327 | A score sets a reserved key — accepted, but no runtime code reads it; also warns when `movements.<N>.voices` cannot expand with the sheet's size/start settings |
@@ -589,7 +612,7 @@ code-registry and corpus-sweep tests.
 | WARNING | V102 | `\| string` filter applied to a subscript of an int-keyed variable dict |
 | WARNING | V103 | Sheet or instrument timeout outside the reasonable range (V103/V104) |
 | WARNING | V106 | Empty pattern in a `content_contains`/`content_regex` validation, or regex syntax (`[Pp]x`, `A\|B`, `\s`) in a `content_contains` pattern, which is matched as a literal substring |
-| WARNING | V109 | A cadenza reads a file a later sheet produces |
+| WARNING | V109 | A cadenza reads a file without a guaranteed earlier producer. For the same path, movement `produces:` takes precedence over `sheet.stdout_to`, then the gated `file_exists` proxy. Add a dependency on a producer; declarations do not prove that a file exists at cadenza time. |
 | WARNING | V201 | Jinja `{{ }}` syntax inside a validation path or command (they are format strings, never rendered) |
 | WARNING | V202 | Python format-string (`%s`, `{x}`) syntax inside a Jinja template |
 | WARNING | V203 | No validation rules exist — nothing defines done |
@@ -598,6 +621,7 @@ code-registry and corpus-sweep tests.
 | WARNING | V215 | No instrument in the score's chain appears installed on this machine (an installed CLI binary or a loopback HTTP server that serves the profile's model counts as installed) |
 | WARNING | V230 | Flow configuration error rendered from the loader (loops/triggers/goto) with position and hint |
 | ERROR | V233 | A loop `until` names `file("{{ … }}")`: Jinja braces inside a flow file path are kept verbatim, so the file never exists — write the workspace-relative or `{workspace}` validation form |
+| WARNING | V235 | `sheet.fan_out_messaging` explicitly set without a fan-out group with multiple voices; remove the setting or configure concurrent siblings |
 | WARNING | V301 | A skill technique's `path` does not exist — the agent would never receive that methodology |
 | WARNING | V302 | An MCP technique targets an instrument with no MCP access path (native config or generated bridge) |
 | WARNING | V303 | Folded YAML scalar on a command field (newlines collapse — usually not what the author meant) |
@@ -1009,6 +1033,7 @@ Validates that your environment is ready to run Marianne scores. Checks Python v
 | Instrument hygiene | User- and venue-layer profiles that no score the conductor has been given names and no class chain includes (GH #443). Reported only, never deleted: a seat is an alias over an existing profile, so a profile nothing names is archived by a person or kept by submitting the score that needs it. `--json` lists them under `unreferenced_profiles`. Skipped before the conductor has ever run. Reads the registry of the conductor the CLI addresses (`--conductor-clone` selects the clone's) |
 | Credential exposure | Ready agent profiles using the explicit `cli.command.inherit_env` opt-out while credential-shaped variables are set (GH #335). Profiles are named without printing values; declare `required_env` or remove the opt-out to clear the warning |
 | Credentials no longer reaching a profile | A ready personal/venue profile with no `required_env`, running an executable a shipped profile authenticates by environment (`claude`, `codex`, `gemini`, `agy`, `goose`), while those variables are set in this environment: since GH #335 they are filtered by default, so the instrument authenticates differently from the shell it was tested in. Declare `required_env` with the variables it reads, or `required_env: []` if it uses its own store |
+| Gemini auth inference | A ready `gemini`-executable CLI profile with none of `GEMINI_API_KEY` (primary, GH #469), `GOOGLE_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`, `CLOUDSDK_CONFIG` set is reported unsupported with a message naming the variables, instead of ready: the default individual-tier OAuth path cannot run a headless prompt. An auth signal is a readiness hint, not proof — verify with `mzt instruments check <profile> --live` (see the instrument guide's Gemini section) |
 
 Every command that answers "can this instrument run here" — `doctor`, `instruments list`, `instruments check`, `instruments classes check` and `classes write` — uses one probe with four states (GH #447):
 
@@ -1429,9 +1454,15 @@ and entry availability. `check` exits 1 for a broken layer or a user configured
 class with no available entry; `check --class strong` also requires that class
 to have an available entry. `write` probes shipped profiles and creates
 `~/.marianne/classes.yaml` with an ordered, model-free chain for each eligible
-class. It preserves an existing file with `--if-absent`, prints a proposal with
-`--dry-run`, and requires `--force` to replace hand edits. Replacements are
-backed up and written atomically.
+class — `strong`, `workhorse`, `fast`, `cheap`, `writing`, `review`, `vision`,
+`local`, `high-context`, `image`, and `video` (the last three seat `gemini-cli`
+once a locally enabled override passes their probe — first in `image` and
+`video`; GH #469). It ranks
+shipped names using their effective same-named user/venue overrides; an
+additional user or venue profile joins a chain only where its own `class_hints`
+put it (see the instrument guide). It preserves an existing file with
+`--if-absent`, prints a proposal with `--dry-run`, and requires `--force` to
+replace hand edits. Replacements are backed up and written atomically.
 
 These commands manage and inspect available instruments — the AI tools Marianne can use to execute scores. Instruments include CLI tools (Claude Code, Gemini CLI, Codex CLI, Aider, Goose) and HTTP APIs (Anthropic API, Ollama).
 
@@ -2088,6 +2119,73 @@ mzt telemetry flush --push --endpoint https://your-receiver.example/telemetry
 
 ---
 
+## Corpus Commands
+
+Local composition-corpus groundwork (GH #148): assemble and measure a corpus of
+score-composition examples from explicitly selected sources. Nothing is
+discovered automatically, nothing is sent, consent is never consulted or
+changed, and no model training happens here. See
+[research/2026-11-05-composition-corpus-groundwork.md](research/2026-11-05-composition-corpus-groundwork.md)
+for the schema, trust rules, and what the counters do and do not establish.
+
+### `mzt corpus build`
+
+Write a deduplicated JSONL corpus of `TrainingExample` records to a local file.
+
+```
+Usage: mzt corpus build [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--sources` | | `examples,scores` | Comma-separated score dirs or telemetry JSONL spools |
+| `--output` | | *required* | Destination JSONL file (private local export) |
+
+Directories are read as trusted local input: YAML is preserved byte-for-byte
+(comments and line endings included), nested repositories (including
+rosetta-corpus), symlinks, and `.lock` files are excluded. Telemetry JSONL is
+not trusted: every accepted score passes through the telemetry sanitizer again,
+and malformed or unsupported envelopes are skipped and counted in a warning
+without logging their contents. Deduplication hashes exact output text (no YAML
+normalization); when exact duplicates occur across sources, the repository
+example wins, including its rationale.
+
+The destination is written atomically (temp file + rename, fsync'd) and must
+differ from the sources, the consent state file, and reserved `.lock` names,
+and must not replace a source score. Review the output before sharing it — the
+corpus tooling is local-only and asserts no redistribution or training rights.
+
+```bash
+mzt corpus build --sources examples,scores --output /tmp/composition-corpus.jsonl
+```
+
+---
+
+### `mzt corpus stats`
+
+Count distinct outputs and annotations against the 200-example volume target.
+
+```
+Usage: mzt corpus stats [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--sources` | | `examples,scores` | Comma-separated score dirs or telemetry JSONL spools |
+| `--json` | | false | Emit machine-readable counts |
+
+Reports `total_examples` (after deduplication), `by_source_kind`, `by_category`,
+`annotated` (records carrying a human `rationale`), and `meets_target` against
+`target_volume` (200). Volume alone does not establish diversity, permission,
+or training readiness.
+
+```bash
+mzt corpus stats
+mzt corpus stats --sources examples,/path/to/telemetry.jsonl --json
+```
+
+---
+
 ## Configuration Reference
 
 Score configurations are defined in YAML files. Here are the key sections:
@@ -2189,10 +2287,19 @@ Run `mzt instruments list` to see all available instruments. Built-in instrument
 | `aider` | CLI | Aider pair programming |
 | `goose` | CLI | Block's Goose agent |
 | `ollama` | HTTP | Local models through Ollama's OpenAI-compatible endpoint |
+| `claude-code-ollama` | CLI | Claude Code harness routed at a local Ollama server |
 
 Retired backend-era names do not resolve. Update old scores to a current CLI
 profile, or use `ollama` when a local OpenAI-compatible text endpoint is the
 right execution surface.
+
+`claude-code-ollama` pins `ANTHROPIC_BASE_URL=http://localhost:11434` and
+local authentication in the child environment. Start `ollama serve`, pull the
+selected model (default `llama3.1:8b`), and install `claude` on PATH first.
+The CLI availability probe checks the binary; it does not check Ollama readiness
+or pull models. `ollama` remains the raw HTTP route. To change the origin, copy
+the profile into `~/.marianne/instruments/` and edit
+`cli.command.env.ANTHROPIC_BASE_URL` (a full `http://host:port` origin, without `/v1`).
 
 ### Validation Types
 
@@ -2291,7 +2398,44 @@ execution time.
 | `MZT_CORS_ORIGINS` | Comma-separated allowed CORS origins | `http://localhost:8080,http://127.0.0.1:8080` |
 | `MZT_CORS_CREDENTIALS` | Allow credentials in CORS requests | `true` |
 | `MZT_DEV` | Enable development mode (permissive CORS) | |
+| `MARIANNE_MAILBOX` | Job mailbox root exported to every CLI and interactive instrument in a job; `mzt mail` resolves it, or derives it from `MARIANNE_SCRATCH/mailbox` | set by the job |
+| `MARIANNE_SCRATCH` | Scratch root for the running sheet; also supplies the mailbox root when `MARIANNE_MAILBOX` is absent | set by the job |
+| `MARIANNE_SHEET` | This sheet's number; identifies the inbox owner for `mzt mail` | set by the job |
 | `ANTHROPIC_API_KEY` | API key for Anthropic API backend | |
+
+
+
+## Musician messaging
+
+Inside a running job, shell-capable instruments can exchange notes through the
+scratch-owned mailbox, independent of harness adapters:
+
+```bash
+mzt mail send 2 "The shared interface is ready"
+mzt mail send all "Review the updated interface before editing"
+mzt mail read
+mzt mail read --since 123
+```
+
+`send` accepts a concrete sheet number or `all` (all initialized inboxes except
+your own). `read` prints JSONL records with `id`, `timestamp`, `sender`,
+`recipient`, and `body`. IDs are opaque, increasing cursors local to your inbox;
+pass the last received ID to `--since` to exclude messages already seen.
+The backends export `MARIANNE_MAILBOX` and `MARIANNE_SHEET`; the CLI can also
+resolve the inbox root from `MARIANNE_SCRATCH/mailbox`. It refuses to guess a job
+or sheet when that context is missing. Messages are data, not instructions.
+Send events record identities and UTF-8 byte counts without message bodies.
+Inbox contents follow the job's scratch cleanup policy; a job that ends in an
+error, timeout, or cancellation keeps its scratch (and with it the inboxes) for
+post-mortem.
+
+`mzt diagnose JOB` includes mailbox traffic (sender, recipient, UTF-8 byte count,
+per-inbox counts, and first/last timestamps); `--json` adds `mailbox_traffic` when
+messages exist. The conductor records each send and its summary when the job
+settles at any terminal status — COMPLETED, FAILED, or CANCELLED — so a job that
+died mid-fan-out still logs every delivered send, and retains this metadata in
+the job checkpoint before scratch cleanup. Message bodies are excluded from
+traffic logs and diagnosis.
 
 ---
 

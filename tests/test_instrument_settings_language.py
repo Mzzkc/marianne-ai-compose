@@ -129,5 +129,41 @@ def test_runtime_instrument_key_census_is_declared() -> None:
     assert set(InstrumentSettings.model_fields) == {
         "timeout_seconds", "model", "provider", "interactive",
         "interactive_max_nudges", "interactive_nudge_message", "max_tokens",
+        "interactive_nudge_policy", "interactive_nudge_instrument",
+        "interactive_nudge_timeout_seconds",
         "temperature", "response_format",
     }
+
+
+@pytest.mark.parametrize("knobs", [
+    {"interactive_nudge_policy": "bogus"},
+    {"interactive_nudge_timeout_seconds": 0},
+    {"interactive_nudge_timeout_seconds": -1},
+])
+def test_model_nudge_invalid_settings(knobs):
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        InstrumentSettings(**knobs)
+
+
+def test_model_nudge_settings_mapping():
+    knobs = {"interactive_nudge_policy": "model", "interactive_nudge_instrument": "cheap",
+             "interactive_nudge_timeout_seconds": 2.5}
+    assert dict(InstrumentSettings(**knobs)) == knobs
+    assert dict(InstrumentSettings()) == {}
+
+def test_model_nudge_survives_yaml_load_and_sheet_merge(tmp_path):
+    path = tmp_path / "nudge.yaml"
+    path.write_text(
+        "name: model-nudge\nworkspace: ./output\n"
+        "sheet: {size: 1, total_items: 1}\n"
+        "instrument_config: {interactive_nudge_policy: model, "
+        "interactive_nudge_instrument: cheap, interactive_nudge_timeout_seconds: 2.5}\n"
+        "prompt: {template: hi}\n"
+    )
+    config = JobConfig.from_yaml(path)
+    assert config.unknown_fields == ()
+    sheet = build_sheets(config)[0]
+    assert sheet.instrument_config["interactive_nudge_policy"] == "model"
+    assert sheet.instrument_config["interactive_nudge_instrument"] == "cheap"
+    assert sheet.instrument_config["interactive_nudge_timeout_seconds"] == 2.5

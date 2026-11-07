@@ -1245,7 +1245,11 @@ class SheetState(BaseModel):
         """Capture tail of stdout/stderr for debugging.
 
         Stores the last `max_bytes` of each output stream. Sets output_truncated
-        to True if either stream was larger than the limit.
+        to True if either stream was larger than the limit. Both truncated and
+        untruncated tails are stored strictly UTF-8-encodable: every tail is
+        round-tripped through UTF-8 with errors="replace", so a lone surrogate
+        or other invalid byte from a mis-decoded subprocess stream never
+        survives into state or `--json` machine output (issue #495).
 
         Credential scanning (F-003): Before storing, both streams are scanned
         for API key patterns (sk-ant-*, AKIA*, AIzaSy*, Bearer tokens) and
@@ -1267,20 +1271,37 @@ class SheetState(BaseModel):
         stdout_truncated = len(stdout_bytes) > max_bytes
         stderr_truncated = len(stderr_bytes) > max_bytes
 
-        # Capture tail (last N bytes) and decode back to string
+        # Capture tail (last N bytes) and decode back to string.
+        # Both branches apply the same explicit decode policy: every stored
+        # tail is round-tripped through UTF-8 with errors="replace" so state
+        # is always strictly encodable regardless of producer bytes (issue
+        # #495 — a lone surrogate from a mis-decoded subprocess stream must
+        # never survive into conductor state).
         if stdout_truncated:
             self.stdout_tail = stdout_bytes[-max_bytes:].decode(
                 "utf-8", errors="replace"
             )
         else:
-            self.stdout_tail = stdout if stdout else None
+            self.stdout_tail = (
+                stdout.encode("utf-8", errors="replace").decode(
+                    "utf-8", errors="replace"
+                )
+                if stdout
+                else None
+            )
 
         if stderr_truncated:
             self.stderr_tail = stderr_bytes[-max_bytes:].decode(
                 "utf-8", errors="replace"
             )
         else:
-            self.stderr_tail = stderr if stderr else None
+            self.stderr_tail = (
+                stderr.encode("utf-8", errors="replace").decode(
+                    "utf-8", errors="replace"
+                )
+                if stderr
+                else None
+            )
 
         # Scan and redact credential patterns before storage (F-003)
         self.stdout_tail = redact_credentials(self.stdout_tail)
@@ -1367,6 +1388,11 @@ class CheckpointState(BaseModel):
         "k=v` (#359). Persisted so resume re-applies them — the default "
         "resume path re-reads the YAML and would otherwise drop them. "
         "Merged into prompt.variables with CLI overriding YAML.",
+    )
+
+    mailbox_traffic: dict[str, Any] | None = Field(
+        default=None,
+        description="Body-free per-send metadata retained before scratch inbox cleanup.",
     )
 
     # Timestamps

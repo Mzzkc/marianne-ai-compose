@@ -7,6 +7,7 @@ This module contains all the built-in validation checks organized by category:
 """
 
 from marianne.validation.checks.best_practices import (
+    FanOutMessagingCheck,
     FanOutWithoutDependenciesCheck,
     FanOutWithoutParallelCheck,
     FileExistsOnlyCheck,
@@ -122,6 +123,7 @@ __all__ = [
     "FormatSyntaxInTemplateCheck",
     "NoValidationsCheck",
     "FileExistsOnlyCheck",
+    "FanOutMessagingCheck",
     "FanOutWithoutDependenciesCheck",
     "FanOutWithoutParallelCheck",
     "VariableShadowingCheck",

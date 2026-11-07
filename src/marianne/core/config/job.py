@@ -341,6 +341,13 @@ class MovementDef(BaseModel):
         "and start_item=1, this expands like sheet.fan_out at the same "
         "movement; an explicit fan_out count takes precedence.",
     )
+    produces: list[str] = Field(
+        default_factory=list,
+        description="Files this movement produces, relative to the workspace or "
+        "prefixed with {workspace}. Each fan-out voice declares these outputs; "
+        "use {sheet_num} for a separate file per voice. Declares ownership for "
+        "cadenza ordering and foreign-artifact checks; does not create or validate files.",
+    )
     instrument_fallbacks: list[str] = Field(
         default_factory=list,
         description="Default fallback chain for sheets in this movement. "
@@ -483,6 +490,16 @@ class SheetConfig(BaseModel):
             "Stages not listed default to 1 instance. "
             "Example: {2: 3, 4: 3} creates 3 parallel instances of stages 2 and 4. "
             "Requires size=1 and start_item=1. Cleared after expansion."
+        ),
+    )
+
+    fan_out_messaging: Literal["file", "none"] = Field(
+        default="file",
+        description=(
+            "Fan-out messaging mode (conceptually fan_out.messaging). "
+            "'file' enables scratch-owned inboxes and polling instructions for "
+            "concurrent siblings; 'none' omits messaging prompt setup. "
+            "A sibling field preserves the existing fan_out stage-to-count mapping."
         ),
     )
 

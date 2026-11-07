@@ -33,6 +33,21 @@ python tests/scripts/check_language.py --baseline tests/fixtures/language_baseli
                                # as tests/test_score_language.py; see below)
 ```
 
+**Load-sensitive tests carry load-scaled timeout marks (GH #501).** The global
+30 s pytest-timeout is a safety net against orphaned processes and is not
+relaxed. Subprocess/IO-heavy tests whose wall time scales with host contention
+instead carry `@pytest.mark.timeout(load_scaled_timeout(N))` plus
+`@pytest.mark.load_sensitive`, where `load_scaled_timeout` (from
+`tests/helpers.py`) returns `ceil(N × factor)` with the factor read from
+`MARIANNE_TEST_LOAD_FACTOR` — default 1, clamped ≥ 1, and fail-safe to 1.0 on
+garbage input. Marks are evaluated at module import, so export the env var
+before pytest starts. Pick a base that dominates the test's internal budget
+with headroom (e.g. 180 over a 120 s drain budget): the ceiling stays finite —
+a hung test still dies, just at a load-scaled bound. CI's `load-sensitive` job
+runs the marked tests idle at the default factor (the marks must not change
+idle behavior) and again under `stress-ng --io 4 --cpu 4` with
+`MARIANNE_TEST_LOAD_FACTOR=4`.
+
 **The score language is gated like code.** Score YAML keys, validator messages,
 `docs/` and the skills in `plugins/` are four layers of one language (CLAUDE.md,
 GH #436). `tests/scripts/check_language.py` fails on a schema key with no description,

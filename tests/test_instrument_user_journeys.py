@@ -51,6 +51,7 @@ class TestDiscoverInstruments:
         # Every documented built-in CLI and HTTP profile must load.
         expected_names = {
             "claude-code",
+            "claude-code-ollama",
             "gemini-cli",
             "qwen-code",
             "openclaw",
@@ -71,6 +72,33 @@ class TestDiscoverInstruments:
             f"extra={sorted(actual_names - expected_names)}"
         )
         assert "gpt-5.6" not in profiles
+
+    def test_local_claude_profile_preserves_the_http_ollama_route(self) -> None:
+        builtins_dir = Path(__file__).resolve().parents[1] / "src/marianne/instruments/builtins"
+        profiles = InstrumentProfileLoader.load_directory(builtins_dir)
+        local = profiles["claude-code-ollama"]
+        assert local.kind == "cli"
+        assert local.cli is not None
+        command = local.cli.command
+        assert command.executable == "claude"
+        assert command.env["ANTHROPIC_BASE_URL"] == "http://localhost:11434"
+        assert command.env["ANTHROPIC_AUTH_TOKEN"] == "local"
+        assert command.env["ANTHROPIC_API_KEY"] == ""
+        assert command.prompt_via_stdin and command.stdin_sentinel == "-"
+        assert command.start_new_session
+        assert command.json_schema_flag == "--json-schema"
+        assert command.extra_flags == []
+        assert local.capabilities == {
+            "tool_use", "file_editing", "shell_access", "structured_output",
+        }
+        assert local.default_model in {model.name for model in local.models}
+        assert all(
+            model.cost_per_1k_input == model.cost_per_1k_output == 0 for model in local.models
+        )
+        http = profiles["ollama"]
+        assert http.kind == "http"
+        assert http.http is not None
+        assert http.http.base_url == "http://localhost:11434/v1"
 
     def test_builtin_profiles_have_required_fields(self) -> None:
         """Every built-in profile has name, kind, display_name and matching config."""

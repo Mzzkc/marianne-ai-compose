@@ -67,10 +67,21 @@ and constraints are extracted directly from the Pydantic v2 config models in
 | `description` | `str \| None` | `None` | Human-readable description |
 | `workspace` | `Path` | `./workspace` | Output directory. Resolved to absolute path at construction time. |
 | `instrument` | `str \| None` | `None` | Profile, score alias, or capability class. The packaged classes are `strong`, `workhorse`, `fast`, `cheap`, `writing`, `review`, `vision`, `local`, `high-context`, `image`, `video`; the vocabulary is the packaged `classes/default.yaml` itself, and a user (`~/.marianne/classes.yaml`) or venue (`.marianne/classes.yaml`) layer may define ANY further class name or tombstone a packaged one with `null` (GH #433). Run `mzt instruments classes show` to see resolved chains. If unset, defaults to `claude-code`. |
-| `instrument_config` | `InstrumentSettings` | `{}` | Typed per-score overrides. Keys: `timeout_seconds` (sheet execution timeout), `model`, `provider`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`, `max_tokens`, `temperature`, `response_format`. Unknown keys warn as V010/V011; executor support still varies. |
+| `instrument_config` | `InstrumentSettings` | `{}` | Typed per-score overrides. Keys: `timeout_seconds` (sheet execution timeout), `model`, `provider`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`, `interactive_nudge_policy`, `interactive_nudge_instrument`, `interactive_nudge_timeout_seconds`, `max_tokens`, `temperature`, `response_format`. Unknown keys warn as V010/V011; executor support still varies. |
 | `instruments` | `dict[str, InstrumentDef]` | `{}` | Named instrument definitions local to this score. Declares reusable aliases referencing registered instrument profiles with optional overrides. Referenced by name in per-sheet or per-movement `instrument:` fields. See [instruments](#instruments). |
 | `movements` | `dict[int, MovementDef]` | `{}` | Movement declarations. Map of movement number to MovementDef. Each movement can specify a name, instrument, instrument config, and voice count. See [movements](#movements). |
 | `instrument_fallbacks` | `list[str]` | `[]` | Score-level fallback chain. Each profile, alias, or class is expanded in place; a primary class's tail runs before declared fallbacks. See [Instrument Fallbacks](#instrument-fallbacks). |
+
+Interactive continuation defaults to `instrument_config.interactive_nudge_policy: static`.
+Set it to `model` with `instrument_config.interactive_nudge_instrument` naming a
+registered inexpensive headless instrument to generate contextual inputs from
+the idle screen. `instrument_config.interactive_nudge_timeout_seconds` is a
+finite positive per-call limit (default 30 seconds), additionally bounded by
+the sheet deadline. Invalid or failed model replies fall back to
+`interactive_nudge_message`; an unrecoverable decision stops nudging and
+leaves validations to judge the attempt. These settings work at all four
+instrument override scopes. Missing instrument configuration uses static
+continuation with a warning.
 
 ```yaml
 instrument: gemini-cli
@@ -257,6 +268,17 @@ through the same fan-out engine as `sheet.fan_out`: dependencies, voice variable
 and sheet numbering all use the expanded sheets. An explicit `sheet.fan_out`
 count takes precedence for that movement.
 
+Declare the files a movement writes with `produces:`. Paths are workspace-relative
+or `{workspace}`-prefixed; `{sheet_num}` expands to each concrete sheet number,
+so fan-out voices can declare separate outputs. This is an ownership declaration:
+it neither creates files nor verifies success. Keep output validations to check
+the result. For the same path, explicit `produces:` ownership takes precedence
+over `sheet.stdout_to`, which takes precedence over a sheet-gated `file_exists`
+proxy. Independent paths from all three sources are combined. V108 suppresses
+missing-file errors for declared cadenza outputs; V109 still warns if no producer
+is a dependency ancestor. The foreign-artifact guard uses the same ownership map;
+a shared declaration belongs to every voice that declares it.
+
 ```yaml
 movements:
   1:
@@ -265,6 +287,8 @@ movements:
   2:
     name: Implementation
     voices: 3
+    produces:
+      - "{workspace}/implementation-{sheet_num}.md"
     instrument: gemini-cli
     instrument_config:
       model: gemini-2.5-flash
@@ -285,6 +309,7 @@ movements:
 | `instrument` | `str \| None` | `None` | min_length=1 | Instrument for all sheets in this movement. Overrides the score-level `instrument:` but is overridden by per-sheet assignments. Can reference a score-local `instruments:` alias or a registered profile name. |
 | `instrument_config` | `InstrumentSettings` | `{}` | | Typed instrument overrides for this movement; unknown keys warn as V010/V011. |
 | `voices` | `int \| None` | `None` | `>= 1` | Number of parallel voices in this movement. Shorthand for `fan_out: {N: voices}`. |
+| `produces` | `list[str]` | `[]` | | Files this movement writes. Workspace-relative paths support `{workspace}` and `{sheet_num}`; each fan-out voice declares its own expanded outputs. Used for cadenza ordering and foreign-artifact checks; keep validations to check successful output. |
 | `instrument_fallbacks` | `list[str]` | `[]` | | Default fallback chain for sheets in this movement. Overrides score-level `instrument_fallbacks`. |
 
 **Instrument resolution precedence** (highest to lowest):
@@ -392,6 +417,7 @@ Defines how the work is divided into sheets (execution units).
 | `prelude` | `list[InjectionItem]` | `[]` | | Shared context injected into ALL sheets. Each item references a file and a category (`context`, `skill`, or `tool`). File paths support Jinja templating. Files are read at sheet execution time. |
 | `cadenzas` | `dict[int, list[InjectionItem]]` | `{}` | | Per-sheet context injections. Map of `sheet_num -> list of InjectionItems`. Applied in addition to prelude items for the specified sheet. |
 | `fan_out` | `dict[int, int]` | `{}` | Requires `size=1`, `start_item=1` | Fan-out declarations. Map of `stage_num -> instance_count`. Creates parallel instances of stages. Cleared after expansion. |
+| `fan_out_messaging` | `"file" \| "none"` | `"file"` | | Fan-out messaging (`fan_out.messaging` conceptually). Use this sibling field, preserving the stage-to-count `fan_out` mapping. `file` prepares scratch-owned inboxes and adds polling instructions with sibling numbers and descriptions; `none` omits that prompt setup. Explicit use without concurrent voices emits V234 WARNING. |
 | `fan_out_stage_map` | `dict[int, dict[str, int]] \| None` | `None` | | Per-sheet fan-out metadata, populated by expansion. Survives serialization for resume support. |
 | `spec_tags` | `dict[int, list[str]]` | `{}` | | Per-sheet spec fragment tag filters. Map of `sheet_num -> list of tags`. Only fragments matching at least one tag are injected for that sheet. Sheets without entries receive all fragments. |
 | `descriptions` | `dict[int, str]` | `{}` | | Human-readable labels for sheets (`sheet.descriptions`), map of `sheet_num -> description`; shown in `mzt status`. |
@@ -1337,7 +1363,7 @@ table below describes retained score syntax, not active log routing.
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `level` | `"DEBUG" \| "INFO" \| "WARNING" \| "ERROR"` | `"INFO"` | | Minimum log level |
-| `format` | `"json" \| "console" \| "both"` | `"console"` | `file_path` required when `"both"` | Output format |
+| `format` | `"json" \| "console" \| "both"` | `"console"` | `file_path` required when `"both"` | Output format. The JSON renderer always serializes with `ensure_ascii=True` (issue #495): the JSON log stream may share stdout with `--json` machine output, so log records can never emit non-ASCII bytes regardless of configuration |
 | `file_path` | `Path \| None` | `None` | | Log file output path |
 | `max_file_size_mb` | `int` | `50` | `1–1000` | Maximum log file size before rotation (MB). Rotation renames inline; gzip runs on a helper thread so the event loop never waits on it |
 | `backup_count` | `int` | `5` | `0–100` | Rotated log files to keep |
@@ -1543,7 +1569,7 @@ Available but rarely need changing:
 | `monitor_interval_seconds` | `float` | `15.0` | `>= 5` | Interval between resource monitor checks |
 | `max_job_history` | `int` | `1000` | `>= 10` | Completed/failed/cancelled jobs to keep in memory |
 | `observer` | `ObserverConfig` | *(see sub-config)* | | Observer and event bus configuration. `exclude_patterns` (default `.git/`, `__pycache__/`, `node_modules/`, `.venv/`, `*.pyc`) filters the workspace file events; the recorder's own `.marianne-observer.jsonl` and the `.marianne/` and `.marianne-scratch/` bookkeeping directories are always excluded, so the timeline shows the musician's work, not the recorder's heartbeat |
-| `orchestra` | `OrchestraConfig` | *(see sub-config)* | | Orchestra view: a public-safe fleet timeline, live over IPC and appended daily to `~/.marianne/orchestra/<day>.jsonl` for replay. Keys: `enabled` (true), `persist` (true), `directory`, `ring_size` (2000, `>= 100`), `keep_ended_seconds` (1800). The projection carries score name, sheet, instrument, outcome and time only |
+| `orchestra` | `OrchestraConfig` | *(see sub-config)* | | Orchestra view: a public-safe fleet timeline, live over IPC and appended daily to `~/.marianne/orchestra/<day>.jsonl` for replay. Keys: `enabled` (true), `persist` (true), `directory`, `ring_size` (2000, `>= 100`), `keep_ended_seconds` (1800). The projection carries score name, sheet, instrument, outcome, time and a short note (fallback transition, retry attempt, or the verbatim chain-refusal reason, which can name the child score's path) |
 | `profiler` | `ProfilerConfig` | *(see sub-config)* | | System profiler (strace off by default, GPU probing off by default) |
 | `preflight` | `PreflightConfig` | *(see sub-config)* | | Preflight prompt analysis thresholds. Controls when prompts are warned or rejected based on estimated token count. |
 | `hot_reload` | `HotReloadConfig` | *(see [Hot Reload](#hot-reload))* | | Opt-in watcher that hot-applies config and instrument profile changes without a restart |
@@ -1612,7 +1638,10 @@ dispatch waits for the running count to drain below the new limit (#231).
 `partial` when profile files failed to load), and the live per-model caps
 (`model_concurrency`). With `--json`, stdout carries only the JSON
 document (safe for `jq`); with an explicit `--socket`, no PID file is
-read and the daemon's own payload supplies the `pid`.
+read and the daemon's own payload supplies the `pid`. All `--json`
+output is ASCII-escaped strict UTF-8 emitted verbatim — the machine
+contract shared by every command (issue #495; see
+`docs/cli-reference.md` § JSON output).
 
 **Field reloadability** — what a reload applies vs. what needs a restart
 (changed restart-only fields are reported in `declined` and the running

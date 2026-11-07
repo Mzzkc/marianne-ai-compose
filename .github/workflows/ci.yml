@@ -92,6 +92,57 @@ jobs:
           path: coverage.xml
           if-no-files-found: ignore
 
+  load-sensitive:
+    name: Load-sensitive tests (stress-ng)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out the public plugins submodule (score-language gate)
+        run: git submodule update --init --depth 1 plugins
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync dependencies (locked)
+        run: uv sync --extra dev --extra daemon --extra tui --locked
+      - name: Install stress-ng
+        run: sudo apt-get update && sudo apt-get install -y stress-ng
+      - name: Idle control run (behavior unchanged, no load)
+        # The three load-sensitive tests from #501 must pass with the default
+        # factor 1 on an idle runner — the marks must not change idle behavior.
+        run: >-
+          uv run pytest
+          "tests/test_drain_swap_352.py::TestDrainDeadlockBattery::test_large_stdout_burst"
+          "tests/test_drain_swap_352.py::TestDrainDeadlockBattery::test_one_pipe_closed_early"
+          "tests/test_clone_socket_ownership_repairs.py::test_cancelled_start_reaps_upstream_and_releases_socket"
+          "tests/test_daemon_e2e.py::TestDaemonLifecycle::test_graceful_shutdown"
+          -n0 -q
+      - name: Under-load run (stress-ng --io 4 --cpu 4, factor 4)
+        # Reproduce the host-load conditions that tripped the 30s safety net
+        # (#501): real IO+CPU contention while the per-test timeout marks are
+        # load-scaled. CI runners can't observe their own load the way the
+        # solver conductor does (getloadavg-based factor), so export the
+        # scaling explicitly the way verify.sh would at load ~4x cores.
+        env:
+          MARIANNE_TEST_LOAD_FACTOR: "4"
+        run: |
+          stress-ng --io 4 --cpu 4 --timeout 300s >/dev/null 2>&1 &
+          STRESS_PID=$!
+          sleep 2  # let the load ramp up before pytest collects
+          # bash -e would abort the step on a failing pytest before the
+          # cleanup below runs, so capture the exit code explicitly.
+          set +e
+          uv run pytest \
+            "tests/test_drain_swap_352.py::TestDrainDeadlockBattery::test_large_stdout_burst" \
+            "tests/test_drain_swap_352.py::TestDrainDeadlockBattery::test_one_pipe_closed_early" \
+            "tests/test_clone_socket_ownership_repairs.py::test_cancelled_start_reaps_upstream_and_releases_socket" \
+            "tests/test_daemon_e2e.py::TestDaemonLifecycle::test_graceful_shutdown" \
+            -n0 -q
+          RC=$?
+          set -e
+          kill "$STRESS_PID" 2>/dev/null || true
+          exit $RC
+
   audit:
     name: Dependency audit (pip-audit)
     runs-on: ubuntu-latest

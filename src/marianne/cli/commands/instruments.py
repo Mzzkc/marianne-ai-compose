@@ -634,6 +634,7 @@ def _cli_version(profile: InstrumentProfile) -> str:
         done = subprocess.run(  # noqa: S603 — fixed argv, profile's own executable
             [profile.cli.command.executable, "--version"],
             capture_output=True, text=True, timeout=15, check=False,
+            encoding="utf-8", errors="replace",
         )
     except (OSError, subprocess.TimeoutExpired):
         return "unknown"

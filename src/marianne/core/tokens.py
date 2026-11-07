@@ -55,6 +55,14 @@ _MODEL_EFFECTIVE_WINDOWS: dict[str, int] = {
     "mistral": 30_000,
 }
 
+# Output token reservation applied to registry (profile-declared) windows so
+# they carry the same "effective" semantics as this module's maintained
+# tables ("raw context window minus output reservation"). Capped at ~4K to
+# mirror the reservation the hardcoded tables apply "for most models" — a
+# profile advertising a huge max_output_tokens must not zero out the input
+# budget.
+_REGISTRY_OUTPUT_RESERVATION: int = 4_096
+
 # Default window for unknown models — conservative to avoid overflow.
 _DEFAULT_EFFECTIVE_WINDOW: int = 128_000
 
@@ -68,6 +76,7 @@ _INSTRUMENT_EFFECTIVE_WINDOWS: dict[str, int] = {
     "gemini-cli": 1_000_000,
     "codex-cli": 196_000,
     "ollama": 128_000,
+    "claude-code-ollama": 128_000,
 }
 
 
@@ -129,18 +138,16 @@ def get_effective_window_size(
     model and instrument are provided, returns the minimum of the two — the
     instrument may impose a stricter limit than the model's native window.
 
-    For unknown models/instruments, returns a conservative default.
+    A model not in the curated table is resolved, when an instrument is
+    given, from that instrument's registry profile: an exact model-name
+    match returns the profile's declared ``context_window`` minus a 4,096
+    token output reservation. Curated table entries always win.
 
-    Args:
-        model: Model name or identifier. None uses the default window.
-        instrument: Instrument (backend) name. None imposes no instrument limit.
-            Unknown instruments impose no additional limit.
-
-    Returns:
-        Effective input token budget (always > 0).
+    For models/instruments that resolve to nothing, returns a conservative
+    default.
     """
     # Resolve model window (None if model not provided or unknown)
-    model_window = _resolve_model_window(model)
+    model_window = _resolve_model_window(model, instrument=instrument)
 
     # Resolve instrument window (None if instrument not provided or unknown)
     instrument_window: int | None = None
@@ -157,8 +164,25 @@ def get_effective_window_size(
     return _DEFAULT_EFFECTIVE_WINDOW
 
 
-def _resolve_model_window(model: str | None) -> int | None:
-    """Resolve model name to effective window, or None if not provided/unknown."""
+def _resolve_model_window(
+    model: str | None, *, instrument: str | None = None,
+) -> int | None:
+    """Resolve model name to effective window, or None if not provided/unknown.
+
+    Resolution order:
+        1. The maintained ``_MODEL_EFFECTIVE_WINDOWS`` table (exact, then
+           versioned-prefix match) — the curated, instrument-independent
+           numbers existing callers depend on.
+        2. When an instrument is given, the instrument's registry profile:
+           an exact model-name match on the profile's declared
+           ``ModelCapacity.context_window`` (minus output reservation) makes
+           per-model ceilings (e.g. ``qwen3:8b`` on ``claude-code-ollama``)
+           participate in effective-window resolution without waiting for a
+           curated table entry. Unscoped registry lookups are deliberately
+           NOT attempted: profiles list the same model name under different
+           instruments with different capacities, and consumers pass the
+           instrument alongside the model.
+    """
     if model is None:
         return None
 
@@ -173,12 +197,51 @@ def _resolve_model_window(model: str | None) -> int | None:
         if model_lower.startswith(key) or key.startswith(model_lower):
             return value
 
+    if instrument is not None:
+        window = _resolve_model_window_from_registry(model, instrument)
+        if window is not None:
+            return window
+
     _logger.debug(
         "unknown_model_using_default_window",
         model=model,
         default_window=_DEFAULT_EFFECTIVE_WINDOW,
     )
     return None
+
+
+def _resolve_model_window_from_registry(
+    model: str, instrument: str,
+) -> int | None:
+    """Look up a model's declared window in its instrument's registry profile.
+
+    Exact (case-insensitive) name match only. Returns the declared
+    ``context_window`` minus the output reservation (registry profiles carry
+    RAW windows; this module's contract is EFFECTIVE windows), floored at 1.
+    Returns ``None`` when the instrument or model is not declared — the
+    caller falls back to the conservative default.
+
+    Best-effort and never raises: token accounting must not break because of
+    an unexpected registry error.
+    """
+    try:
+        from marianne.instruments.loader import load_all_profiles
+
+        profiles = load_all_profiles()
+        profile = profiles.get(instrument)
+        if profile is None:
+            return None
+        for entry in getattr(profile, "models", None) or []:
+            if str(getattr(entry, "name", "")).lower() == model.lower():
+                window = getattr(entry, "context_window", None)
+                if not window:
+                    return None
+                return max(1, int(window) - _REGISTRY_OUTPUT_RESERVATION)
+        return None
+    except Exception:  # noqa: BLE001 — registry resolution is best-effort fallback
+        _logger.debug("tokens.registry_model_window_unavailable", exc_info=True)
+        # Never break token accounting because of an unexpected registry error.
+        return None
 
 
 def _resolve_instrument_window(instrument: str) -> int | None:

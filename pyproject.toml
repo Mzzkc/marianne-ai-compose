@@ -152,6 +152,7 @@ markers = [
     "overnight: long-running tests for cron execution",
     "property_based: hypothesis property-based tests",
     "playwright: browser E2E tests — must run with -n0 (no xdist)",
+    "load_sensitive: subprocess/IO-heavy tests whose wall time scales with host load; carried timeout marks are load-scaled via MARIANNE_TEST_LOAD_FACTOR",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

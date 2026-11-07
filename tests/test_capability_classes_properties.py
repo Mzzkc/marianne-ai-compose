@@ -21,7 +21,7 @@ from marianne.core.config.classes import (
 
 @given(
     name=st.sampled_from(["strong", "fast", "local", "workhorse"]),
-    profile=st.sampled_from(["claude-code", "codex-cli", "ollama"]),
+    profile=st.sampled_from(["claude-code", "codex-cli", "ollama", "claude-code-ollama"]),
     model=st.one_of(st.none(), st.text(alphabet="abc123-", min_size=1, max_size=12)),
     tombstone=st.booleans(),
 )
@@ -51,7 +51,7 @@ def test_classesfile_entry_and_generatedby_round_trip_and_refuse_repeats(
 
 @given(
     name=st.sampled_from(["strong", "fast", "local"]),
-    profile=st.sampled_from(["claude-code", "codex-cli", "ollama"]),
+    profile=st.sampled_from(["claude-code", "codex-cli", "ollama", "claude-code-ollama"]),
     source_layer=st.sampled_from(["default", "user", "venue"]),
     phase=st.sampled_from(["submit", "resume"]),
 )

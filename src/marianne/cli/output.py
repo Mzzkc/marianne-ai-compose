@@ -25,6 +25,7 @@ This module centralizes all Rich-based formatting utilities for the CLI:
 
 from __future__ import annotations
 
+import sys
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
 
@@ -762,13 +763,10 @@ def output_error(
         hints: Optional list of hint strings for the user.
         severity: "error" (red) or "warning" (yellow).
         json_output: If True, output as JSON instead of Rich markup.
-        console_instance: Console to print to. Defaults to module console.
+        console_instance: Console to print to. Defaults to module console
+            (Rich mode) or a direct stdout write (JSON mode, issue #495).
         **json_extras: Extra key-value pairs included in JSON output only.
     """
-    out = console_instance or console
-    color = "red" if severity == "error" else "yellow"
-    label = "Error" if severity == "error" else "Warning"
-
     if json_output:
         result: dict[str, str | int | float | bool | list[str] | None] = {
             "success": False,
@@ -783,14 +781,26 @@ def output_error(
         import json as _json
 
         sanitized = _sanitize_for_json(result)
-        out.print(
-            _json.dumps(sanitized, indent=2, default=str),
-            markup=False,
-            highlight=False,
-            soft_wrap=True,
-        )
+        text = _json.dumps(sanitized, indent=2, default=str, ensure_ascii=True)
+        if console_instance is None:
+            # Machine output: bypass Rich entirely. Rich's rendering pipeline
+            # applies emoji substitution (``:code:`` → glyph) even with
+            # ``markup=False``, which can mutate the serialized JSON and emit
+            # non-ASCII bytes (issue #495). Write the ASCII-only text verbatim.
+            sys.stdout.write(text + "\n")
+        else:
+            console_instance.print(
+                text,
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+                emoji=False,
+            )
         return
 
+    out = console_instance or console
+    color = "red" if severity == "error" else "yellow"
+    label = "Error" if severity == "error" else "Warning"
     if error_code:
         prefix = f"[{color}]{label} [{error_code}]:[/{color}] "
     else:
@@ -846,20 +856,31 @@ def output_json(
     Control characters and ANSI escape sequences in string values are
     stripped to prevent invalid JSON (F-032).
 
+    The machine contract (issue #495): with ``--json``, stdout carries only
+    the JSON — valid UTF-8, verbatim. On the default path the ASCII-only
+    serialization (``ensure_ascii=True``) is written directly to
+    ``sys.stdout``, bypassing Rich's rendering pipeline, whose emoji
+    substitution (``:code:`` → glyph) can mutate the payload after
+    serialization.
+
     Args:
         data: JSON-serializable dict or list.
-        console_instance: Console to print to. Defaults to module console.
+        console_instance: Console to print to. Defaults to direct stdout write.
     """
     import json
 
     sanitized = _sanitize_for_json(data)
-    out = console_instance or console
-    out.print(
-        json.dumps(sanitized, indent=2, default=str),
-        markup=False,
-        highlight=False,
-        soft_wrap=True,
-    )
+    text = json.dumps(sanitized, indent=2, default=str, ensure_ascii=True)
+    if console_instance is None:
+        sys.stdout.write(text + "\n")
+    else:
+        console_instance.print(
+            text,
+            markup=False,
+            highlight=False,
+            soft_wrap=True,
+            emoji=False,
+        )
 
 
 def format_error_details(error: CheckpointErrorRecord) -> str:

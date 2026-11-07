@@ -13,6 +13,20 @@ stderr, so the backend's existing group signal, prompt pipe and output
 drains are unchanged. It imports nothing from ``marianne`` and runs under
 ``-I`` so nothing in the workspace can shadow it (GH #445).
 
+With ``--report PATH`` the supervisor writes a JSON report there (atomic
+tmp+rename; write failures are silent — the report is a debug artifact, not
+a contract). Alongside the adoption counts it always carries the GH #487
+forensic keys, on every path including spawn errors: ``forwarded_signals``
+(a list of ``{"signal": int, "at_seconds": float}`` entries, monotonic
+seconds relative to run-loop start, recording each signal the supervisor
+received and dispatched to the child — appended before the kill, so the
+history also records a dispatch that lost the ProcessLookupError race),
+``escalated_to_sigkill`` (bool), and ``escalated_after_seconds`` (float or
+null, first-signal → escalation). tmux's ``pane_dead_signal`` only ever
+shows the final signal, so this history is what distinguishes an
+internally-escalated death from an external kill; interactive drivers read
+it to attribute pane deaths (see ``interactive/driver.py``).
+
 Every signal here targets one explicit PID through ``os.kill``; there is
 no group signal in this file by design (F-490 guard applies elsewhere).
 """
@@ -237,7 +251,9 @@ def main(argv: list[str]) -> int:
     except OSError as exc:
         print(f"instrument_supervisor: cannot start {command[0]!r}: {exc}", file=sys.stderr)
         _write_report(report, {"spawn_error": str(exc), "io_priority": io_applied,
-                               "max_open_files": open_files_applied})
+                               "max_open_files": open_files_applied,
+                               "forwarded_signals": [], "escalated_to_sigkill": False,
+                               "escalated_after_seconds": None})
         return 127
     child_pid = child.pid
     me = os.getpid()
@@ -245,11 +261,26 @@ def main(argv: list[str]) -> int:
     adopted_during_run = 0
     seen: set[int] = set()
     signalled_child_at: float | None = None
+    # Forensic record (GH #487): WHICH signals reached the supervisor and
+    # were forwarded to the child, and whether the run loop escalated to
+    # SIGKILL after the grace. tmux's pane_dead_signal only ever shows the
+    # FINAL signal (the supervisor's self-re-kill), so a benign forwarded
+    # SIGHUP escalated at the grace is otherwise indistinguishable from an
+    # external SIGKILL. Monotonic timestamps are relative to the run-loop
+    # start (they sequence the history without leaking wall-clock time).
+    forwarded_signals: list[dict[str, float | int]] = []
+    escalated_to_sigkill = False
+    escalated_after_seconds: float | None = None
+    run_started_monotonic = time.monotonic()
 
     while status["exit_code"] is None and status["signal"] is None:
         _reap(child_pid, status)
         if forwarded:
             pending = forwarded.pop(0)
+            forwarded_signals.append({
+                "signal": int(pending),
+                "at_seconds": round(time.monotonic() - run_started_monotonic, 3),
+            })
             try:
                 os.kill(child_pid, pending)
             except ProcessLookupError:
@@ -258,6 +289,12 @@ def main(argv: list[str]) -> int:
                 signalled_child_at = time.monotonic()
         if (signalled_child_at is not None
                 and time.monotonic() - signalled_child_at > _CHILD_GRACE_SECONDS):
+            escalated_to_sigkill = True
+            # signalled_child_at is set-once (the first forward) and only
+            # clobbered below, so this measures first-signal→escalation.
+            escalated_after_seconds = round(
+                time.monotonic() - signalled_child_at, 3,
+            )
             try:
                 os.kill(child_pid, signal.SIGKILL)
             except ProcessLookupError:
@@ -280,6 +317,9 @@ def main(argv: list[str]) -> int:
         "unreaped": counts["unreaped"],
         "io_priority": io_applied,
         "max_open_files": open_files_applied,
+        "forwarded_signals": forwarded_signals,
+        "escalated_to_sigkill": escalated_to_sigkill,
+        "escalated_after_seconds": escalated_after_seconds,
     })
     # Popen never saw the exit; stop its finalizer from calling waitpid again.
     child.returncode = status["exit_code"] if status["signal"] is None else -int(status["signal"])

@@ -41,8 +41,12 @@ async def test_interactive_backend_passes_filtered_env(tmp_path, monkeypatch, in
     assert result.success
     env = backend._driver.run.call_args.kwargs["env"]
     assert env["MARIANNE_SCRATCH"] == str(tmp_path / ".marianne-scratch")
+    assert env["MARIANNE_MAILBOX"] == str(tmp_path / ".marianne-scratch" / "mailbox")
+    assert "MARIANNE_SHEET" not in env  # No sheet request was supplied to this probe.
+    owned_keys = {"MARIANNE_SCRATCH", "MARIANNE_MAILBOX", "MARIANNE_SHEET"}
     expected = build_instrument_env(profile.cli.command)
-    expected.pop("MARIANNE_SCRATCH", None)
-    assert {k: v for k, v in env.items() if k != "MARIANNE_SCRATCH"} == expected
+    assert {k: v for k, v in env.items() if k not in owned_keys} == {
+        k: v for k, v in expected.items() if k not in owned_keys
+    }
     assert ("FOREIGN_SECRET" in env) == (inherit and required is None)
     assert env["PROFILE_TOKEN"] == "allowed-probe"

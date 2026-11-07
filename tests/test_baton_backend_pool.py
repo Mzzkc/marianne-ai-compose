@@ -550,3 +550,27 @@ class TestKeyringIntegration:
         backend = await pool.acquire("openrouter")
         assert backend is not None
         await pool.close_all()
+
+
+class TestCreateOneOff:
+    """Public seam for one-off backends outside the dispatch pool."""
+
+    def test_delegates_to_create_backend_for_instrument(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        registry = MagicMock()
+        pool = BackendPool(registry)
+        with patch(
+            "marianne.daemon.baton.backend_pool.create_backend_for_instrument"
+        ) as factory:
+            factory.return_value = sentinel = object()
+            result = pool.create_one_off("cheap", model="m1")
+            assert result is sentinel
+            factory.assert_called_once_with(
+                registry, "cheap", model="m1", working_directory=None,
+            )
+
+    def test_unknown_instrument_raises(self) -> None:
+        pool = BackendPool(_make_registry())
+        with pytest.raises(ValueError, match="not found in registry"):
+            pool.create_one_off("no-such-instrument")

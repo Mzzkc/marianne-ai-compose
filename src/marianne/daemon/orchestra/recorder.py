@@ -93,6 +93,28 @@ def _instrument_of(data: dict[str, Any]) -> str | None:
     return None
 
 
+#: Public vocabulary for ``job.chain_refused`` notes. The daemon log keeps the
+#: free-text reason; the projection keeps only which kind of refusal it was.
+_REFUSAL_WORDS: tuple[tuple[str, str], ...] = (
+    ("already active", "already_active"),
+    ("depth limit", "depth_limit"),
+    ("not found", "not_found"),
+    ("cost limit", "cost_limit"),
+    ("unavailable", "unavailable"),
+)
+
+
+def _refusal_word(message: object) -> str:
+    """Map a free-text chain refusal to one of six fixed words (never the text)."""
+    if not isinstance(message, str):
+        return "error"
+    lowered = message.lower()
+    for needle, word in _REFUSAL_WORDS:
+        if needle in lowered:
+            return word
+    return "error"
+
+
 def project_event(event: ObserverEvent) -> OrchestraEvent | None:
     """Project a bus event into the orchestra vocabulary, or None to drop it.
 
@@ -114,9 +136,10 @@ def project_event(event: ObserverEvent) -> OrchestraEvent | None:
         if isinstance(src, str) and isinstance(dst, str):
             note = f"{src} -> {dst}"
     elif kind == "job.chain_refused":
-        reason = data.get("message")
-        if isinstance(reason, str) and reason:
-            note = reason
+        # The refusal message is free text (it can carry a resolved score
+        # path or an exception string); the projection carries only a fixed
+        # vocabulary word so no path or error text reaches the public page.
+        note = _refusal_word(data.get("message"))
     elif kind == "job.chained":
         # Only a concert action is a chain; other trigger actions are not shown.
         actions = data.get("actions")

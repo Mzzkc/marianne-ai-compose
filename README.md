@@ -52,7 +52,8 @@ An **instrument** is any CLI tool wrapped in a YAML profile. Marianne treats ins
 | Instrument    | What It Wraps |
 |---------------|---------------|
 | `claude-code` | Claude Code CLI — full Musician profile |
-| `gemini-cli`  | Google Gemini CLI |
+| `claude-code-ollama` | Claude Code CLI routed at a local Ollama server — zero-cost agent harness (needs `claude` on PATH, `ollama serve`, a pulled model) |
+| `gemini-cli`  | Google Gemini CLI — ships unsupported (individual-tier OAuth); enable locally via the [API-key readiness path](docs/instrument-guide.md#gemini-cli-authentication-and-readiness) (GH #469) |
 | `codex-cli`   | OpenAI Codex CLI |
 | `aider`       | Aider — AI pair programming |
 | `goose`       | Goose — autonomous coding agent |
@@ -186,6 +187,11 @@ sheet:
     3: [1]      # Sheet 3 depends on sheet 1 (runs parallel with 2)
     4: [2, 3]   # Sheet 4 depends on both 2 and 3
 ```
+
+Concurrent fan-out voices can exchange notes while they run through the
+scratch-owned mailbox — `sheet.fan_out_messaging: file` (the default) prepares
+per-sheet inboxes and the musicians use `mzt mail send` / `mzt mail read`.
+See the [CLI reference](docs/cli-reference.md#musician-messaging) for details.
 
 See the [Score Writing Guide](docs/score-writing-guide.md) for complete documentation.
 
@@ -410,6 +416,17 @@ mzt instruments list        # See available instruments
 | `mzt telemetry consent --grant` | Grant user-level consent (opt-in) |
 | `mzt telemetry export` | Inspect staged envelopes (no sending) |
 | `mzt telemetry flush --push --endpoint URL` | Explicitly submit staged data |
+
+### Corpus
+
+| Command | Purpose |
+|---------|---------|
+| `mzt corpus build --output FILE` | Assemble a private local composition corpus (JSONL) |
+| `mzt corpus stats` | Count distinct outputs and annotations against the volume target |
+
+Corpus sources are explicitly selected score directories or telemetry JSONL
+files; nothing is discovered, sent, or trained automatically. See
+[docs/research/2026-11-05-composition-corpus-groundwork.md](docs/research/2026-11-05-composition-corpus-groundwork.md).
 
 `mzt run` requires a running conductor. Only `mzt validate` and `--dry-run` work without one.
 

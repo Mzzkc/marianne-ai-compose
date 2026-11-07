@@ -13,8 +13,10 @@ from marianne.execution.instruments.interactive.driver import (
     ContinuationPolicy,
     DriverResult,
     InteractiveSessionDriver,
+    NudgeDecision,
     StaticNudgePolicy,
 )
+from marianne.execution.instruments.interactive.model_nudge import ModelNudgePolicy
 from marianne.execution.instruments.interactive.tmux import TmuxControl, TmuxError
 
 __all__ = [
@@ -23,6 +25,8 @@ __all__ = [
     "DriverResult",
     "InteractiveCliBackend",
     "InteractiveSessionDriver",
+    "ModelNudgePolicy",
+    "NudgeDecision",
     "StaticNudgePolicy",
     "TmuxControl",
     "TmuxError",

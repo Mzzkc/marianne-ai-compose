@@ -28,7 +28,11 @@ from marianne.core.config.classes import ClassEntry, ClassSnapshot, InstrumentRe
 from marianne.core.config.execution import ValidationRule
 from marianne.core.config.job import AliasEntry, InjectionItem, InstrumentDef
 from marianne.core.constants import SHEET_NUM_KEY, positional_template_variables
-from marianne.core.producers import foreign_artifacts
+from marianne.core.producers import (
+    declared_products_from_config,
+    foreign_artifacts,
+    has_declared_outputs,
+)
 
 if TYPE_CHECKING:
     from marianne.core.config.job import JobConfig
@@ -86,6 +90,11 @@ class Sheet(BaseModel):
         description="Absolute path of the score file this Sheet was built from. "
         "Anchors the score_dir template variable; None for scores built "
         "without a file (no anchor is better than a bogus one).",
+    )
+
+    mailbox_siblings: dict[int, str] = Field(
+        default_factory=dict,
+        description="Same-movement inbox recipients and labels; empty when messaging is disabled.",
     )
 
     # --- Instrument ---
@@ -341,6 +350,10 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
     """
     sheets: list[Sheet] = []
     total_sheets = config.sheet.total_sheets
+    products = declared_products_from_config(config)
+    # Proxy-only scores retain their legacy guard behavior, including shared
+    # validation paths. Explicit declarations/stdout enable co-ownership.
+    product_signals = products if has_declared_outputs(config) else config.validations
 
     # Alias select modifiers (#473): each alias use is counted in sheet order
     # (`cycle`) and per movement (`spread`), so rotation is deterministic for
@@ -488,7 +501,7 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
         # Score-level validations apply to all sheets
         validations = list(config.validations)
         # Artifacts other, non-ancestor sheets are declared to produce (#386).
-        foreign = foreign_artifacts(sheet_num, validations, config.sheet.dependencies)
+        foreign = foreign_artifacts(sheet_num, product_signals, config.sheet.dependencies)
 
         # --- Instrument Fallbacks ---
         # Resolution: per_sheet > movement > score-level
@@ -585,6 +598,14 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
                 movement=movement,
                 voice=voice,
                 voice_count=voice_count,
+                mailbox_siblings=(
+                    {
+                        num: config.sheet.descriptions.get(num, f"Sheet {num}")
+                        for num, meta in (config.sheet.fan_out_stage_map or {}).items()
+                        if meta["stage"] == movement
+                    }
+                    if voice_count > 1 and config.sheet.fan_out_messaging == "file" else {}
+                ),
                 description=description,
                 workspace=config.workspace,
                 score_path=config.source_path,

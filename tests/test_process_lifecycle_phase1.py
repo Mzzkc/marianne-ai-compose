@@ -968,3 +968,155 @@ class TestDeregisterJobKillsProcessGroups:
             "job_id": "J",
             **result.to_dict(),
         }
+
+
+# ============================================================
+# GH #487: identity-guarded _active_pids group kills
+# ============================================================
+
+
+class TestIdentityGuardedGroupKills:
+    """A stale _active_pids entry (leader reaped, PID recycled by an
+    unrelated live process group) must NEVER receive the TERM->KILL
+    sequence — that is exactly an un-attributed SIGKILL to an unrelated
+    process. Matching identity, or no recorded identity, kills as before.
+    """
+
+    @pytest.mark.asyncio
+    async def test_identity_guard_skips_recycled_pgid_kill(self) -> None:
+        """A tracked leader whose PID now has DIFFERENT start ticks (the OS
+        recycled it into a new process) is refused: no signal is delivered,
+        and the refusal is logged for forensics."""
+        import subprocess
+
+        adapter = _make_adapter()
+        # A REAL recycled-occupant process: a live sleep in its own group,
+        # standing in for whatever the OS put on the old PID.
+        occupant = subprocess.Popen(
+            ["sleep", "60"], start_new_session=True,
+        )
+        try:
+            recycled_pid = occupant.pid
+            pgid = recycled_pid  # own session => pid == pgid, like a pane
+            adapter._active_pids[("J", 1)] = (recycled_pid, pgid)
+            # Ticks of a DIFFERENT (never-existent) process: the entry is
+            # stale by construction — the tracked spawn is long gone.
+            adapter._active_pid_ticks[("J", 1)] = 12345
+
+            killpg_calls: list[tuple[int, int]] = []
+
+            def fake_killpg(pgid_arg, sig):
+                killpg_calls.append((pgid_arg, sig))
+
+            with patch(
+                "marianne.utils.process.os.killpg", side_effect=fake_killpg,
+            ), patch(
+                "marianne.daemon.baton.adapter.os.getpgid",
+                return_value=999,
+            ), structlog.testing.capture_logs() as logs:
+                adapter.deregister_job("J")
+
+            assert killpg_calls == [], "a recycled pgid must receive no signal"
+            assert ("J", 1) not in adapter._active_pids
+            assert ("J", 1) not in adapter._active_pid_ticks
+            refused = [
+                log for log in logs
+                if log.get("event") == "adapter.kill.refused_recycled_pgid"
+            ]
+            assert len(refused) == 1, "the refusal must be logged"
+        finally:
+            occupant.kill()
+            occupant.wait()
+
+    @pytest.mark.asyncio
+    async def test_identity_guard_still_kills_live_owner(self) -> None:
+        """Matching start ticks (the tracked leader is still the same live
+        process): the TERM (and scheduled KILL) sequence is preserved."""
+        import subprocess
+
+        from marianne.utils.process import _proc_start_ticks
+
+        adapter = _make_adapter()
+        leader = subprocess.Popen(
+            ["sleep", "60"], start_new_session=True,
+        )
+        try:
+            pid = leader.pid
+            adapter._active_pids[("J", 1)] = (pid, pid)
+            # Real ticks of the live leader — identity captured at track time.
+            adapter._active_pid_ticks[("J", 1)] = _proc_start_ticks(pid)
+
+            killpg_calls: list[tuple[int, int]] = []
+
+            def fake_killpg(pgid_arg, sig):
+                killpg_calls.append((pgid_arg, sig))
+
+            with patch(
+                "marianne.utils.process.os.killpg", side_effect=fake_killpg,
+            ), patch(
+                "marianne.daemon.baton.adapter.os.getpgid",
+                return_value=999,
+            ):
+                adapter.deregister_job("J")
+
+            assert (pid, signal.SIGTERM) in killpg_calls, (
+                "matching identity must still receive the pre-emptive TERM"
+            )
+            assert ("J", 1) not in adapter._active_pids
+        finally:
+            leader.kill()
+            leader.wait()
+
+    @pytest.mark.asyncio
+    async def test_identity_guard_fail_open_without_recorded_ticks(self) -> None:
+        """No recorded ticks (legacy entry, probe gap at track time): the
+        kill proceeds — a probe gap must never skip a legitimate cleanup
+        (#344 discipline)."""
+        adapter = _make_adapter()
+        adapter._active_pids[("J", 1)] = (100, 200)
+        # No _active_pid_ticks entry at all.
+
+        killpg_calls: list[tuple[int, int]] = []
+
+        def fake_killpg(pgid_arg, sig):
+            killpg_calls.append((pgid_arg, sig))
+
+        with patch(
+            "marianne.utils.process.os.killpg", side_effect=fake_killpg,
+        ), patch(
+            "marianne.daemon.baton.adapter.os.getpgid",
+            return_value=999,
+        ):
+            adapter.deregister_job("J")
+
+        assert (200, signal.SIGTERM) in killpg_calls
+
+    @pytest.mark.asyncio
+    async def test_leader_identity_matches_unit_semantics(self) -> None:
+        """Direct checks of the refuse-only / fail-open matrix."""
+        from marianne.daemon.baton.adapter import BatonAdapter
+
+        # No recorded ticks → proceed.
+        assert BatonAdapter._leader_identity_matches(1, None) is True
+        # Recorded ticks, /proc unreadable now (implausible pid) → proceed
+        # (fail open; the entry's process is dead either way).
+        assert BatonAdapter._leader_identity_matches(2**22 + 5, 7) is True
+
+    @pytest.mark.asyncio
+    async def test_leader_identity_matches_positive_match_and_mismatch(self) -> None:
+        """Current process PID with matching ticks returns True; mismatched ticks returns False."""
+        import os
+
+        from marianne.daemon.baton.adapter import BatonAdapter
+        from marianne.utils.process import _proc_start_ticks
+
+        my_pid = os.getpid()
+        real_ticks = _proc_start_ticks(my_pid)
+        if real_ticks is not None:
+            # Positive match
+            assert BatonAdapter._leader_identity_matches(my_pid, real_ticks) is True
+            # Positive mismatch (e.g. recycled PID with different start ticks)
+            assert (
+                BatonAdapter._leader_identity_matches(my_pid, real_ticks + 99999)
+                is False
+            )

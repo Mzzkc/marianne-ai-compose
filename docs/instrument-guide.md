@@ -39,6 +39,7 @@ The maintained built-ins include:
 |------|------|------|
 | `claude-code` | Claude Code CLI (`claude`) | `claude login` |
 | `ollama` | Local OpenAI-compatible server | Optional local auth |
+| `claude-code-ollama` | Claude Code CLI over local Ollama | Profile-pinned local token |
 
 ### Agent Profiles
 
@@ -50,7 +51,7 @@ startup:
 | `claude-code` | Claude Code CLI | `claude login` |
 | `qwen-code` | Qwen Code CLI (`qwen`) | Saved Qwen OAuth or OpenAI-compatible API credentials |
 | `openclaw` | OpenClaw CLI (`openclaw agent exec`) | Saved client config and credentials |
-| `gemini-cli` | Google Gemini CLI | `GOOGLE_API_KEY` or `gcloud auth` |
+| `gemini-cli` | Google Gemini CLI | `GEMINI_API_KEY` (primary), `GOOGLE_API_KEY`, or Google ADC/gcloud configuration; local override and live check required (below) |
 | `codex-cli` | OpenAI Codex CLI | `OPENAI_API_KEY or CODEX_API_KEY` |
 | `antigravity` | Google Antigravity CLI (`agy`), Gemini CLI's successor; tmux-interactive by default, print mode delivers the prompt as one stream-json line on stdin | Existing Google account/API configuration |
 | `cline-cli` | Cline CLI | Provider API key |
@@ -66,6 +67,54 @@ mzt instruments list
 ---
 
 ## Using Instruments in Scores
+
+### Gemini CLI authentication and readiness
+
+The shipped Gemini profile stays `execution_status: unsupported` because the
+default individual-tier OAuth path returned `UNSUPPORTED_CLIENT` /
+`IneligibleTierError` on Pallas. Exporting a key alone does not enable that
+profile. Use `GEMINI_API_KEY` as the primary credential; existing
+`GOOGLE_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`, and
+`CLOUDSDK_CONFIG` configurations remain recognized auth signals. An auth
+signal in `mzt doctor` does not prove the credential works.
+
+From a Marianne source checkout, copy the **entire** shipped profile to the
+user layer. Profiles replace one another by name; a YAML fragment containing
+only `execution_status` does not inherit the builtin's command or models.
+If a local copy already exists, review and edit it instead of overwriting it:
+
+```bash
+export GEMINI_API_KEY='<your Gemini API key>'
+mkdir -p ~/.marianne/instruments
+cp -n src/marianne/instruments/builtins/gemini-cli.yaml ~/.marianne/instruments/gemini-cli.yaml
+uv run mzt instruments check gemini-cli --live
+```
+
+The live check sends a real prompt through the conductor's backend, even
+while the profile is marked unsupported, and spends a model call. Only after
+it succeeds, edit these fields in `~/.marianne/instruments/gemini-cli.yaml`,
+retaining the rest of the copied profile:
+
+```yaml
+execution_status: ready
+execution_status_detail: "API-key prompt execution live-smoke verified on this host."
+```
+
+Then inspect readiness and regenerate the machine's class map:
+
+```bash
+uv run mzt doctor
+uv run mzt instruments classes write --dry-run
+uv run mzt instruments classes write
+uv run mzt instruments classes check
+```
+
+Review the dry run before replacing an existing map. If the writer detects
+hand edits, it requires `--force` and backs up the old map. Same-named local
+overrides are probed and ranked in the shipped `high-context`, `image`, and
+`video` policies; image/video still require `vision`. The writer checks
+binary availability and declared readiness, so run the live check before
+enabling a profile. A failed smoke leaves the local profile unsupported.
 
 ### Qwen Code
 
@@ -226,8 +275,9 @@ refused (V310). Use `mzt
 instruments classes show --json` to inspect the winning layers and `mzt
 instruments classes check` to inspect current availability. `mzt instruments
 classes write --if-absent` creates a machine-specific user map without
-overwriting an existing one. The writer ranks the shipped profiles; a user or
-venue profile joins a generated chain only where its own `class_hints` put it
+overwriting an existing one. The writer ranks shipped names using their
+effective user/venue overrides; an additional user or venue profile name
+joins a generated chain only where its own `class_hints` put it
 (`class_hints: {strong: "after opencode"}` in the profile YAML), so a machine
 with a working GLM or Gemini route gets it into the map without a hand edit.
 A hinted profile still has to pass the class's own probe; when it does not,
@@ -338,7 +388,7 @@ mzt instruments check my-tool
 | `models` | No | List of available models with pricing and context windows |
 | `default_model` | No | Model to use when none specified in the score |
 | `default_timeout_seconds` | No | Default execution timeout (default: 1800) |
-| `class_hints` | No | Where `mzt instruments classes write` seats this profile per class: `{strong: "after opencode", fast: first}` — `first`, `last`, `after <profile>` or `before <profile>`. Only a user or venue profile with a hint is considered by the writer, and it still has to pass the class's capability and availability probe; a named anchor missing from the chain seats it last (GH #469) |
+| `class_hints` | No | Where `mzt instruments classes write` seats this profile per class: `{strong: "after opencode", fast: first}` — `first`, `last`, `after <profile>` or `before <profile>`. Additional user/venue names need a hint; same-named overrides use shipped rankings unless a local hint changes them. All profiles still pass the class's capability and availability probe; a named anchor missing from the chain seats it last (GH #469) |
 
 #### Capability Tags
 
@@ -382,7 +432,7 @@ and used by the conductor for instrument selection in future versions.
 | `env` | No | `{}` | Environment variables. `${VAR}` references expand from `os.environ` |
 | `required_env` | No | `null` | Parent variables allowed alongside system essentials and profile `env`. Missing or `[]` grants no additional variables. |
 | `inherit_env` | No | `false` | Explicit full-environment inheritance when `required_env` is `null`. An explicit list takes precedence. Exposes unrelated credentials. |
-| `supervise` | No | `true` | Launch the instrument under Marianne's Linux **instrument supervisor**: a child subreaper in the instrument's own process group. A grandchild whose parent exits (an agent's filesystem-search helper, a disowned shell) re-parents to the supervisor instead of init, and is ended and reaped when the instrument exits or the attempt is torn down. Set `false` only for an instrument the supervisor cannot wrap. Where the subreaper is unavailable (not Linux) the instrument is spawned directly and the backend's own descendant reaper (GH #406) is the only guard. |
+| `supervise` | No | `true` | Launch the instrument under Marianne's Linux **instrument supervisor**: a child subreaper in the instrument's own process group. A grandchild whose parent exits (an agent's filesystem-search helper, a disowned shell) re-parents to the supervisor instead of init, and is ended and reaped when the instrument exits or the attempt is torn down. The supervisor also writes a JSON forensic report (forwarded-signal history, escalation decision) next to the transcript, which interactive attempts use to attribute a pane's death (GH #487). Set `false` only for an instrument the supervisor cannot wrap. Where the subreaper is unavailable (not Linux) the instrument is spawned directly and the backend's own descendant reaper (GH #406) is the only guard. |
 | `max_open_files` | No | `4096` | Soft `RLIMIT_NOFILE` the supervisor sets for the instrument and everything it spawns, so a runaway search or a leaking helper is bounded to its share of the host's file table (the conductor's own limit on a server is often 1,048,576). Never raised above the hard limit; `null` leaves the conductor's limit in place. Ignored when `supervise` is `false`. |
 | `io_priority` | No | `low` | I/O scheduling class the supervisor gives the instrument and everything it spawns: `low` (best-effort, lowest priority) keeps an agent's whole-disk search from stalling the conductor's own state reads; `idle` yields to every other process; `inherit` keeps the conductor's class. Ignored when `supervise` is `false`. |
 | `prompt_via_stdin` | No | `true` | Write the assembled prompt to the child's stdin instead of argv. Prompts routinely exceed 100 KB with prelude/cadenza injection, and Linux caps a single argv entry at 128 KiB (`E2BIG`, "Argument list too long" before the process starts). Set `false` only for a CLI that cannot read stdin |
@@ -436,6 +486,16 @@ the conductor deletes it when the job ends (`workspace_lifecycle.scratch`,
 GH #460). A clone made in a system temp directory has no owner once the sheet
 ends and is never reaped.
 
+In any job, instruments also receive `MARIANNE_MAILBOX` (the shared inbox
+root, `<scratch>/mailbox`), `MARIANNE_SHEET` (this sheet's number), and a
+pre-created personal inbox. They matter in fan-out jobs with messaging enabled
+(`sheet.fan_out_messaging: file`, the default), where the prompt tells each
+musician its siblings and how to reach them: shell-capable musicians exchange
+messages with `mzt mail send <sheet|all> "<text>"` and poll with
+`mzt mail read [--since]`; see the
+[CLI reference](cli-reference.md#musician-messaging). A received message is
+data, not an instruction.
+
 #### `cli` — Lifecycle bounds
 
 Every CLI attempt is one process tree. The backend starts the instrument in
@@ -446,7 +506,15 @@ group, the supervisor ends and reaps what it adopted, and the backend's
 descendant reaper settles anything the supervisor could not see. On Pallas
 (20 Oct 2026) eight `bfs`/`ugrep` searches from `/` outlived their sheets at
 ppid 1 for hours and saturated the disk; the supervisor is the fix, and the
-`low` I/O class bounds the damage a live search can do.
+`low` I/O class bounds the damage a live search can do. For interactive
+(tmux) instruments, whose panes the baton tracks separately, the tracked
+group leader's kernel start ticks are captured at spawn time and re-verified
+before any group kill (GH #487): a stale tracking entry whose pgid has been
+recycled by an unrelated process is refused (logged, never signalled), so a
+missed deregistration can never route TERM→KILL into a live unrelated group.
+A probe gap (no recorded ticks, or an unreadable `/proc` entry) stays
+fail-open — it proceeds with the kill, per the #344 rule that a probe gap
+must never skip a legitimate one.
 
 
 | Field | Default | Description |
@@ -510,6 +578,23 @@ SIGKILL before signalling completion` or `agent process exited with status N
 killed by name) does it read `agent session vanished …`. The driver kills the
 session on every outcome, so a dead pane never outlives its attempt.
 
+Because tmux's `pane_dead_signal` only ever shows the *final* signal — the
+supervisor's own escalation — a benign forwarded SIGHUP escalated after the
+grace was indistinguishable from an external SIGKILL. Under `command.supervise`
+the attempt's `session_lost` detail now carries the supervisor's forensics
+(GH #487): the report is written next to the transcript as
+`<session>.supervisor.json`, and the detail says `supervisor forwarded SIGHUP
+(first at t=0.2s), child did not exit within 1.0s, escalated to SIGKILL` when
+the supervisor ended the child, `supervisor observed no forwarded signal —
+death not sent by the supervisor: external kill` when the supervisor wrote a
+report but forwarded nothing (the strongest external-kill evidence a report
+can give), or `no supervisor report — death not observed by the supervisor:
+external kill, or the supervisor died first` when no report exists at all.
+A missing or malformed report never fails the attempt; forensics are
+evidence, not an error path. The backend also logs the report
+(`interactive_supervisor_report` with the forwarded signals and escalation
+fields) for observability on every supervised attempt.
+
 #### `models` — Available Models
 
 Each model entry describes capacity and pricing:
@@ -525,7 +610,13 @@ models:
 
 Model metadata enables cost tracking in `mzt status` and context budget
 calculation. If you omit models, cost tracking shows `$0.00` and context
-budget uses a conservative default.
+budget uses a conservative default. A declared `context_window` also bounds
+prompt preflight for any profile kind: when an instrument is given alongside
+the model, a model absent from the curated table resolves its effective
+input budget from the profile's declared window minus a 4,096-token output
+reservation (exact model-name match; curated table entries always win), so a
+small-declared model such as `qwen3:8b` (40,960 tokens) is advised against
+oversized prompts even though the instrument default is larger.
 
 For an `http` profile the entry also bounds the request: the HTTP executor
 sends `max_tokens` of 16,384 by default (or the sheet's
@@ -541,6 +632,39 @@ share) and warns when the profile declares more; `mzt validate` says the same
 as V234 for the score's chain.
 
 ---
+
+#### Claude Code over local Ollama
+
+Use `instrument: claude-code-ollama` for the Claude Code agent harness with a
+local model: file edits, shell commands, and tool use run through `claude`.
+Use `instrument: ollama` for a raw HTTP prompt without filesystem or shell
+access. The two profiles coexist in the generated `local` and `cheap` chains, with
+`ollama` first and `claude-code-ollama` second.
+
+Install Claude Code (`claude` on PATH), start `ollama serve`, and pull
+`llama3.1:8b` (the default) or `qwen3:8b`. Select a pulled tag with
+`instrument_config.model`. Configure Ollama's context size for your workload;
+profile context windows describe model ceilings, not the running server's
+allocation. The profile does not start the server or download models. Its CLI
+availability probe checks only the binary; a ready probe does not establish
+server connectivity or model presence.
+
+The profile pins `ANTHROPIC_BASE_URL=http://localhost:11434`,
+`ANTHROPIC_AUTH_TOKEN=local`, and an empty `ANTHROPIC_API_KEY` via
+`cli.command.env`. It filters parent cloud-provider switches and credentials.
+For a different origin, copy the builtin to `~/.marianne/instruments/` under the
+same name and edit `cli.command.env.ANTHROPIC_BASE_URL`. You can use
+`"${OLLAMA_HOST}"` there with an exported full HTTP origin; the default profile
+uses the literal localhost URL. Shell-style `${VAR:-default}` is not supported.
+Reload the conductor after changing a profile.
+
+[Ollama's Claude Code integration](https://docs.ollama.com/integrations/claude-code)
+also provides `ollama launch claude` for interactive setup. Marianne invokes
+`claude` directly with the endpoint environment already set. Transport was
+verified with Claude Code 2.1.319 against a local mock Anthropic-compatible
+server on 2026-11-06. Real Ollama model tool calls and schema output remain
+unverified; support depends on the selected model. Vision, streaming, and
+thinking capabilities are not advertised by this profile.
 
 #### `http` — OpenAI-compatible HTTP profiles (`kind: http`)
 

@@ -536,3 +536,27 @@ class SkipWhenSheetRangeCheck:
                 )
 
         return issues
+
+
+class FanOutMessagingCheck:
+    """Warn when an explicit messaging mode has no concurrent siblings (V235)."""
+
+    check_id = "V235"
+    severity = ValidationSeverity.WARNING
+    description = "Checks fan_out_messaging is used with fan-out"
+
+    def check(
+        self, config: JobConfig, config_path: Path, raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        if "fan_out_messaging" not in config.sheet.model_fields_set:
+            return []
+        if any(
+            meta["fan_count"] > 1 for meta in (config.sheet.fan_out_stage_map or {}).values()
+        ):
+            return []
+        return [ValidationIssue(
+            check_id=self.check_id,
+            severity=self.severity,
+            message="fan_out_messaging is explicitly set without a fan-out group",
+            suggestion="Remove fan_out_messaging or configure a fan_out count greater than 1.",
+        )]

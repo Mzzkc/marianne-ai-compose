@@ -1,0 +1,103 @@
+# Claude Code harness over Ollama's Anthropic-compatible API.
+# Requires claude on PATH, ollama serve already running, and a pulled model.
+# CLI availability checks the binary only, not server/model readiness.
+# No server auto-launch, model pulls, interactive mode, or reasoning flags.
+# Tool/schema support depends on the selected local model.
+# Override cli.command.env.ANTHROPIC_BASE_URL in a user profile for another
+# origin (or use ${OLLAMA_HOST}; expandvars has no shell-default syntax).
+# Only OLLAMA_HOST is inherited; profile grants pin the local auth/endpoint,
+# clearing ANTHROPIC_API_KEY to avoid inherited paid-provider credentials.
+#
+# Verified: 2026-11-06 against Claude Code 2.1.319 and a local mock
+# Anthropic-compatible seam (no real Ollama on the authoring machine).
+# Observed: POST /v1/messages, explicit local model, Bearer local auth,
+# streamed response -> JSON result/usage, successful exit 0 without --effort.
+# Output/error configuration follows the Claude Code harness contract;
+# real-model tool calls, JSON schema, and error responses remain unverified.
+# Model context ceilings (server num_ctx may be lower):
+# https://ollama.com/library/llama3.1 (128K), https://ollama.com/library/qwen3 (40K).
+# Configure Ollama context to suit the workload and available memory.
+
+name: claude-code-ollama
+display_name: Claude Code (Ollama)
+description: Claude Code agent harness routed to a running local Ollama server
+kind: cli
+execution_status: warning
+execution_status_detail: "Verified only against a mock Anthropic-compatible seam (no Ollama on the authoring host): routing, auth header and streamed-JSON parsing are observed; real-model tool calls, JSON schema and error responses are not. Run `mzt instruments check claude-code-ollama` against a live `ollama serve` with a pulled model before relying on it; set execution_status: ready in a user-layer copy once it passes."
+capabilities:
+- tool_use
+- file_editing
+- shell_access
+- structured_output
+default_model: llama3.1:8b
+default_timeout_seconds: 1800
+models:
+- name: llama3.1:8b
+  context_window: 131072
+  cost_per_1k_input: 0.0
+  cost_per_1k_output: 0.0
+  max_output_tokens: 8192
+  max_concurrent: 1
+- name: qwen3:8b
+  context_window: 40960
+  cost_per_1k_input: 0.0
+  cost_per_1k_output: 0.0
+  max_output_tokens: 8192
+  max_concurrent: 1
+cli:
+  command:
+    executable: claude
+    prompt_flag: -p
+    prompt_via_stdin: true
+    stdin_sentinel: '-'
+    start_new_session: true
+    required_env:
+    - OLLAMA_HOST
+    model_flag: --model
+    auto_approve_flag: --dangerously-skip-permissions
+    output_format_flag: --output-format
+    output_format_value: json
+    json_schema_flag: --json-schema
+    system_prompt_flag: --system-prompt
+    allowed_tools_flag: --allowedTools
+    mcp_config_flag: --mcp-config
+    mcp_config_prefix_args:
+    - --strict-mcp-config
+    mcp_disable_args:
+    - --strict-mcp-config
+    - --mcp-config
+    - '{"mcpServers":{}}'
+    env:
+      ANTHROPIC_BASE_URL: http://localhost:11434
+      ANTHROPIC_AUTH_TOKEN: local
+      ANTHROPIC_API_KEY: ''
+  output:
+    format: json
+    result_path: result
+    error_path: error.message
+    input_tokens_path: usage.input_tokens
+    output_tokens_path: usage.output_tokens
+    aggregate_tokens: false
+  errors:
+    success_exit_codes:
+    - 0
+    rate_limit_patterns:
+    - rate.?limit
+    - (?:error|status|code)[^\w]*429
+    - (?:error|status|code)[^\w]*529
+    - You've hit your limit
+    - 'API Error: Rate limit'
+    - resets.*\(\w+/\w+\)
+    - (?:server|api|service).*overloaded
+    auth_error_patterns:
+    - not authenticated
+    - login required
+    - unauthorized
+    - invalid.*api.*key
+    capacity_patterns:
+    - overloaded
+    - '503'
+    - capacity
+    timeout_patterns:
+    - timed?.?out
+    - timeout

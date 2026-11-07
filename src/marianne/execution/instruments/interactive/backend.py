@@ -21,6 +21,7 @@ See docs/specs/2026-06-10-interactive-mode-design.md.
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import re
 import shutil
@@ -30,16 +31,25 @@ from collections.abc import Callable
 from pathlib import Path
 
 from marianne.core.config.instruments import InstrumentProfile, InteractiveCliConfig
-from marianne.core.config.workspace import SCRATCH_ENV_VAR, scratch_root
+from marianne.core.config.workspace import (
+    MAILBOX_ENV_VAR,
+    SCRATCH_ENV_VAR,
+    mailbox_root,
+    scratch_root,
+)
 from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger
+from marianne.core.mailbox import SHEET_ENV_VAR
 from marianne.execution.base import Backend, ExecutionResult, SheetRequestState
 from marianne.execution.instruments.cli_backend import build_instrument_env
 from marianne.execution.instruments.interactive.driver import (
+    DEFAULT_NUDGE_MESSAGE,
+    ContinuationPolicy,
     DriverResult,
     InteractiveSessionDriver,
     StaticNudgePolicy,
 )
+from marianne.execution.instruments.interactive.model_nudge import BackendFactory, ModelNudgePolicy
 from marianne.execution.instruments.interactive.tmux import (
     MIN_TMUX_VERSION,
     SESSION_PREFIX,
@@ -163,6 +173,10 @@ class InteractiveCliBackend(Backend):
         # re-set on every dispatch (and reset by clear_overrides).
         self._max_nudges: int = DEFAULT_MAX_NUDGES
         self._nudge_message: str | None = None
+        self._nudge_policy = "static"
+        self._nudge_instrument: str | None = None
+        self._nudge_timeout_seconds = 30.0
+        self._nudge_backend_factory: BackendFactory | None = None
 
         # Attempt identity — set by the adapter after acquire; consumed
         # (and cleared) by the next execute(). Without it, execute()
@@ -224,14 +238,47 @@ class InteractiveCliBackend(Backend):
         *,
         max_nudges: int | None = None,
         nudge_message: str | None = None,
+        nudge_policy: str | None = None,
+        nudge_instrument: str | None = None,
+        nudge_timeout_seconds: float | None = None,
+        backend_factory: BackendFactory | None = None,
     ) -> None:
         """Apply per-sheet interactive knobs from instrument_config."""
+        if nudge_policy is not None and nudge_policy not in {"static", "model"}:
+            raise ValueError("nudge_policy must be static or model")
+        if nudge_timeout_seconds is not None and (
+            not math.isfinite(nudge_timeout_seconds) or nudge_timeout_seconds <= 0
+        ):
+            raise ValueError("nudge timeout must be finite and > 0")
+        if nudge_instrument is not None and not nudge_instrument.strip():
+            raise ValueError("nudge instrument must be non-empty")
+        if nudge_policy is not None:
+            self._nudge_policy = nudge_policy
+        if nudge_instrument is not None:
+            self._nudge_instrument = nudge_instrument
+        if nudge_timeout_seconds is not None:
+            self._nudge_timeout_seconds = nudge_timeout_seconds
+        if backend_factory is not None:
+            self._nudge_backend_factory = backend_factory
         if max_nudges is not None:
             if max_nudges < 0:
                 raise ValueError(f"max_nudges must be >= 0, got {max_nudges}")
             self._max_nudges = max_nudges
         if nudge_message is not None:
             self._nudge_message = nudge_message
+
+    def _build_nudge_policy(self) -> ContinuationPolicy:
+        message = self._nudge_message or DEFAULT_NUDGE_MESSAGE
+        if self._nudge_policy == "model":
+            if self._nudge_backend_factory is not None and self._nudge_instrument:
+                return ModelNudgePolicy(
+                    backend_factory=self._nudge_backend_factory,
+                    instrument_name=self._nudge_instrument,
+                    timeout_seconds=self._nudge_timeout_seconds,
+                    fallback_message=message,
+                )
+            _logger.warning("interactive_model_nudge_unconfigured", instrument=self._profile.name)
+        return StaticNudgePolicy(message)
 
     def apply_overrides(self, overrides: dict[str, object]) -> None:
         """Apply per-sheet parameter overrides (model)."""
@@ -251,6 +298,10 @@ class InteractiveCliBackend(Backend):
         # Per-sheet knobs and identity never survive into the free list.
         self._max_nudges = DEFAULT_MAX_NUDGES
         self._nudge_message = None
+        self._nudge_policy = "static"
+        self._nudge_instrument = None
+        self._nudge_timeout_seconds = 30.0
+        self._nudge_backend_factory = None
         self._attempt_identity = None
         # W-F3: per-sheet prompt bytes neither — see Backend.set_preamble.
         self._preamble = None
@@ -377,19 +428,25 @@ class InteractiveCliBackend(Backend):
             req_extensions = None
 
         command = self._build_command()
+        # GH #487: per-attempt supervisor forensic report, next to the raw
+        # transcript (same deliberate outside-any-workspace home: a debug
+        # artifact whose writes must not freshen workspace mtimes). The
+        # driver reads it on session_lost so the detail names the signal the
+        # supervisor forwarded and whether it escalated — an absent report
+        # is itself evidence (external kill).
+        supervisor_report_path = _TRANSCRIPT_DIR / f"{session}.supervisor.json"
         if self._cli.command.supervise:
             # The pane process stays its own group leader (the supervisor is
             # the leader; the agent shares the group), so pid == pgid holds.
             command = supervised_argv(
                 command, io_priority=self._cli.command.io_priority,
                 max_open_files=self._cli.command.max_open_files,
+                report_path=supervisor_report_path,
             )
         full_prompt = self._build_prompt(
             prompt, marker, req_preamble, req_extensions
         )
-        policy = StaticNudgePolicy(
-            self._nudge_message,
-        ) if self._nudge_message else StaticNudgePolicy()
+        policy = self._build_nudge_policy()
 
         pane_pid: int | None = None
 
@@ -423,8 +480,14 @@ class InteractiveCliBackend(Backend):
                 policy=policy,
                 max_nudges=self._max_nudges,
                 transcript_path=transcript,
+                supervisor_report_path=(
+                    supervisor_report_path
+                    if self._cli.command.supervise else None
+                ),
                 on_pane_pid=_register_pid,
-                env=self._instrument_env(workspace),
+                env=self._instrument_env(
+                    workspace, sheet_num=request.sheet_num if request is not None else None,
+                ),
                 on_output=self._on_output,
             )
         finally:
@@ -438,6 +501,22 @@ class InteractiveCliBackend(Backend):
                 self._on_process_exited(pane_pid)
 
         duration = time.monotonic() - start
+        # The driver may hold a parsed supervisor report (session_lost path);
+        # expose it for observability even when the mapped result does not
+        # carry it in the error message.
+        supervisor_report = driver_result.supervisor_report
+        if supervisor_report is not None:
+            _logger.info(
+                "interactive_supervisor_report",
+                instrument=self._profile.name,
+                session=session,
+                attempt=attempt_label,
+                forwarded_signals=supervisor_report.get("forwarded_signals"),
+                escalated_to_sigkill=supervisor_report.get("escalated_to_sigkill"),
+                escalated_after_seconds=supervisor_report.get(
+                    "escalated_after_seconds"
+                ),
+            )
         result = self._map_result(driver_result, duration)
 
         _logger.info(
@@ -452,7 +531,9 @@ class InteractiveCliBackend(Backend):
         )
         return result
 
-    def _instrument_env(self, workspace: Path) -> dict[str, str]:
+    def _instrument_env(
+        self, workspace: Path, *, sheet_num: int | None = None,
+    ) -> dict[str, str]:
         """Snapshot the shared policy, then add the job-owned scratch root.
 
         Even opt-out profiles pass a complete snapshot to tmux: its server may
@@ -461,19 +542,29 @@ class InteractiveCliBackend(Backend):
         env = build_instrument_env(self._cli.command, self._profile.name)
         if env is None:
             env = dict(os.environ)
-        env.pop(SCRATCH_ENV_VAR, None)
-        env.update(self._scratch_env(workspace) or {})
+        for key in (SCRATCH_ENV_VAR, MAILBOX_ENV_VAR, SHEET_ENV_VAR):
+            env.pop(key, None)
+        env.update(self._scratch_env(workspace, sheet_num=sheet_num) or {})
         return env
 
     @staticmethod
-    def _scratch_env(workspace: Path) -> dict[str, str] | None:
-        """The job's scratch root for the pane environment (GH #460)."""
+    def _scratch_env(
+        workspace: Path, *, sheet_num: int | None = None,
+    ) -> dict[str, str] | None:
+        """Export scratch and MARIANNE_MAILBOX paths for the pane environment."""
         root = scratch_root(workspace)
+        mailbox = mailbox_root(workspace)
         try:
             root.mkdir(parents=True, exist_ok=True)
+            mailbox.mkdir(parents=True, exist_ok=True)
+            if sheet_num is not None:
+                (mailbox / str(sheet_num)).mkdir(exist_ok=True)
         except OSError:
             return None
-        return {SCRATCH_ENV_VAR: str(root)}
+        env = {SCRATCH_ENV_VAR: str(root), MAILBOX_ENV_VAR: str(mailbox)}
+        if sheet_num is not None:
+            env[SHEET_ENV_VAR] = str(sheet_num)
+        return env
 
     async def _ensure_session_gone(self, session: str) -> None:
         """Backend-level final tmux teardown guard.

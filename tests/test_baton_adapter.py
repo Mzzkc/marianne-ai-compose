@@ -990,3 +990,38 @@ class TestCompletionSignaling:
         # Should still be set (idempotent)
         assert adapter._completion_events["j1"].is_set()
         assert adapter._completion_results["j1"] is True
+
+
+async def test_model_nudge_dispatch_threads_settings(tmp_path, monkeypatch):
+    from marianne.daemon.baton.adapter import BatonAdapter
+    from marianne.execution.instruments.interactive.backend import InteractiveCliBackend
+    from marianne.execution.instruments.interactive.model_nudge import ModelNudgePolicy
+    from tests.test_interactive_mode import FakeTmux, make_interactive_config, make_profile
+
+    adapter = BatonAdapter()
+    backend = InteractiveCliBackend(make_profile(interactive=make_interactive_config()),
+                                    tmux=FakeTmux(), working_directory=tmp_path)
+    pool = MagicMock()
+    pool.acquire = AsyncMock(return_value=backend)
+    pool.release = AsyncMock()
+    one_off_factory = MagicMock()
+    pool.create_one_off = one_off_factory
+    adapter._backend_pool = pool
+    sheet = _make_sheet(workspace=str(tmp_path))
+    sheet.instrument_config = {
+        "interactive_nudge_policy": "model", "interactive_nudge_instrument": "cheap",
+        "interactive_nudge_timeout_seconds": 7.5,
+    }
+    state = _make_execution_state()
+    adapter.register_job("model-job", [sheet], dependencies={})
+    with monkeypatch.context() as patch:
+        patch.setattr("marianne.daemon.baton.adapter.sheet_task", AsyncMock())
+        await adapter._dispatch_callback("model-job", 1, state)
+        policy = backend._build_nudge_policy()
+        try:
+            assert isinstance(policy, ModelNudgePolicy)
+            assert backend._nudge_timeout_seconds == 7.5
+            policy._backend_factory("cheap")
+            one_off_factory.assert_called_once_with("cheap")
+        finally:
+            await asyncio.gather(*adapter._active_tasks.values(), return_exceptions=True)

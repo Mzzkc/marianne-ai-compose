@@ -43,10 +43,17 @@ default).
 - **Public orchestra surface** (`MZT_PUBLIC_ORCHESTRA=true`, GH #468): the
   middleware serves `/orchestra`, `/api/orchestra/{snapshot,replay,stream}` and
   `/static` to every client regardless of mode. The surface is the conductor's
-  whitelisted projection (names, sheet numbers, instruments, outcomes, times;
+  whitelisted projection (names, sheet numbers, instruments, outcomes, times,
+  plus a short note — see the caveat below;
   `daemon/orchestra/recorder.project_event`), the API is read-only, `replay`
   validates `day` as `YYYY-MM-DD`, and rate limiting still applies. The prefix
   match is exact-segment (`/orchestral` is not public). Off by default.
+- **The chain-refusal note is a vocabulary word, never the message.** A
+  `job.chain_refused` beat's note is one of `already_active`, `depth_limit`,
+  `not_found`, `cost_limit`, `unavailable` or `error`; the conductor's free-text
+  reason (which can name a score path or carry exception text) stays in the
+  daemon log. Prompts, output, paths and error text never reach the beat log
+  or the replay JSONL.
 
 ## Conclusion
 

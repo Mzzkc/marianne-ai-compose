@@ -31,6 +31,7 @@ Example usage:
 from __future__ import annotations
 
 import gzip
+import json
 import logging
 import os
 import shutil
@@ -764,6 +765,12 @@ def _get_json_processors(
 
     Returns:
         List of processors for JSON rendering.
+
+    Note:
+        The JSON renderer is pinned to ``ensure_ascii=True`` (issue #495):
+        the JSON log handler may share stdout with ``--json`` machine
+        output, so no configuration or structlog upgrade may silently emit
+        non-ASCII bytes from the log stream.
     """
     processors: list[Processor] = [
         structlog.stdlib.filter_by_level,  # Filter before processing
@@ -782,7 +789,11 @@ def _get_json_processors(
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer(),
+        structlog.processors.JSONRenderer(
+            serializer=lambda *args, **kwargs: json.dumps(
+                *args, **kwargs, ensure_ascii=True
+            )
+        ),
     ])
 
     return processors

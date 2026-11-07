@@ -126,6 +126,8 @@ def kill_sessions_with_prefix_sync(
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=_SYNC_COMMAND_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
@@ -154,6 +156,8 @@ def kill_sessions_with_prefix_sync(
                 check=False,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_SYNC_COMMAND_TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired:

@@ -48,6 +48,8 @@ from typing import Annotated
 import typer
 
 from marianne import __version__
+from marianne.cli.commands.corpus import corpus_app
+from marianne.cli.commands.mail import mail_app
 from marianne.cli.commands.telemetry import telemetry_app
 
 # Re-export helpers module for direct access to internal state (conftest.py needs this)
@@ -330,6 +332,8 @@ app.add_typer(conductor_app, name="conductor", rich_help_panel="Conductor")
 # Daemon configuration
 app.add_typer(config_app)
 app.add_typer(telemetry_app)
+app.add_typer(corpus_app)
+app.add_typer(mail_app, name="mail", rich_help_panel="Score Runs")
 
 # Instrument management
 app.add_typer(instruments_app)

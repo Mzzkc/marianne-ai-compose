@@ -417,3 +417,53 @@ class TestTranscriptTruncation398:
         text = transcript.read_text(encoding="utf-8", errors="replace")
         assert "STALE CONTENT FROM YESTERDAY" not in text
         assert "fake-agent completed task" in text
+
+
+@pytest.mark.parametrize("model_output, expected", [
+    ("NUDGE: please continue with the failing test", "please continue with the failing test"),
+    ("no parseable marker", "please continue with the original task"),
+    (None, "please continue with the original task"),
+])
+async def test_backend_model_nudge_reaches_live_agent(
+    tmux: TmuxControl, tmp_path: Path, model_output: str | None, expected: str,
+) -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from marianne.core.config.instruments import CliCommand, CliProfile, InstrumentProfile
+    from marianne.execution.base import ExecutionResult
+    from marianne.execution.instruments.interactive.backend import (
+        InteractiveCliBackend,
+        completion_marker_path,
+    )
+
+    marker = completion_marker_path(tmp_path, "model-test", 1, 1)
+    script = _write_fake_agent(tmp_path)
+    config = _interactive_config()
+    config.extra_args = [str(script), str(marker)]
+    profile = InstrumentProfile(
+        name="test-model-nudge", display_name="Test", kind="cli",
+        cli=CliProfile(command=CliCommand(executable=sys.executable, supervise=False),
+                       output={"format": "text"}, interactive=config),
+    )
+    backend = InteractiveCliBackend(profile, working_directory=tmp_path, tmux=tmux)
+    model = MagicMock()
+    model.execute = AsyncMock(return_value=ExecutionResult(
+        success=True, stdout=model_output or "", stderr="", duration_seconds=0,
+    ))
+    model.close = AsyncMock()
+    factory = MagicMock(return_value=model)
+    backend.set_attempt_identity("model-test", 1, 1)
+    backend.configure_interactive(
+        max_nudges=1, nudge_message="please continue with the original task",
+        nudge_policy="model" if model_output is not None else "static",
+        nudge_instrument="cheap", nudge_timeout_seconds=2, backend_factory=factory,
+    )
+    result = await backend.execute("Wait for follow-up instructions.", timeout_seconds=20)
+    assert result.success, result.stderr
+    received = (tmp_path / "received.txt").read_text()
+    assert expected in received
+    if model_output is None:
+        factory.assert_not_called()
+    else:
+        factory.assert_called_once_with("cheap")
+        model.close.assert_awaited_once()

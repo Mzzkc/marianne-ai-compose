@@ -41,6 +41,7 @@ def _schedule_payload() -> dict[str, Any]:
 @pytest.mark.asyncio
 async def test_status_json_has_exact_additive_schedule_object(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     payload = _checkpoint_payload()
     payload["schedule"] = _schedule_payload()
@@ -49,10 +50,11 @@ async def test_status_json_has_exact_additive_schedule_object(
         AsyncMock(return_value=(True, payload)),
     )
 
-    with console.capture() as capture:
-        await _status_job("recurring-job", True, None)
+    # Machine JSON bypasses Rich (issue #495): it is written directly to
+    # sys.stdout, so capture stdout rather than the Rich console.
+    await _status_job("recurring-job", True, None)
 
-    rendered = json.loads(capture.get())
+    rendered = json.loads(capsys.readouterr().out)
     assert rendered["schedule"] == _schedule_payload()
     assert set(rendered["schedule"]) == {
         "enabled",
@@ -67,16 +69,17 @@ async def test_status_json_has_exact_additive_schedule_object(
 @pytest.mark.asyncio
 async def test_unscheduled_status_json_snapshot_has_no_schedule_key(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(
         "marianne.daemon.detect.try_daemon_route",
         AsyncMock(return_value=(True, _checkpoint_payload())),
     )
 
-    with console.capture() as capture:
-        await _status_job("recurring-job", True, None)
+    # Machine JSON bypasses Rich (issue #495): capture stdout.
+    await _status_job("recurring-job", True, None)
 
-    assert "schedule" not in json.loads(capture.get())
+    assert "schedule" not in json.loads(capsys.readouterr().out)
 
 
 @pytest.mark.asyncio
@@ -129,6 +132,7 @@ async def test_default_list_keeps_terminal_job_with_live_recurrence_visible(
 @pytest.mark.asyncio
 async def test_meta_fallback_json_strips_private_schedule_extras(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     payload = {
         "job_id": "recurring-job",
@@ -141,18 +145,22 @@ async def test_meta_fallback_json_strips_private_schedule_extras(
             "timer_handle": "private",
         },
     }
+    # The fallback logs a debug record with a traceback; keep stdout clean
+    # so the machine stream is only the JSON.
+    monkeypatch.setattr(status_module._logger, "debug", MagicMock())
     monkeypatch.setattr(
         "marianne.daemon.detect.try_daemon_route",
         AsyncMock(return_value=(True, payload)),
     )
 
-    with console.capture() as capture:
-        await _status_job("recurring-job", True, None)
+    # Machine JSON bypasses Rich (issue #495): capture stdout.
+    await _status_job("recurring-job", True, None)
 
-    rendered = json.loads(capture.get())
+    out = capsys.readouterr().out
+    rendered = json.loads(out)
     assert rendered["schedule"] == _schedule_payload()
-    assert "lease_digest" not in capture.get()
-    assert "timer_handle" not in capture.get()
+    assert "lease_digest" not in out
+    assert "timer_handle" not in out
 
 
 @pytest.mark.asyncio
@@ -186,6 +194,7 @@ async def test_meta_fallback_omits_malformed_schedule_with_diagnostic(
 @pytest.mark.parametrize("json_output", [True, False])
 async def test_disabled_registry_data_diagnostic_is_visible_without_a_fake_due(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
     json_output: bool,
 ) -> None:
     """A damaged durable projection remains public rather than becoming 1970 or vanishing."""
@@ -203,15 +212,17 @@ async def test_disabled_registry_data_diagnostic_is_visible_without_a_fake_due(
             "diagnostic": "registry_data_error",
         },
     }
+    # The fallback logs a debug record with a traceback; keep stdout clean
+    # so the machine stream is only the JSON.
+    monkeypatch.setattr(status_module._logger, "debug", MagicMock())
     monkeypatch.setattr(
         "marianne.daemon.detect.try_daemon_route",
         AsyncMock(return_value=(True, payload)),
     )
 
-    with console.capture() as capture:
-        await _status_job("damaged-recurring-job", json_output, None)
+    await _status_job("damaged-recurring-job", json_output, None)
 
-    rendered = capture.get()
+    rendered = capsys.readouterr().out
     if json_output:
         schedule = json.loads(rendered)["schedule"]
         assert schedule["next_due_at"] is None
@@ -233,6 +244,7 @@ async def test_disabled_registry_data_diagnostic_is_visible_without_a_fake_due(
 )
 async def test_meta_fallback_omits_unrenderable_schedule_due_time(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
     next_due_at: float,
     json_output: bool,
 ) -> None:
@@ -244,16 +256,19 @@ async def test_meta_fallback_omits_unrenderable_schedule_due_time(
         "schedule": {**_schedule_payload(), "next_due_at": next_due_at},
     }
     warning = MagicMock()
+    debug = MagicMock()
     monkeypatch.setattr(status_module._logger, "warning", warning)
+    # The fallback logs a debug record with a traceback; keep stdout clean
+    # so the machine stream is only the JSON.
+    monkeypatch.setattr(status_module._logger, "debug", debug)
     monkeypatch.setattr(
         "marianne.daemon.detect.try_daemon_route",
         AsyncMock(return_value=(True, payload)),
     )
 
-    with console.capture() as capture:
-        await _status_job("recurring-job", json_output, None)
+    await _status_job("recurring-job", json_output, None)
 
-    rendered = capture.get()
+    rendered = capsys.readouterr().out
     if json_output:
         assert "schedule" not in json.loads(rendered)
     else:

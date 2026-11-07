@@ -36,6 +36,7 @@ from marianne.core.config.instruments import (
     ModelCapacity,
 )
 from marianne.execution.instruments.cli_backend import PluginCliBackend
+from tests.helpers import load_scaled_timeout
 
 
 def _python_profile() -> InstrumentProfile:
@@ -102,6 +103,8 @@ class TestDrainDeadlockBattery:
         assert len(result.stdout) == 32 * CHUNK
         assert len(result.stderr) == 32 * CHUNK
 
+    @pytest.mark.timeout(load_scaled_timeout(180))
+    @pytest.mark.load_sensitive
     async def test_large_stdout_burst(self) -> None:
         """50MB on a single pipe — far beyond any OS buffer — arrives whole."""
         total = 50 * 1024 * 1024
@@ -118,6 +121,8 @@ class TestDrainDeadlockBattery:
         assert result.success is True
         assert len(result.stdout) == total
 
+    @pytest.mark.timeout(load_scaled_timeout(120))
+    @pytest.mark.load_sensitive
     async def test_one_pipe_closed_early(self) -> None:
         """Child closes stderr immediately, then streams stdout."""
         script = (

@@ -1214,6 +1214,18 @@ def _build_diagnostic_report(
         "generated_at": datetime.now(UTC).isoformat(),
     }
 
+    from marianne.core.config.workspace import mailbox_root
+    from marianne.core.mailbox import merge_traffic, traffic_summary
+
+    traffic = job.mailbox_traffic
+    if workspace is not None and mailbox_root(workspace).is_dir():
+        try:
+            traffic = merge_traffic(traffic, traffic_summary(mailbox_root(workspace)))
+        except (ValueError, OSError) as mailbox_error:
+            report["mailbox_error"] = str(mailbox_error)
+    if traffic and traffic.get("sends"):
+        report["mailbox_traffic"] = merge_traffic(traffic)
+
     # Count sheets using display status (format_sheet_display_status) so that
     # COMPLETED+validation_passed=False counts as "failed", matching the
     # timeline display. Without this, the progress summary says "Completed: 20"
@@ -1470,6 +1482,24 @@ def _display_diagnostic_report(job: CheckpointState, report: dict[str, Any]) -> 
             f"  Run supervisor {cleanup['supervisor_pid']}: "
             f"{cleanup['reparented_orphans']} reparented orphans observed"
         )
+
+    traffic = report.get("mailbox_traffic")
+    if traffic:
+        console.print("\n[bold cyan]Mailbox traffic[/bold cyan]")
+        for send in traffic["sends"]:
+            console.print(
+                f"  {send['sender']} -> {send['recipient']}: "
+                f"{send['bytes']} bytes at {send['timestamp']}",
+                markup=False,
+            )
+        for sheet, totals in traffic["sheets"].items():
+            console.print(
+                f"  Sheet {sheet}: {totals['messages']} messages, {totals['bytes']} bytes; "
+                f"{totals['first_timestamp']} to {totals['last_timestamp']}",
+                markup=False,
+            )
+    if report.get("mailbox_error"):
+        console.print(f"Mailbox traffic unavailable: {report['mailbox_error']}", markup=False)
 
     # Progress section
     progress = report.get("progress", {})

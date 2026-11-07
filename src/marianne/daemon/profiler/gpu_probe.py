@@ -162,6 +162,8 @@ class GpuProbe:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
         )
         if result.returncode != 0:
@@ -186,7 +188,9 @@ class GpuProbe:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
         if proc.returncode != 0:
             return []
-        return GpuProbe._parse_nvidia_smi_output(stdout.decode())
+        return GpuProbe._parse_nvidia_smi_output(
+            stdout.decode("utf-8", errors="replace")
+        )
 
     # ─── shared parser ─────────────────────────────────────────────
 

@@ -15,6 +15,7 @@ from marianne.daemon.clone import build_clone_config
 from marianne.daemon.config import DaemonConfig, McpPoolConfig, McpServerEntry, SocketConfig
 from marianne.daemon.mcp_socket_bridge import McpSocketBridge
 from marianne.daemon.profiler.models import ProfilerConfig
+from tests.helpers import load_scaled_timeout
 
 
 @pytest.fixture
@@ -245,6 +246,8 @@ def test_default_clone_profiler_is_isolated(
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(load_scaled_timeout(120))
+@pytest.mark.load_sensitive
 async def test_cancelled_start_reaps_upstream_and_releases_socket(
     tmp_path: Path, upstream_command: str
 ) -> None:
@@ -547,4 +550,70 @@ async def test_nonreading_client_drain_does_not_block_other_upstream_responses(
         assert (await canary(owner.socket_path))["id"] == "caller-id"
     finally:
         writer.transport.abort()
+        await owner.stop()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("boundary", ["drain", "reply"])
+async def test_start_preserves_cancellation_at_completed_io(
+    tmp_path: Path,
+    upstream_command: str,
+    monkeypatch: pytest.MonkeyPatch,
+    boundary: str,
+) -> None:
+    """A completed I/O operation must not swallow cancellation of startup."""
+    hanging = shlex.join([sys.executable, "-c", "import time; time.sleep(60)"])
+    owner = bridge(tmp_path / "mcp.sock", hanging if boundary == "drain" else upstream_command)
+    captured: list[asyncio.subprocess.Process] = []
+    cancellation_sent = asyncio.Event()
+
+    def cancel_start() -> None:
+        assert owner.process is not None
+        captured.append(owner.process)
+        cancellation_sent.set()
+        asyncio.get_running_loop().call_soon(task.cancel)
+
+    if boundary == "drain":
+        original_drain = asyncio.StreamWriter.drain
+
+        async def cancel_after_drain(writer: asyncio.StreamWriter) -> None:
+            await original_drain(writer)
+            if (
+                owner.process is not None
+                and writer is owner.process.stdin
+                and not cancellation_sent.is_set()
+            ):
+                cancel_start()
+
+        monkeypatch.setattr(asyncio.StreamWriter, "drain", cancel_after_drain)
+    else:
+        original_route = owner._route_upstream_message
+
+        async def cancel_after_reply(message: dict) -> None:
+            await original_route(message)
+            if not cancellation_sent.is_set():
+                cancel_start()
+
+        monkeypatch.setattr(owner, "_route_upstream_message", cancel_after_reply)
+
+    task = asyncio.create_task(owner.start())
+    try:
+        await asyncio.wait_for(cancellation_sent.wait(), timeout=2)
+        done, _ = await asyncio.wait({task}, timeout=2)
+        assert done, "startup swallowed cancellation at a completed I/O boundary"
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert captured[0].returncode is not None
+        assert owner.process is None
+        assert not owner.socket_path.exists()
+        replacement = bridge(owner.socket_path, upstream_command)
+        try:
+            await replacement.start()
+            assert (await canary(owner.socket_path))["id"] == "caller-id"
+        finally:
+            await replacement.stop()
+    finally:
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
         await owner.stop()

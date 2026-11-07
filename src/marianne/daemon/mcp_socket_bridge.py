@@ -118,7 +118,9 @@ class McpSocketBridge:
                 )
 
             self._initialize_result = await self._initialize_upstream()
-            self._server = await self._socket_owner.start(self._handle_client)
+            # Own the server before its cancellable listener-registration yield.
+            self._server = await self._socket_owner.start(self._handle_client, start_serving=False)
+            await self._server.start_serving()
         except BaseException:
             await self.stop()
             raise
@@ -348,7 +350,10 @@ class McpSocketBridge:
         message["id"] = upstream_id
         self._pending[upstream_id] = future
         await self._write_upstream_message(message)
-        return await asyncio.wait_for(future, timeout=30.0)
+        # Keep caller cancellation even if the reply completes concurrently.
+        # Python 3.11 wait_for can return a ready result instead of cancelling.
+        async with asyncio.timeout(30.0):
+            return await future
 
     async def _send_upstream_notification(self, message: dict[str, Any]) -> None:
         await self._write_upstream_message(message)
@@ -358,7 +363,8 @@ class McpSocketBridge:
             raise RuntimeError(f"MCP bridge {self.name!r} has no upstream stdin")
         async with self._write_lock:
             self.process.stdin.write(_encode_jsonrpc_message(message, self.upstream_framing))
-            await asyncio.wait_for(self.process.stdin.drain(), _WRITE_TIMEOUT_SECONDS)
+            async with asyncio.timeout(_WRITE_TIMEOUT_SECONDS):
+                await self.process.stdin.drain()
 
     async def _read_upstream_loop(self) -> None:
         if self.process is None or self.process.stdout is None:

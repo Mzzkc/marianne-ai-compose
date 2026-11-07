@@ -31,7 +31,9 @@ still needs current security review for the environment where it will run.
   `MZT_PUBLIC_ORCHESTRA=true` the middleware serves `/orchestra`, its
   read-only API and `/static` to every client and nothing else (GH #387,
   #468). The projection carries score names, sheet numbers, instruments,
-  outcomes and times only.
+  outcomes, times, and short notes; one note — the reason a concert chain
+  was refused — is the conductor's refusal message verbatim and can name
+  the child score's filesystem path. Prompts and output never appear.
 
 Tracking: [#292](https://github.com/Mzzkc/marianne-ai-compose/issues/292)
 (minimal dashboard security review; historical alpha blocker).

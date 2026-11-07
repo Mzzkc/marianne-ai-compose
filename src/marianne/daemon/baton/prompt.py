@@ -309,6 +309,17 @@ class PromptRenderer:
             self._total_stages if self._total_stages > 0 else self._total_sheets
         )
 
+        if sheet.voice_count > 1 and sheet.mailbox_siblings:
+            from marianne.core.config.workspace import mailbox_root
+
+            root = mailbox_root(sheet.workspace)
+            # Set up every recipient before the first sibling executes, so
+            # broadcast reaches musicians that have not started rendering yet.
+            for sibling in sheet.mailbox_siblings:
+                (root / str(sibling)).mkdir(mode=0o700, parents=True, exist_ok=True)
+            context.mailbox_path = str(root)
+            context.mailbox_siblings = dict(sheet.mailbox_siblings)
+
         # F-210: Cross-sheet context from AttemptContext
         if attempt_context is not None:
             context.previous_outputs = dict(attempt_context.previous_outputs)

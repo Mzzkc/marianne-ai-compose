@@ -55,7 +55,31 @@ class TestProjection:
             message="Job 'solver' is already active",
         ))
         assert refused is not None and refused["kind"] == "job.chain_refused"
-        assert refused["note"] == "Job 'solver' is already active"
+        assert refused["note"] == "already_active"
+
+
+def test_chain_refusal_note_is_a_vocabulary_word_never_the_text() -> None:
+    """A refusal carrying a resolved path or an exception string projects to a
+    fixed word; the path and the exception text never reach the public page."""
+    from marianne.daemon.orchestra.recorder import project_event
+
+    for message, word in (
+        ("child score not found: /home/someone/scores/child.yaml", "not_found"),
+        ("concert chain depth limit reached (3)", "depth_limit"),
+        ("parent cost limit exceeded", "cost_limit"),
+        ("parent job is unavailable", "unavailable"),
+        ("concert submission callback unavailable", "unavailable"),
+        ("RuntimeError: boom /home/someone/secret", "error"),
+        (None, "error"),
+    ):
+        projected = project_event({
+            "event": "baton.flow.concert_refused", "job_id": "j", "sheet_num": 1,
+            "timestamp": 1.0, "data": {"accepted": False, "message": message},
+        })
+        assert projected is not None
+        assert projected["note"] == word, (message, projected["note"])
+        assert "/home/" not in str(projected)
+        assert "boom" not in str(projected)
 
 
 @pytest.mark.asyncio

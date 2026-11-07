@@ -43,12 +43,18 @@ class TestJobToolsBasic:
 
     async def test_list_jobs_placeholder(self, mock_state_backend: Mock, temp_workspace):
         """Test list_jobs returns placeholder message."""
-        job_tools = JobTools(mock_state_backend, temp_workspace)
+        # Exercise the real absent-daemon probe without contacting the host.
+        with patch(
+            "marianne.mcp.tools._resolve_socket_path",
+            return_value=temp_workspace / "absent-conductor.sock",
+        ):
+            job_tools = JobTools(mock_state_backend, temp_workspace)
         result = await job_tools.call_tool("list_jobs", {})
 
         assert "content" in result
         assert len(result["content"]) == 1
         assert "Marianne MCP Submitted Scores" in result["content"][0]["text"]
+        assert "mzt list" in result["content"][0]["text"]
 
     @patch("marianne.mcp.tools.JobControlService")
     async def test_get_job_success(
