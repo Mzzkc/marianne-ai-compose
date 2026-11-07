@@ -14,13 +14,16 @@ concurrency:
 permissions:
   contents: read
 
-# NOTE on submodules: `compiler` and `scores/rosetta-corpus` are NOT checked
-# out — no core test depends on them (the compile-command tests `importorskip`
-# the optional `marianne_compiler` package). `plugins` IS checked out in the
-# test jobs: the score-language gate (tests/test_score_language.py, GH #436)
-# reads the skill layer, and the repo is public so no token is needed. Without
-# it the gate would skip itself and CI could never fail on a language gap
-# (Lens Inspect F6, 2026-10-14).
+# NOTE on submodules: `compiler` is NOT checked out — no core test depends on
+# it (the compile-command tests `importorskip` the optional `marianne_compiler`
+# package). `plugins` IS checked out in the test jobs: the score-language gate
+# (tests/test_score_language.py, GH #436) reads the skill layer, and the repo
+# is public so no token is needed. Without it the gate would skip itself and
+# CI could never fail on a language gap (Lens Inspect F6, 2026-10-14).
+# `scores/rosetta-corpus` IS checked out too: the long-tail proof tests
+# (tests/test_rosetta_long_tail_proofs.py, GH #354) run the corpus's own
+# tools/long_tail_proof.py. Without it they fail on a missing file, and main
+# went red at the merge that brought them in (4c8a3776). The corpus is public.
 
 jobs:
   lint:
@@ -60,8 +63,8 @@ jobs:
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
-      - name: Check out the public plugins submodule (score-language gate)
-        run: git submodule update --init --depth 1 plugins
+      - name: Check out the public plugins and rosetta-corpus submodules
+        run: git submodule update --init --depth 1 plugins scores/rosetta-corpus
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -97,8 +100,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check out the public plugins submodule (score-language gate)
-        run: git submodule update --init --depth 1 plugins
+      - name: Check out the public plugins and rosetta-corpus submodules
+        run: git submodule update --init --depth 1 plugins scores/rosetta-corpus
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
