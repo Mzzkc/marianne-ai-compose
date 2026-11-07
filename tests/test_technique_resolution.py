@@ -372,3 +372,23 @@ class TestTechniqueResolutionIntegration:
         assert "github" in rt.mcp_servers
         assert "coord" in rt.skills
         assert "work_only" not in rt.skills
+
+
+def test_movement_phase_names_gate_techniques() -> None:
+    from marianne.daemon.baton.techniques import movement_phase_name
+
+    expected = {1: "recon", 2: "plan", 3: "work", 4: "integration", 5: "inspect", 6: "aar"}
+    for number, name in expected.items():
+        assert movement_phase_name(number) == name
+    for number in (0, -1, 7, 999):
+        assert movement_phase_name(number) == "work"
+    techniques = {
+        "tool": TechniqueConfig(kind="mcp", phases=["work"], config={"server": "tool"}),
+        "shared": TechniqueConfig(kind="protocol", phases=["all"]),
+    }
+    assert resolve_techniques_for_sheet(techniques, movement_phase_name(3)).mcp_servers == {
+        "tool": "tool",
+    }
+    recon = resolve_techniques_for_sheet(techniques, movement_phase_name(1))
+    assert recon.mcp_servers == {}
+    assert recon.protocols == ["shared"]

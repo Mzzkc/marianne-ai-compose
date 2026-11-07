@@ -514,6 +514,9 @@ class TestValidationPathScopeCheck:
 
         assert "V306" in check_ids
 
+    # Parsing the full shipped corpus can exceed the unit-test ceiling under
+    # xdist contention; match the other corpus sweep's bounded timeout.
+    @pytest.mark.timeout(180)
     def test_repo_corpus_has_no_v306_false_positives(self) -> None:
         """V306 stays quiet across currently parseable shipped scores."""
         repo_root = Path(__file__).resolve().parents[1]

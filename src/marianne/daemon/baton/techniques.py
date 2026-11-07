@@ -40,6 +40,19 @@ if TYPE_CHECKING:
     from marianne.daemon.mcp_pool import McpPoolManager
 
 _logger = get_logger("daemon.baton.techniques")
+
+MOVEMENT_PHASE_NAMES: tuple[str, ...] = (
+    "recon", "plan", "work", "integration", "inspect", "aar",
+)
+
+
+def movement_phase_name(movement: int) -> str:
+    """Map the six lifecycle movements to phase names; extra movements do work."""
+    if 1 <= movement <= len(MOVEMENT_PHASE_NAMES):
+        return MOVEMENT_PHASE_NAMES[movement - 1]
+    return "work"
+
+
 @dataclass(frozen=True)
 class ResolvedTechniques:
     """Resolved techniques for a specific phase.
@@ -66,6 +79,8 @@ class ResolvedTechniques:
 def filter_techniques_for_phase(
     techniques: dict[str, TechniqueConfig],
     phase: str,
+    *,
+    movement: int | None = None,
 ) -> dict[str, TechniqueConfig]:
     """Filter techniques to those active in a given phase.
 
@@ -76,13 +91,17 @@ def filter_techniques_for_phase(
     Args:
         techniques: Full technique declarations from JobConfig.
         phase: Current sheet phase name (e.g., "work", "recon").
+        movement: Optional numeric alias for existing numbered declarations.
 
     Returns:
         Dict of technique name to TechniqueConfig for active techniques.
     """
     if not techniques:
         return {}
-    return {name: tc for name, tc in techniques.items() if phase in tc.phases or "all" in tc.phases}
+    aliases = {phase, "all"}
+    if movement is not None:
+        aliases.add(str(movement))
+    return {name: tc for name, tc in techniques.items() if aliases.intersection(tc.phases)}
 
 
 def generate_technique_manifest(
@@ -183,6 +202,8 @@ def discover_technique_doc(
 def resolve_techniques_for_sheet(
     techniques: dict[str, TechniqueConfig],
     phase: str,
+    *,
+    movement: int | None = None,
 ) -> ResolvedTechniques:
     """Full resolution pipeline: filter + manifest + skill doc discovery.
 
@@ -193,11 +214,12 @@ def resolve_techniques_for_sheet(
     Args:
         techniques: All technique declarations from JobConfig.
         phase: Current sheet phase.
+        movement: Optional numeric alias for legacy phase declarations.
 
     Returns:
         ResolvedTechniques with filtered data, manifest, and skill docs.
     """
-    filtered = filter_techniques_for_phase(techniques, phase)
+    filtered = filter_techniques_for_phase(techniques, phase, movement=movement)
     if not filtered:
         return ResolvedTechniques()
 

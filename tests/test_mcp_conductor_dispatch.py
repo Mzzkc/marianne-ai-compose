@@ -135,6 +135,9 @@ class _BackendPool:
     async def close_all(self) -> None:
         pass
 
+    async def create_one_off(self, *args: Any, **kwargs: Any) -> Any:
+        return self.backend
+
 
 class _McpPool:
     def __init__(self, socket_path: Path | None = None) -> None:
@@ -308,7 +311,7 @@ async def test_baton_dispatch_sets_mcp_config_for_resolved_mcp_technique(
 
 @pytest.mark.asyncio
 async def test_baton_dispatch_generates_code_bridge_for_non_native_backend(
-    tmp_path: Path,
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
 ) -> None:
     from marianne.daemon.baton.adapter import BatonAdapter
 
@@ -412,6 +415,7 @@ async def test_baton_dispatch_generates_code_bridge_for_non_native_backend(
     assert backend.prompt_seen is not None
     assert "from techniques_rt import filesystem" in backend.prompt_seen
     assert (tmp_path / "mcp-marker.txt").read_text() == "MCP_BRIDGE_OK"
+    assert "adapter.dispatch.mcp_config_unsupported" in capsys.readouterr().out
 
 
 @pytest.mark.asyncio
@@ -518,3 +522,52 @@ async def test_all_builtin_profiles_can_use_shared_mcp_code_bridge(
 
     assert (tmp_path / "techniques_rt.py").exists()
     assert (tmp_path / "mcp-marker.txt").read_text() == "MCP_BRIDGE_OK"
+
+
+@pytest.mark.parametrize(("movement", "phases", "active"), [
+    (3, ["work"], True), (1, ["work"], False), (9, ["work"], True),
+    (3, ["3"], True), (1, ["all"], True),
+])
+async def test_movement_gates_interactive_mcp_dispatch(
+    tmp_path: Path, movement: int, phases: list[str], active: bool,
+) -> None:
+    from marianne.daemon.baton.adapter import BatonAdapter
+    from marianne.execution.instruments.interactive import InteractiveCliBackend
+    from marianne.execution.instruments.interactive.driver import DriverResult
+
+    profile = InstrumentProfile.model_validate(yaml.safe_load(
+        (BUILTINS_DIR / "claude-code.yaml").read_text(),
+    ))
+    tmux = MagicMock()
+    tmux.has_session = AsyncMock(return_value=False)
+    backend = InteractiveCliBackend(profile, working_directory=tmp_path, tmux=tmux)
+    commands: list[list[str]] = []
+
+    async def drive(**kwargs: Any) -> DriverResult:
+        commands.append(kwargs["command"])
+        return DriverResult(outcome="completed", final_screen="done", nudges_sent=0)
+
+    backend._driver.run = drive
+    adapter = BatonAdapter(max_concurrent_sheets=1)
+    adapter.set_backend_pool(_BackendPool(backend, registry=_Registry(profile)))
+    mcp_pool = _McpPool()
+    adapter.set_mcp_pool(mcp_pool)  # type: ignore[arg-type]
+    sheet = _sheet(tmp_path, instrument_config={"interactive": True})
+    sheet.movement = movement
+    adapter.register_job("interactive-mcp", [sheet], {1: []}, techniques={
+        "filesystem": TechniqueConfig(kind="mcp", phases=phases, config={"server": "filesystem"}),
+    })
+    run_task = asyncio.create_task(adapter.run())
+    try:
+        assert await asyncio.wait_for(adapter.wait_for_completion("interactive-mcp"), timeout=5)
+    finally:
+        await adapter.baton.inbox.put(ShutdownRequested(graceful=True))
+        await asyncio.wait_for(run_task, timeout=3)
+    assert len(commands) == 1
+    assert (str(tmp_path / ".mcp-pool-config.json") in commands[0]) is active
+    assert bool(mcp_pool.calls) is active
+    if active:
+        config = commands[0][commands[0].index("--mcp-config") + 1]
+        assert json.loads(Path(config).read_text())["mcpServers"] == {
+            "filesystem": {"command": "proxy", "args": []},
+        }

@@ -2751,12 +2751,15 @@ class BatonAdapter:
         job_techniques = getattr(self, "_job_techniques", {}).get(job_id)
         resolved_techniques = None
         if job_techniques:
-            from marianne.daemon.baton.techniques import resolve_techniques_for_sheet
+            from marianne.daemon.baton.techniques import (
+                movement_phase_name,
+                resolve_techniques_for_sheet,
+            )
 
-            phase = str(sheet.movement) if sheet.movement else str(sheet_num)
+            phase = movement_phase_name(sheet.movement or sheet_num)
             try:
                 resolved_techniques = resolve_techniques_for_sheet(
-                    job_techniques, phase
+                    job_techniques, phase, movement=sheet.movement or sheet_num,
                 )
             except Exception as exc:  # noqa: BLE001 — dispatch failure is delivered to the baton for retry handling
                 self._send_dispatch_failure(
@@ -3141,8 +3144,19 @@ class BatonAdapter:
                 if _icfg_rf.get("timeout_seconds") is not None else None
             ),
         )
-        if mcp_config_path is not None and hasattr(backend, "set_mcp_config"):
-            backend.set_mcp_config(mcp_config_path)
+        if mcp_config_path is not None:
+            if hasattr(backend, "set_mcp_config"):
+                backend.set_mcp_config(mcp_config_path)
+            else:
+                _logger.warning(
+                    "adapter.dispatch.mcp_config_unsupported",
+                    extra={
+                        "job_id": job_id,
+                        "sheet_num": sheet_num,
+                        "backend": type(backend).__name__,
+                        "path": str(mcp_config_path),
+                    },
+                )
         return (
             asyncio.create_task(
                 self._musician_wrapper(

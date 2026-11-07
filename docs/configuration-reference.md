@@ -567,7 +567,7 @@ techniques:
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `kind` | `TechniqueKind` | **required** | `skill`, `mcp`, or `protocol` | Component kind. `skill` — text-based methodology (memory protocol, mateship, coordination). `mcp` — MCP server tools via the shared pool. `protocol` — communication protocols (A2A, coordination). |
-| `phases` | `list[str]` | **required** | | Phases where the technique is available (e.g., recon, plan, work, integration, inspect, aar). Empty list = declared but not active in any phase. |
+| `phases` | `list[str]` | **required** | | Phases where the technique is available (e.g., recon, plan, work, integration, inspect, aar). Empty list = declared but not active in any phase. Numbered movements map onto the same names (1→recon, 2→plan, 3→work, 4→integration, 5→inspect, 6→aar, later→work), and a declaration listing the sheet's movement number as a phase entry matches that movement. |
 | `required` | `bool` | `false` | | Fail dispatch when an active `skill` technique document cannot be resolved. Modern persistent-agent specialist techniques should set this `true`. |
 | `config` | `dict` | `{}` | | Kind-specific configuration. `mcp`: server name, transport. `skill`: path to the skill document. `protocol`: protocol-specific settings. |
 

@@ -57,6 +57,10 @@ from marianne.execution.instruments.interactive.tmux import (
     TmuxError,
     sanitize_session_name,
 )
+from marianne.execution.instruments.workspace_mcp_config import (
+    MCP_WORKSPACE_CONFIG_LOCKS,
+    WorkspaceMcpConfigMixin,
+)
 from marianne.utils.process import supervised_argv
 
 _logger = get_logger("execution.interactive.backend")
@@ -117,7 +121,7 @@ def _completion_suffix(marker: Path) -> str:
     )
 
 
-class InteractiveCliBackend(Backend):
+class InteractiveCliBackend(WorkspaceMcpConfigMixin, Backend):
     """Backend that drives a CLI instrument through a live tmux session.
 
     One instance per concurrent interactive sheet (pooled in a free-list
@@ -165,6 +169,7 @@ class InteractiveCliBackend(Backend):
         self._tmux = tmux or TmuxControl()
         self._driver = InteractiveSessionDriver(self._tmux, self._interactive)
 
+        self._mcp_config_path: Path | None = None
         self._model: str | None = profile.default_model
         self._preamble: str | None = None
         self._prompt_extensions: list[str] = []
@@ -221,6 +226,10 @@ class InteractiveCliBackend(Backend):
         cheap. Without a transcript (capture failed) nothing is delivered.
         """
         self._on_output = callback
+
+    def set_mcp_config(self, config_path: Path | None) -> None:
+        """Connect this attempt to the pool via a flag or workspace config file."""
+        self._mcp_config_path = config_path
 
     def set_attempt_identity(
         self, job_id: str, sheet_num: int, attempt: int,
@@ -303,6 +312,7 @@ class InteractiveCliBackend(Backend):
         self._nudge_timeout_seconds = 30.0
         self._nudge_backend_factory = None
         self._attempt_identity = None
+        self._mcp_config_path = None
         # W-F3: per-sheet prompt bytes neither — see Backend.set_preamble.
         self._preamble = None
         self._prompt_extensions = []
@@ -345,7 +355,12 @@ class InteractiveCliBackend(Backend):
         if cmd.model_flag and self._model:
             args.append(cmd.model_flag)
             args.append(self._model)
-        if cmd.mcp_disable_args and interactive.inherit_mcp_disable_args:
+        if self._mcp_config_path is not None and cmd.mcp_config_flag:
+            args.extend(cmd.mcp_config_prefix_args)
+            args.extend([cmd.mcp_config_flag, str(self._mcp_config_path)])
+        elif self._mcp_config_path is not None and cmd.mcp_config_workspace_path:
+            pass  # execute() temporarily materializes the workspace file.
+        elif cmd.mcp_disable_args and interactive.inherit_mcp_disable_args:
             args.extend(cmd.mcp_disable_args)
         args.extend(interactive.extra_args)
         return args
@@ -469,7 +484,18 @@ class InteractiveCliBackend(Backend):
         )
 
         start = time.monotonic()
+        target = self._workspace_mcp_config_target()
+        workspace_lock: asyncio.Lock | None = None
+        lock_acquired = False
+        restore: tuple[Path, bytes | None, bool] | None = None
         try:
+            if target is not None:
+                workspace_lock = MCP_WORKSPACE_CONFIG_LOCKS.setdefault(
+                    target.resolve(), asyncio.Lock(),
+                )
+                await workspace_lock.acquire()
+                lock_acquired = True
+                restore = self._materialize_workspace_mcp_config(target)
             driver_result = await self._driver.run(
                 session=session,
                 command=command,
@@ -491,7 +517,13 @@ class InteractiveCliBackend(Backend):
                 on_output=self._on_output,
             )
         finally:
-            await self._ensure_session_gone(session)
+            try:
+                await self._ensure_session_gone(session)
+            finally:
+                if restore is not None:
+                    self._restore_workspace_mcp_config(restore)
+                if workspace_lock is not None and lock_acquired:
+                    workspace_lock.release()
             # The pane process should be dead here. This PID is an UNTRACK
             # TOKEN, not a live process reference — the OS may have recycled
             # it. Consumers must only ever remove it from tracking

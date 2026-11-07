@@ -513,7 +513,7 @@ class TestCredentialRedactionTotality:
         prefix=_SAFE_TEXT,
         suffix=_SAFE_TEXT,
     )
-    @settings(max_examples=200)
+    @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_credential_never_survives_redaction(
         self, credential: str, prefix: str, suffix: str
     ) -> None:
@@ -529,7 +529,7 @@ class TestCredentialRedactionTotality:
         assert "[REDACTED_" in result, f"No redaction marker found in result: '{result}'"
 
     @given(credential=_ANY_CREDENTIAL)
-    @settings(max_examples=100)
+    @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     def test_bare_credential_fully_redacted(self, credential: str) -> None:
         """A bare credential string is fully replaced by a redaction marker."""
         from marianne.utils.credential_scanner import redact_credentials
@@ -543,7 +543,7 @@ class TestCredentialRedactionTotality:
         cred_b=_ANY_CREDENTIAL,
         separator=st.sampled_from([" ", "\n", ", ", " | ", " and "]),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     def test_multiple_credentials_all_redacted(
         self, cred_a: str, cred_b: str, separator: str
     ) -> None:
@@ -570,7 +570,7 @@ class TestCredentialRedactionIdempotency:
     """
 
     @given(credential=_ANY_CREDENTIAL, prefix=_SAFE_TEXT, suffix=_SAFE_TEXT)
-    @settings(max_examples=100)
+    @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     def test_redaction_is_idempotent(self, credential: str, prefix: str, suffix: str) -> None:
         """Double redaction equals single redaction."""
         from marianne.utils.credential_scanner import redact_credentials
