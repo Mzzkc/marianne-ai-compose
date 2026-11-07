@@ -428,12 +428,20 @@ class InteractiveCliBackend(Backend):
             req_extensions = None
 
         command = self._build_command()
+        # GH #487: per-attempt supervisor forensic report, next to the raw
+        # transcript (same deliberate outside-any-workspace home: a debug
+        # artifact whose writes must not freshen workspace mtimes). The
+        # driver reads it on session_lost so the detail names the signal the
+        # supervisor forwarded and whether it escalated — an absent report
+        # is itself evidence (external kill).
+        supervisor_report_path = _TRANSCRIPT_DIR / f"{session}.supervisor.json"
         if self._cli.command.supervise:
             # The pane process stays its own group leader (the supervisor is
             # the leader; the agent shares the group), so pid == pgid holds.
             command = supervised_argv(
                 command, io_priority=self._cli.command.io_priority,
                 max_open_files=self._cli.command.max_open_files,
+                report_path=supervisor_report_path,
             )
         full_prompt = self._build_prompt(
             prompt, marker, req_preamble, req_extensions
@@ -461,6 +469,7 @@ class InteractiveCliBackend(Backend):
         )
 
         start = time.monotonic()
+        supervisor_report: dict[str, object] | None = None
         try:
             driver_result = await self._driver.run(
                 session=session,
@@ -472,6 +481,10 @@ class InteractiveCliBackend(Backend):
                 policy=policy,
                 max_nudges=self._max_nudges,
                 transcript_path=transcript,
+                supervisor_report_path=(
+                    supervisor_report_path
+                    if self._cli.command.supervise else None
+                ),
                 on_pane_pid=_register_pid,
                 env=self._instrument_env(
                     workspace, sheet_num=request.sheet_num if request is not None else None,
@@ -489,6 +502,22 @@ class InteractiveCliBackend(Backend):
                 self._on_process_exited(pane_pid)
 
         duration = time.monotonic() - start
+        # The driver may hold a parsed supervisor report (session_lost path);
+        # expose it for observability even when the mapped result does not
+        # carry it in the error message.
+        supervisor_report = driver_result.supervisor_report
+        if supervisor_report is not None:
+            _logger.info(
+                "interactive_supervisor_report",
+                instrument=self._profile.name,
+                session=session,
+                attempt=attempt_label,
+                forwarded_signals=supervisor_report.get("forwarded_signals"),
+                escalated_to_sigkill=supervisor_report.get("escalated_to_sigkill"),
+                escalated_after_seconds=supervisor_report.get(
+                    "escalated_after_seconds"
+                ),
+            )
         result = self._map_result(driver_result, duration)
 
         _logger.info(

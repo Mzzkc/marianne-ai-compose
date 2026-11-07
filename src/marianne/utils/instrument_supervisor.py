@@ -237,7 +237,9 @@ def main(argv: list[str]) -> int:
     except OSError as exc:
         print(f"instrument_supervisor: cannot start {command[0]!r}: {exc}", file=sys.stderr)
         _write_report(report, {"spawn_error": str(exc), "io_priority": io_applied,
-                               "max_open_files": open_files_applied})
+                               "max_open_files": open_files_applied,
+                               "forwarded_signals": [], "escalated_to_sigkill": False,
+                               "escalated_after_seconds": None})
         return 127
     child_pid = child.pid
     me = os.getpid()
@@ -245,19 +247,41 @@ def main(argv: list[str]) -> int:
     adopted_during_run = 0
     seen: set[int] = set()
     signalled_child_at: float | None = None
+    # Forensic record (GH #487): WHICH signals reached the supervisor and
+    # were forwarded to the child, and whether the run loop escalated to
+    # SIGKILL after the grace. tmux's pane_dead_signal only ever shows the
+    # FINAL signal (the supervisor's self-re-kill), so a benign forwarded
+    # SIGHUP escalated at the grace is otherwise indistinguishable from an
+    # external SIGKILL. Monotonic timestamps are relative to the run-loop
+    # start (they sequence the history without leaking wall-clock time).
+    forwarded_signals: list[dict[str, float | int]] = []
+    escalated_to_sigkill = False
+    escalated_after_seconds: float | None = None
+    first_signalled_monotonic: float | None = None
+    run_started_monotonic = time.monotonic()
 
     while status["exit_code"] is None and status["signal"] is None:
         _reap(child_pid, status)
         if forwarded:
             pending = forwarded.pop(0)
+            forwarded_signals.append({
+                "signal": int(pending),
+                "at_seconds": round(time.monotonic() - run_started_monotonic, 3),
+            })
             try:
                 os.kill(child_pid, pending)
             except ProcessLookupError:
                 pass
             if signalled_child_at is None:
                 signalled_child_at = time.monotonic()
+                first_signalled_monotonic = signalled_child_at
         if (signalled_child_at is not None
                 and time.monotonic() - signalled_child_at > _CHILD_GRACE_SECONDS):
+            escalated_to_sigkill = True
+            if first_signalled_monotonic is not None:
+                escalated_after_seconds = round(
+                    time.monotonic() - first_signalled_monotonic, 3,
+                )
             try:
                 os.kill(child_pid, signal.SIGKILL)
             except ProcessLookupError:
@@ -280,6 +304,9 @@ def main(argv: list[str]) -> int:
         "unreaped": counts["unreaped"],
         "io_priority": io_applied,
         "max_open_files": open_files_applied,
+        "forwarded_signals": forwarded_signals,
+        "escalated_to_sigkill": escalated_to_sigkill,
+        "escalated_after_seconds": escalated_after_seconds,
     })
     # Popen never saw the exit; stop its finalizer from calling waitpid again.
     child.returncode = status["exit_code"] if status["signal"] is None else -int(status["signal"])

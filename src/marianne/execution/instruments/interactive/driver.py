@@ -21,7 +21,9 @@ See docs/specs/2026-06-10-interactive-mode-design.md.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
+import signal
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -65,6 +67,18 @@ _SUBMIT_MAX_ENTERS = 3
 # A paste that produces no visible screen change was swallowed (modal
 # dialog, etc.) — retry the paste this many times total before proceeding.
 _PASTE_MAX_ATTEMPTS = 3
+
+# GH #487 forensics: names for the signals the supervisor may forward, used
+# only in the session_lost detail string; unknown numbers render literally.
+_SIGNAL_NAMES = {
+    int(signal.SIGTERM): "SIGTERM",
+    int(signal.SIGINT): "SIGINT",
+    int(signal.SIGHUP): "SIGHUP",
+}
+# The supervisor's own escalation grace (instrument_supervisor
+# _CHILD_GRACE_SECONDS), quoted in the detail when the report lacks a
+# measured elapsed time.
+_ESCALATION_GRACE_FALLBACK_SECONDS = 1.0
 
 DriverOutcome = Literal[
     "completed",        # agent created the completion marker
@@ -156,6 +170,16 @@ class DriverResult:
     detail: str | None = None
     """Human-readable diagnostic for non-completed outcomes."""
 
+    supervisor_report: dict[str, object] | None = None
+    """Parsed instrument-supervisor forensic report for this attempt (GH #487).
+
+    Present only when the pane ran under ``supervise: true`` AND the
+    supervisor managed to write its report before the pane teardown — an
+    absent report is itself evidence (external kill; the supervisor never
+    observed a forwarded signal). Never parsed from the agent's output:
+    the report is the backend-controlled supervisor's own record.
+    """
+
 
 class InteractiveSessionDriver:
     """Drives one agent CLI session to completion inside tmux.
@@ -182,6 +206,7 @@ class InteractiveSessionDriver:
         policy: ContinuationPolicy,
         max_nudges: int,
         transcript_path: Path | None = None,
+        supervisor_report_path: Path | None = None,
         on_pane_pid: Callable[[int], None] | None = None,
         env: dict[str, str] | None = None,
         on_output: Callable[[str, bytes], None] | None = None,
@@ -201,6 +226,10 @@ class InteractiveSessionDriver:
                 agent transitions back to verified-busy).
             transcript_path: raw pipe-pane log destination (debug artifact),
                 or None to skip transcript capture.
+            supervisor_report_path: where the instrument supervisor writes
+                its JSON forensic report (GH #487). Read after the attempt
+                ends; an absent/unreadable/malformed report simply means no
+                forensics — it never fails the attempt.
             on_pane_pid: callback fired with the pane PID once known —
                 the backend routes this to the baton's process-group
                 registration.
@@ -307,11 +336,35 @@ class InteractiveSessionDriver:
                 detail = f"attempt deadline ({timeout_seconds}s) reached"
             elif outcome == "session_lost":
                 exited = self._last_pane_exit
-                detail = (
-                    f"agent process {exited.describe()} before signalling completion"
-                    if exited is not None
-                    else "agent session vanished before signalling completion "
-                    "(tmux no longer holds it: server gone or session killed)"
+                supervisor_report = self._read_supervisor_report(
+                    supervisor_report_path,
+                )
+                if exited is not None:
+                    detail = (
+                        f"agent process {exited.describe()} before signalling completion"
+                    )
+                else:
+                    detail = (
+                        "agent session vanished before signalling completion "
+                        "(tmux no longer holds it: server gone or session killed)"
+                    )
+                forensic = self._summarize_supervisor_forensics(
+                    supervisor_report,
+                )
+                if forensic is not None:
+                    detail = f"{detail}; {forensic}"
+                else:
+                    detail = (
+                        f"{detail} (no supervisor report — "
+                        "death not observed by the supervisor: external kill, "
+                        "or the supervisor died first)"
+                    )
+                return DriverResult(
+                    outcome=outcome,
+                    final_screen=final_screen,
+                    nudges_sent=nudges_total,
+                    detail=detail,
+                    supervisor_report=supervisor_report,
                 )
             elif outcome == "provider_error":
                 detail = "interactive provider error screen detected"
@@ -598,6 +651,65 @@ class InteractiveSessionDriver:
     # ──────────────────────────────────────────────────────────────────
     # Helpers
     # ──────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _read_supervisor_report(
+        path: Path | None,
+    ) -> dict[str, object] | None:
+        """Parse the supervisor's forensic report, if it exists (GH #487).
+
+        Fail-open: missing file (no supervisor, external SIGKILL racing the
+        write, or supervise=False), unreadable, or non-dict JSON all return
+        None — forensics are evidence, never an error path.
+        """
+        if path is None:
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    @staticmethod
+    def _summarize_supervisor_forensics(
+        report: dict[str, object] | None,
+    ) -> str | None:
+        """Human-readable one-liner of what the supervisor observed.
+
+        Returns None when the report carries no forwarding history — the
+        caller then states the complementary fact ("no supervisor report /
+        nothing forwarded") which distinguishes an escalation death from an
+        external kill.
+        """
+        if report is None:
+            return None
+        raw = report.get("forwarded_signals")
+        entries = [
+            e for e in (raw if isinstance(raw, list) else [])
+            if isinstance(e, dict) and isinstance(e.get("signal"), int)
+        ]
+        if not entries:
+            return None
+        names = [
+            _SIGNAL_NAMES.get(e["signal"], f"signal {e['signal']}")
+            for e in entries
+        ]
+        first = entries[0].get("at_seconds")
+        summary = f"supervisor forwarded {' then '.join(names)}"
+        if isinstance(first, (int, float)):
+            summary += f" (first at t={first}s)"
+        if report.get("escalated_to_sigkill"):
+            after = report.get("escalated_after_seconds")
+            grace = (
+                f"{after:.1f}s" if isinstance(after, (int, float))
+                else f"{_ESCALATION_GRACE_FALLBACK_SECONDS:.1f}s"
+            )
+            summary += (
+                f", child did not exit within {grace}, escalated to SIGKILL"
+            )
+        else:
+            summary += ", child exited on the forwarded signal"
+        return summary
 
     async def _submit_text(self, session: str, text: str) -> None:
         """Paste text into the input box and submit it, verifying delivery.

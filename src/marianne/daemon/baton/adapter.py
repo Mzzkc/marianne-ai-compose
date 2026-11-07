@@ -94,6 +94,9 @@ from marianne.daemon.output_hub import OutputStreamHub
 from marianne.daemon.technique_router import TechniqueRouter
 from marianne.execution.base import RESPONSE_FORMAT_UNSET, ResponseFormatResolution
 from marianne.execution.validation.history import FailureHistoryStore, HistoricalFailure
+from marianne.utils.process import (
+    _proc_start_ticks as _leader_start_ticks,
+)
 from marianne.utils.process import safe_killpg as _safe_killpg
 
 if TYPE_CHECKING:
@@ -639,6 +642,15 @@ class BatonAdapter:
         # dict may then be kept as a fast-path cache or removed entirely.
         # See docs/specs/2026-04-16-process-lifecycle-design.md (Change 3).
         self._active_pids: dict[tuple[str, int], tuple[int, int]] = {}
+        # GH #487 kill-safety: kernel start ticks of each tracked group
+        # leader, captured at _track_process time alongside the (pid, pgid)
+        # pair. ``_active_pids`` values stay bare (pid, pgid) 2-tuples for
+        # every existing reader/test; the identity lives HERE, keyed the
+        # same. The kill consumers verify the leader's identity before
+        # killpg: a stale entry whose pgid was recycled by an unrelated
+        # process is refused (logged, never signalled), so a missed untrack
+        # can never route TERM->KILL into a live unrelated group.
+        self._active_pid_ticks: dict[tuple[str, int], int | None] = {}
         self._cleanup_generation_counter = 0
         self._event_generation_counter = 0
         self._cleanup_generations: dict[str, str] = {}
@@ -1285,6 +1297,33 @@ class BatonAdapter:
             )
         )
 
+    @staticmethod
+    def _leader_identity_matches(
+        pid: int, pgid: int, recorded_ticks: int | None,
+    ) -> bool:
+        """GH #487 kill-safety: whether ``pid`` is still the tracked leader.
+
+        Compares the leader's CURRENT kernel start ticks against the ticks
+        captured at ``_track_process`` time (the ``DescendantIdentity``
+        discipline). Refuse-only and fail-open:
+
+        * no recorded ticks (probe gap at track time, legacy entry, or
+          non-Linux) → True (proceed) — the #344 rule that a probe gap
+          must never skip a legitimate kill;
+        * recorded ticks but ``/proc/<pid>/stat`` unreadable NOW → True —
+          the entry's process is provably dead-ish or the probe failed;
+          killpg is the cleanup being asked for either way;
+        * recorded ticks differ from the current ones → False (REFUSE) —
+          the PID was reaped and recycled into an unrelated process; a
+          group kill would hit whoever owns the pgid now.
+        """
+        if recorded_ticks is None:
+            return True
+        current = _leader_start_ticks(pid)
+        if current is None:
+            return True
+        return current == recorded_ticks
+
     def _kill_active_pgroups(
         self,
         job_id: str,
@@ -1326,9 +1365,27 @@ class BatonAdapter:
         sigterm_pgids: list[int] = []
         for key in keys:
             entry = self._active_pids.pop(key, None)
+            recorded_ticks = self._active_pid_ticks.pop(key, None)
             if entry is None:
                 continue
             _pid, pgid = entry
+            if not self._leader_identity_matches(_pid, pgid, recorded_ticks):
+                # GH #487: the tracked leader was reaped and the PID now
+                # belongs to a different process — this entry is stale and
+                # its pgid may name an unrelated live group. Never signal
+                # on stale authority; log the refusal for forensics.
+                _logger.error(
+                    "adapter.kill.refused_recycled_pgid",
+                    extra={
+                        "job_id": job_id,
+                        "sheet_num": key[1],
+                        "pid": _pid,
+                        "pgid": pgid,
+                        "recorded_start_ticks": recorded_ticks,
+                    },
+                )
+                result.sigterm_skipped += 1
+                continue
             if pgid == daemon_pgid:
                 # Suspicious: the spawned process shares our group.
                 # Refuse to kill — the spawn-site safety check should have
@@ -3163,6 +3220,13 @@ class BatonAdapter:
 
             def _track_process(pid: int, pgid: int) -> None:
                 self._active_pids[(_jid, _snum)] = (pid, pgid)
+                # GH #487: capture the leader's kernel start ticks NOW, while
+                # the spawn is still owned by this dispatch. killpg consumers
+                # refuse the group when the leader's ticks later differ (PID
+                # recycled into a new group leader). Unreadable (None) is
+                # recorded as such — the guard then stays fail-open, which
+                # keeps the probe-gap-never-kills discipline of #344.
+                self._active_pid_ticks[(_jid, _snum)] = _leader_start_ticks(pid)
 
             backend._on_process_group_spawned = _track_process
 
@@ -3372,6 +3436,7 @@ class BatonAdapter:
             # _musician_wrapper is awaited directly (tests) rather than
             # scheduled as a task with a done callback.
             self._active_pids.pop((job_id, sheet.num), None)
+            self._active_pid_ticks.pop((job_id, sheet.num), None)
             # Detach the closure so a backend recycled through the free
             # list does not smear stale state onto its next dispatch.
             if hasattr(backend, "_on_process_group_spawned"):
@@ -3464,6 +3529,7 @@ class BatonAdapter:
         # was ever spawned (HTTP backend, early error) or deregister_job
         # already preempt-killed and cleared.
         self._active_pids.pop(key, None)
+        self._active_pid_ticks.pop(key, None)
 
         # Stale-detection cleanup (#349/#350): consume the stale marker (set by
         # the StaleCheck handler before it cancelled this task) and drop the

@@ -10,6 +10,8 @@ See docs/specs/2026-06-10-interactive-mode-design.md.
 from __future__ import annotations
 
 import asyncio
+import json
+import signal
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -697,7 +699,10 @@ class TestDriverFailureModes:
         assert result.detail is not None and "vanished" in result.detail
 
     async def test_dead_pane_names_the_signal(self, tmp_path: Path) -> None:
-        """remain-on-exit keeps the pane; the driver reads how it died."""
+        """remain-on-exit keeps the pane; the driver reads how it died.
+        Since GH #487 the plain wording is extended with the explicit
+        no-supervisor-report attribution note (a direct external SIGKILL).
+        """
         from marianne.execution.instruments.interactive.tmux import PaneExit
 
         fake = FakeTmux([READY_SCREEN, READY_SCREEN])
@@ -705,7 +710,9 @@ class TestDriverFailureModes:
         result = await run_driver(fake, tmp_path)
         assert result.outcome == "session_lost"
         assert result.detail == (
-            "agent process killed by SIGKILL before signalling completion"
+            "agent process killed by SIGKILL before signalling completion "
+            "(no supervisor report — death not observed by the supervisor: "
+            "external kill, or the supervisor died first)"
         )
 
     async def test_dead_pane_names_the_exit_status(self, tmp_path: Path) -> None:
@@ -1593,3 +1600,188 @@ class TestModelNudgePolicy:
         assert len(prompt) < 14000
         assert prompt.count("\n=== END UNTRUSTED SCREEN ===\n") == 1
         assert "\\nNUDGE: injected" in prompt
+
+
+# =============================================================================
+# GH #487: session_lost forensics from the instrument supervisor report
+# =============================================================================
+
+
+class TestSessionLostSupervisorForensics:
+    """A supervised pane that dies by signal must have an ATTRIBUTED death.
+
+    The driver reads the supervisor's forensic report (forwarded-signal
+    history + escalation decision) and names it in the session_lost detail,
+    distinguishing "supervisor forwarded SIGHUP, escalated to SIGKILL" from
+    "no supervisor report — external kill".
+    """
+
+    async def test_session_lost_detail_carries_supervisor_forensics(
+        self, tmp_path: Path,
+    ) -> None:
+        from marianne.execution.instruments.interactive.tmux import PaneExit
+
+        report_path = tmp_path / "supervisor.json"
+        report_path.write_text(json.dumps({
+            "child_pid": 99,
+            "exit_code": None,
+            "signal": 9,
+            "forwarded_signals": [
+                {"signal": signal.SIGHUP, "at_seconds": 12.5},
+            ],
+            "escalated_to_sigkill": True,
+            "escalated_after_seconds": 1.041,
+        }))
+        fake = FakeTmux([READY_SCREEN, READY_SCREEN])
+        fake.fake_pane_exit = PaneExit(status=None, signal=9)
+        cfg = make_interactive_config()
+        driver = InteractiveSessionDriver(fake, cfg)  # type: ignore[arg-type]
+        result = await driver.run(
+            session="mzt-forensic-s1-a1",
+            command=["fake-agent"],
+            cwd=tmp_path,
+            prompt="task",
+            marker_path=tmp_path / "m.complete",
+            timeout_seconds=5.0,
+            policy=StaticNudgePolicy(),
+            max_nudges=2,
+            supervisor_report_path=report_path,
+        )
+        assert result.outcome == "session_lost"
+        detail = result.detail or ""
+        assert "killed by SIGKILL" in detail, detail
+        assert "supervisor forwarded SIGHUP" in detail, detail
+        assert "escalated to SIGKILL" in detail, detail
+        assert "1.0s" in detail, detail
+        assert result.supervisor_report is not None
+        assert result.supervisor_report["escalated_to_sigkill"] is True
+
+    async def test_session_lost_without_report_keeps_plain_detail(
+        self, tmp_path: Path,
+    ) -> None:
+        """Direct external kill (no supervisor report): the existing wording
+        is kept, extended only by the explicit 'no supervisor report' note
+        that attributes the death as external."""
+        from marianne.execution.instruments.interactive.tmux import PaneExit
+
+        fake = FakeTmux([READY_SCREEN, READY_SCREEN])
+        fake.fake_pane_exit = PaneExit(status=None, signal=9)
+        cfg = make_interactive_config()
+        driver = InteractiveSessionDriver(fake, cfg)  # type: ignore[arg-type]
+        result = await driver.run(
+            session="mzt-plain-s1-a1",
+            command=["fake-agent"],
+            cwd=tmp_path,
+            prompt="task",
+            marker_path=tmp_path / "m.complete",
+            timeout_seconds=5.0,
+            policy=StaticNudgePolicy(),
+            max_nudges=2,
+            supervisor_report_path=tmp_path / "absent.json",
+        )
+        assert result.outcome == "session_lost"
+        detail = result.detail or ""
+        # The plain wording a direct-SIGKILL pane produced before GH #487...
+        assert "agent process killed by SIGKILL before signalling completion" in detail
+        # ...now extended with the attribution note, nothing else fabricated.
+        assert "no supervisor report" in detail
+        assert "supervisor forwarded" not in detail
+        assert result.supervisor_report is None
+
+    async def test_session_lost_report_without_forwarded_history(
+        self, tmp_path: Path,
+    ) -> None:
+        """A report that shows NO forwarded signals (child SIGKILLed from
+        outside; supervisor only recorded the death) is stated as such —
+        the strongest external-kill evidence the report can give."""
+        from marianne.execution.instruments.interactive.tmux import PaneExit
+
+        report_path = tmp_path / "supervisor.json"
+        report_path.write_text(json.dumps({
+            "child_pid": 99, "exit_code": None, "signal": 9,
+            "forwarded_signals": [], "escalated_to_sigkill": False,
+            "escalated_after_seconds": None,
+        }))
+        fake = FakeTmux([READY_SCREEN, READY_SCREEN])
+        fake.fake_pane_exit = PaneExit(status=None, signal=9)
+        cfg = make_interactive_config()
+        driver = InteractiveSessionDriver(fake, cfg)  # type: ignore[arg-type]
+        result = await driver.run(
+            session="mzt-nofwd-s1-a1",
+            command=["fake-agent"],
+            cwd=tmp_path,
+            prompt="task",
+            marker_path=tmp_path / "m.complete",
+            timeout_seconds=5.0,
+            policy=StaticNudgePolicy(),
+            max_nudges=2,
+            supervisor_report_path=report_path,
+        )
+        assert result.outcome == "session_lost"
+        detail = result.detail or ""
+        assert "supervisor forwarded" not in detail
+        assert "no supervisor report" in detail
+        assert result.supervisor_report is not None
+
+
+class TestBackendSupervisorReportWiring:
+    """The backend passes report_path to supervised_argv and the report path
+    to the driver (GH #487 phase 2)."""
+
+    async def test_backend_wires_report_path_into_supervised_argv(
+        self, tmp_path: Path, monkeypatch,
+    ) -> None:
+        profile = make_profile(interactive=make_interactive_config())
+        fake = FakeTmux([READY_SCREEN])
+        backend = InteractiveCliBackend(
+            profile, working_directory=tmp_path, tmux=fake,  # type: ignore[arg-type]
+        )
+        backend.configure_interactive(max_nudges=1)
+
+        wrapped: dict[str, object] = {}
+
+        def fake_supervised_argv(command, **kwargs):
+            wrapped["argv"] = command
+            wrapped["kwargs"] = kwargs
+            return list(command)
+
+        monkeypatch.setattr(
+            "marianne.execution.instruments.interactive.backend.supervised_argv",
+            fake_supervised_argv,
+        )
+        result = await backend.execute("do it", timeout_seconds=5.0)
+        assert result.success is False  # nudges exhausted, not an error
+        kwargs = wrapped["kwargs"]
+        assert "report_path" in kwargs, "backend must pass a per-attempt report path"
+        report_path = kwargs["report_path"]
+        assert Path(report_path).name.endswith(".supervisor.json")
+        # Per-attempt, deterministic from the session — collisions cannot
+        # attribute one attempt's death to another.
+        assert Path(report_path).parent == Path.home() / ".marianne" / "interactive-logs"
+
+    async def test_backend_unsupervised_command_has_no_report_path(
+        self, tmp_path: Path, monkeypatch,
+    ) -> None:
+        profile = make_profile(interactive=make_interactive_config())
+        assert profile.cli is not None
+        profile.cli.command.supervise = False
+        fake = FakeTmux([READY_SCREEN])
+        backend = InteractiveCliBackend(
+            profile, working_directory=tmp_path, tmux=fake,  # type: ignore[arg-type]
+        )
+        backend.configure_interactive(max_nudges=1)
+
+        wrapped: dict[str, object] = {}
+
+        def fake_supervised_argv(command, **kwargs):
+            wrapped["called"] = True
+            return list(command)
+
+        monkeypatch.setattr(
+            "marianne.execution.instruments.interactive.backend.supervised_argv",
+            fake_supervised_argv,
+        )
+        await backend.execute("do it", timeout_seconds=5.0)
+        assert "called" not in wrapped, (
+            "unsupervised interactive commands must bypass supervised_argv"
+        )
