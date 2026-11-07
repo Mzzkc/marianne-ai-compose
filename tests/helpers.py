@@ -25,7 +25,7 @@ def _parse_load_factor() -> float:
         factor = float(raw)
     except (TypeError, ValueError):
         return 1.0
-    if isinstance(factor, float) and (math.isnan(factor) or math.isinf(factor)):
+    if math.isnan(factor) or math.isinf(factor):
         return 1.0
     # Clamp: factors < 1 would shrink ceilings below the safety net's intent.
     return max(1.0, factor)
