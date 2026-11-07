@@ -1723,6 +1723,106 @@ class TestSessionLostSupervisorForensics:
         assert "no supervisor report" in detail
         assert result.supervisor_report is not None
 
+    async def test_session_lost_multiple_forwarded_signals_sequence(
+        self, tmp_path: Path,
+    ) -> None:
+        """When multiple signals are forwarded (e.g. SIGHUP then SIGINT),
+        the detail string chains them chronologically."""
+        from marianne.execution.instruments.interactive.tmux import PaneExit
+
+        report_path = tmp_path / "supervisor.json"
+        report_path.write_text(json.dumps({
+            "child_pid": 99,
+            "exit_code": None,
+            "signal": 9,
+            "forwarded_signals": [
+                {"signal": signal.SIGHUP, "at_seconds": 2.1},
+                {"signal": signal.SIGINT, "at_seconds": 2.6},
+            ],
+            "escalated_to_sigkill": True,
+            "escalated_after_seconds": 1.05,
+        }))
+        fake = FakeTmux([READY_SCREEN, READY_SCREEN])
+        fake.fake_pane_exit = PaneExit(status=None, signal=9)
+        cfg = make_interactive_config()
+        driver = InteractiveSessionDriver(fake, cfg)  # type: ignore[arg-type]
+        result = await driver.run(
+            session="mzt-multi-s1-a1",
+            command=["fake-agent"],
+            cwd=tmp_path,
+            prompt="task",
+            marker_path=tmp_path / "m.complete",
+            timeout_seconds=5.0,
+            policy=StaticNudgePolicy(),
+            max_nudges=2,
+            supervisor_report_path=report_path,
+        )
+        assert result.outcome == "session_lost"
+        detail = result.detail or ""
+        assert "supervisor forwarded SIGHUP then SIGINT" in detail
+        assert "first at t=2.1s" in detail
+        assert "escalated to SIGKILL" in detail
+
+    async def test_session_lost_child_exited_on_forwarded_signal_without_escalation(
+        self, tmp_path: Path,
+    ) -> None:
+        """When the child exits on the forwarded signal before grace expires,
+        the detail indicates exit on the signal rather than escalation."""
+        from marianne.execution.instruments.interactive.tmux import PaneExit
+
+        report_path = tmp_path / "supervisor.json"
+        report_path.write_text(json.dumps({
+            "child_pid": 99,
+            "exit_code": None,
+            "signal": 15,
+            "forwarded_signals": [
+                {"signal": signal.SIGTERM, "at_seconds": 3.0},
+            ],
+            "escalated_to_sigkill": False,
+            "escalated_after_seconds": None,
+        }))
+        fake = FakeTmux([READY_SCREEN, READY_SCREEN])
+        fake.fake_pane_exit = PaneExit(status=None, signal=15)
+        cfg = make_interactive_config()
+        driver = InteractiveSessionDriver(fake, cfg)  # type: ignore[arg-type]
+        result = await driver.run(
+            session="mzt-fwdexit-s1-a1",
+            command=["fake-agent"],
+            cwd=tmp_path,
+            prompt="task",
+            marker_path=tmp_path / "m.complete",
+            timeout_seconds=5.0,
+            policy=StaticNudgePolicy(),
+            max_nudges=2,
+            supervisor_report_path=report_path,
+        )
+        assert result.outcome == "session_lost"
+        detail = result.detail or ""
+        assert "supervisor forwarded SIGTERM" in detail
+        assert "child exited on the forwarded signal" in detail
+        assert "escalated" not in detail
+
+    def test_read_supervisor_report_malformed_json_fail_open(self, tmp_path: Path) -> None:
+        """Malformed JSON or non-dict payloads return None fail-open."""
+        corrupt = tmp_path / "corrupt.json"
+        corrupt.write_text("NOT_JSON{")
+        assert InteractiveSessionDriver._read_supervisor_report(corrupt) is None
+
+        array_json = tmp_path / "array.json"
+        array_json.write_text("[1, 2, 3]")
+        assert InteractiveSessionDriver._read_supervisor_report(array_json) is None
+
+    def test_summarize_supervisor_forensics_fallback_grace(self) -> None:
+        """When escalated_after_seconds is missing or None, fallback grace is used."""
+        report: dict[str, object] = {
+            "forwarded_signals": [{"signal": int(signal.SIGHUP), "at_seconds": 1.0}],
+            "escalated_to_sigkill": True,
+            "escalated_after_seconds": None,
+        }
+        summary = InteractiveSessionDriver._summarize_supervisor_forensics(report)
+        assert summary is not None
+        assert "did not exit within 1.0s, escalated to SIGKILL" in summary
+
 
 class TestBackendSupervisorReportWiring:
     """The backend passes report_path to supervised_argv and the report path

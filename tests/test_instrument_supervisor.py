@@ -451,3 +451,16 @@ def test_clean_exit_report_keeps_forensic_keys(tmp_path: Path) -> None:
     assert payload["forwarded_signals"] == []
     assert payload["escalated_to_sigkill"] is False
     assert payload["escalated_after_seconds"] is None
+
+
+def test_spawn_error_report_has_stable_forensic_keys(tmp_path: Path) -> None:
+    """GH #487: when the supervisor cannot start the command, the report still
+    contains the stable forensic keys."""
+    report = tmp_path / "report.json"
+    result = _run("--report", str(report), "--", "/nonexistent/binary/path")
+    assert result.returncode == 127
+    payload = json.loads(report.read_text())
+    assert "spawn_error" in payload
+    assert payload["forwarded_signals"] == []
+    assert payload["escalated_to_sigkill"] is False
+    assert payload["escalated_after_seconds"] is None
