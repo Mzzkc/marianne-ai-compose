@@ -13,6 +13,20 @@ stderr, so the backend's existing group signal, prompt pipe and output
 drains are unchanged. It imports nothing from ``marianne`` and runs under
 ``-I`` so nothing in the workspace can shadow it (GH #445).
 
+With ``--report PATH`` the supervisor writes a JSON report there (atomic
+tmp+rename; write failures are silent — the report is a debug artifact, not
+a contract). Alongside the adoption counts it always carries the GH #487
+forensic keys, on every path including spawn errors: ``forwarded_signals``
+(a list of ``{"signal": int, "at_seconds": float}`` entries, monotonic
+seconds relative to run-loop start, recording each signal the supervisor
+received and dispatched to the child — appended before the kill, so the
+history also records a dispatch that lost the ProcessLookupError race),
+``escalated_to_sigkill`` (bool), and ``escalated_after_seconds`` (float or
+null, first-signal → escalation). tmux's ``pane_dead_signal`` only ever
+shows the final signal, so this history is what distinguishes an
+internally-escalated death from an external kill; interactive drivers read
+it to attribute pane deaths (see ``interactive/driver.py``).
+
 Every signal here targets one explicit PID through ``os.kill``; there is
 no group signal in this file by design (F-490 guard applies elsewhere).
 """

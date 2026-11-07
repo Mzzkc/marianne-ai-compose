@@ -432,7 +432,7 @@ and used by the conductor for instrument selection in future versions.
 | `env` | No | `{}` | Environment variables. `${VAR}` references expand from `os.environ` |
 | `required_env` | No | `null` | Parent variables allowed alongside system essentials and profile `env`. Missing or `[]` grants no additional variables. |
 | `inherit_env` | No | `false` | Explicit full-environment inheritance when `required_env` is `null`. An explicit list takes precedence. Exposes unrelated credentials. |
-| `supervise` | No | `true` | Launch the instrument under Marianne's Linux **instrument supervisor**: a child subreaper in the instrument's own process group. A grandchild whose parent exits (an agent's filesystem-search helper, a disowned shell) re-parents to the supervisor instead of init, and is ended and reaped when the instrument exits or the attempt is torn down. Set `false` only for an instrument the supervisor cannot wrap. Where the subreaper is unavailable (not Linux) the instrument is spawned directly and the backend's own descendant reaper (GH #406) is the only guard. |
+| `supervise` | No | `true` | Launch the instrument under Marianne's Linux **instrument supervisor**: a child subreaper in the instrument's own process group. A grandchild whose parent exits (an agent's filesystem-search helper, a disowned shell) re-parents to the supervisor instead of init, and is ended and reaped when the instrument exits or the attempt is torn down. The supervisor also writes a JSON forensic report (forwarded-signal history, escalation decision) next to the transcript, which interactive attempts use to attribute a pane's death (GH #487). Set `false` only for an instrument the supervisor cannot wrap. Where the subreaper is unavailable (not Linux) the instrument is spawned directly and the backend's own descendant reaper (GH #406) is the only guard. |
 | `max_open_files` | No | `4096` | Soft `RLIMIT_NOFILE` the supervisor sets for the instrument and everything it spawns, so a runaway search or a leaking helper is bounded to its share of the host's file table (the conductor's own limit on a server is often 1,048,576). Never raised above the hard limit; `null` leaves the conductor's limit in place. Ignored when `supervise` is `false`. |
 | `io_priority` | No | `low` | I/O scheduling class the supervisor gives the instrument and everything it spawns: `low` (best-effort, lowest priority) keeps an agent's whole-disk search from stalling the conductor's own state reads; `idle` yields to every other process; `inherit` keeps the conductor's class. Ignored when `supervise` is `false`. |
 | `prompt_via_stdin` | No | `true` | Write the assembled prompt to the child's stdin instead of argv. Prompts routinely exceed 100 KB with prelude/cadenza injection, and Linux caps a single argv entry at 128 KiB (`E2BIG`, "Argument list too long" before the process starts). Set `false` only for a CLI that cannot read stdin |
@@ -506,7 +506,15 @@ group, the supervisor ends and reaps what it adopted, and the backend's
 descendant reaper settles anything the supervisor could not see. On Pallas
 (20 Oct 2026) eight `bfs`/`ugrep` searches from `/` outlived their sheets at
 ppid 1 for hours and saturated the disk; the supervisor is the fix, and the
-`low` I/O class bounds the damage a live search can do.
+`low` I/O class bounds the damage a live search can do. For interactive
+(tmux) instruments, whose panes the baton tracks separately, the tracked
+group leader's kernel start ticks are captured at spawn time and re-verified
+before any group kill (GH #487): a stale tracking entry whose pgid has been
+recycled by an unrelated process is refused (logged, never signalled), so a
+missed deregistration can never route TERM→KILL into a live unrelated group.
+A probe gap (no recorded ticks, or an unreadable `/proc` entry) stays
+fail-open — it proceeds with the kill, per the #344 rule that a probe gap
+must never skip a legitimate one.
 
 
 | Field | Default | Description |
@@ -569,6 +577,23 @@ SIGKILL before signalling completion` or `agent process exited with status N
 …`. Only when tmux no longer holds the session at all (server gone, session
 killed by name) does it read `agent session vanished …`. The driver kills the
 session on every outcome, so a dead pane never outlives its attempt.
+
+Because tmux's `pane_dead_signal` only ever shows the *final* signal — the
+supervisor's own escalation — a benign forwarded SIGHUP escalated after the
+grace was indistinguishable from an external SIGKILL. Under `command.supervise`
+the attempt's `session_lost` detail now carries the supervisor's forensics
+(GH #487): the report is written next to the transcript as
+`<session>.supervisor.json`, and the detail says `supervisor forwarded SIGHUP
+(first at t=0.2s), child did not exit within 1.0s, escalated to SIGKILL` when
+the supervisor ended the child, `supervisor observed no forwarded signal —
+death not sent by the supervisor: external kill` when the supervisor wrote a
+report but forwarded nothing (the strongest external-kill evidence a report
+can give), or `no supervisor report — death not observed by the supervisor:
+external kill, or the supervisor died first` when no report exists at all.
+A missing or malformed report never fails the attempt; forensics are
+evidence, not an error path. The backend also logs the report
+(`interactive_supervisor_report` with the forwarded signals and escalation
+fields) for observability on every supervised attempt.
 
 #### `models` — Available Models
 
