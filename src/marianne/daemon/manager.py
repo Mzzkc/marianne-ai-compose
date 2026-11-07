@@ -37,7 +37,7 @@ from marianne.core.checkpoint import (
     SheetStatus,
 )
 from marianne.core.config.classes import InstrumentResolution
-from marianne.core.config.flow import ConcertTrigger
+from marianne.core.config.flow import ConcertTrigger, span_range
 from marianne.core.config.job import JobConfig as ConcreteJobConfig
 from marianne.core.config.job import merge_runtime_variables
 from marianne.core.config.spec import SpecCorpusConfig
@@ -264,6 +264,44 @@ def _reset_sheets_for_resume(
             sheet.reset_for_retry()
             reset += 1
     return reset
+
+
+def _reopen_loops_for_resume(
+    checkpoint: CheckpointState,
+    pre_resume_status: DaemonJobStatus | None,
+    from_sheet: int | None = None,
+) -> int:
+    """Reopen failure-terminated loops with pending work after sheet recovery.
+
+    Preserve the in-flight iteration so recovered dispatches receive its index.
+    Deliberate loop completion and paused terminal work remain authoritative;
+    an explicit ``from_sheet`` override follows the sheet-reset rules instead.
+    """
+    if from_sheet is None and (
+        pre_resume_status is None
+        or pre_resume_status in _RESUME_PRESERVE_TERMINAL_STATUSES
+    ):
+        return 0
+
+    reopened = 0
+    for span, run in checkpoint.flow.loops.items():
+        if run.phase != "completed" or run.completed_reason not in {
+            "range_failed", "condition_error",
+        }:
+            continue
+        members = [checkpoint.sheets[num] for num in span_range(span) if num in checkpoint.sheets]
+        if not any(
+            sheet.status == SheetStatus.PENDING
+            and (from_sheet is None or sheet.sheet_num >= from_sheet)
+            for sheet in members
+        ):
+            continue
+        run.phase = "running"
+        run.completed_reason = None
+        run.cost_baseline_usd = sum(sheet.total_cost_usd for sheet in members)
+        run.iteration_started_at = time.time()
+        reopened += 1
+    return reopened
 
 
 @dataclass
@@ -6823,6 +6861,12 @@ class JobManager:
         resume, FAILED + cascade-SKIPPED sheets are reset to PENDING and
         redispatched (#185 — intrinsic recovery, no separate ``mzt recover``).
         ``from_sheet`` forces a reset of every sheet >= N regardless of status.
+        Failure-terminated loops (``range_failed`` / ``condition_error``) with
+        pending member sheets are reopened alongside the reset — back to
+        ``running`` with the in-flight iteration preserved — so recovered
+        dispatches see their loop index again (#500); loops that ended for a
+        genuine reason (condition met, count, iteration or cost cap) stay
+        closed, and a PAUSED resume preserves loop state entirely.
 
         Args:
             job_id: Conductor job ID.
@@ -6971,6 +7015,16 @@ class JobManager:
         reset_count = _reset_sheets_for_resume(
             checkpoint, pre_resume_status, from_sheet=from_sheet
         )
+        reopened_count = _reopen_loops_for_resume(
+            checkpoint, pre_resume_status, from_sheet=from_sheet
+        )
+        if reopened_count:
+            _logger.info(
+                "baton.resume.loops_reopened",
+                job_id=job_id,
+                reopened_count=reopened_count,
+                from_sheet=from_sheet,
+            )
         if reset_count:
             _logger.info(
                 "baton.resume.sheets_reset",

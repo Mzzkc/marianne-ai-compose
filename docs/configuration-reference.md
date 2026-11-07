@@ -1889,6 +1889,14 @@ child is admitted under a lineage id (`<name>--chain<depth>--<UTC stamp>`)
 rather than the parent's own id, and `concert.max_chain_depth` (root
 `concert:` block, `enabled: true`) is the only bound on the chain (GH #454).
 Loop and trigger state is saved in the same checkpoint as sheet state.
+On resume, a loop that ended in failure (`range_failed` or `condition_error`)
+is reopened when sheet recovery leaves member sheets pending — back to
+`running` with the in-flight iteration preserved, so the loop index is
+available to recovered dispatches (GH #500). Loops that ended for a genuine
+reason (`condition_met`, `count_reached`, `max_iterations`,
+`cost_limit_exceeded`) stay closed, and a paused resume preserves loop state
+exactly as persisted; `--from-sheet` reopens a failure-terminated loop only
+when it still has a member sheet >= N.
 
 See [convergence-loop](https://github.com/Mzzkc/marianne-ai-compose/blob/main/examples/patterns/convergence-loop.yaml) for a
 CLI-only score with a file expression and failure escalation.

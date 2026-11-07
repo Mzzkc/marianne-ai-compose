@@ -159,6 +159,8 @@ Usage: mzt resume [OPTIONS] JOB_ID
 
 Loads the score state and continues execution from where it left off. By default, Marianne auto-reloads the config from the original YAML file if it still exists on disk. Falls back to the cached `config_snapshot` when the file is gone. Use `--no-reload` to force using the cached snapshot: the score exactly as it was admitted (or as the last reloading resume ran it), so edits made to the YAML on disk since then are ignored. The snapshot is written at submit and refreshed on every reloading resume.
 
+Resuming a `failed` or `cancelled` score (or passing `--from-sheet`) also reopens loops that ended in failure (`range_failed`, `condition_error`) when the reset left member sheets pending: the loop returns to `running` with its in-flight iteration preserved, so templates and validations see the loop index (e.g. `{{ pass_no }}`) again instead of failing with E999 on an undefined variable. A loop that ended for a genuine reason — `condition_met`, `count_reached`, `max_iterations`, `cost_limit_exceeded` — stays closed. Resuming a `paused` score preserves loop state as persisted. Each reopened loop is logged (`baton.resume.loops_reopened`) with the count and any `from_sheet` bound.
+
 #### Arguments
 
 | Argument | Required | Description |
@@ -173,7 +175,7 @@ Loads the score state and continues execution from where it left off. By default
 | `--force` | `-f` | false | Force resume even if score appears completed |
 | `--escalation` | `-e` | false | Pause sheets in FERMATA on retry exhaustion for a composer decision; resolve with `mzt resolve`. Works without `--self-healing` |
 | `--no-reload` | | false | Use cached config snapshot instead of auto-reloading from YAML file |
-| `--from-sheet` | | | Reset every sheet >= N to pending and re-run from there, including completed or skipped sheets |
+| `--from-sheet` | | | Reset every sheet >= N to pending and re-run from there, including completed or skipped sheets; loops whose span still has a pending member sheet >= N are reopened with their iteration preserved |
 | `--self-healing` | `-H` | false | Enable automatic diagnosis and remediation when retries are exhausted |
 | `--yes` | `-y` | false | Auto-confirm suggested fixes when using `--self-healing` |
 

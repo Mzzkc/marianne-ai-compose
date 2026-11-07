@@ -10,6 +10,7 @@ from marianne.core.config.flow import LoopConfig, SheetTriggerConfig, TriggerAct
 from marianne.core.config.instruments import InstrumentRouteBinding
 from marianne.core.expressions import FileFacts
 from marianne.core.sheet import Sheet
+from marianne.daemon import manager as manager_module
 from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.events import (
@@ -21,6 +22,7 @@ from marianne.daemon.baton.events import (
     SheetAttemptResult,
 )
 from marianne.daemon.baton.musician import _render_template
+from marianne.daemon.registry import DaemonJobStatus
 
 
 def _checkpoint() -> CheckpointState:
@@ -62,7 +64,46 @@ async def test_count_loop_reopens_and_survives_checkpoint_round_trip() -> None:
     assert restored.sheets[1].status == SheetStatus.COMPLETED
     assert restored.flow.loops["1"].phase == "completed"
     assert restored.flow.loops["1"].completed_reason == "count_reached"
+    assert baton2._jobs["j"].flow is not None
+    assert baton2._jobs["j"].flow.indices_for(1) == {}
     assert baton2.is_job_complete("j")
+
+
+async def test_resume_failed_loop_restores_flow_vars_and_iterates(tmp_path) -> None:
+    checkpoint = _checkpoint()
+    checkpoint.sheets[1].max_retries = 0
+    loops = {"1": LoopConfig(count=3, index="pass_no")}
+    baton = BatonCore()
+    baton.register_job("j", checkpoint.sheets, {}, loops=loops, flow_state=checkpoint.flow)
+    await baton.handle_event(_result(0))
+    assert checkpoint.flow.loops["1"].iteration == 2
+    await baton.handle_event(_result(1, success=False))
+    run = checkpoint.flow.loops["1"]
+    assert run.phase == "completed"
+    assert run.completed_reason == "range_failed"
+
+    restored = CheckpointState.model_validate_json(checkpoint.model_dump_json())
+    manager_module._reset_sheets_for_resume(restored, DaemonJobStatus.FAILED)
+    manager_module._reopen_loops_for_resume(restored, DaemonJobStatus.FAILED)
+    recovered = BatonCore()
+    recovered.register_job("j", restored.sheets, {}, loops=loops, flow_state=restored.flow)
+    engine = recovered._jobs["j"].flow
+    assert engine is not None
+    indices = engine.indices_for(1)
+    assert indices == {"pass_no": 2}
+    sheet = Sheet(
+        num=1, movement=1, voice_count=1, workspace=tmp_path, instrument_name="cli",
+        prompt_template="pass {{ pass_no }} / {{ loops.pass_no }}",
+    )
+    assert _render_template(sheet, {**indices, "loops": indices}) == "pass 2 / 2"
+    await recovered.handle_event(_result(restored.sheets[1].dispatch_epoch))
+    assert restored.flow.loops["1"].iteration == 3
+    assert restored.sheets[1].status == SheetStatus.PENDING
+    assert engine.indices_for(1) == {"pass_no": 3}
+    await recovered.handle_event(_result(restored.sheets[1].dispatch_epoch))
+    assert recovered.is_job_complete("j")
+    assert restored.flow.loops["1"].completed_reason == "count_reached"
+    assert engine.indices_for(1) == {}
 
 
 async def test_loop_index_renders_inside_jinja_for_block(tmp_path) -> None:
