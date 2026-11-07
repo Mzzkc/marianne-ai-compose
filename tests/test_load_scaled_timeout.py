@@ -92,10 +92,12 @@ def test_marked_tests_have_valid_timeout_and_load_sensitive_markers() -> None:
         marks = {m.name: m for m in getattr(func, "pytestmark", [])}
         assert "load_sensitive" in marks, f"{name} missing load_sensitive mark"
         assert "timeout" in marks, f"{name} missing timeout mark"
-        assert marks["timeout"].args[0] == load_scaled_timeout(expected_base), (
-            f"{name} timeout expected {load_scaled_timeout(expected_base)}, got {marks['timeout'].args[0]}"
+        expected_timeout = load_scaled_timeout(expected_base)
+        actual_timeout = marks["timeout"].args[0]
+        assert actual_timeout == expected_timeout, (
+            f"{name} timeout expected {expected_timeout}, got {actual_timeout}"
         )
-        assert marks["timeout"].args[0] >= expected_base, (
-            f"{name} timeout expected base >= {expected_base}, got {marks['timeout'].args[0]}"
+        assert actual_timeout >= expected_base, (
+            f"{name} timeout expected base >= {expected_base}, got {actual_timeout}"
         )
 
