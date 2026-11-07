@@ -1047,15 +1047,18 @@ def _prepare_for_yaml(obj: Any) -> Any:
     return obj
 
 
-def _apply_default_workspace(data: dict[str, Any]) -> None:
+def _apply_default_workspace(data: dict[str, Any]) -> bool:
     """Fill an auto-managed workspace into a loaded score that omits one (#58).
 
     Mutates ``data`` in place. A no-op when ``workspace`` is already set (any
     truthy value), so an explicit path always wins. Requires a ``name`` to
     derive from; if absent, the model's own default applies instead.
+
+    Returns whether a workspace was derived, so a caller that names the run
+    (``mzt run --job-id``, GH #505) can re-derive it from the run's name.
     """
     if data.get("workspace"):
-        return
+        return False
     name = data.get("name")
     if isinstance(name, str) and name.strip():
         ws = default_workspace_for(name)
@@ -1067,6 +1070,8 @@ def _apply_default_workspace(data: dict[str, Any]) -> None:
         # leaf dir itself is created at job start, as with any workspace.
         ws.parent.mkdir(parents=True, exist_ok=True)
         data["workspace"] = str(ws)
+        return True
+    return False
 
 
 class ValidateConfig(BaseModel):
@@ -1087,11 +1092,22 @@ class JobConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
     _unknown_fields: list[UnknownScoreField] = PrivateAttr(default_factory=list)
+    _workspace_auto_managed: bool = PrivateAttr(default=False)
 
     @property
     def unknown_fields(self) -> tuple[UnknownScoreField, ...]:
         """Fields removed by the tolerant score-file loader."""
         return tuple(self._unknown_fields)
+
+    @property
+    def workspace_auto_managed(self) -> bool:
+        """Whether the loader derived ``workspace`` from ``name`` (#58).
+
+        True only when the score file omits ``workspace:``. A run named with
+        ``mzt run --job-id`` (GH #505) then gets ``~/workspaces/<job-id>``
+        instead, so two runs of one shipped score never share a workspace.
+        """
+        return self._workspace_auto_managed
 
     validation_settings: ValidateConfig = Field(
         default_factory=ValidateConfig,
@@ -1534,13 +1550,15 @@ class JobConfig(BaseModel):
             ws = Path(str(ws_val)).expanduser()
             if not ws.is_absolute():
                 data["workspace"] = str((path.resolve().parent / ws).resolve())
-        else:
+        auto_managed = False
+        if not ws_val:
             # A loaded score that omits workspace gets a conductor-managed one
             # under ~/workspaces/<name> (#58) — workspaces "just work".
-            _apply_default_workspace(data)
+            auto_managed = _apply_default_workspace(data)
         clean, unknown = strip_unknown_score_fields(data, cls)
         config = cls.model_validate(clean)
         config._unknown_fields = unknown
+        config._workspace_auto_managed = auto_managed
         config.source_path = path.resolve()
         return config
 
@@ -1569,11 +1587,13 @@ class JobConfig(BaseModel):
             ws = Path(str(ws_val)).expanduser()
             if not ws.is_absolute():
                 parsed["workspace"] = str((path.resolve().parent / ws).resolve())
-        else:
-            _apply_default_workspace(parsed)
+        auto_managed = False
+        if not ws_val:
+            auto_managed = _apply_default_workspace(parsed)
         clean, unknown = strip_unknown_score_fields(parsed, cls)
         config = cls.model_validate(clean)
         config._unknown_fields = unknown
+        config._workspace_auto_managed = auto_managed
         config.source_path = path.resolve()
         return config
 
@@ -1589,10 +1609,11 @@ class JobConfig(BaseModel):
         # A loaded score that omits workspace gets a conductor-managed one
         # under ~/workspaces/<name> (#58). Explicit relative paths are left to
         # the model's _resolve_workspace (resolved against CWD), as before.
-        _apply_default_workspace(data)
+        auto_managed = _apply_default_workspace(data)
         clean, unknown = strip_unknown_score_fields(data, cls)
         config = cls.model_validate(clean)
         config._unknown_fields = unknown
+        config._workspace_auto_managed = auto_managed
         return config
 
     def get_state_path(self) -> Path:

@@ -126,6 +126,16 @@ def run(
         "malformed lock rejects the job with a specific reason. Omit for "
         "ordinary unlocked submission.",
     ),
+    job_id: str | None = typer.Option(
+        None,
+        "--job-id",
+        help="Name this run. By default the job ID is the score's filename "
+        "stem; --job-id lets one shipped score serve several commissions "
+        "side by side without copying it. When the score sets no "
+        "workspace:, the auto-managed workspace follows the job ID too "
+        "(~/workspaces/<job-id>). Use the same ID with status, pause, "
+        "resume and cancel.",
+    ),
     var: list[str] | None = typer.Option(
         None,
         "--var",
@@ -139,6 +149,15 @@ def run(
     """Run a score from a YAML configuration file."""
     from marianne.core.config import JobConfig
     from marianne.daemon.fleet import is_fleet_config
+
+    # A direct call of run() (tests, embedding) leaves typer's OptionInfo
+    # default in place; only a real string names the run.
+    if not isinstance(job_id, str):
+        job_id = None
+    if job_id is not None:
+        from ._shared import validate_job_id
+
+        job_id = validate_job_id(job_id)
 
     try:
         runtime_vars = _parse_runtime_vars(var)
@@ -167,6 +186,7 @@ def run(
             yes=yes,
             escalation=escalation,
             runtime_vars=runtime_vars,
+            job_id=job_id,
         )
         return
 
@@ -268,6 +288,7 @@ def run(
             escalation=escalation,
             runtime_vars=runtime_vars,
             require_lock=require_lock,
+            job_id=job_id,
         ),
     )
     if routed:
@@ -327,6 +348,7 @@ async def _try_daemon_submit(
     escalation: bool = False,
     runtime_vars: dict[str, str] | None = None,
     require_lock: Path | None = None,
+    job_id: str | None = None,
 ) -> bool:
     """Submit a job to the running conductor.
 
@@ -363,6 +385,8 @@ async def _try_daemon_submit(
             params["runtime_variables"] = runtime_vars
         if require_lock is not None:
             params["required_lock"] = str(Path(require_lock).resolve())
+        if job_id is not None:
+            params["job_id"] = job_id
 
         routed, result = await try_daemon_route("job.submit", params)
         if not routed:
@@ -549,9 +573,12 @@ def _run_fleet(
     yes: bool,
     escalation: bool,
     runtime_vars: dict[str, str],
+    job_id: str | None = None,
 ) -> None:
     """Run or preview a fleet config through the documented run command."""
     unsupported: list[str] = []
+    if job_id is not None:
+        unsupported.append("--job-id")
     if start_sheet is not None:
         unsupported.append("--start-sheet")
     if workspace is not None:

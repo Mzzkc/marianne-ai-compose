@@ -41,7 +41,7 @@ from marianne.core.config.flow import ConcertTrigger
 from marianne.core.config.job import JobConfig as ConcreteJobConfig
 from marianne.core.config.job import merge_runtime_variables
 from marianne.core.config.spec import SpecCorpusConfig
-from marianne.core.config.workspace import sanitize_workspace_name
+from marianne.core.config.workspace import default_workspace_for, sanitize_workspace_name
 from marianne.core.constants import STATE_DB_FILENAME
 from marianne.core.logging import get_logger
 from marianne.daemon.backpressure import BackpressureController
@@ -2443,6 +2443,21 @@ class JobManager:
                     ),
                 )
 
+        # A named run of a score that omits workspace: (GH #505). The loader
+        # derived ~/workspaces/<score name>; a run named with --job-id gets
+        # ~/workspaces/<job-id> instead, so two commissions of one shipped
+        # score never share a workspace. Carried on the request so the job
+        # task, the pending queue and resume all use the same path.
+        if (
+            request.job_id
+            and not request.workspace
+            and parsed_config is not None
+            and parsed_config.workspace_auto_managed
+        ):
+            workspace = default_workspace_for(job_id)
+            workspace.parent.mkdir(parents=True, exist_ok=True)
+            request = request.model_copy(update={"workspace": workspace})
+
         # Resolve relative workspace against client_cwd (working directory fix).
         # When the CLI sends client_cwd, relative workspace paths from the
         # config should resolve against where the user invoked the command,
@@ -2916,11 +2931,18 @@ class JobManager:
         config_path: Path,
         job_id: str,
     ) -> Path | None:
-        """Best-effort workspace resolution from a config file."""
+        """Best-effort workspace resolution from a config file.
+
+        A score that omits ``workspace:`` resolves to the auto-managed
+        workspace of ``job_id``, which differs from the score's name only for
+        a run named with ``mzt run --job-id`` (GH #505).
+        """
         try:
             from marianne.core.config import JobConfig
 
             parsed = JobConfig.from_yaml(config_path)
+            if parsed.workspace_auto_managed:
+                return default_workspace_for(job_id)
             return parsed.workspace
         except Exception:  # noqa: BLE001 — structured logger reports pending.workspace_resolve_failed
             _logger.debug(

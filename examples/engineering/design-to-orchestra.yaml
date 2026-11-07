@@ -51,7 +51,8 @@
 # beside it):
 #   mzt validate examples/engineering/design-to-orchestra.yaml
 #   mzt run examples/engineering/design-to-orchestra.yaml \
-#     --var specs_dir=$HOME/workspaces/spec-forge/specs \
+#     --job-id orchestra-<commission> \
+#     --var specs_dir=$HOME/workspaces/spec-forge-<commission>/specs \
 #     --var project_root=/abs/project \
 #     --var tempo=standard
 #   Read RUN.md, then start the fleet it names (or set --var submit=true).

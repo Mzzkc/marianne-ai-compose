@@ -41,16 +41,20 @@
 #      designs. Flat directory; every file in it is read.
 #   3. mzt validate examples/engineering/spec-forge.yaml
 #   4. mzt run examples/engineering/spec-forge.yaml \
+#        --job-id spec-forge-<commission> \
 #        --var concept_file=/abs/concept.md \
 #        --var context_dir=/abs/context \
 #        --var tempo=standard
 #   5. The score pauses in FERMATA on its last sheet. Read
 #      07-stakeholder-brief.md, then:
-#        mzt resolve spec-forge <last-sheet> accept   # approve the design
-#        mzt resolve spec-forge <last-sheet> retry    # after editing the specs
+#        mzt resolve spec-forge-<commission> <last-sheet> accept   # approve
+#        mzt resolve spec-forge-<commission> <last-sheet> retry    # after edits
+#      --job-id is optional; it names the run (and its ~/workspaces/ dir)
+#      so this file serves every commission unmodified. Never copy it to
+#      rename a run.
 #      If the review loop spent every pass still in REWORK, the brief opens
 #      with "Not yet approved" and the blockers; the decision is still yours.
-#      `mzt status spec-forge` shows the sheet number.
+#      `mzt status spec-forge-<commission>` shows the sheet number.
 #   6. Feed specs/ to design-to-orchestra.yaml.
 #
 # tempo: rapid | standard | thorough. It sets how many review passes the loop
