@@ -1363,7 +1363,7 @@ table below describes retained score syntax, not active log routing.
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `level` | `"DEBUG" \| "INFO" \| "WARNING" \| "ERROR"` | `"INFO"` | | Minimum log level |
-| `format` | `"json" \| "console" \| "both"` | `"console"` | `file_path` required when `"both"` | Output format |
+| `format` | `"json" \| "console" \| "both"` | `"console"` | `file_path` required when `"both"` | Output format. The JSON renderer always serializes with `ensure_ascii=True` (issue #495): the JSON log stream may share stdout with `--json` machine output, so log records can never emit non-ASCII bytes regardless of configuration |
 | `file_path` | `Path \| None` | `None` | | Log file output path |
 | `max_file_size_mb` | `int` | `50` | `1–1000` | Maximum log file size before rotation (MB). Rotation renames inline; gzip runs on a helper thread so the event loop never waits on it |
 | `backup_count` | `int` | `5` | `0–100` | Rotated log files to keep |
@@ -1638,7 +1638,10 @@ dispatch waits for the running count to drain below the new limit (#231).
 `partial` when profile files failed to load), and the live per-model caps
 (`model_concurrency`). With `--json`, stdout carries only the JSON
 document (safe for `jq`); with an explicit `--socket`, no PID file is
-read and the daemon's own payload supplies the `pid`.
+read and the daemon's own payload supplies the `pid`. All `--json`
+output is ASCII-escaped strict UTF-8 emitted verbatim — the machine
+contract shared by every command (issue #495; see
+`docs/cli-reference.md` § JSON output).
 
 **Field reloadability** — what a reload applies vs. what needs a restart
 (changed restart-only fields are reported in `declined` and the running

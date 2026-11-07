@@ -435,6 +435,29 @@ JSON output structure:
 
 ---
 
+### JSON output (`--json`)
+
+`--json` is a machine contract on every command that offers it: stdout
+carries only the JSON document — valid UTF-8, ASCII-escaped, emitted
+verbatim (no emoji or markup substitution) — so a consumer can
+`json.load(sys.stdin)` it without an `errors=` policy (issue #495).
+Hostile bytes captured from musicians or subprocesses (a stray `0x97`
+em dash in an output tail, lone surrogates from a mis-decoded stream)
+are neutralized at the capture boundary before they reach state, and the
+JSON writer serializes with `ensure_ascii=True` through a direct stdout
+write that bypasses Rich's rendering pipeline. JSON-format logging
+(`--log-format json`) is pinned to the same ASCII-only serialization.
+
+#### Global JSON guarantees
+
+All `--json` output shares these guarantees (issue #495):
+
+- **Strict UTF-8.** `mzt status <job> --json | python3 -c 'import sys, json; json.load(sys.stdin)'` never raises `UnicodeDecodeError`, whatever a musician's subprocess printed.
+- **ASCII-only serialization.** Output is written with `ensure_ascii=True`; non-ASCII characters in values appear as `\uXXXX` escapes.
+- **Verbatim emission.** The serialized text is written directly to stdout (bypassing Rich's emoji substitution), so the payload a consumer parses is the payload `json.dumps` produced.
+
+The guarantees are enforced by regression tests (`tests/test_json_utf8_contract.py`) that plant hostile bytes (raw `0x97`, lone surrogates) in attempt output and assert the emitted JSON parses strictly.
+
 ### `mzt watch`
 
 Live-tail musician output for a running score (#352).

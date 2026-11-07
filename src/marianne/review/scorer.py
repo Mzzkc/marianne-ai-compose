@@ -169,6 +169,8 @@ class GitDiffProvider:
                     cwd=str(workspace),
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=30,
                 )
             else:
@@ -178,6 +180,8 @@ class GitDiffProvider:
                     cwd=str(workspace),
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=30,
                 )
                 unstaged = subprocess.run(
@@ -185,6 +189,8 @@ class GitDiffProvider:
                     cwd=str(workspace),
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=30,
                 )
                 return staged.stdout + unstaged.stdout
