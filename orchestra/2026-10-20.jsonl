@@ -1,0 +1,66 @@
+{"ts":1792515435.928782,"job":"issue-triage","sheet":null,"kind":"job.started","instrument":null,"outcome":null,"note":null}
+{"ts":1792515436.928782,"job":"issue-triage","sheet":1,"kind":"sheet.dispatched","instrument":"codex-cli","outcome":null,"note":null}
+{"ts":1792515557.577417,"job":"issue-triage","sheet":1,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792515559.58216,"job":"issue-triage","sheet":2,"kind":"sheet.dispatched","instrument":"codex-cli","outcome":null,"note":null}
+{"ts":1792515654.558677,"job":"issue-triage","sheet":2,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792515656.565909,"job":"issue-triage","sheet":3,"kind":"sheet.dispatched","instrument":"codex-cli","outcome":null,"note":null}
+{"ts":1792515699.219389,"job":"issue-triage","sheet":3,"kind":"sheet.ended","instrument":null,"outcome":"partial","note":null}
+{"ts":1792515699.219747,"job":"issue-triage","sheet":3,"kind":"sheet.retry","instrument":null,"outcome":null,"note":null}
+{"ts":1792515705.800653,"job":"issue-triage","sheet":3,"kind":"sheet.dispatched","instrument":"codex-cli","outcome":null,"note":"attempt 2"}
+{"ts":1792516023.579433,"job":"issue-triage","sheet":3,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792516025.588359,"job":"issue-triage","sheet":4,"kind":"sheet.dispatched","instrument":"codex-cli","outcome":null,"note":null}
+{"ts":1792516026.094015,"job":"issue-triage","sheet":5,"kind":"sheet.dispatched","instrument":"codex-cli","outcome":null,"note":null}
+{"ts":1792516026.608356,"job":"issue-triage","sheet":6,"kind":"sheet.dispatched","instrument":"codex-cli","outcome":null,"note":null}
+{"ts":1792516119.445503,"job":"issue-triage","sheet":4,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792516181.161536,"job":"issue-triage","sheet":6,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792516197.865902,"job":"issue-triage","sheet":5,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792516199.895038,"job":"issue-triage","sheet":7,"kind":"sheet.dispatched","instrument":"codex-cli","outcome":null,"note":null}
+{"ts":1792516312.218623,"job":"issue-triage","sheet":7,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792516314.223796,"job":"issue-triage","sheet":8,"kind":"sheet.dispatched","instrument":"codex-cli","outcome":null,"note":null}
+{"ts":1792516392.43998,"job":"issue-triage","sheet":8,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792516394.486884,"job":"issue-triage","sheet":9,"kind":"sheet.dispatched","instrument":"codex-cli","outcome":null,"note":null}
+{"ts":1792516447.731121,"job":"issue-triage","sheet":9,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792516448.731121,"job":"issue-triage","sheet":null,"kind":"job.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792516472.464424,"job":"issue-solver","sheet":null,"kind":"job.started","instrument":null,"outcome":null,"note":null}
+{"ts":1792516473.464424,"job":"issue-solver","sheet":1,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":null}
+{"ts":1792516529.702343,"job":"issue-solver","sheet":1,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792516531.707946,"job":"issue-solver","sheet":2,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":null}
+{"ts":1792516849.969767,"job":"issue-solver","sheet":2,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792516851.975674,"job":"issue-solver","sheet":3,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":null}
+{"ts":1792517039.845387,"job":"issue-solver","sheet":3,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792517041.852153,"job":"issue-solver","sheet":4,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":null}
+{"ts":1792520641.999707,"job":"issue-solver","sheet":4,"kind":"sheet.ended","instrument":null,"outcome":"failed","note":null}
+{"ts":1792520642.000019,"job":"issue-solver","sheet":4,"kind":"sheet.retry","instrument":null,"outcome":null,"note":null}
+{"ts":1792520663.729701,"job":"issue-solver","sheet":4,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":"attempt 2"}
+{"ts":1792520946.957203,"job":"issue-solver","sheet":4,"kind":"sheet.ended","instrument":null,"outcome":"failed","note":null}
+{"ts":1792520946.957457,"job":"issue-solver","sheet":4,"kind":"sheet.fallback","instrument":"codex-cli","outcome":null,"note":"claude-code -> codex-cli"}
+{"ts":1792520947.003895,"job":"issue-solver","sheet":4,"kind":"sheet.dispatched","instrument":"codex-cli","outcome":null,"note":null}
+{"ts":1792522290.382614,"job":"issue-solver","sheet":4,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792522292.391491,"job":"issue-solver","sheet":5,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":null}
+{"ts":1792522292.902627,"job":"issue-solver","sheet":6,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":null}
+{"ts":1792522293.408241,"job":"issue-solver","sheet":7,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":null}
+{"ts":1792522577.422964,"job":"issue-solver","sheet":7,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792523394.246535,"job":"issue-solver","sheet":5,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792524216.177652,"job":"issue-solver","sheet":6,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792524218.189674,"job":"issue-solver","sheet":8,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":null}
+{"ts":1792526618.814107,"job":"issue-solver","sheet":8,"kind":"sheet.ended","instrument":null,"outcome":"failed","note":null}
+{"ts":1792526618.814399,"job":"issue-solver","sheet":8,"kind":"sheet.retry","instrument":null,"outcome":null,"note":null}
+{"ts":1792526626.940119,"job":"issue-solver","sheet":8,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":"attempt 2"}
+{"ts":1792527486.069786,"job":"issue-solver","sheet":8,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792527488.082521,"job":"issue-solver","sheet":9,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":null}
+{"ts":1792527686.946204,"job":"issue-solver","sheet":9,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792527688.961429,"job":"issue-solver","sheet":10,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":null}
+{"ts":1792532258.498533,"job":"issue-solver","sheet":10,"kind":"sheet.ended","instrument":null,"outcome":"partial","note":null}
+{"ts":1792532258.498898,"job":"issue-solver","sheet":10,"kind":"sheet.retry","instrument":null,"outcome":null,"note":null}
+{"ts":1792532282.481587,"job":"issue-solver","sheet":10,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":"attempt 2"}
+{"ts":1792532805.099444,"job":"issue-solver","sheet":null,"kind":"job.paused","instrument":null,"outcome":null,"note":null}
+{"ts":1792533713.702615,"job":"issue-solver","sheet":10,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792533715.0,"job":"issue-solver","sheet":null,"kind":"job.resumed","instrument":null,"outcome":null,"note":null}
+{"ts":1792533757.99355,"job":"issue-solver","sheet":11,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":null}
+{"ts":1792534535.486097,"job":"issue-solver","sheet":11,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792534537.50844,"job":"issue-solver","sheet":12,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":null}
+{"ts":1792534612.613247,"job":"issue-solver","sheet":12,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792534614.64502,"job":"issue-solver","sheet":13,"kind":"sheet.dispatched","instrument":"claude-code","outcome":null,"note":null}
+{"ts":1792534663.83785,"job":"issue-solver","sheet":13,"kind":"sheet.ended","instrument":null,"outcome":"completed","note":null}
+{"ts":1792534664.33785,"job":"issue-solver","sheet":13,"kind":"job.chained","instrument":null,"outcome":null,"note":null}
+{"ts":1792534664.83785,"job":"issue-solver","sheet":null,"kind":"job.ended","instrument":null,"outcome":"completed","note":null}
