@@ -67,7 +67,7 @@ and constraints are extracted directly from the Pydantic v2 config models in
 | `description` | `str \| None` | `None` | Human-readable description |
 | `workspace` | `Path` | `./workspace` | Output directory. Resolved to absolute path at construction time. |
 | `instrument` | `str \| None` | `None` | Profile, score alias, or capability class. The packaged classes are `strong`, `workhorse`, `fast`, `cheap`, `writing`, `review`, `vision`, `local`, `high-context`, `image`, `video`; the vocabulary is the packaged `classes/default.yaml` itself, and a user (`~/.marianne/classes.yaml`) or venue (`.marianne/classes.yaml`) layer may define ANY further class name or tombstone a packaged one with `null` (GH #433). Run `mzt instruments classes show` to see resolved chains. If unset, defaults to `claude-code`. |
-| `instrument_config` | `InstrumentSettings` | `{}` | Typed per-score overrides. Keys: `timeout_seconds` (sheet execution timeout), `model`, `provider`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`, `interactive_nudge_policy`, `interactive_nudge_instrument`, `interactive_nudge_timeout_seconds`, `max_tokens`, `temperature`, `response_format`. Unknown keys warn as V010/V011; executor support still varies. |
+| `instrument_config` | `InstrumentSettings` | `{}` | Typed per-score overrides. Keys: `timeout_seconds` (sheet execution timeout), `model`, `provider`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`, `interactive_nudge_policy`, `interactive_nudge_instrument`, `interactive_nudge_timeout_seconds`, `max_tokens`, `temperature`, `response_format`, `first_output_timeout_seconds` (CLI first-output silence bound, GH #502; omit to inherit the profile, a finite positive number to override, `null` to disable — see the [CLI timeout section](instrument-guide.md) for the full semantics). Unknown keys warn as V010/V011; executor support still varies. |
 | `instruments` | `dict[str, InstrumentDef]` | `{}` | Named instrument definitions local to this score. Declares reusable aliases referencing registered instrument profiles with optional overrides. Referenced by name in per-sheet or per-movement `instrument:` fields. See [instruments](#instruments). |
 | `movements` | `dict[int, MovementDef]` | `{}` | Movement declarations. Map of movement number to MovementDef. Each movement can specify a name, instrument, instrument config, and voice count. See [movements](#movements). |
 | `instrument_fallbacks` | `list[str]` | `[]` | Score-level fallback chain. Each profile, alias, or class is expanded in place; a primary class's tail runs before declared fallbacks. See [Instrument Fallbacks](#instrument-fallbacks). |
@@ -103,6 +103,15 @@ with the request; they do not mutate another in-flight sheet's settings.
 Any top-level key this reference does not list is dropped by the tolerant loader; when its value is a block (a mapping or a list) `mzt validate` warns V010 — the runtime implements no such block, so nothing it configures will happen (a key from an unmerged branch, such as `deliver:`, is the usual cause). A stray scalar is V011 INFO.
 
 The same typed key set is checked at score `instrument_config`, `movements.<N>.instrument_config`, `sheet.per_sheet_instrument_config.<N>`, and `instruments.<alias>.config`. These scopes merge in that order, with an alias applied before a per-sheet override. An unknown key warns and is ignored; it does not change the sheet timeout.
+
+`first_output_timeout_seconds` is tri-state like `response_format` (GH #502):
+omitted inherits the CLI profile's first-output bound, a finite positive number
+widens or narrows it for that scope, and `null` disables it for that sheet.
+Once any stdout or stderr byte arrives, only the sheet timeout governs; the
+sheet timeout also caps the override when it exceeds it. Applies to CLI
+backends; HTTP and interactive backends warn and ignore it. See the
+[Instrument Guide](instrument-guide.md) for the profile-level setting and
+worked examples.
 
 `response_format` is opt-in. For OpenAI-compatible HTTP profiles, an omitted
 key inherits `http.response_format`, an explicit `null` disables it for that

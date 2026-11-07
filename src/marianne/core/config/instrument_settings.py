@@ -2,10 +2,29 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator, Mapping
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
+
+
+def coerce_first_output_timeout(value: Any) -> float:
+    """Single enforcement point for a first_output_timeout_seconds override.
+
+    Shared by the pydantic schema below and adapter dispatch validation so
+    YAML loading and direct ``Sheet`` callers that bypass YAML cannot drift
+    apart. Accepts a finite positive number (numeric strings included);
+    refuses booleans, zero, negatives, nonfinite values, and garbage.
+    """
+    if isinstance(value, bool):
+        raise ValueError(
+            "first_output_timeout_seconds must be a duration, not a boolean"
+        )
+    bound = float(value)
+    if not math.isfinite(bound) or bound <= 0:
+        raise ValueError("first_output_timeout_seconds must be finite and positive")
+    return bound
 
 
 class InstrumentSettings(BaseModel, Mapping[str, Any]):
@@ -20,6 +39,22 @@ class InstrumentSettings(BaseModel, Mapping[str, Any]):
         description="Maximum seconds one sheet's instrument execution may run; "
         "set this at score, movement, sheet, or score-alias scope.",
     )
+    first_output_timeout_seconds: float | None = Field(
+        default=None, gt=0, allow_inf_nan=False,
+        description="CLI first-output silence bound in seconds, capped by the sheet "
+        "timeout. Omit to inherit the profile; use a finite positive number to "
+        "override, or null to disable. HTTP and interactive backends ignore it.",
+    )
+
+    @field_validator("first_output_timeout_seconds", mode="before")
+    @classmethod
+    def _first_output_duration_not_bool(cls, value: Any) -> Any:
+        # Null (disable) and omission (inherit) are not durations; only a
+        # present non-null value carries the shared coercion contract.
+        if value is not None:
+            coerce_first_output_timeout(value)
+        return value
+
     model: str | None = Field(
         default=None, description="Model requested from this instrument profile."
     )

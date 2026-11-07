@@ -305,6 +305,7 @@ keys:
 | `interactive_nudge_policy` | `static` (default) or `model` for screen-aware continuation. |
 | `interactive_nudge_instrument` | Registered headless instrument to call when the policy is `model`. |
 | `interactive_nudge_timeout_seconds` | Finite positive model-call timeout; defaults to 30 seconds, within the sheet deadline. |
+| `first_output_timeout_seconds` | CLI-only first-output silence bound (GH #502). Omit to inherit the profile, a finite positive number to override, `null` to disable. Capped by `timeout_seconds`; inert after the first output byte. |
 
 Unknown keys are silently ignored — don't rely on keys outside this table.
 

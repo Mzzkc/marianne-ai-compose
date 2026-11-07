@@ -522,6 +522,16 @@ must never skip a legitimate one.
 | `post_exit_drain_grace_seconds` | `3.0` | Maximum time to drain inherited pipes after the CLI parent exits |
 | `first_output_timeout_seconds` | unset | Seconds the CLI may run with **zero bytes** on stdout and stderr before the attempt is ended as a stall (GH #434). A streaming agent emits its init event within seconds of a healthy start, so silence is a dead session, not thinking: the attempt ends with a `Stale execution` marker, the baton retries after 120 s and then falls back, and the sheet timeout is not burned. The shipped `jsonl` profiles (codex-cli, opencode, antigravity) set `90`; `json` and `text` profiles leave it unset because they emit nothing until the end (claude-code's `--output-format json` is one: its stalls are bounded only by the sheet timeout until that profile moves to stream-json). A long silence AFTER the first byte is never struck by this bound. |
 
+Per-sheet `instrument_config.first_output_timeout_seconds` overrides this profile
+default (GH #502). Omit the key to inherit the profile; set a finite positive
+number to widen or narrow the first-output bound; set `null` to disable it for
+that sheet. The sheet timeout always caps execution, including when the override
+exceeds it or disables the first-output bound. Once any stdout or stderr byte
+arrives, only the sheet timeout governs. For example, under known backup or IO
+pressure a sheet can set `instrument_config: {first_output_timeout_seconds: 240}`
+without changing the shared profile or other concurrent sheets. This setting
+applies to CLI backends; HTTP and interactive backends warn and ignore it.
+
 #### `cli.output` — How to Parse the Result
 
 | Field | Required | Default | Description |

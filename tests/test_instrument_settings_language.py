@@ -131,7 +131,7 @@ def test_runtime_instrument_key_census_is_declared() -> None:
         "interactive_max_nudges", "interactive_nudge_message", "max_tokens",
         "interactive_nudge_policy", "interactive_nudge_instrument",
         "interactive_nudge_timeout_seconds",
-        "temperature", "response_format",
+        "temperature", "response_format", "first_output_timeout_seconds",
     }
 
 

@@ -57,6 +57,7 @@ from marianne.core.config.execution import (
     StaleDetectionConfig,
 )
 from marianne.core.config.flow import ConcertTrigger
+from marianne.core.config.instrument_settings import coerce_first_output_timeout
 from marianne.core.config.instruments import validate_openai_response_format
 from marianne.core.constants import VALIDATION_PASS_RATE_KEY
 from marianne.core.expressions import parse_expression
@@ -92,7 +93,12 @@ from marianne.daemon.baton.state import (
 )
 from marianne.daemon.output_hub import OutputStreamHub
 from marianne.daemon.technique_router import TechniqueRouter
-from marianne.execution.base import RESPONSE_FORMAT_UNSET, ResponseFormatResolution
+from marianne.execution.base import (
+    FIRST_OUTPUT_TIMEOUT_UNSET,
+    RESPONSE_FORMAT_UNSET,
+    FirstOutputTimeoutResolution,
+    ResponseFormatResolution,
+)
 from marianne.execution.validation.history import FailureHistoryStore, HistoricalFailure
 from marianne.utils.process import (
     _proc_start_ticks as _leader_start_ticks,
@@ -3103,6 +3109,32 @@ class BatonAdapter:
                     "dispatch the sheet without its schema guarantee"
                 )
 
+        first_output_timeout: FirstOutputTimeoutResolution = FIRST_OUTPUT_TIMEOUT_UNSET
+        if "first_output_timeout_seconds" in _icfg_rf:
+            from marianne.execution.instruments.cli_backend import PluginCliBackend
+
+            if isinstance(backend, PluginCliBackend):
+                raw_bound = _icfg_rf["first_output_timeout_seconds"]
+                if raw_bound is None:
+                    first_output_timeout = None
+                else:
+                    try:
+                        first_output_timeout = coerce_first_output_timeout(raw_bound)
+                    except (TypeError, ValueError, OverflowError) as exc:
+                        raise ValueError(
+                            "instrument_config.first_output_timeout_seconds "
+                            "must be a finite positive number or null"
+                        ) from exc
+            else:
+                _logger.warning(
+                    "adapter.dispatch.first_output_timeout_unsupported",
+                    extra={
+                        "job_id": job_id,
+                        "sheet_num": sheet_num,
+                        "backend": type(backend).__name__,
+                    },
+                )
+
         mode = AttemptMode.NORMAL
         completion_suffix: str | None = None
         if state.completion_attempts > 0 and state.can_complete:
@@ -3127,6 +3159,7 @@ class BatonAdapter:
                 prior_failure if mode != AttemptMode.COMPLETION else None
             ),
             response_format=sheet_response_format,
+            first_output_timeout_seconds=first_output_timeout,
             expected_route=state.expected_route,
             route_model_override=_icfg_rf.get("model"),
             route_provider_override=_icfg_rf.get("provider"),

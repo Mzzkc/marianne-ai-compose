@@ -50,6 +50,7 @@ from marianne.execution.base import (
     ExitReason,
     SheetRequestState,
     _ResponseFormatUnset,
+    is_first_output_timeout_unset,
 )
 from marianne.execution.instruments.workspace_mcp_config import (
     MCP_WORKSPACE_CONFIG_LOCKS as _MCP_WORKSPACE_CONFIG_LOCKS,
@@ -863,13 +864,13 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
         parent_create_time: float | None,
         parent_start_ticks: int | None,
         effective_timeout: float,
+        first_output_bound: float | None,
         stdout_chunks: list[bytes],
         stderr_chunks: list[bytes],
     ) -> int:
         """Wait for the parent to exit, within the sheet timeout, and (GH #434)
-        raise ``_FirstOutputStall`` if the profile bounds first output and the
+        raise ``_FirstOutputStall`` if the request bounds first output and the
         bound passes with zero bytes on both pipes."""
-        bound = self._cli.first_output_timeout_seconds
         waiter = asyncio.ensure_future(
             _wait_for_parent_exit(
                 proc, descendants, parent_create_time,
@@ -877,10 +878,10 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
             )
         )
         try:
-            if bound is None or bound >= effective_timeout:
+            if first_output_bound is None or first_output_bound >= effective_timeout:
                 return await asyncio.wait_for(waiter, timeout=effective_timeout)
             deadline = time.monotonic() + effective_timeout
-            first_output_deadline = time.monotonic() + bound
+            first_output_deadline = time.monotonic() + first_output_bound
             while True:
                 if stdout_chunks or stderr_chunks:
                     # Output has started; the ordinary sheet timeout governs.
@@ -1360,6 +1361,13 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
             return refusal
 
         effective_timeout = timeout_seconds or self._profile.default_timeout_seconds
+        first_output_bound = (
+            self._cli.first_output_timeout_seconds
+            if request is None or is_first_output_timeout_unset(
+                request.first_output_timeout_seconds
+            )
+            else request.first_output_timeout_seconds
+        )
         job_id = request.job_id if request is not None else None
         sheet_num = request.sheet_num if request is not None else None
 
@@ -1657,7 +1665,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
                 try:
                     exit_code = await self._wait_bounded_by_first_output(
                         proc, descendants, parent_create_time, parent_start_ticks,
-                        effective_timeout, stdout_chunks, stderr_chunks,
+                        effective_timeout, first_output_bound, stdout_chunks, stderr_chunks,
                     )
                     if parent_create_time is not None:
                         descendants.update((child.pid, child) for child in
@@ -1685,7 +1693,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
                     _logger.warning(
                         "plugin_cli_first_output_stall",
                         instrument=self._profile.name,
-                        first_output_timeout=self._cli.first_output_timeout_seconds,
+                        first_output_timeout=first_output_bound,
                         timeout=effective_timeout,
                         job_id=job_id,
                         sheet_num=sheet_num,
@@ -1747,7 +1755,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
                     # text a zero-byte session has.
                     stderr_data += (
                         f"\nStale execution: no output within "
-                        f"{self._cli.first_output_timeout_seconds:g}s of start "
+                        f"{first_output_bound:g}s of start "
                         "(first_output_timeout_seconds, GH #434)\n"
                     )
 

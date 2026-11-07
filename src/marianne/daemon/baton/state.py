@@ -43,7 +43,12 @@ MAX_FALLBACK_HISTORY: int = 50
 from marianne.core.checkpoint import TERMINAL_SHEET_STATUSES, SheetStatus
 from marianne.core.config.instruments import InstrumentRouteBinding
 from marianne.daemon.baton.events import SheetAttemptResult
-from marianne.execution.base import RESPONSE_FORMAT_UNSET, ResponseFormatResolution
+from marianne.execution.base import (
+    FIRST_OUTPUT_TIMEOUT_UNSET,
+    RESPONSE_FORMAT_UNSET,
+    FirstOutputTimeoutResolution,
+    ResponseFormatResolution,
+)
 
 BatonSheetStatus = SheetStatus
 
@@ -160,6 +165,9 @@ class AttemptContext:
     expected_route: InstrumentRouteBinding | None = None
     route_model_override: str | None = None
     route_provider_override: str | None = None
+    first_output_timeout_seconds: FirstOutputTimeoutResolution = FIRST_OUTPUT_TIMEOUT_UNSET
+    """CLI first-output bound: unset inherits the profile, None disables it,
+    and a positive number overrides it request-locally for this attempt."""
 
 
 # =============================================================================
