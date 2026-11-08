@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Union
 
+from typing_extensions import TypeIs
+
 if TYPE_CHECKING:
     import httpx
 
@@ -36,6 +38,24 @@ RESPONSE_FORMAT_UNSET: _ResponseFormatUnset = _ResponseFormatUnset()
 
 # Tri-state resolution carried on SheetRequestState / AttemptContext.
 ResponseFormatResolution = Union[dict[str, Any], None, "_ResponseFormatUnset"]
+
+
+class _FirstOutputTimeoutUnset:
+    """No request override; use the CLI profile's first-output bound."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "FIRST_OUTPUT_TIMEOUT_UNSET"
+
+
+FIRST_OUTPUT_TIMEOUT_UNSET: _FirstOutputTimeoutUnset = _FirstOutputTimeoutUnset()
+FirstOutputTimeoutResolution = Union[float, None, "_FirstOutputTimeoutUnset"]
+
+
+def is_first_output_timeout_unset(value: Any) -> TypeIs[_FirstOutputTimeoutUnset]:
+    """True when ``value`` is the unset sentinel (inherit the profile bound)."""
+    return isinstance(value, _FirstOutputTimeoutUnset)
 
 
 @dataclass(frozen=True)
@@ -71,6 +91,9 @@ class SheetRequestState:
     route_provider_override: str | None = None
     job_id: str | None = None
     sheet_num: int | None = None
+    first_output_timeout_seconds: FirstOutputTimeoutResolution = FIRST_OUTPUT_TIMEOUT_UNSET
+    """CLI first-output bound: unset uses the profile, None disables it,
+    and a positive number overrides it, capped by the sheet timeout."""
 
 
 @dataclass

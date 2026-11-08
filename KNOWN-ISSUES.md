@@ -76,8 +76,12 @@ constraint remains:
 
 Fixed in this release: the specific bug where `mzt recover` followed by
 `mzt resume` re-FAILed a job immediately (the baton held stale sheet state and
-fired `is_job_complete` before recover took effect), and the bug where the
-`Attempts` column read `0` for all baton-driven sheets.
+fired `is_job_complete` before recover took effect), the bug where the
+`Attempts` column read `0` for all baton-driven sheets, and the bug where
+resuming a FAILED score whose loop had ended in `range_failed`/`condition_error`
+lost the loop index — recovered sheets failed with E999 (`pass_no is
+undefined`) because the loop stayed `completed`; the resume now reopens such
+loops with their iteration preserved (#500).
 
 Broader recovery-reliability hardening is tracked in
 [#305](https://github.com/Mzzkc/marianne-ai-compose/issues/305).

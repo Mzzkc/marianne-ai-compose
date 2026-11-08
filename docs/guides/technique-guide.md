@@ -104,6 +104,13 @@ in the current sheet's phase. This means:
 - A technique declared for `[all]` is available in every phase
 - A technique with an empty phases list is declared but never active
 
+When a score uses numbered movements instead of named phases, the six
+lifecycle movements map to phase names (`1`→recon, `2`→plan, `3`→work,
+`4`→integration, `5`→inspect, `6`→aar; any later movement counts as
+`work`), and a technique that listed the sheet's movement *number* as a
+phase entry also matches, so hand-written techniques declared for numbered
+sheets still gate correctly.
+
 Phase names correspond to the agent lifecycle:
 - `recon` — Reconnaissance (gathering information)
 - `plan` — Planning (deciding what to do)

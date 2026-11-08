@@ -33,6 +33,11 @@ _logger = get_logger("daemon.mcp_pool")
 
 # Timeout for waiting on process termination during shutdown
 _STOP_TIMEOUT_SECONDS = 10.0
+_MONITOR_INTERVAL_SECONDS = 1.0
+_RESTART_BACKOFF_SECONDS = 1.0
+_MAX_RESTART_ATTEMPTS = 3
+# A short-lived successful spawn does not reset a crash loop's retry budget.
+_RESTART_STABLE_SECONDS = 30.0
 
 
 class McpServerState(str, Enum):
@@ -52,13 +57,18 @@ class _ServerHandle:
         state: Current server state.
     """
 
-    __slots__ = ("bridge", "name", "process", "state")
+    __slots__ = (
+        "bridge", "name", "next_restart_at", "process", "restart_attempts", "started_at", "state",
+    )
 
     def __init__(self, name: str) -> None:
         self.name = name
         self.process: asyncio.subprocess.Process | None = None
         self.bridge: McpSocketBridge | None = None
         self.state = McpServerState.STOPPED
+        self.restart_attempts = 0
+        self.next_restart_at = 0.0
+        self.started_at = 0.0
 
 
 class McpPoolManager:
@@ -86,20 +96,37 @@ class McpPoolManager:
         self._handles: dict[str, _ServerHandle] = {
             name: _ServerHandle(name) for name in config.servers
         }
+        self._monitor_task: asyncio.Task[None] | None = None
+        self._stopping = False
+        self._lifecycle_lock = asyncio.Lock()
 
     def server_names(self) -> list[str]:
         """Return the names of all configured servers."""
         return list(self._config.servers.keys())
 
     def is_running(self, name: str) -> bool:
-        """Check if a server is currently running."""
+        """Check if a server is currently running.
+
+        Reconciles the recorded state against the live process/bridge: a handle
+        recorded as RUNNING whose process has exited (or whose bridge is dead)
+        is transitioned to FAILED as a side effect, so config generation and
+        status inventories exclude the dead server immediately.
+        """
         handle = self._handles.get(name)
-        if handle is None:
+        if handle is None or handle.state != McpServerState.RUNNING:
             return False
-        return handle.state == McpServerState.RUNNING
+        alive = (
+            handle.bridge.is_running if handle.bridge is not None
+            else handle.process is not None and handle.process.returncode is None
+        )
+        if not alive:
+            handle.state = McpServerState.FAILED
+        return alive
 
     def get_status(self) -> dict[str, McpServerState]:
         """Get the state of all servers."""
+        for name in self._handles:
+            self.is_running(name)
         return {name: handle.state for name, handle in self._handles.items()}
 
     def get_socket_path(self, name: str) -> Path | None:
@@ -124,140 +151,194 @@ class McpPoolManager:
         }
 
     async def start_all(self) -> None:
-        """Start all configured MCP server processes.
-
-        Each server is started as an asyncio subprocess. Failures are
-        logged and the server is marked as FAILED — other servers still
-        start.
-        """
-        for name, entry in self._config.servers.items():
-            handle = self._handles[name]
+        """Start the pool once and supervise it until stop_all()."""
+        async with self._lifecycle_lock:
+            if self._monitor_task is not None and not self._monitor_task.done():
+                return
+            self._stopping = False
             try:
-                _logger.info(
-                    "mcp_pool.starting_server",
-                    extra={"server": name, "command": entry.command},
+                for name, handle in self._handles.items():
+                    handle.restart_attempts = 0
+                    handle.next_restart_at = 0.0
+                    await self._start_server(name)
+            except BaseException:
+                await self._stop_all()
+                raise
+            if self._handles:
+                self._monitor_task = asyncio.create_task(self._monitor(), name="mcp-pool-monitor")
+
+    async def _start_server(self, name: str) -> None:
+        """Use the same startup path for initial launch and supervised restarts."""
+        entry = self._config.servers[name]
+        handle = self._handles[name]
+        try:
+            _logger.info(
+                "mcp_pool.starting_server",
+                extra={"server": name, "command": entry.command},
+            )
+
+            if entry.transport == "stdio":
+                framing: McpFraming = (
+                    "content-length"
+                    if entry.framing == "content-length"
+                    else "newline"
                 )
-
-                if entry.transport == "stdio":
-                    framing: McpFraming = (
-                        "content-length"
-                        if entry.framing == "content-length"
-                        else "newline"
-                    )
-                    bridge = McpSocketBridge(
-                        name=name,
-                        command=entry.command,
-                        socket_path=Path(entry.socket),
-                        upstream_framing=framing,
-                    )
-                    await bridge.start()
-                    handle.bridge = bridge
-                    handle.process = bridge.process
-                else:
-                    # Non-stdio transports are still lifecycle-managed only.
-                    socket_path = Path(entry.socket)
-                    socket_path.parent.mkdir(parents=True, exist_ok=True)
-                    cmd_parts = shlex.split(entry.command)
-                    if not cmd_parts:
-                        raise ValueError("MCP server command must not be empty")
-                    process = await asyncio.create_subprocess_exec(
-                        cmd_parts[0],
-                        *cmd_parts[1:],
-                        stdin=asyncio.subprocess.PIPE,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                    )
-                    handle.process = process
-                handle.state = McpServerState.RUNNING
-
-                _logger.info(
-                    "mcp_pool.server_started",
-                    extra={
-                        "server": name,
-                        "pid": handle.process.pid if handle.process else None,
-                        "transport": entry.transport,
-                    },
+                bridge = McpSocketBridge(
+                    name=name,
+                    command=entry.command,
+                    socket_path=Path(entry.socket),
+                    upstream_framing=framing,
                 )
+                handle.bridge = bridge
+                await bridge.start()
+                handle.process = bridge.process
+            else:
+                # Non-stdio transports are still lifecycle-managed only.
+                socket_path = Path(entry.socket)
+                socket_path.parent.mkdir(parents=True, exist_ok=True)
+                cmd_parts = shlex.split(entry.command)
+                if not cmd_parts:
+                    raise ValueError("MCP server command must not be empty")
+                process = await asyncio.create_subprocess_exec(
+                    cmd_parts[0],
+                    *cmd_parts[1:],
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                handle.process = process
+            handle.state = McpServerState.RUNNING
+            handle.started_at = asyncio.get_running_loop().time()
 
-            except (
-                FileNotFoundError,
-                PermissionError,
-                OSError,
-                RuntimeError,
-                TimeoutError,
-                ValueError,
-            ) as e:
-                handle.state = McpServerState.FAILED
-                _logger.error(
-                    "mcp_pool.server_start_failed",
-                    extra={"server": name, "error": str(e)},
+            _logger.info(
+                "mcp_pool.server_started",
+                extra={
+                    "server": name,
+                    "pid": handle.process.pid if handle.process else None,
+                    "transport": entry.transport,
+                },
+            )
+
+        except (
+            FileNotFoundError,
+            PermissionError,
+            OSError,
+            RuntimeError,
+            TimeoutError,
+            ValueError,
+        ) as e:
+            handle.state = McpServerState.FAILED
+            _logger.error(
+                "mcp_pool.server_start_failed",
+                extra={"server": name, "error": str(e)},
+            )
+
+    async def _monitor(self) -> None:
+        """Restart exited servers according to policy, with a bounded crash budget."""
+        while not self._stopping:
+            await asyncio.sleep(_MONITOR_INTERVAL_SECONDS)
+            for name, handle in self._handles.items():
+                if self._stopping:
+                    return
+                now = asyncio.get_running_loop().time()
+                if self.is_running(name):
+                    if now - handle.started_at >= _RESTART_STABLE_SECONDS:
+                        handle.restart_attempts = 0
+                    continue
+                if handle.state != McpServerState.FAILED:
+                    continue
+                policy = self._config.servers[name].restart_policy
+                exit_code = handle.process.returncode if handle.process is not None else None
+                if policy == "never" or (policy == "on-failure" and exit_code == 0):
+                    continue
+                if handle.restart_attempts >= _MAX_RESTART_ATTEMPTS or now < handle.next_restart_at:
+                    continue
+                handle.restart_attempts += 1
+                await self._stop_server(name)
+                if self._stopping:
+                    return
+                await self._start_server(name)
+                handle.next_restart_at = (
+                    asyncio.get_running_loop().time()
+                    + _RESTART_BACKOFF_SECONDS * 2 ** (handle.restart_attempts - 1)
                 )
 
     async def stop_all(self) -> None:
-        """Stop all running MCP server processes.
+        """Cancel and join supervision before stopping any server."""
+        async with self._lifecycle_lock:
+            await self._stop_all()
 
-        Sends SIGTERM and waits up to _STOP_TIMEOUT_SECONDS for each
-        process. Already-exited processes are handled gracefully.
-        """
-        for name, handle in self._handles.items():
-            if handle.bridge is not None:
-                try:
-                    await handle.bridge.stop()
-                except Exception:  # noqa: BLE001 — structured logger reports mcp_pool.bridge_stop_error
-                    _logger.warning(
-                        "mcp_pool.bridge_stop_error",
-                        extra={"server": name},
-                        exc_info=True,
-                    )
-                finally:
-                    handle.bridge = None
-                    handle.process = None
-                    handle.state = McpServerState.STOPPED
-                continue
+    async def _stop_all(self) -> None:
+        """Clean up with lifecycle ownership, also on cancelled initial startup."""
+        self._stopping = True
+        monitor, self._monitor_task = self._monitor_task, None
+        if monitor is not None:
+            monitor.cancel()
+            await asyncio.gather(monitor, return_exceptions=True)
+        for name in self._handles:
+            await self._stop_server(name)
 
-            if handle.process is None:
-                handle.state = McpServerState.STOPPED
-                continue
-
+    async def _stop_server(self, name: str) -> None:
+        """Release the old process and socket before shutdown or a restart."""
+        handle = self._handles[name]
+        if handle.bridge is not None:
             try:
-                if handle.process.returncode is None:
-                    # Process is still alive — terminate it
-                    handle.process.terminate()
-                    try:
-                        await asyncio.wait_for(
-                            handle.process.wait(),
-                            timeout=_STOP_TIMEOUT_SECONDS,
-                        )
-                    except TimeoutError:
-                        _logger.warning(
-                            "mcp_pool.server_kill",
-                            extra={"server": name, "reason": "stop_timeout"},
-                        )
-                        handle.process.kill()
-                        await handle.process.wait()
-
-                _logger.info(
-                    "mcp_pool.server_stopped",
-                    extra={
-                        "server": name,
-                        "exit_code": handle.process.returncode,
-                    },
-                )
-
-            except ProcessLookupError:
-                _logger.debug(
-                    "mcp_pool.server_already_exited",
-                    extra={"server": name},
-                )
-            except Exception:  # noqa: BLE001 — structured logger reports mcp_pool.server_stop_error
+                await handle.bridge.stop()
+            except Exception:  # noqa: BLE001 — structured logger reports mcp_pool.bridge_stop_error
                 _logger.warning(
-                    "mcp_pool.server_stop_error",
+                    "mcp_pool.bridge_stop_error",
                     extra={"server": name},
                     exc_info=True,
                 )
             finally:
+                handle.bridge = None
                 handle.process = None
                 handle.state = McpServerState.STOPPED
+            return
+
+        if handle.process is None:
+            handle.state = McpServerState.STOPPED
+            return
+
+        try:
+            if handle.process.returncode is None:
+                # Process is still alive — terminate it
+                handle.process.terminate()
+                try:
+                    await asyncio.wait_for(
+                        handle.process.wait(),
+                        timeout=_STOP_TIMEOUT_SECONDS,
+                    )
+                except TimeoutError:
+                    _logger.warning(
+                        "mcp_pool.server_kill",
+                        extra={"server": name, "reason": "stop_timeout"},
+                    )
+                    handle.process.kill()
+                    await handle.process.wait()
+
+            _logger.info(
+                "mcp_pool.server_stopped",
+                extra={
+                    "server": name,
+                    "exit_code": handle.process.returncode,
+                },
+            )
+
+        except ProcessLookupError:
+            _logger.debug(
+                "mcp_pool.server_already_exited",
+                extra={"server": name},
+            )
+        except Exception:  # noqa: BLE001 — structured logger reports mcp_pool.server_stop_error
+            _logger.warning(
+                "mcp_pool.server_stop_error",
+                extra={"server": name},
+                exc_info=True,
+            )
+        finally:
+            handle.process = None
+            handle.state = McpServerState.STOPPED
 
     async def health_check(self, name: str) -> bool:
         """Check if a server process is alive.

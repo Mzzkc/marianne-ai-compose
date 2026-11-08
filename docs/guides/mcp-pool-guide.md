@@ -34,7 +34,12 @@ Conductor (DaemonManager)
 ```
 
 The pool manager handles:
-- **Process lifecycle**: start, health check, restart on failure
+- **Process lifecycle**: start, live liveness reconciliation (a handle recorded
+  as RUNNING whose process exited or whose bridge died is transitioned to
+  FAILED immediately), and supervised restarts per `restart_policy`
+- **Restart supervision**: a background monitor restarts crashed servers
+  according to policy, with exponential backoff (1s, 2s, 4s) and a bounded
+  crash budget (3 attempts; a server that stays up 30s resets the budget)
 - **Socket bridge lifecycle**: bind/unbind per-server Unix sockets
 - **Client multiplexing**: request-id rewrite/restore for concurrent clients
 - **Config generation**: per-workspace MCP config files for MCP-native CLIs
@@ -91,7 +96,7 @@ such entry and reports its toolchain gaps in REA's words; it never installs.
 | `command` | string | required | Command to start the MCP server |
 | `transport` | string | "stdio" | Transport protocol (stdio, sse, http) |
 | `socket` | string | required | Unix socket path exposed by the bridge for stdio servers |
-| `restart_policy` | string | "on-failure" | When to restart: on-failure, always, never |
+| `restart_policy` | enum | "on-failure" | When the monitor restarts a crashed server: `on-failure` (skip a clean exit 0), `always`, `never`. Invalid values are refused at config load |
 | `framing` | string | "newline" | Upstream stdio framing: `newline` or `content-length` |
 
 ## Score YAML Integration
@@ -113,11 +118,20 @@ techniques:
 ```
 
 At dispatch time, the baton's technique resolver:
-1. Filters techniques to those active in the current sheet's phase
+1. Filters techniques to those active in the current sheet's phase (the six
+   lifecycle movements map to `recon`/`plan`/`work`/`integration`/`inspect`/
+   `aar`; sheets beyond movement 6 count as `work`, and a technique that
+   declared the sheet's movement *number* as a phase entry also matches)
 2. Generates a technique manifest (text describing available tools)
 3. Injects the manifest into the musician's prompt as a skill-category item
-4. Generates a workspace-local MCP config file for active running pool servers
-5. Calls `backend.set_mcp_config(path)` for MCP-native CLI backends
+4. Generates a workspace-local MCP config file for active running pool
+   servers — a server whose process has actually exited is excluded even if
+   the recorded state has not caught up
+5. Calls `backend.set_mcp_config(path)` for MCP-native CLI backends — both
+   headless (`PluginCliBackend`) and interactive tmux (`InteractiveCliBackend`)
+   backends implement it; a backend without the method is named in an
+   `adapter.dispatch.mcp_config_unsupported` warning rather than silently
+   losing the config
 6. Generates prompt stubs and `<workspace>/techniques_rt.py` for code-mode
    access to the same active servers
 7. Clears the backend MCP config after the sheet releases the backend
@@ -137,7 +151,11 @@ Native support means the profile has either `mcp_config_flag` or
 - `mcp_config_workspace_merge_key`: for broader JSON settings files, merge only
   the generated MCP server object under that key and restore the previous file
   after execution
-- `PluginCliBackend.set_mcp_config(path)` causes the supported path to be used
+- `PluginCliBackend.set_mcp_config(path)` and
+  `InteractiveCliBackend.set_mcp_config(path)` both cause the supported path
+  to be used; interactive instruments with a workspace-path profile get the
+  file materialized around each tmux run (serialized against concurrent
+  headless attempts through a shared per-target lock)
 - The baton adapter calls `set_mcp_config()` when active MCP techniques resolve
 
 Built-in direct support as of 2026-06-21:
@@ -183,12 +201,16 @@ from marianne.daemon.config import McpPoolConfig
 manager = McpPoolManager(config.mcp_pool)
 
 # Lifecycle
-await manager.start_all()       # Start all configured servers
-await manager.stop_all()        # Gracefully terminate all servers
+await manager.start_all()       # Start all configured servers and begin
+                                 # supervised restart monitoring
+await manager.stop_all()        # Cancel the monitor, then gracefully
+                                 # terminate all servers
 
 # Status
 manager.server_names()          # -> ["github", "filesystem"]
-manager.is_running("github")    # -> True
+manager.is_running("github")    # -> True; reconciles live process/bridge
+                                 # state and transitions a dead RUNNING
+                                 # handle to FAILED as a side effect
 manager.get_status()            # -> {"github": RUNNING, "filesystem": STOPPED}
 
 # Socket paths
@@ -232,15 +254,24 @@ The MCP pool integrates with the conductor lifecycle:
 - Check daemon logs: `mcp_pool.server_start_failed`
 
 ### Server dies during execution
-- The pool tracks server state via `health_check()`
-- `restart_policy: on-failure` will restart crashed servers
+- `is_running()` and `get_status()` reconcile against the live process/bridge:
+  a crashed server is reported FAILED immediately, not just on the next
+  `health_check()`
+- The pool's monitor task restarts a FAILED server per its `restart_policy`
+  (`on-failure` skips a clean exit 0), with exponential backoff (1s, 2s, 4s)
+  and at most 3 attempts per crash loop; a server that stays up 30 seconds
+  resets the attempt budget
 - Agent sheets will see technique unavailability in their next dispatch
 
 ### MCP config not applied to instrument
 - Only instruments with `mcp_config_flag` or `mcp_config_workspace_path` in
-  their profile support direct MCP config
+  their profile support direct MCP config — this now includes interactive tmux
+  instruments, whose backend materializes a workspace config file around each
+  run
 - Check instrument profile: one of those fields must be set
-- Verify `set_mcp_config()` was called with the correct path
+- Verify `set_mcp_config()` was called with the correct path; if the dispatch
+  log shows `adapter.dispatch.mcp_config_unsupported`, the backend did not
+  implement `set_mcp_config` and the config was dropped with a warning
 - Instruments without a direct MCP config path should still get
   `<workspace>/techniques_rt.py`; check that the MCP technique resolved for the
   current sheet phase and that the pool server is running

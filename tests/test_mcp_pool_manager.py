@@ -536,3 +536,33 @@ class TestHealthCheck:
     ) -> None:
         manager = McpPoolManager(pool_config)
         assert not await manager.health_check("github")
+
+
+@pytest.mark.parametrize("transport", ["http", "stdio"])
+async def test_crashed_server_excluded_from_config(tmp_path: Path, transport: str) -> None:
+    """Dead upstreams must disappear before handing config to the next sheet."""
+    config = McpPoolConfig(servers={
+        "test": McpServerEntry(
+            command="server", transport=transport,
+            socket=str(tmp_path / "test.sock"), restart_policy="never",
+        ),
+    })
+    manager = McpPoolManager(config)
+    process = MagicMock(returncode=None, pid=1234)
+    bridge = MagicMock(process=process, is_running=True)
+    bridge.start = AsyncMock()
+    bridge.stop = AsyncMock()
+    with (
+        patch("marianne.daemon.mcp_pool.asyncio.create_subprocess_exec", return_value=process),
+        patch("marianne.daemon.mcp_pool.McpSocketBridge", return_value=bridge),
+    ):
+        try:
+            await manager.start_all()
+            assert manager.generate_mcp_config_file(tmp_path) is not None
+            process.returncode = 1
+            bridge.is_running = False
+            assert not manager.is_running("test")
+            assert manager.generate_mcp_config_file(tmp_path) is None
+            assert manager.get_status()["test"] == McpServerState.FAILED
+        finally:
+            await manager.stop_all()

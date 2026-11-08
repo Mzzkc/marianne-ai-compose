@@ -1904,3 +1904,70 @@ class TestBackendSupervisorReportWiring:
         assert "called" not in wrapped, (
             "unsupervised interactive commands must bypass supervised_argv"
         )
+
+
+@pytest.mark.parametrize("inherit_disable", [True, False])
+def test_mcp_config_flag_and_clear(inherit_disable: bool, tmp_path: Path) -> None:
+    profile = make_profile(interactive=make_interactive_config(
+        inherit_mcp_disable_args=inherit_disable,
+    ))
+    assert profile.cli is not None
+    profile.cli.command.mcp_config_flag = "--mcp-config"
+    profile.cli.command.mcp_config_prefix_args = ["--strict-mcp-config"]
+    backend = InteractiveCliBackend(profile, working_directory=tmp_path)
+    backend.set_mcp_config(tmp_path / "pool.json")
+    argv = backend._build_command()
+    assert argv[-3:] == ["--strict-mcp-config", "--mcp-config", str(tmp_path / "pool.json")]
+    assert "--no-mcp" not in argv
+    backend.set_mcp_config(None)
+    argv = backend._build_command()
+    assert "--mcp-config" not in argv
+    assert ("--no-mcp" in argv) is inherit_disable
+
+
+def test_mcp_config_cleared_on_pool_release(tmp_path: Path) -> None:
+    profile = make_profile(interactive=make_interactive_config(inherit_mcp_disable_args=True))
+    assert profile.cli is not None
+    profile.cli.command.mcp_config_flag = "--mcp-config"
+    backend = InteractiveCliBackend(profile)
+    backend.set_mcp_config(tmp_path / "pool.json")
+    backend.clear_overrides()
+    assert "--mcp-config" not in backend._build_command()
+    assert "--no-mcp" in backend._build_command()
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+async def test_mcp_config_workspace_visible_and_restored(
+    tmp_path: Path, cancelled: bool,
+) -> None:
+    profile = make_profile(interactive=make_interactive_config(inherit_mcp_disable_args=True))
+    assert profile.cli is not None
+    profile.cli.command.mcp_config_workspace_path = ".agents/settings.json"
+    profile.cli.command.mcp_config_workspace_merge_key = "mcpServers"
+    backend = InteractiveCliBackend(profile, working_directory=tmp_path, tmux=FakeTmux())
+    source = tmp_path / "pool.json"
+    source.write_text('{"mcpServers": {"tool": {"command": "proxy"}}}')
+    target = tmp_path / ".agents/settings.json"
+    target.parent.mkdir()
+    previous = b'{"theme":"dark", "mcpServers":{"old":{}}}\n'
+    target.write_bytes(previous)
+    backend.set_mcp_config(source)
+
+    async def drive(**kwargs: Any) -> Any:
+        assert "--no-mcp" not in kwargs["command"]
+        assert json.loads(target.read_text()) == {
+            "theme": "dark", "mcpServers": {"tool": {"command": "proxy"}},
+        }
+        if cancelled:
+            raise asyncio.CancelledError
+        from marianne.execution.instruments.interactive.driver import DriverResult
+        return DriverResult(outcome="completed", final_screen="done", nudges_sent=0)
+
+    backend._driver.run = drive
+    if cancelled:
+        with pytest.raises(asyncio.CancelledError):
+            await backend.execute("use pool tools")
+    else:
+        result = await backend.execute("use pool tools")
+        assert result.success
+    assert target.read_bytes() == previous

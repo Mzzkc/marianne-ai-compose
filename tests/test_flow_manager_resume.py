@@ -8,11 +8,173 @@ import pytest
 
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
 from marianne.core.config.flow import SheetTriggerConfig, TriggerAction
+from marianne.core.flow_state import LoopRunState
+from marianne.daemon import manager as manager_module
 from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.config import DaemonConfig
 from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
 from marianne.daemon.types import JobRequest
+
+
+def _failed_loop_checkpoint(reason: str = "range_failed") -> CheckpointState:
+    return CheckpointState(
+        job_id="j", job_name="failed-loop", total_sheets=4,
+        sheets={
+            1: SheetState(sheet_num=1, status=SheetStatus.COMPLETED, total_cost_usd=8),
+            2: SheetState(sheet_num=2, status=SheetStatus.COMPLETED, total_cost_usd=1),
+            3: SheetState(sheet_num=3, status=SheetStatus.FAILED, total_cost_usd=2),
+            4: SheetState(sheet_num=4, status=SheetStatus.SKIPPED, error_code="E999",
+                          total_cost_usd=3),
+        },
+        flow={"loops": {"2-4": LoopRunState(
+            span="2-4", index_name="pass_no", iteration=3, phase="completed",
+            completed_reason=reason, cost_baseline_usd=0, iteration_started_at=1,
+        )}},
+    )
+
+
+@pytest.mark.parametrize("status", [DaemonJobStatus.FAILED, DaemonJobStatus.CANCELLED])
+def test_resume_failed_loop_reopens_run_state(status: DaemonJobStatus) -> None:
+    checkpoint = _failed_loop_checkpoint()
+    assert manager_module._reset_sheets_for_resume(checkpoint, status) == 2
+    before = time.time()
+    assert manager_module._reopen_loops_for_resume(checkpoint, status) == 1
+    run = checkpoint.flow.loops["2-4"]
+    assert checkpoint.sheets[3].status == SheetStatus.PENDING
+    assert checkpoint.sheets[4].status == SheetStatus.PENDING
+    assert checkpoint.sheets[2].status == SheetStatus.COMPLETED
+    assert run.phase == "running"
+    assert run.completed_reason is None
+    assert run.iteration == 3
+    assert run.cost_baseline_usd == 6
+    assert run.iteration_started_at is not None
+    assert before <= run.iteration_started_at <= time.time()
+    assert manager_module._reopen_loops_for_resume(checkpoint, status) == 0
+
+
+@pytest.mark.parametrize("status", [None, DaemonJobStatus.PAUSED, DaemonJobStatus.PAUSED_AT_CHAIN])
+def test_resume_paused_keeps_completed_loop_closed(status: DaemonJobStatus | None) -> None:
+    checkpoint = _failed_loop_checkpoint()
+    before = checkpoint.model_dump()
+    assert manager_module._reset_sheets_for_resume(checkpoint, status) == 0
+    assert manager_module._reopen_loops_for_resume(checkpoint, status) == 0
+    assert checkpoint.model_dump() == before
+
+
+@pytest.mark.parametrize("reason", [
+    "count_reached", "condition_met", "max_iterations", "skipped", "cost_limit_exceeded",
+])
+def test_resume_preserves_genuinely_completed_loops(reason: str) -> None:
+    checkpoint = _failed_loop_checkpoint(reason)
+    before = checkpoint.flow.model_dump()
+    manager_module._reset_sheets_for_resume(checkpoint, DaemonJobStatus.FAILED)
+    assert manager_module._reopen_loops_for_resume(checkpoint, DaemonJobStatus.FAILED) == 0
+    assert checkpoint.flow.model_dump() == before
+
+
+def test_resume_condition_error_loop_reopens() -> None:
+    checkpoint = _failed_loop_checkpoint("condition_error")
+    manager_module._reset_sheets_for_resume(checkpoint, DaemonJobStatus.FAILED)
+    assert manager_module._reopen_loops_for_resume(checkpoint, DaemonJobStatus.FAILED) == 1
+    run = checkpoint.flow.loops["2-4"]
+    assert run.phase == "running"
+    assert run.completed_reason is None
+    assert run.iteration == 3
+    assert run.cost_baseline_usd == 6
+
+
+def test_resume_reopens_nested_inner_loop() -> None:
+    checkpoint = _failed_loop_checkpoint()
+    checkpoint.total_sheets = 6
+    checkpoint.sheets.update({
+        5: SheetState(sheet_num=5, status=SheetStatus.COMPLETED, total_cost_usd=4),
+        6: SheetState(sheet_num=6, status=SheetStatus.COMPLETED, total_cost_usd=5),
+    })
+    checkpoint.flow.loops = {
+        "2-6": LoopRunState(span="2-6", index_name="outer", iteration=3,
+                            phase="completed", completed_reason="range_failed"),
+        "3-4": LoopRunState(span="3-4", index_name="inner", iteration=2,
+                            phase="completed", completed_reason="range_failed"),
+    }
+    manager_module._reset_sheets_for_resume(checkpoint, DaemonJobStatus.FAILED)
+    assert manager_module._reopen_loops_for_resume(checkpoint, DaemonJobStatus.FAILED) == 2
+    outer, inner = checkpoint.flow.loops.values()
+    assert (outer.phase, outer.iteration, outer.cost_baseline_usd) == ("running", 3, 15)
+    assert (inner.phase, inner.iteration, inner.cost_baseline_usd) == ("running", 2, 5)
+    assert outer.completed_reason is inner.completed_reason is None
+
+
+@pytest.mark.parametrize(
+    "from_sheet, expected_count, expected_phase",
+    [(3, 1, "running"), (5, 0, "completed")],
+)
+def test_resume_from_sheet_reopens_only_affected_loop(
+    from_sheet: int, expected_count: int, expected_phase: str,
+) -> None:
+    checkpoint = _failed_loop_checkpoint()
+    manager_module._reset_sheets_for_resume(checkpoint, DaemonJobStatus.PAUSED, from_sheet)
+    assert manager_module._reopen_loops_for_resume(
+        checkpoint, DaemonJobStatus.PAUSED, from_sheet,
+    ) == expected_count
+    assert checkpoint.flow.loops["2-4"].phase == expected_phase
+
+
+def test_resume_does_not_reopen_loop_without_pending_members() -> None:
+    checkpoint = _failed_loop_checkpoint()
+    for sheet in checkpoint.sheets.values():
+        sheet.status = SheetStatus.COMPLETED
+    before = checkpoint.flow.model_dump()
+    manager_module._reset_sheets_for_resume(checkpoint, DaemonJobStatus.FAILED)
+    assert manager_module._reopen_loops_for_resume(checkpoint, DaemonJobStatus.FAILED) == 0
+    assert checkpoint.flow.model_dump() == before
+
+
+async def test_resume_failed_loop_runs_remaining_passes(tmp_path: Path) -> None:
+    """The public manager resume path must restore indices before dispatch."""
+    witness = tmp_path / "passes.txt"
+    fail_once = tmp_path / "failed-once"
+    score = tmp_path / "loop.yaml"
+    score.write_text(
+        "name: resume-loop\n"
+        f"workspace: {tmp_path / 'workspace'}\n"
+        "instrument: cli\n"
+        "retry:\n  max_retries: 0\n"
+        "sheet:\n  size: 1\n  total_items: 1\n"
+        "  loops:\n    1:\n      count: 3\n      index: pass_no\n"
+        "prompt:\n  template: |\n"
+        f"    echo {{{{ pass_no }}}} >> {witness}\n"
+        f"    if [ {{{{ pass_no }}}} -eq 2 ] && [ ! -e {fail_once} ]; then\n"
+        f"      touch {fail_once}\n"
+        "      exit 1\n"
+        "    fi\n",
+        encoding="utf-8",
+    )
+    manager = JobManager(DaemonConfig(
+        pid_file=tmp_path / "conductor.pid", state_db_path=tmp_path / "jobs.db",
+    ))
+
+    async def terminal_status(job_id: str) -> DaemonJobStatus:
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            status = manager._job_meta[job_id].status
+            if status in {DaemonJobStatus.FAILED, DaemonJobStatus.COMPLETED}:
+                return status
+            await asyncio.sleep(0.02)
+        pytest.fail("loop job did not reach a terminal state")
+
+    await manager.start()
+    try:
+        response = await manager.submit_job(JobRequest(config_path=score))
+        assert response.status == "accepted"
+        assert await terminal_status(response.job_id) == DaemonJobStatus.FAILED
+        assert witness.read_text().split() == ["1", "2"]
+        resumed = await manager.resume_job(response.job_id)
+        assert resumed.status == "accepted"
+        assert await terminal_status(response.job_id) == DaemonJobStatus.COMPLETED
+        assert witness.read_text().split() == ["1", "2", "2", "3"]
+    finally:
+        await manager.shutdown(graceful=False)
 
 
 @pytest.mark.asyncio

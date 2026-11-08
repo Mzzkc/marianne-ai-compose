@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from marianne.core.config import JobConfig
 from marianne.validation.base import ValidationSeverity
 from marianne.validation.checks.jinja import BashArrayLengthCheck
@@ -93,6 +95,9 @@ class TestBashArrayLengthCheck:
         issues = runner.validate(cfg, p, yaml_str)
         assert runner.get_exit_code(issues) == 1
 
+    # Parsing the full shipped corpus can exceed the unit-test ceiling under
+    # xdist contention; match the other corpus sweeps' bounded timeout.
+    @pytest.mark.timeout(180)
     def test_repo_corpus_has_no_v305_hits(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         paths: list[Path] = []

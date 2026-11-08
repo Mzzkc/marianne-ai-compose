@@ -279,3 +279,93 @@ async def test_first_output_bound_unset_keeps_the_sheet_timeout_contract() -> No
     assert result.exit_reason == "timeout"
     assert "Stale execution" not in result.stderr
 
+
+
+@pytest.mark.asyncio
+async def test_request_local_first_output_widen_delays_strike() -> None:
+    backend = PluginCliBackend(_profile(first_output=0.4))
+    start = time.monotonic()
+    result = await backend.execute(
+        "import time; time.sleep(30)", timeout_seconds=1.1,
+        request=SheetRequestState(first_output_timeout_seconds=3.0),
+    )
+    assert result.exit_reason == "timeout"
+    assert not result.success
+    assert "Stale execution" not in result.stderr
+    assert time.monotonic() - start >= 1.0
+    assert backend._cli.first_output_timeout_seconds == 0.4
+
+
+@pytest.mark.asyncio
+async def test_request_local_first_output_null_disables_bound() -> None:
+    backend = PluginCliBackend(_profile(first_output=0.4))
+    result = await backend.execute(
+        "import time; time.sleep(30)", timeout_seconds=1.1,
+        request=SheetRequestState(first_output_timeout_seconds=None),
+    )
+    assert result.exit_reason == "timeout"
+    assert not result.success
+    assert "Stale execution" not in result.stderr
+
+
+@pytest.mark.asyncio
+async def test_request_local_unset_falls_back_to_profile() -> None:
+    backend = PluginCliBackend(_profile(first_output=0.4))
+    result = await backend.execute(
+        "import time; time.sleep(30)", timeout_seconds=10,
+        request=SheetRequestState(),
+    )
+    assert result.exit_reason == "timeout"
+    assert not result.success
+    assert "Stale execution: no output within 0.4s" in result.stderr
+
+
+@pytest.mark.asyncio
+async def test_request_local_bound_inert_after_first_byte() -> None:
+    backend = PluginCliBackend(_profile(first_output=0.1))
+    result = await backend.execute(
+        "import time; print('hello', flush=True); time.sleep(1.2); print('done')",
+        timeout_seconds=10,
+        request=SheetRequestState(first_output_timeout_seconds=0.5),
+    )
+    assert result.success
+    assert result.exit_code == 0
+    assert "done" in result.stdout
+    assert "Stale execution" not in result.stderr
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("profile_bound", [None, 5.0])
+async def test_request_local_narrow_bound_used_in_marker(profile_bound) -> None:
+    backend = PluginCliBackend(_profile(first_output=profile_bound))
+    result = await backend.execute(
+        "import time; time.sleep(30)", timeout_seconds=10,
+        request=SheetRequestState(first_output_timeout_seconds=0.4),
+    )
+    assert result.exit_reason == "timeout"
+    assert not result.success
+    assert "Stale execution: no output within 0.4s" in result.stderr
+
+
+@pytest.mark.asyncio
+async def test_request_local_concurrent_bounds_do_not_leak() -> None:
+    backend = PluginCliBackend(_profile(first_output=0.4))
+    disabled, inherited, widened = await asyncio.gather(
+        backend.execute(
+            "import time; time.sleep(0.9); print('disabled')", timeout_seconds=4,
+            request=SheetRequestState(first_output_timeout_seconds=None),
+        ),
+        backend.execute(
+            "import time; time.sleep(30)", timeout_seconds=4,
+            request=SheetRequestState(),
+        ),
+        backend.execute(
+            "import time; time.sleep(0.9); print('widened')", timeout_seconds=4,
+            request=SheetRequestState(first_output_timeout_seconds=3.0),
+        ),
+    )
+    assert disabled.success and disabled.stdout == "disabled\n"
+    assert widened.success and widened.stdout == "widened\n"
+    assert inherited.exit_reason == "timeout"
+    assert "Stale execution: no output within 0.4s" in inherited.stderr
+    assert backend._cli.first_output_timeout_seconds == 0.4

@@ -38,7 +38,7 @@ class McpServerEntry(BaseModel):
     socket: str = Field(
         description="Unix socket path for proxying this server to agents",
     )
-    restart_policy: str = Field(
+    restart_policy: Literal["on-failure", "always", "never"] = Field(
         default="on-failure",
         description="When to restart: 'on-failure', 'always', 'never'",
     )

@@ -25,7 +25,6 @@ import shutil
 import signal
 import time
 from collections.abc import Callable
-from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -51,7 +50,12 @@ from marianne.execution.base import (
     ExitReason,
     SheetRequestState,
     _ResponseFormatUnset,
+    is_first_output_timeout_unset,
 )
+from marianne.execution.instruments.workspace_mcp_config import (
+    MCP_WORKSPACE_CONFIG_LOCKS as _MCP_WORKSPACE_CONFIG_LOCKS,
+)
+from marianne.execution.instruments.workspace_mcp_config import WorkspaceMcpConfigMixin
 from marianne.utils.json_path import extract_json_path
 from marianne.utils.process import (
     DescendantIdentity,
@@ -74,12 +78,6 @@ _logger = get_logger("backend.plugin_cli")
 # to exit cleanly after SIGTERM; short enough not to stall cancel paths.
 # See docs/specs/2026-04-16-process-lifecycle-design.md (Change 2).
 _KILL_GRACE_SECONDS = 2.0
-
-# Some CLIs, notably Antigravity, discover MCP servers from a fixed
-# workspace-local config file rather than accepting a per-run config flag.
-# Keep those temporary materializations serialized per target path.
-_MCP_WORKSPACE_CONFIG_LOCKS: dict[Path, asyncio.Lock] = {}
-
 
 async def _drain_stream(
     stream: asyncio.StreamReader | None,
@@ -403,7 +401,7 @@ def _structured_error_text(stdout: str) -> str:
     return "\n".join(found)
 
 
-class PluginCliBackend(Backend):
+class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
     """Generic CLI backend driven by an InstrumentProfile.
 
     Builds CLI commands, runs them via asyncio subprocess, and parses
@@ -581,106 +579,6 @@ class PluginCliBackend(Backend):
             config_path: Path to the MCP config JSON file, or None to clear.
         """
         self._mcp_config_path = config_path
-
-    def _workspace_mcp_config_target(self) -> Path | None:
-        """Return the workspace-local MCP config target, if this profile needs one."""
-        rel_path = self._cli.command.mcp_config_workspace_path
-        if self._mcp_config_path is None or not rel_path:
-            return None
-        workspace = self._working_directory or Path.cwd()
-        return workspace / rel_path
-
-    def _workspace_mcp_config_bytes(self, target: Path) -> bytes:
-        """Return bytes to write to a CLI-discovered workspace config path."""
-        if self._mcp_config_path is None:
-            return b""
-
-        merge_key = self._cli.command.mcp_config_workspace_merge_key
-        if not merge_key:
-            return self._mcp_config_path.read_bytes()
-
-        try:
-            source_data = json.loads(self._mcp_config_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise RuntimeError(
-                f"Generated MCP config is not valid JSON: {self._mcp_config_path}"
-            ) from exc
-
-        if not isinstance(source_data, dict):
-            raise RuntimeError(
-                f"Generated MCP config must be a JSON object: {self._mcp_config_path}"
-            )
-
-        try:
-            target_data = json.loads(target.read_text(encoding="utf-8")) if target.exists() else {}
-        except json.JSONDecodeError:
-            target_data = {}
-        if not isinstance(target_data, dict):
-            target_data = {}
-
-        target_data[merge_key] = source_data.get(merge_key, {})
-        return (json.dumps(target_data, indent=2) + "\n").encode("utf-8")
-
-    def _materialize_workspace_mcp_config(
-        self,
-        target: Path,
-    ) -> tuple[Path, bytes | None, bool] | None:
-        """Materialize generated MCP config to a CLI-discovered workspace path.
-
-        Returns a restore tuple of ``(target, previous_bytes, parent_existed)``.
-        ``previous_bytes`` is ``None`` when no file existed and the file should
-        be deleted after execution.
-        """
-        if self._mcp_config_path is None:
-            return None
-
-        source = self._mcp_config_path
-        if source.resolve() == target.resolve():
-            return None
-
-        parent_existed = target.parent.exists()
-        previous = target.read_bytes() if target.exists() else None
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(self._workspace_mcp_config_bytes(target))
-
-        _logger.debug(
-            "plugin_cli_workspace_mcp_config_materialized",
-            instrument=self._profile.name,
-            source=str(source),
-            target=str(target),
-            merge_key=self._cli.command.mcp_config_workspace_merge_key,
-            restored_existing=previous is not None,
-        )
-        return target, previous, parent_existed
-
-    def _restore_workspace_mcp_config(
-        self,
-        restore: tuple[Path, bytes | None, bool],
-    ) -> None:
-        """Restore or remove a temporary workspace MCP config file."""
-        target, previous, parent_existed = restore
-        try:
-            if previous is None:
-                target.unlink(missing_ok=True)
-                if not parent_existed:
-                    with suppress(OSError):
-                        target.parent.rmdir()
-            else:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(previous)
-            _logger.debug(
-                "plugin_cli_workspace_mcp_config_restored",
-                instrument=self._profile.name,
-                target=str(target),
-                restored_existing=previous is not None,
-            )
-        except OSError:
-            _logger.warning(
-                "plugin_cli_workspace_mcp_config_restore_failed",
-                instrument=self._profile.name,
-                target=str(target),
-                exc_info=True,
-            )
 
     def _build_prompt(
         self,
@@ -1012,13 +910,13 @@ class PluginCliBackend(Backend):
         parent_create_time: float | None,
         parent_start_ticks: int | None,
         effective_timeout: float,
+        first_output_bound: float | None,
         stdout_chunks: list[bytes],
         stderr_chunks: list[bytes],
     ) -> int:
         """Wait for the parent to exit, within the sheet timeout, and (GH #434)
-        raise ``_FirstOutputStall`` if the profile bounds first output and the
+        raise ``_FirstOutputStall`` if the request bounds first output and the
         bound passes with zero bytes on both pipes."""
-        bound = self._cli.first_output_timeout_seconds
         waiter = asyncio.ensure_future(
             _wait_for_parent_exit(
                 proc, descendants, parent_create_time,
@@ -1026,10 +924,10 @@ class PluginCliBackend(Backend):
             )
         )
         try:
-            if bound is None or bound >= effective_timeout:
+            if first_output_bound is None or first_output_bound >= effective_timeout:
                 return await asyncio.wait_for(waiter, timeout=effective_timeout)
             deadline = time.monotonic() + effective_timeout
-            first_output_deadline = time.monotonic() + bound
+            first_output_deadline = time.monotonic() + first_output_bound
             while True:
                 if stdout_chunks or stderr_chunks:
                     # Output has started; the ordinary sheet timeout governs.
@@ -1520,6 +1418,13 @@ class PluginCliBackend(Backend):
             return refusal
 
         effective_timeout = timeout_seconds or self._profile.default_timeout_seconds
+        first_output_bound = (
+            self._cli.first_output_timeout_seconds
+            if request is None or is_first_output_timeout_unset(
+                request.first_output_timeout_seconds
+            )
+            else request.first_output_timeout_seconds
+        )
         job_id = request.job_id if request is not None else None
         sheet_num = request.sheet_num if request is not None else None
 
@@ -1817,7 +1722,7 @@ class PluginCliBackend(Backend):
                 try:
                     exit_code = await self._wait_bounded_by_first_output(
                         proc, descendants, parent_create_time, parent_start_ticks,
-                        effective_timeout, stdout_chunks, stderr_chunks,
+                        effective_timeout, first_output_bound, stdout_chunks, stderr_chunks,
                     )
                     if parent_create_time is not None:
                         descendants.update((child.pid, child) for child in
@@ -1845,7 +1750,7 @@ class PluginCliBackend(Backend):
                     _logger.warning(
                         "plugin_cli_first_output_stall",
                         instrument=self._profile.name,
-                        first_output_timeout=self._cli.first_output_timeout_seconds,
+                        first_output_timeout=first_output_bound,
                         timeout=effective_timeout,
                         job_id=job_id,
                         sheet_num=sheet_num,
@@ -1907,7 +1812,7 @@ class PluginCliBackend(Backend):
                     # text a zero-byte session has.
                     stderr_data += (
                         f"\nStale execution: no output within "
-                        f"{self._cli.first_output_timeout_seconds:g}s of start "
+                        f"{first_output_bound:g}s of start "
                         "(first_output_timeout_seconds, GH #434)\n"
                     )
 
