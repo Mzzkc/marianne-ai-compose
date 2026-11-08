@@ -24,6 +24,8 @@ Two scores composed into a concert that autonomously solves any project's GitHub
 
 **issue-triage** runs first (once per project). It profiles the project (language, frameworks, build/test/lint commands, entry points) via **Source Triangulation**, generates a verified test/lint/typecheck/smoke harness with a **Shipyard Gate** (the smoke test must pass before expensive downstream work runs), fetches open issues from the target repository, and passes every issue body through a **Triage Gate**: the Cisco AI skill scanner rejects prompt-injection payloads while a hardened Python pass sanitizes titles/labels of shell-dangerous characters. Surviving issues are classified by effort tier (integer, 1 = no deps), their dependencies extracted and triangulated against GitHub cross-references, and emitted as `issue-dag.yaml` + `issues/sanitized-corpus.yaml` + `project-harness/*.sh` + `project-profile.yaml` — the exact artifacts issue-solver consumes.
 
+The DAG is run-bound, not inherited: each triage run writes a per-label history file `issue-dag-<label>.yaml` and atomically republishes the canonical `issue-dag.yaml` from the same bytes (temporary file + `os.replace`), archiving any pre-existing DAG under a timestamped name instead of reusing it — a stale DAG from a previous label is history, never input. Tail-sheet gates verify against the corpus rewritten by this run: triangulation must reference every corpus issue (`#<number>`), the DAG must be at least as fresh as the corpus with the run's exact label and issue-number set, and the `07-ready.md` manifest must carry the run's label and corpus count.
+
 **issue-solver** then consumes those artifacts. Each iteration picks the next solvable issue (no unresolved deps, lowest tier, then the repo's own `P0`..`P3` label with unlabelled issues ranked as `P2`, then lowest number; an issue GitHub reports CLOSED since the triage is folded into the DAG's `resolved` list first, so a chain never re-solves what a human closed), investigates the codebase, plans a 1-4 phase implementation strategy, executes each phase with fix+completion passes, runs three parallel quality reviewers (functional, E2E, code quality) whose findings are synthesized before shipping (a harness failure sets the functional verdict only after the test fails alone or the diff touches its file; a venue flake is recorded, not ruled on), updates documentation, verifies all tests pass against the generated harness, commits, pushes, closes the GitHub issue, atomically appends to the DAG's resolved list, and **self-chains** to solve the next one.
 
 ### quality-triage.yaml (complements issue-triage)
@@ -106,7 +108,7 @@ mzt status score-composer --watch
 3. Authenticate GitHub CLI: `gh auth login`
 4. Run it: `mzt run examples/engineering/issue-triage.yaml`
 
-Output: `examples/workspaces/issue-triage-workspace/issue-dag.yaml` (plus `issues/sanitized-corpus.yaml`, `project-harness/*.sh`, `project-profile.yaml`) — the artifacts issue-solver consumes.
+Output: `examples/workspaces/issue-triage-workspace/issue-dag.yaml` (plus the per-label history `issue-dag-<label>.yaml`, `issues/sanitized-corpus.yaml`, `project-harness/*.sh`, `project-profile.yaml`) — the artifacts issue-solver consumes. Re-running triage for a new label archives the old DAG (timestamped copy) and republishes `issue-dag.yaml` for the new run; the solver keeps reading only the canonical name.
 
 **Then run the solver (self-chains until the DAG is exhausted):**
 

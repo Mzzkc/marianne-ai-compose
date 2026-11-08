@@ -56,6 +56,7 @@
 #   04-deps-tests.md             — Dependency signals: test relationships
 #   05-triangulation.md          — Cross-source triangulation
 #   issue-dag.yaml               — Dependency-ordered issue DAG (mutable; solver updates it)
+#   issue-dag-<label>.yaml       — Per-label DAG history (canonical copy above)
 #   07-ready.md                  — Handoff manifest
 #
 # Time: 10-30 min (depends on issue count)  |  Sheets: 9
@@ -70,6 +71,10 @@ description: "Discover project, safely triage GitHub issues, produce dependency 
 # Do NOT archive_on_fresh — the solver reads this workspace across its entire
 # self-chain. Overwriting mid-run would corrupt the DAG. Re-run this score
 # only when the solver is stopped.
+# A stale issue-dag.yaml is archived, never reused: sheet 8 preserves the old
+# DAG before publishing this label's DAG and atomically updating the canonical copy.
+# Tail gates check corpus coverage, DAG freshness/label/issue set, and manifest
+# label/count against the sanitized corpus rewritten by stage 3 of this run.
 
 # `workhorse` fits repeatable general work; prefer yours in classes.yaml.
 instrument: workhorse
@@ -505,6 +510,9 @@ prompt:
     - `## Independent Issues (Tier-1)` — bullet list of issues with no dependencies
     - `## Coverage Check` — total issues from corpus vs total mentioned in analysis
 
+    Reference every corpus issue as `#<number>` somewhere in the analysis,
+    including independent issues. An empty corpus needs no issue references.
+
     Do not summarize. Don't average conflicting positions. Show the structure
     so stage 6 can assemble the DAG mechanically.
 
@@ -517,7 +525,20 @@ prompt:
     Read `{{ workspace }}/05-triangulation.md` and
     `{{ workspace }}/issues/sanitized-corpus.yaml`.
 
-    Assemble `{{ workspace }}/issue-dag.yaml`:
+    Before writing, archive any existing `{{ workspace }}/issue-dag.yaml`
+    under a unique timestamped archive name, preserving its bytes and previous
+    label. A stale DAG from a previous label is history, never input to reuse.
+    Preserve any existing per-label file before replacing that label's history.
+
+    Assemble `{{ workspace }}/issue-dag-{{ issue_label }}.yaml` from this run's
+    corpus and triangulation. Then atomically update the canonical
+    `{{ workspace }}/issue-dag.yaml` with the same bytes: write a temporary file
+    in the workspace and use `os.replace` to publish it. The solver continues
+    reading only the canonical name. Write the new DAG after the current corpus
+    (its mtime must be at least the corpus mtime), with the exact current label
+    and exactly the corpus issue-number set. For an empty corpus use `issues: []`.
+
+    Both DAG copies use this schema:
 
     ```yaml
     dag_metadata:
@@ -592,6 +613,9 @@ prompt:
     The harness and smoke gate were already verified in stage 2 — do not re-run.
 
     Write `{{ workspace }}/07-ready.md`:
+
+    Use the exact current label on the `- Label:` line and the current sanitized
+    corpus size on the `- Total triaged:` line (0 for an empty corpus).
 
     ```markdown
     # Issue Triage Complete
@@ -769,6 +793,25 @@ validations:
     condition: "sheet_num >= 7"
     stage: 2
 
+  - type: command_succeeds
+    command: |
+      python3 - {workspace} <<'PY'
+      import re, sys
+      import yaml
+      from pathlib import Path
+      workspace = Path(sys.argv[1])
+      corpus = yaml.safe_load((workspace / 'issues/sanitized-corpus.yaml').read_text())
+      report = (workspace / '05-triangulation.md').read_text()
+      expected = {i['number'] for i in corpus['issues']}
+      mentioned = {int(n) for n in re.findall(r'#(\d+)\b', report)}
+      missing = expected - mentioned
+      assert not missing, f'Triangulation missing corpus issues: {sorted(missing)}'
+      print('Triangulation covers current corpus')
+      PY
+    description: "Triangulation covers this run's corpus"
+    condition: "sheet_num >= 7"
+    stage: 2
+
   # ── Stage 6: DAG Assembly (sheet 8) ───────────────────────────────────────
   - type: file_exists
     path: "{workspace}/06-dag.md"
@@ -790,6 +833,40 @@ validations:
       print(f'DAG valid: {len(d[\"issues\"])} issues')
       "
     description: "DAG is valid YAML with required structure"
+    condition: "sheet_num >= 8"
+    stage: 2
+
+  - type: command_succeeds
+    command: |
+      python3 - {workspace} <<'PY'
+      import os, sys
+      from pathlib import Path
+      workspace = Path(sys.argv[1])
+      dag_mtime = os.path.getmtime(workspace / 'issue-dag.yaml')
+      corpus_mtime = os.path.getmtime(workspace / 'issues/sanitized-corpus.yaml')
+      assert dag_mtime >= corpus_mtime, 'DAG predates current corpus'
+      print('DAG is fresh for current corpus')
+      PY
+    description: "DAG is fresh for this run's corpus"
+    condition: "sheet_num >= 8"
+    stage: 2
+
+  - type: command_succeeds
+    command: |
+      python3 - {workspace} {issue_label} <<'PY'
+      import sys
+      import yaml
+      from pathlib import Path
+      workspace = Path(sys.argv[1])
+      dag = yaml.safe_load((workspace / 'issue-dag.yaml').read_text())
+      corpus = yaml.safe_load((workspace / 'issues/sanitized-corpus.yaml').read_text())
+      assert dag['dag_metadata']['label'] == sys.argv[2], 'DAG label does not match this run'
+      expected = {i['number'] for i in corpus['issues']}
+      actual = {i['number'] for i in dag['issues']}
+      assert actual == expected, f'DAG issue set differs from corpus: {actual ^ expected}'
+      print('DAG matches current label and corpus issue set')
+      PY
+    description: "DAG matches this run's label and issue set"
     condition: "sheet_num >= 8"
     stage: 2
 
@@ -830,6 +907,25 @@ validations:
     path: "{workspace}/07-ready.md"
     pattern: "Ready for Score 2"
     description: "Manifest declares readiness"
+    condition: "sheet_num >= 9"
+    stage: 2
+
+  - type: command_succeeds
+    command: |
+      python3 - {workspace} {issue_label} <<'PY'
+      import re, sys
+      import yaml
+      from pathlib import Path
+      workspace = Path(sys.argv[1])
+      corpus = yaml.safe_load((workspace / 'issues/sanitized-corpus.yaml').read_text())
+      manifest = (workspace / '07-ready.md').read_text()
+      labels = re.findall(r'^- Label:[ \t]*(.*?)[ \t]*$', manifest, re.MULTILINE)
+      counts = re.findall(r'^- Total triaged:[ \t]*(\d+)[ \t]*$', manifest, re.MULTILINE)
+      assert labels == [sys.argv[2]], 'Manifest label does not match this run'
+      assert counts == [str(len(corpus['issues']))], 'Manifest count does not match corpus'
+      print('Manifest matches current label and corpus count')
+      PY
+    description: "Manifest matches this run's label and issue count"
     condition: "sheet_num >= 9"
     stage: 2
 

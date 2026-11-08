@@ -36,6 +36,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`issue-triage`: a stale DAG on tail-sheet failure no longer masquerades as fresh (GH #503).**
+  Triage runs in one workspace across labels, and when a tail sheet failed, the
+  validations that re-ran on retry inherited files from the previous run against a
+  stable workspace: the sheet-7 corpus-coverage gate matched issue numbers that no
+  longer existed in the current corpus, and sheets 8-9 passed on a `issue-dag.yaml`
+  and `07-ready.md` left over from the previous label. The DAG is now run-bound:
+  sheet 8 archives any existing DAG under a unique timestamped name (a stale DAG is
+  history, never input to reuse), writes this run's DAG to a per-label
+  `issue-dag-{{ issue_label }}.yaml`, and atomically republishes the canonical
+  `issue-dag.yaml` from the same bytes (temporary file + `os.replace`), while the
+  solver keeps reading only the canonical name. Four new gates in
+  `examples/engineering/issue-triage.yaml` bind the tail to the corpus rewritten by
+  this run — triangulation references every corpus issue, the DAG's mtime is at
+  least the corpus's with the run's exact label and issue-number set, and the
+  `07-ready.md` manifest carries the run's label and corpus count — all written as
+  quoted-heredoc Python that takes `{workspace}` and `{issue_label}` as `argv`
+  (never spliced into string literals), pinned by replay tests
+  (`tests/test_issue_triage_stale_gate.py`) that prove the stale direction refuses
+  and the fresh direction accepts.
 - **The conductor ceiling no longer fails a held job (GH #504).** `job_timeout_seconds`
   was documented as accumulated RUNNING time but enforced as wall-clock from
   activation, so a job PAUSED by the operator or holding a FERMATA for a composer's
