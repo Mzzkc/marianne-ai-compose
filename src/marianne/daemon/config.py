@@ -532,8 +532,10 @@ class DaemonConfig(BaseModel):
     job_timeout_seconds: float = Field(
         default=86400.0,
         ge=60.0,
-        description="Maximum wall-clock time for a single job task. "
-        "Jobs exceeding this limit are cancelled with FAILED status. "
+        description="Maximum accumulated RUNNING time for a single job. "
+        "Time spent PAUSED, holding a FERMATA for a composer, or across conductor "
+        "downtime is not charged (GH #504); a job whose RUNNING time exceeds the "
+        "limit is cancelled with FAILED status and the reason 'timed_out'. "
         "Default is 24 hours (86400s). Set higher for known long-running jobs.",
     )
     shutdown_timeout_seconds: float = Field(

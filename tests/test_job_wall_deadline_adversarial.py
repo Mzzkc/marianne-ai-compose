@@ -53,7 +53,13 @@ async def _capture_timeout(
     manager: JobManager,
     monkeypatch: pytest.MonkeyPatch,
     job_id: str,
-) -> float:
+) -> float | None:
+    """The outer ``wait_for`` bound the wrapper selected.
+
+    ``None`` for a one-shot job: its daemon ceiling is enforced against
+    accumulated RUNNING time by the hold-aware watchdog (GH #504), so the
+    outer bound stays open. A minted tick deadline keeps the strict bound.
+    """
     selected: list[float | None] = []
 
     async def wait_for(coro: Any, timeout: float | None) -> Any:
@@ -67,7 +73,6 @@ async def _capture_timeout(
 
     await manager._run_managed_task(job_id, finish())
     assert len(selected) == 1
-    assert selected[0] is not None
     return selected[0]
 
 
@@ -294,7 +299,12 @@ async def test_malformed_legacy_fields_fall_back_without_minting_deadline(
         selected = await _capture_timeout(manager, monkeypatch, meta.job_id)
         status = await manager.get_job_status(meta.job_id)
 
-        assert selected == 75.0
+        # No minted deadline, so this is a one-shot job: the outer wait_for
+        # bound is open and the 75 s daemon limit is enforced against
+        # accumulated RUNNING time by the hold-aware watchdog (GH #504), so a
+        # pause never spends it. The status projection still reports the
+        # daemon limit as the effective remaining budget.
+        assert selected is None
         assert meta.wall_deadline_at is None
         assert status["deadline"]["daemon_limit_seconds"] == 75.0
         assert status["deadline"]["effective_remaining_seconds"] == 75.0

@@ -95,7 +95,7 @@ The conductor is composed of several layers:
 
 - **DaemonProcess** — Owns the lifecycle. In background mode, performs a classic double-fork to detach from the terminal. Installs signal handlers for SIGTERM and SIGINT.
 - **DaemonServer** — Listens on a Unix domain socket. Each client connection is handled as an asyncio task. Messages are newline-delimited JSON (NDJSON), each containing a JSON-RPC 2.0 request or response.
-- **JobManager** — Tracks jobs as `asyncio.Task` instances. Uses a `Semaphore` to enforce the `max_concurrent_jobs` limit. Jobs exceeding `job_timeout_seconds` are cancelled.
+- **JobManager** — Tracks jobs as `asyncio.Task` instances. Uses a `Semaphore` to enforce the `max_concurrent_jobs` limit. Jobs whose accumulated RUNNING time exceeds `job_timeout_seconds` are cancelled; a pause or a FERMATA hold does not spend that budget (GH #504).
 - **JobService** — Decoupled execution engine (no CLI dependencies). Handles the full run/resume/pause/status lifecycle for individual jobs.
 - **JobRegistry** — SQLite-backed persistent storage. Survives conductor restarts. On startup, orphaned jobs (status `queued` or `running` from a previous conductor) are marked as `failed`.
 - **RecurrenceController + ScheduleRegistry** — Source-owned recurring YAML declarations are projected into the same SQLite state database. The controller arms `CronTick` events through Baton's TimerWheel, leases each `(schedule_id, due_at)` before normal child admission, rereads the source before dispatch, and restores one next or latest action after restart. A missing, changed, or corrupt declaration is removed/replaced/disabled loudly rather than replayed.
@@ -208,7 +208,7 @@ The conductor is configured via a YAML file passed to `mzt start --config <path>
 |-------|------|---------|-------------|
 | `max_concurrent_jobs` | `int` | `15` | Max simultaneous jobs (1–50) |
 | `log_level` | `str` | `"info"` | One of: `debug`, `info`, `warning`, `error` |
-| `job_timeout_seconds` | `float` | `86400.0` | Max wall-clock time per job (24 hours) |
+| `job_timeout_seconds` | `float` | `86400.0` | Max accumulated RUNNING time per job (24 hours); PAUSED and FERMATA holds are not charged (GH #504) |
 | `learning.enabled` | `bool` | `true` | Semantic learning on/off |
 | `profiler.enabled` | `bool` | `true` | Resource monitoring on/off |
 

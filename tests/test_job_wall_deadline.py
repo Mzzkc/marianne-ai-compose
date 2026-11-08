@@ -53,7 +53,10 @@ async def _capture_wait_timeout(
     manager: JobManager,
     monkeypatch: pytest.MonkeyPatch,
     job_id: str,
-) -> float:
+) -> float | None:
+    """The outer ``wait_for`` bound; ``None`` for a one-shot job, whose daemon
+    ceiling is enforced against RUNNING time by the hold-aware watchdog
+    (GH #504). A minted tick deadline keeps the strict bound."""
     captured: list[float | None] = []
 
     async def fake_wait_for(coro: Any, timeout: float | None) -> Any:
@@ -67,7 +70,6 @@ async def _capture_wait_timeout(
 
     await manager._run_managed_task(job_id, finish())
     assert len(captured) == 1
-    assert captured[0] is not None
     return captured[0]
 
 
@@ -83,7 +85,9 @@ async def test_legacy_daemon_only_job_uses_configured_execution_timeout(
         meta = _queued_meta(job_id="legacy", submitted_at=clock.value)
         manager._job_meta[meta.job_id] = meta
         selected = await _capture_wait_timeout(manager, monkeypatch, meta.job_id)
-        assert selected == 90.0
+        # One-shot job: the outer bound is open; the 90 s daemon limit is
+        # enforced on accumulated RUNNING time by the watchdog (GH #504).
+        assert selected is None
         assert meta.status is DaemonJobStatus.COMPLETED
         assert meta.wall_deadline_at is None
     finally:

@@ -139,7 +139,11 @@ async def test_daemon_budget_counts_running_intervals_only(
 
         await manager._run_managed_task("budget", second_run())
         record = await manager._registry.get_job("budget")
-        assert selected[-2:] == [100.0, 70.0]
+        # The outer wait_for bound is open for a one-shot job (GH #504); the
+        # RUNNING budget itself is what this test proves: 30 s charged by
+        # the first run, 10,000 s of pause and downtime not charged, 5 s
+        # more by the second run.
+        assert selected[-2:] == [None, None]
         assert record is not None and record.running_seconds == 35.0
     finally:
         held.set()

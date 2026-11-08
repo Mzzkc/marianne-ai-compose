@@ -7,6 +7,7 @@ routes IPC requests to JobService, and cancels all tasks on shutdown.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import os
@@ -5990,6 +5991,80 @@ class JobManager:
             expired_before_execution=expired_before_execution,
         )
 
+    #: Watchdog re-sample interval for the RUNNING-budget ceiling (GH #504).
+    _HOLD_AWARE_SAMPLE_SECONDS: ClassVar[float] = 5.0
+
+    @staticmethod
+    def _hold_aware_outer_timeout(meta: JobMeta, budget: float) -> float | None:
+        """The outer ``wait_for`` bound: the budget only when no hold can occur.
+
+        A one-shot job's ceiling is enforced by ``_hold_aware`` against
+        accumulated RUNNING time, so the outer bound stays open (``None``)
+        and a PAUSED or FERMATA hold never spends it (GH #504). A score with
+        an absolute tick deadline (``wall_deadline_at``) keeps the strict
+        outer bound: pending time, pause and restart consume a tick window
+        by definition (GH #435).
+        """
+        return budget if meta.wall_deadline_at is not None else None
+
+    async def _hold_aware(
+        self,
+        job_id: str,
+        coro: Coroutine[Any, Any, DaemonJobStatus | None],
+        *,
+        budget: float,
+    ) -> DaemonJobStatus | None:
+        """Run ``coro`` under the conductor ceiling, charging RUNNING time only.
+
+        ``job_timeout_seconds`` is documented as accumulated RUNNING time:
+        pauses and conductor downtime do not spend it. The plain
+        ``asyncio.wait_for`` bound counted wall-clock from activation, so a
+        job PAUSED by the operator or holding a FERMATA for a composer was
+        failed at the ceiling as "exceeded timeout" while nothing executed
+        (GH #504: the spec-forge memory commission, paused 23 h 54 m, failed
+        at 24 h). Here a watchdog samples the job's status: the RUNNING
+        budget already charged (``meta.running_seconds``) plus the current
+        RUNNING interval must stay under the ceiling; time spent in any other
+        status is not charged. When the charged time crosses the ceiling the
+        task is cancelled and ``TimeoutError`` is raised, exactly as the
+        outer bound would have, so the existing timeout path records it.
+        """
+        task: asyncio.Task[DaemonJobStatus | None] = asyncio.ensure_future(coro)
+        ceiling = float(self._config.job_timeout_seconds)
+        try:
+            while True:
+                meta = self._job_meta.get(job_id)
+                charged = meta.running_seconds if meta is not None else 0.0
+                if (
+                    meta is not None
+                    and meta.status is DaemonJobStatus.RUNNING
+                    and meta.running_started_at is not None
+                ):
+                    charged += max(0.0, self._monotonic_clock() - meta.running_started_at)
+                remaining = ceiling - charged
+                if remaining <= 0:
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+                    raise TimeoutError(f"job '{job_id}' exceeded its RUNNING budget")
+                # Re-sample when the remaining RUNNING budget would run out if
+                # the job keeps running, and at least every few seconds so a
+                # clock the tests drive (or a resumed charge) is noticed
+                # promptly; a hold simply stops the charge until it ends.
+                done, _pending = await asyncio.wait(
+                    {task}, timeout=min(remaining, self._HOLD_AWARE_SAMPLE_SECONDS),
+                )
+                if done:
+                    return task.result()
+        except asyncio.CancelledError:
+            if not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+            raise
+
     async def _run_managed_task(
         self,
         job_id: str,
@@ -6119,7 +6194,10 @@ class JobManager:
 
                 try:
                     coro_started = True
-                    result_status = await asyncio.wait_for(coro, timeout=timeout)
+                    result_status = await asyncio.wait_for(
+                        self._hold_aware(job_id, coro, budget=timeout),
+                        timeout=self._hold_aware_outer_timeout(meta, timeout),
+                    )
                     final_status = (
                         result_status
                         if isinstance(result_status, DaemonJobStatus)
