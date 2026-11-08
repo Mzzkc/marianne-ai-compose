@@ -88,6 +88,55 @@ def class_source_paths(
     return default.resolve(), user.resolve(), venue.resolve()
 
 
+def unloaded_venue_class_layer(
+    class_map: ClassMap,
+    client_cwd: Path | None,
+    requested: set[str],
+) -> tuple[Path, Path] | None:
+    """A venue class file beside the caller that this class map never read (GH #510).
+
+    The conductor resolves the venue layer from ITS working directory (under
+    the shipped unit, ``$HOME``, which makes "venue" the user file). A
+    ``.marianne/classes.yaml`` beside the submitted score that defines one of
+    the classes the score uses is then read by ``mzt validate`` from the
+    project and ignored by dispatch. Returns ``(beside, loaded)`` when that is
+    the case, else ``None``. Only classes the score actually names count: a
+    venue file that redefines nothing the job uses changes nothing.
+    """
+    if client_cwd is None or not requested:
+        return None
+    beside = client_cwd / ".marianne" / "classes.yaml"
+    if not beside.is_file():
+        return None
+    loaded = next((r.path for r in class_map.layers if r.layer == "venue"), None)
+    if loaded is None:
+        return None
+    try:
+        if beside.resolve() == loaded.resolve():
+            return None
+        data = parse_classes_file(beside.read_text(encoding="utf-8"))
+    except (OSError, ValueError, yaml.YAMLError):
+        # An unreadable or invalid file beside the caller is the validator's
+        # report (V324), not this gate's.
+        return None
+    if not (set(data.classes) & requested):
+        return None
+    return beside, loaded
+
+
+def requested_class_names(
+    config: JobConfig, profile_names: set[str], class_map: ClassMap,
+) -> set[str]:
+    """Class names this score resolves through the map (not aliases, not profiles)."""
+    names: set[str] = set()
+    for _location, name in _instrument_positions(config):
+        if name in config.instruments or name in profile_names:
+            continue
+        if name in class_map.classes or name in CLASS_VOCABULARY:
+            names.add(name)
+    return names
+
+
 @dataclass(frozen=True)
 class ClassLoadFailure:
     layer: LayerName

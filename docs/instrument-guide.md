@@ -262,7 +262,11 @@ instrument_fallbacks: [local]
 ```
 
 Marianne reads the packaged class map, then `~/.marianne/classes.yaml`, then
-the venue's `.marianne/classes.yaml`. A higher layer replaces a class's entire
+the venue's `.marianne/classes.yaml` relative to the reading process's working
+directory (the conductor's, not the score's, so under the shipped unit the
+conductor's venue file is `$HOME/.marianne/classes.yaml`; a score that depends
+on a different venue file beside it is refused at submit, GH #510). A higher
+layer replaces a class's entire
 ordered chain; `null` removes one. A score alias takes precedence over a
 registered profile, and a registered profile takes precedence over a class.
 The resolved class chain is saved with the job, so editing the map changes new

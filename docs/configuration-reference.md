@@ -244,8 +244,16 @@ instrument_fallbacks: [review]
 ```
 
 Class files are read in order: the packaged default, `~/.marianne/classes.yaml`,
-then `<venue>/.marianne/classes.yaml` relative to the conductor's working
-directory. A later definition replaces the whole ordered chain; `null` removes
+then `.marianne/classes.yaml` relative to the reading process's working
+directory: `mzt validate` reads it from where you run it, the conductor from
+where it was started (the shipped systemd unit uses `$HOME`, so there the
+conductor's "venue" layer is the user file). A score that uses a class a
+`.marianne/classes.yaml` beside it redefines, when the conductor read a
+different venue file, is refused at submit naming both paths (GH #510); start
+the conductor from the project directory or move the definition to
+`~/.marianne/classes.yaml` and run `mzt conductor reload`. `mzt validate --json`
+reports each venue layer with `resolved_from`. A later definition replaces the
+whole ordered chain; `null` removes
 an inherited class. Resolution order is score alias, registered profile, then
 class. Class chains become profile names before dispatch and are frozen in each
 job's checkpoint. A global class edit affects new submissions; `--fresh`

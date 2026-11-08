@@ -36,6 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A project venue class file the conductor never read is refused at submit (GH #510).**
+  The conductor resolves `.marianne/classes.yaml` from its own working directory
+  (`$HOME` under the shipped unit), so a checkout's venue file reached `mzt validate`
+  but never dispatch. Submit now refuses a score that uses a class the file beside
+  it redefines when the conductor read a different venue file, naming both paths,
+  mirroring the venue-profile guard; `mzt validate --json` reports each venue layer
+  with `resolved_from`. Configuration reference, instrument guide, daemon guide and
+  the command skill say which working directory decides the venue layer.
+
 - **Z.AI's "Weekly/Monthly Limit Exhausted" is a rate limit on every route (GH #509).**
   The built-in `claude-code` profile (headless patterns and interactive screen
   patterns) and `opencode` profile now recognise the Z.AI gateway's quota text

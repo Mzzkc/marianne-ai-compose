@@ -87,7 +87,13 @@ from marianne.daemon.types import (
     ObserverEvent,
     ScheduleStatus,
 )
-from marianne.instruments.classes import ClassMap, load_class_map, resolve_job_classes
+from marianne.instruments.classes import (
+    ClassMap,
+    load_class_map,
+    requested_class_names,
+    resolve_job_classes,
+    unloaded_venue_class_layer,
+)
 from marianne.instruments.registry import InstrumentRegistry
 from marianne.telemetry import TelemetryCollector
 from marianne.utils.time import utc_now
@@ -2444,10 +2450,36 @@ class JobManager:
                 profile_names = {
                     profile.name for profile in self._instrument_registry.list_all()
                 }
+                class_map = self._class_map or load_class_map(profile_names=profile_names)
+                # A venue class file beside the score that this conductor never
+                # read (GH #510): under the shipped unit the daemon's working
+                # directory is $HOME, so its "venue" layer IS the user file and
+                # the checkout's .marianne/classes.yaml reaches `mzt validate`
+                # but never dispatch. Refuse at submit, naming both paths, as
+                # the venue-profile guard below does.
+                unread = unloaded_venue_class_layer(
+                    class_map,
+                    request.client_cwd,
+                    requested_class_names(parsed_config, profile_names, class_map),
+                )
+                if unread is not None:
+                    beside, loaded = unread
+                    return JobResponse(
+                        job_id=job_id,
+                        status="rejected",
+                        message=(
+                            f"The score uses a capability class that {beside} "
+                            f"redefines, but this conductor's venue class layer is "
+                            f"{loaded.resolve()} (resolved from its working directory), "
+                            "so dispatch would not use that file. Start the conductor "
+                            "from the project directory, or move the definition to "
+                            "~/.marianne/classes.yaml and run 'mzt conductor reload'."
+                        ),
+                    )
                 admitted_classes = resolve_job_classes(
                     parsed_config,
                     profile_names,
-                    self._class_map or load_class_map(profile_names=profile_names),
+                    class_map,
                     expected_route=request.expected_route is not None,
                 )
             except ValueError as exc:

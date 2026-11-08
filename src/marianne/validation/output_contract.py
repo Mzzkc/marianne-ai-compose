@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
 from marianne.core.config import JobConfig
@@ -69,6 +70,9 @@ def class_summary(config: JobConfig) -> dict[str, Any]:
                 "layer": record.layer,
                 "path": str(record.path),
                 "sha256": record.sha256,
+                # GH #510: the venue path is relative to the process working
+                # directory; the conductor's may differ from this command's.
+                "resolved_from": str(Path.cwd()) if record.layer == "venue" else None,
                 "present": record.sha256 is not None,
             }
         )

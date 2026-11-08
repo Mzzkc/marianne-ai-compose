@@ -200,6 +200,14 @@ Rate limits do **not** cause job rejection. They are per-instrument concerns han
 
 The conductor is configured via a YAML file passed to `mzt start --config <path>`. Without a config file, all defaults are used.
 
+The conductor's working directory decides its venue layers: `.marianne/instruments/`
+and `.marianne/classes.yaml` are resolved relative to where `mzt start` ran (the
+shipped systemd unit sets `WorkingDirectory=$HOME`, which makes both venue layers
+equal to the user layers). A score whose project carries a venue profile or class
+definition the conductor never read is refused at submit with both paths named
+(GH #510); start the conductor from the project directory, or move the file to
+`~/.marianne/` and run `mzt conductor reload`.
+
 ### DaemonConfig Fields
 
 **Essential fields** (what you'll typically configure):
