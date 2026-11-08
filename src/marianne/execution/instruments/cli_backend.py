@@ -364,6 +364,13 @@ def _structured_error_text(stdout: str) -> str:
     the values of any ``error``/``message``/``codex_error_info`` keys found
     at its top level or one level down, joined. Agent output in earlier
     records and in ``agent_message`` items is never included.
+
+    Claude Code's ``--output-format json`` prints an ARRAY of stream events
+    and reports an API refusal in its terminal ``type: result`` object as
+    ``is_error: true`` plus the message under ``result`` (GH #507: a weekly
+    limit, "You've hit your weekly limit · resets Nov 9, 3am (UTC)", exit 1,
+    stderr empty). The array reduces to that terminal object, and on an
+    ``is_error`` object the ``result`` text is error text, not agent prose.
     """
     stripped = stdout.strip()
     if not stripped:
@@ -372,13 +379,15 @@ def _structured_error_text(stdout: str) -> str:
     candidates: list[Any] = []
     for raw in (last, stripped):
         try:
-            candidates.append(json.loads(raw))
+            candidates.append(_terminal_json_object(json.loads(raw)))
             break
         except json.JSONDecodeError:
             continue
     if not candidates or not isinstance(candidates[0], dict):
         return ""
     found: list[str] = []
+    if candidates[0].get("is_error") and isinstance(candidates[0].get("result"), str):
+        found.append(candidates[0]["result"])
 
     def walk(obj: dict[str, Any], depth: int) -> None:
         for key, value in obj.items():

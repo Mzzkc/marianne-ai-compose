@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Claude Code's weekly limit on stdout is a rate limit (GH #507).** The structured
+  error scan now reads the `result` text of a Claude Code terminal object that says
+  `is_error: true`, and the builtin profile's patterns accept "hit your weekly limit"
+  and a `(UTC)` reset zone. Before, the refusal was retried as a transient E009 and a
+  twelve-sheet job failed on its first sheet with no quota wait and no fallback.
+
 - **The orchestra timeline's chain-refusal note is a fixed word, never the conductor's message (merge review of GH #468).** `job.chain_refused` beats projected the refusal text verbatim, and two refusal causes carry a resolved score path or raw exception text; the public beat log and replay JSONL now carry one of `already_active`, `depth_limit`, `not_found`, `cost_limit`, `unavailable`, `error`, and the free text stays in the daemon log. A test plants a path and an exception string and asserts neither reaches the projection.
 - **A torn mailbox record no longer bricks the inbox (merge review of GH #467).** A sender killed mid-record left a last line without its newline; every later `mzt mail send` to that sheet then refused forever and readers stopped silently at the tear. The next append now truncates the unacknowledged tail under the exclusive lock and writes its record with one `os.write`; readers still never surface torn bytes.
 - **`claude-code-ollama` ships as `execution_status: warning` (merge review of GH #85).** Its verification is a mock Anthropic-compatible seam, so the profile says so instead of defaulting to `ready`; the detail names the live check to run before relying on it.

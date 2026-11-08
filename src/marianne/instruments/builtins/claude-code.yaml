@@ -271,9 +271,11 @@ cli:
       - "rate.?limit"
       - "(?:error|status|code)[^\\w]*429"
       - "(?:error|status|code)[^\\w]*529"
-      - "You've hit your limit"
+      # "You've hit your limit", "You've hit your weekly limit" (GH #507)
+      - "You've hit your (?:\\w+[- ])?limit"
       - "API Error: Rate limit"
-      - "resets.*\\(\\w+/\\w+\\)"
+      # "resets 9pm (America/Chicago)" and "resets Nov 9, 3am (UTC)"
+      - "resets.*\\(\\w+(?:/\\w+)?\\)"
       - "(?:server|api|service).*overloaded"
     # Auth/permission errors
     auth_error_patterns:
