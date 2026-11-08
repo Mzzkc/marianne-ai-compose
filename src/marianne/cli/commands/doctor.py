@@ -564,6 +564,119 @@ def _scan_unreferenced_user_profiles(
     return findings
 
 
+_REA_ENTRY_MARKERS = ("rea-agents", "rea.mjs", "/rea ", "/rea mcp")
+
+
+def _rea_pool_entries(config_file: Path | None = None) -> list[tuple[str, str]]:
+    """Pool entries whose command runs REA (Reverse Engineer Anything).
+
+    Reads the same ``mcp_pool.servers`` the conductor loads from
+    ``~/.marianne/conductor.yaml`` (GH #499). Returns ``(name, command)``
+    pairs; an unreadable or absent config yields none. REA is recognised by
+    its package or entry script in the command — the pool entry names the
+    interpreter and ``rea.mjs`` explicitly because the ``rea`` shim needs a
+    Node the default PATH may not provide.
+    """
+    import yaml
+
+    path = config_file or Path("~/.marianne/conductor.yaml").expanduser()
+    try:
+        data = yaml.safe_load(path.read_text()) or {}
+    except (OSError, yaml.YAMLError):
+        return []
+    servers = (data.get("mcp_pool") or {}).get("servers") if isinstance(data, dict) else None
+    if not isinstance(servers, dict):
+        return []
+    found: list[tuple[str, str]] = []
+    for name, entry in servers.items():
+        command = entry.get("command") if isinstance(entry, dict) else None
+        if isinstance(command, str) and any(
+            marker in f"{command} " for marker in _REA_ENTRY_MARKERS
+        ):
+            found.append((str(name), command))
+    return found
+
+
+def _rea_doctor_command(pool_command: str) -> list[str]:
+    """REA's own read-only doctor, derived from the pool entry's command.
+
+    The pool runs ``<node> <rea.mjs> mcp``; the provider check runs the same
+    interpreter and script with ``doctor --json`` so it inspects the exact
+    installation the conductor would spawn.
+    """
+    import shlex
+
+    argv = shlex.split(pool_command)
+    if argv and argv[-1] == "mcp":
+        argv = argv[:-1]
+    return [*argv, "doctor", "--json"]
+
+
+def _rea_provider_checks(
+    entries: list[tuple[str, str]], *, timeout_seconds: float = 120.0,
+) -> list[dict[str, Any]]:
+    """Run ``rea doctor --json`` for each REA pool entry (GH #499).
+
+    REA's doctor is strictly read-only and exits 1 when a required check
+    fails, so a non-zero exit is a finding, not a failure to run. Each
+    returned row carries the pool entry, REA's own ``healthy`` verdict and
+    its individual checks (id, ok, detail) so ``mzt doctor`` can report a
+    provider gap — a Ghidra release REA does not accept, a missing Java —
+    in REA's words. Nothing here installs or repairs anything.
+    """
+    import subprocess
+
+    rows: list[dict[str, Any]] = []
+    for name, command in entries:
+        argv = _rea_doctor_command(command)
+        row: dict[str, Any] = {"entry": name, "command": " ".join(argv)}
+        try:
+            proc = subprocess.run(  # noqa: S603 — argv from the operator's own conductor.yaml
+                argv, capture_output=True, text=True, timeout=timeout_seconds, check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            row.update({"status": "unavailable", "detail": f"rea doctor did not run: {exc}"})
+            rows.append(row)
+            continue
+        try:
+            report = json_mod.loads(proc.stdout or "{}")
+        except json_mod.JSONDecodeError:
+            row.update({
+                "status": "unavailable",
+                "detail": f"rea doctor exit {proc.returncode} with non-JSON output",
+            })
+            rows.append(row)
+            continue
+        checks = report.get("checks") if isinstance(report, dict) else None
+        failing = [
+            c for c in (checks or [])
+            if isinstance(c, dict) and c.get("ok") is False
+        ]
+        row.update({
+            "status": "ok" if report.get("healthy") else "warning",
+            "healthy": bool(report.get("healthy")),
+            "exit_code": proc.returncode,
+            # REA's check rows: name, ok, classification, detail, remediation.
+            "checks": [
+                {
+                    "name": c.get("name"),
+                    "ok": c.get("ok"),
+                    "classification": c.get("classification"),
+                    "detail": c.get("detail") or c.get("remediation"),
+                }
+                for c in (checks or []) if isinstance(c, dict)
+            ],
+            "detail": (
+                "REA reports a healthy environment"
+                if report.get("healthy")
+                else "REA reports provider gaps: "
+                + ", ".join(str(c.get("name")) for c in failing)
+            ),
+        })
+        rows.append(row)
+    return rows
+
+
 def doctor(
     json: bool = typer.Option(False, "--json", help="Output results as JSON"),
     clean: bool = typer.Option(
@@ -802,6 +915,9 @@ def doctor(
     # --- Instrument hygiene (GH #443) ---
     unreferenced_profiles = _scan_unreferenced_user_profiles()
 
+    # --- Provider checks (GH #499): REA's own doctor for each REA pool entry ---
+    provider_checks = _rea_provider_checks(_rea_pool_entries())
+
     # --- JSON output ---
     if json:
         result: dict[str, Any] = {
@@ -816,9 +932,11 @@ def doctor(
             "safety_warnings": safety_warnings,
             "storage_findings": storage_findings,
             "unreferenced_profiles": unreferenced_profiles,
+            "provider_checks": provider_checks,
             "cleaned_paths": cleaned_paths,
             "warnings_count": len(warnings) + len(safety_warnings)
-            + len(storage_findings) + len(unreferenced_profiles),
+            + len(storage_findings) + len(unreferenced_profiles)
+            + sum(1 for row in provider_checks if row["status"] != "ok"),
             "errors_count": len(errors),
         }
         out.print_json(json_mod.dumps(result))
@@ -884,6 +1002,23 @@ def doctor(
         out.print(
             "    [dim]A seat is an alias over an existing profile (GH #443). "
             "Archive these files, or submit the score that needs them.[/dim]"
+        )
+
+    # Provider checks (GH #499): REA speaks for its own toolchain.
+    if provider_checks:
+        out.print()
+        out.print("  [bold]Providers:[/bold]")
+        for row in provider_checks:
+            icon = _status_icon("ok" if row["status"] == "ok" else "warning")
+            out.print(f"  {icon} rea ({row['entry']}){'':<10} {row['detail']}")
+            for c in row.get("checks", []):
+                if c.get("ok") is False:
+                    out.print(f"      [dim]{c.get('name')}: {c.get('detail')}[/dim]")
+            if row["status"] != "ok":
+                warnings.append(f"provider rea ({row['entry']}): {row['detail']}")
+        out.print(
+            "    [dim]REA's doctor is read-only; it never installs. Fix a provider gap "
+            "with REA's own setup (`npx rea-agents setup`), then rerun.[/dim]"
         )
 
     # Summary

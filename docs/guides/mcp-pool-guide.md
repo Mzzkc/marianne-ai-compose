@@ -60,6 +60,30 @@ mcp_pool:
       socket: "/tmp/mzt/mcp/filesystem.sock"
 ```
 
+A server whose `bin/` shim needs a runtime the conductor's PATH may not
+provide is declared with its interpreter and entry script spelled out. REA
+(Reverse Engineer Anything, npm `rea-agents`, GH #499) is the shipped example:
+its `rea` shim is `#!/usr/bin/env node` and needs Node 22.23+/24.22+, so the
+entry names the Node binary and `scripts/rea.mjs` directly, exactly the form
+REA documents for manual registration:
+
+```yaml
+mcp_pool:
+  servers:
+    rea:
+      command: "<nvm>/versions/node/v24.22.2/bin/node <nvm>/versions/node/v24.22.2/lib/node_modules/rea-agents/scripts/rea.mjs mcp"
+      transport: stdio
+      socket: "~/.config/mzt/default-mcp/rea.sock"   # the pool resolves no `~`; write the absolute path
+      framing: newline
+```
+
+REA keeps analysis state (an opened target persists across calls), and the
+pool gives every musician on the conductor one shared upstream session, so
+that state is shared too: a sheet that opens a target closes it
+(`close_binary`, keeping `snapshot_path` if the analysis must survive) before
+it ends. `mzt doctor` runs REA's own read-only `rea doctor --json` for each
+such entry and reports its toolchain gaps in REA's words; it never installs.
+
 ### Configuration Fields
 
 | Field | Type | Default | Description |

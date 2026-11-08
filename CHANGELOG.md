@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **REA (Reverse Engineer Anything) support, first rung (GH #499).** A pool entry for
+  REA's stdio MCP server is documented in the MCP pool guide (interpreter and entry
+  script spelled out, open/close discipline for its shared analysis state), and
+  `mzt doctor` gains a Providers section that runs REA's own read-only `rea doctor
+  --json` for each such entry and reports its toolchain gaps in REA's words, under
+  `provider_checks` in `--json`. Nothing installs; a gap is a warning.
+
 - **`mzt run --job-id NAME` (GH #505).** Names a run, so one shipped score can serve two
   commissions at once with no renamed copy: the job ID is NAME, and a score that omits
   `workspace:` gets `~/workspaces/NAME`. Without the flag nothing changes. The composing
