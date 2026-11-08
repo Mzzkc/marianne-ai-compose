@@ -589,6 +589,11 @@ class BatonCore:
                             sheet.status = BatonSheetStatus.PENDING
         if cleared > 0:
             self._state_dirty = True
+        # An operator clearing ALL limits expects every rate-limit WAITING
+        # sheet to move, including one stranded on a never-limited instrument
+        # by an older conductor's fallback race.
+        if instrument is None:
+            self._release_stranded_waiting_sheets()
         return cleared
 
     def get_open_circuit_breakers(self) -> set[str]:
@@ -1937,7 +1942,24 @@ class BatonCore:
         if event.rate_limited and not event.execution_success:
             # Rate limit AND failed — genuine rate limit that prevented
             # execution. Handle as rate limit: wait and retry.
-            sheet.status = BatonSheetStatus.WAITING
+            #
+            # A sibling sheet's RateLimitHit may already have advanced this
+            # sheet's fallback while its musician was still exiting (the
+            # handler relabels every in-flight sheet on the limited
+            # instrument). Then this late result names the OLD instrument.
+            # Parking the sheet WAITING on the NEW instrument strands it: no
+            # RateLimitExpired or clear-rate-limits ever matches an
+            # instrument that is not rate-limited (orchestra-memory-rev4,
+            # 2026-11-08: three sheets sat WAITING for hours). The sheet is
+            # dispatchable on its advanced instrument — make it PENDING.
+            advanced_past = (
+                sheet.instrument_name is not None
+                and sheet.instrument_name != event.instrument_name
+            )
+            if advanced_past:
+                sheet.status = BatonSheetStatus.PENDING
+            else:
+                sheet.status = BatonSheetStatus.WAITING
             self._state_dirty = True
             _logger.info(
                 "baton.sheet.rate_limited",
@@ -1945,6 +1967,8 @@ class BatonCore:
                     "job_id": event.job_id,
                     SHEET_NUM_KEY: event.sheet_num,
                     "instrument": event.instrument_name,
+                    "current_instrument": sheet.instrument_name,
+                    "redispatch_on_fallback": advanced_past,
                 },
             )
             # Inject RateLimitHit so the instrument-level rate limit
@@ -2370,6 +2394,38 @@ class BatonCore:
                 ):
                     sheet.status = BatonSheetStatus.PENDING
         self._state_dirty = True
+
+    def _release_stranded_waiting_sheets(self) -> int:
+        """Return WAITING sheets whose current instrument is not rate-limited to PENDING.
+
+        WAITING means "my instrument is rate-limited; a RateLimitExpired will
+        wake me". A sheet WAITING on an instrument that is not rate-limited
+        has no such timer and would wait forever. Swept only by an operator's
+        clear-all (``mzt clear-rate-limits`` with no instrument): a single
+        instrument's expiry or clear touches only that instrument's sheets,
+        which five suites pin as the contract.
+        """
+        released = 0
+        for job in self._jobs.values():
+            for sheet in job.sheets.values():
+                if sheet.status != BatonSheetStatus.WAITING:
+                    continue
+                inst = self._instruments.get(sheet.instrument_name or "")
+                if inst is not None and inst.rate_limited:
+                    continue
+                sheet.status = BatonSheetStatus.PENDING
+                released += 1
+                _logger.warning(
+                    "baton.sheet.waiting_released",
+                    extra={
+                        "job_id": job.job_id,
+                        SHEET_NUM_KEY: sheet.sheet_num,
+                        "instrument": sheet.instrument_name,
+                    },
+                )
+        if released:
+            self._state_dirty = True
+        return released
 
     def _handle_retry_due(self, event: RetryDue) -> None:
         """Timer fired — sheet is ready for retry."""

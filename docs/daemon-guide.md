@@ -504,6 +504,11 @@ Key capabilities:
 - **Rate limit auto-resume** — when a rate limit is hit, the baton schedules a timer to
   automatically clear the limit when it expires and resume WAITING sheets. Without this,
   rate-limited sheets stay blocked until manually cleared via `mzt clear-rate-limits`.
+  A sheet whose fallback already advanced when its own late refusal arrives is
+  re-queued PENDING on the fallback rather than parked WAITING on an instrument that
+  is not limited; `mzt clear-rate-limits` with no instrument also sweeps any sheet
+  left WAITING on an unlimited instrument back to PENDING. An expiry or a clear of
+  one instrument touches only that instrument's sheets.
 - **Restart recovery** — baton state persists and reconciles with CheckpointState on restart
 - **Cost enforcement** — per-sheet and per-job cost limits enforced after every attempt
 - **Full prompt assembly** — the baton renders prompts through the complete pipeline

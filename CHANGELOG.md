@@ -36,6 +36,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A late rate-limit result no longer strands a sheet whose fallback already advanced.**
+  When several sheets on one instrument hit a quota screen together, the first
+  result's `RateLimitHit` advances every in-flight sibling to its fallback; each
+  sibling's own late result then named the old instrument and parked the sheet
+  WAITING on the new one, which nothing ever woke (`orchestra-memory-rev4`,
+  2026-11-08: three composition sheets sat for hours). The baton now re-queues such
+  a sheet PENDING on its advanced instrument, and a bare `mzt clear-rate-limits`
+  (no instrument) sweeps any sheet WAITING on an unlimited instrument back to
+  PENDING, so a strand left by an older conductor is cleared by the operator's
+  existing command. A single instrument's expiry or clear still touches only that
+  instrument's sheets.
+
 - **`issue-triage`: a stale DAG on tail-sheet failure no longer masquerades as fresh (GH #503).**
   Triage runs in one workspace across labels, and when a tail sheet failed, the
   validations that re-ran on retry inherited files from the previous run against a

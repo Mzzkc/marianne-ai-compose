@@ -1989,7 +1989,7 @@ file for this; it never touches the default one (GH #455).
 
 Clear stale rate limits on instruments. When a backend rate limit expires but the conductor still has it cached, sheets may stay blocked unnecessarily. This command clears the cached limit so dispatch resumes immediately.
 
-Clears both the rate limit coordinator (used by the scheduler) and the baton's per-instrument state (used by the dispatch loop).
+Clears both the rate limit coordinator (used by the scheduler) and the baton's per-instrument state (used by the dispatch loop). Without `--instrument` it also returns to PENDING any sheet left WAITING on an instrument that is not rate-limited (a sheet whose fallback advanced while its refusal was still in flight), so `mzt status` showing WAITING sheets with no rate limit listed is cleared by a bare `mzt clear-rate-limits`; with `--instrument` only that instrument's sheets move.
 
 ```
 Usage: mzt clear-rate-limits [OPTIONS]
@@ -2013,6 +2013,8 @@ mzt clear-rate-limits --json
 
 **When to use:**
 - A rate limit has expired but sheets are still WAITING
+- A sheet is WAITING on an instrument that is not listed under "waiting for rate limit"
+  (its fallback advanced while a refusal was in flight; a bare clear re-queues it)
 - You want to force a retry after a rate limit event
 - Troubleshooting rate limit behavior during development
 
