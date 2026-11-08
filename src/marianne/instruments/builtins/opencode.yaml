@@ -266,6 +266,10 @@ cli:
       - "rate.?limit"
       - "(?:error|status|code)[^\\w]*429"
       - "too many requests"
+      # Z.AI Coding Plan (GH #509): "Error: Weekly/Monthly Limit Exhausted.
+      # Your limit will reset at 2026-11-12 06:24:25"
+      - "Limit Exhausted"
+      - "Your limit will reset at"
     auth_error_patterns:
       - "unauthorized"
       - "invalid.*api.*key"

@@ -246,6 +246,9 @@ cli:
       - "API Error: Rate limit"
       - "Usage limit reached"
       - 'Your limit will reset at\s+\d{4}-\d{2}-\d{2}'
+      # Z.AI gateway quota text printed as an "API Error:" line (GH #509)
+      - "Limit Exhausted"
+      - "temporarily limiting requests"
     quiet_seconds: 15.0
     poll_interval_seconds: 2.0
     startup_timeout_seconds: 90.0
@@ -277,6 +280,12 @@ cli:
       # "resets 9pm (America/Chicago)" and "resets Nov 9, 3am (UTC)"
       - "resets.*\\(\\w+(?:/\\w+)?\\)"
       - "(?:server|api|service).*overloaded"
+      # Z.AI gateway behind ANTHROPIC_BASE_URL (GH #509): "Server is temporarily
+      # limiting requests (not your usage limit) · [1310][Weekly/Monthly Limit
+      # Exhausted. Your limit will reset at 2026-11-12 06:24:25]"
+      - "Limit Exhausted"
+      - "temporarily limiting requests"
+      - "Your limit will reset at"
     # Auth/permission errors
     auth_error_patterns:
       - "not authenticated"

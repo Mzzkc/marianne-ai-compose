@@ -1000,7 +1000,16 @@ path in your instrument profile's `executable` field.
 ### Rate limits not detected
 
 If your instrument hits rate limits but Marianne doesn't detect them, add the
-rate limit text to `cli.errors.rate_limit_patterns`. Use regex:
+rate limit text to `cli.errors.rate_limit_patterns`. A gateway in front of the
+provider speaks its own vocabulary: the Z.AI plan behind `ANTHROPIC_BASE_URL`
+or the OpenCode Z.AI provider answers "Weekly/Monthly Limit Exhausted. Your
+limit will reset at 2026-11-12 06:24:25", which the built-in `claude-code` and
+`opencode` profiles recognise (GH #509). A user-layer profile is a full
+replacement of the built-in, not a merge: when you copy a built-in to change its
+model, copy its `errors` patterns and its `interactive.*_screen_patterns` whole,
+and re-copy them when the built-in gains one, or an interactive musician's
+first-turn quota screen is nudged as an idle agent and the empty session is
+rescued by the previous pass's files. Use regex:
 
 ```yaml
 errors:

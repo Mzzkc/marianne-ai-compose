@@ -94,8 +94,10 @@ mzt run examples/engineering/design-to-orchestra.yaml \
 It surveys the shipped repertoire, casts each part (who builds, who tests,
 who reviews, for how long), writes one build score per part plus an
 integration score and a `type: fleet`, and gates every generated score:
-`mzt validate` with no errors, the composing release checker with a lock,
-a review on two model families, and a verdict. It submits nothing unless
+`mzt validate --strict` with no errors (so a generated score spells its
+workspace and injected paths with `~` or template variables, never an
+expanded `/home/...` path, which V004 refuses), the composing release
+checker with a lock, a review on two model families, and a verdict. It submits nothing unless
 `--var submit=true`; otherwise `RUN.md` in the workspace names the commands
 and re-verifies each lock at start, so a score edited after review refuses
 to run.

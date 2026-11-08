@@ -576,9 +576,9 @@ validations:
   # sections builders and reviewers depend on.
   - type: command_succeeds
     command: |
-      python3 - {workspace} {instance} <<'PY'
+      python3 - {workspace} {instance} {pass_no} <<'PY'
       import re, sys, yaml, pathlib
-      ws, slot = pathlib.Path(sys.argv[1]), int(sys.argv[2])
+      ws, slot, this_pass = pathlib.Path(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])
       part = next(p for p in yaml.safe_load(open(ws / "specs/parts.yaml")) if p["slot"] == slot)
       d = ws / "specs" / f"{slot:02d}-{part['id']}"
       spec, integ = (d / "spec.md").read_text(), (d / "integration.md").read_text()
@@ -587,6 +587,19 @@ validations:
       for h in ("## Depends on", "## Consumed by", "## Integration checks"):
           assert h in integ, f"integration.md missing {h}"
       assert len(spec.split()) >= 300, "spec.md too thin to build from"
+      # Prove THIS pass (GH #509): a repair musician that did nothing (a
+      # quota refusal on its first turn, a crash before its first edit) must
+      # not be rescued by the previous pass's files. If the last verdict
+      # named this part, its spec must be newer than that verdict.
+      verdict = ws / "review" / "verdict.yaml"
+      if this_pass > 1 and verdict.is_file():
+          v = yaml.safe_load(verdict.read_text()) or {}
+          named = {str(b.get("part")) for b in (v.get("blockers") or [])}
+          if part["id"] in named:
+              assert (d / "spec.md").stat().st_mtime > verdict.stat().st_mtime, (
+                  f"{part['id']}: named in pass {this_pass - 1}'s verdict but spec.md "
+                  f"was not rewritten this pass (did the musician do any work?)"
+              )
       PY
     condition: "stage == 4"
     description: "Part spec and integration doc are complete"

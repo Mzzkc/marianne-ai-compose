@@ -26,6 +26,8 @@
 #                         techniques and agents that fit this design
 #   2 Casting         x8  per part: who builds, who tests, who reviews, how long
 #   3 Composition     x9  per part: a build score; slot 9: integration + fleet
+#                         (paths spelled for the strict gate: ~ or templates,
+#                         never an expanded home path, GH #511)
 #   4 Gate (cli)          per score: strict validate, release checker, lock;
 #                         the fleet: every member exists and is gated
 #   5 Review          x2  two reviewers on different families read the scores
@@ -387,8 +389,14 @@ prompt:
 
     Write `{{ workspace }}/orchestra/<NN>-<id>.yaml`: a complete, runnable
     Marianne score that builds this part in `{{ project_root }}` to its
-    acceptance criteria, following the casting. Name it `<id>-build` and use
-    an absolute workspace under `{{ workspace }}/runs/<id>`. It must:
+    acceptance criteria, following the casting. Name it `<id>-build` and give
+    it a workspace under `{{ workspace }}/runs/<id>`. The gate runs
+    `mzt validate --strict` on your score, so spell every path the way the
+    strict validator accepts: the workspace and prelude files with `~/...`
+    or `{{ "{{ workspace }}" }}`, never an expanded `/home/...` path (V004);
+    keep `{{ project_root }}` and `{{ specs_dir }}` as `~`-relative spellings
+    if you substitute them; put a `cli` sheet's script in `command`, not
+    prose in its prompt (V307). It must:
 
     - deliver the part's `## Prototype cut` first and prove it, then the rest;
     - run the part's review methods with authors and reviewers separated;
@@ -701,9 +709,10 @@ validations:
   # something stronger than file existence.
   - type: command_succeeds
     command: |
-      python3 - {workspace} {specs_dir} {instance} <<'PY'
-      import sys, yaml, pathlib
+      python3 - {workspace} {specs_dir} {instance} {pass_no} <<'PY'
+      import re, sys, yaml, pathlib
       ws, specs, slot = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), int(sys.argv[3])
+      this_pass = int(sys.argv[4])
       if slot == 9:
           path = ws / "orchestra" / "integration.yaml"
           fleet = yaml.safe_load(open(ws / "orchestra" / "fleet.yaml"))
@@ -717,6 +726,28 @@ validations:
       assert sheet.get("loops"), f"{path.name}: no bounded repair loop"
       types = {v.get("type") for v in s.get("validations", [])}
       assert "command_succeeds" in types, f"{path.name}: no executed validation"
+      # Prove THIS pass (GH #509): a repair musician that did nothing must not
+      # be rescued by the previous pass's score. A score the last verdict or
+      # the last gate named must be newer than the file that named it.
+      if this_pass > 1:
+          mine = [path.name] + (["fleet.yaml"] if slot == 9 else [])
+          verdict = ws / "review" / "orchestra-verdict.yaml"
+          if verdict.is_file():
+              v = yaml.safe_load(verdict.read_text()) or {}
+              named = " ".join(str(b.get("score", "")) for b in (v.get("blockers") or []))
+              for name in mine:
+                  if name in named:
+                      assert (ws / "orchestra" / name).stat().st_mtime > verdict.stat().st_mtime, (
+                          f"{name}: named in pass {this_pass - 1}'s verdict but not rewritten this pass"
+                      )
+          gate = ws / "04-gate.txt"
+          if gate.is_file():
+              failed = set(re.findall(r"^FAIL (?:validate|release) (\S+)", gate.read_text(), re.M))
+              for name in mine:
+                  if name in failed:
+                      assert (ws / "orchestra" / name).stat().st_mtime > gate.stat().st_mtime, (
+                          f"{name}: failed pass {this_pass - 1}'s gate but not rewritten this pass"
+                      )
       PY
     condition: "stage == 3"
     description: "Generated score injects the design, loops boundedly and runs real checks"

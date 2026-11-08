@@ -36,6 +36,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Z.AI's "Weekly/Monthly Limit Exhausted" is a rate limit on every route (GH #509).**
+  The built-in `claude-code` profile (headless patterns and interactive screen
+  patterns) and `opencode` profile now recognise the Z.AI gateway's quota text
+  ("Limit Exhausted", "temporarily limiting requests", "Your limit will reset at
+  <ISO time>"), so the attempt waits or advances its fallback instead of burning
+  retries or being nudged as an idle agent. `spec-forge` (stage 4) and
+  `design-to-orchestra` (stage 3) now prove THIS pass on a repair: a part or score
+  the previous verdict or gate named must be newer than the file that named it, so
+  a musician that did no work cannot be rescued by the previous pass's files.
+  The instrument guide says why a user-layer copy of a built-in must carry its
+  pattern blocks whole.
+
+- **`design-to-orchestra` no longer asks for an "absolute workspace" its own strict gate refuses (GH #511).**
+  The composition prompt now spells the gate's rules (V004: `~` or template
+  variables, never an expanded home path; V307: a `cli` sheet's script in
+  `command`), so the first pass does not spend a repair pass on a contradiction
+  in the score's own instructions.
+
 - **A late rate-limit result no longer strands a sheet whose fallback already advanced.**
   When several sheets on one instrument hit a quota screen together, the first
   result's `RateLimitHit` advances every in-flight sibling to its fallback; each
