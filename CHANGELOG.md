@@ -41,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decision was failed at 24 h as "exceeded timeout" (the memory-primitive spec-forge,
   paused 23 h 54 m). A hold-aware watchdog now charges RUNNING intervals only; a
   score with a tick deadline (`schedule.max_wall_seconds`) keeps its absolute bound.
+- **Intermittent "database is locked" on resume (GH #506).** The job registry had no
+  busy timeout (Python's 5 s default) while the schedule registry held `BEGIN
+  IMMEDIATE` across a custody fsync on the same state database. The job registry
+  now sets an explicit 30 s busy timeout, and the schedule registry writes its
+  custody witness before taking the writer lock, so neither starves the other.
 
 - **Claude Code's weekly limit on stdout is a rate limit (GH #507).** The structured
   error scan now reads the `result` text of a Claude Code terminal object that says

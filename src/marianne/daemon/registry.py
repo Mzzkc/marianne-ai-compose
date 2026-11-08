@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import aiosqlite
 
@@ -153,17 +153,38 @@ class JobRegistry:
             await registry.register_job(...)
     """
 
-    def __init__(self, db_path: Path) -> None:
+    #: How long a job-registry write waits for another writer on the same
+    #: state database before failing (GH #506). The schedule registry shares
+    #: the file and holds ``BEGIN IMMEDIATE`` for the length of a custody
+    #: fsync; the Python default of 5 s was not enough on a loaded CI runner.
+    DEFAULT_BUSY_TIMEOUT_SECONDS: ClassVar[float] = 30.0
+
+    def __init__(
+        self, db_path: Path, *, busy_timeout_seconds: float | None = None,
+    ) -> None:
         self._db_path = db_path
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn: aiosqlite.Connection | None = None
+        timeout = (
+            self.DEFAULT_BUSY_TIMEOUT_SECONDS
+            if busy_timeout_seconds is None
+            else busy_timeout_seconds
+        )
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("busy_timeout_seconds must be a positive finite duration")
+        self._busy_timeout_seconds = timeout
 
     async def open(self) -> None:
         """Open the database connection and create tables."""
-        conn = await aiosqlite.connect(str(self._db_path))
+        conn = await aiosqlite.connect(
+            str(self._db_path), timeout=self._busy_timeout_seconds,
+        )
         try:
             conn.row_factory = aiosqlite.Row
             await conn.execute("PRAGMA journal_mode=WAL")
+            await conn.execute(
+                f"PRAGMA busy_timeout={int(self._busy_timeout_seconds * 1000)}"
+            )
             await self._create_tables(conn)
         except Exception:
             await conn.close()

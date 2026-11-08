@@ -596,9 +596,16 @@ class ScheduleRegistry:
         """Execute one mutation, rolling it back before translating every failure."""
         async with self._custody_lock:
             try:
-                await self._db.execute("BEGIN IMMEDIATE")
+                # Advance the external witness BEFORE taking the database
+                # writer lock (GH #506): the custody write fsyncs a file and
+                # its directory, and holding BEGIN IMMEDIATE across that
+                # starved the job registry's status writes on the same
+                # state database past their busy timeout ("database is
+                # locked" on a loaded runner). The witness ahead of a
+                # failed commit still fails closed, exactly as before.
                 identity, revision = await self._checked_identity()
                 await asyncio.to_thread(self._write_custody, identity, revision + 1)
+                await self._db.execute("BEGIN IMMEDIATE")
                 await self._db.execute(
                     "UPDATE registry_identity SET revision = ? WHERE singleton = 1",
                     (revision + 1,),
