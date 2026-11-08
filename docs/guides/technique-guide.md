@@ -172,6 +172,27 @@ techniques:
       transport: stdio       # Transport protocol (stdio, sse, http)
 ```
 
+Any stdio MCP server the pool runs attaches the same way; no Marianne code is
+needed for a new tool. REA (Reverse Engineer Anything, GH #499) is the shipped
+example for a sheet that must read a binary, bundle, APK, firmware image or
+runtime capture. The pool entry is in the [MCP pool guide](mcp-pool-guide.md);
+the technique names it and the phases that read artifacts:
+
+```yaml
+techniques:
+  rea:
+    kind: mcp
+    phases: [recon, inspect]   # the sheets that characterise or compare artifacts
+    config:
+      server: rea              # the mcp_pool.servers entry
+```
+
+REA keeps analysis state across calls and the pool shares one upstream
+session across every musician on the conductor, so a sheet that opens a
+target closes it before it ends (`close_binary`, with `snapshot_path` when the
+analysis must survive for a later sheet). `mzt doctor` reports REA's own
+toolchain gaps under Providers.
+
 ### Skill Config
 
 ```yaml
