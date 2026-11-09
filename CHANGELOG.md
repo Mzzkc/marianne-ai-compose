@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   templates) now count as activity; the liveness probe and backstop are unchanged.
 
 ### Changed
+- **The skills say what V228 means.** The validator and the configuration reference already said
+  that a loop's `cost_limit_usd` cannot stop a route priced at $0; no skill said what a composer
+  should do when the warning fires. The composing and score-authoring skills now do: on such a
+  venue `max_iterations` is the only working cap, so set it to the passes the work justifies and
+  keep `cost_limit_usd` for venues that price the route (`artifact-analysis` trips it on a
+  subscription venue by design).
 - **A maker/judge pair is cast as two explicit chains in opposite orders, never a class.**
   `spread` separates voices within one alias; it cannot keep an analyst and its reviewer apart,
   and a capability class on either seat resolves per venue (the first live run of
