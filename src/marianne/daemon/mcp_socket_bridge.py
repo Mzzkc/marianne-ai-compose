@@ -21,7 +21,11 @@ from marianne.daemon.socket_ownership import OwnedUnixSocket
 _logger = get_logger("daemon.mcp_socket_bridge")
 
 McpFraming = Literal["newline", "content-length"]
-_READ_CHUNK_LIMIT = 1024 * 1024
+# One JSON-RPC line may carry a whole tool catalog: REA (rea-agents 6.8.0)
+# answers tools/list with a single 3.5 MB newline-framed line (GH #520). The
+# StreamReader under the upstream pipe and the explicit check below share this
+# bound; a line over it is refused loudly, never silently.
+_READ_CHUNK_LIMIT = 64 * 1024 * 1024
 _WRITE_TIMEOUT_SECONDS = 10.0
 _CLOSE_TIMEOUT_SECONDS = 0.5
 _UPSTREAM_STOP_TIMEOUT_SECONDS = 10.0
@@ -71,14 +75,21 @@ class McpSocketBridge:
         self._stderr_task: asyncio.Task[None] | None = None
         self._initialize_result: dict[str, Any] = {}
         self._stopping = False
+        self._upstream_reader_stopped = False
 
     @property
     def is_running(self) -> bool:
-        """Whether the upstream process and socket server are both alive."""
+        """Whether the upstream process, its reader and the socket server are all alive.
+
+        A live process whose stdout reader has stopped cannot answer anyone
+        (GH #520): every forwarded request would wait forever. Such a bridge
+        reports not running so the pool monitor restarts it under its policy.
+        """
         return (
             self.process is not None
             and self.process.returncode is None
             and self._server is not None
+            and not self._upstream_reader_stopped
         )
 
     async def start(self) -> None:
@@ -90,6 +101,7 @@ class McpSocketBridge:
             await self.stop()
         self._stop_task = None
         self._stopping = False
+        self._upstream_reader_stopped = False
         cmd_parts = shlex.split(self.command)
         if not cmd_parts:
             raise ValueError("MCP server command must not be empty")
@@ -102,6 +114,7 @@ class McpSocketBridge:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                limit=_READ_CHUNK_LIMIT,
             )
             self.process = process
             if process.stdin is None or process.stdout is None:
@@ -369,6 +382,7 @@ class McpSocketBridge:
     async def _read_upstream_loop(self) -> None:
         if self.process is None or self.process.stdout is None:
             return
+        reason = "upstream closed stdout"
         try:
             while not self._stopping:
                 read = await _read_jsonrpc_message(self.process.stdout)
@@ -378,13 +392,48 @@ class McpSocketBridge:
                 await self._route_upstream_message(message)
         except asyncio.CancelledError:
             raise
-        except Exception:  # noqa: BLE001 — structured logger reports mcp_bridge.upstream_read_failed
+        except Exception as exc:  # noqa: BLE001 — structured logger reports mcp_bridge.upstream_read_failed
+            reason = f"upstream read failed: {type(exc).__name__}: {exc}"
             if not self._stopping:
                 _logger.warning(
                     "mcp_bridge.upstream_read_failed",
                     extra={"server": self.name},
                     exc_info=True,
                 )
+        finally:
+            if not self._stopping:
+                await self._fail_pending_and_close(reason)
+
+    async def _fail_pending_and_close(self, reason: str) -> None:
+        """The reader is gone: answer every waiting client, then stop serving.
+
+        Without this a forwarded request sits in ``_pending`` forever while the
+        process stays alive and ``is_running`` stays true (GH #520). Clients get
+        a JSON-RPC error naming the cause; the pool monitor sees a dead bridge.
+        """
+        self._upstream_reader_stopped = True
+        _logger.warning(
+            "mcp_bridge.upstream_reader_stopped",
+            extra={"server": self.name, "reason": reason, "pending": len(self._pending)},
+        )
+        pending_items = list(self._pending.items())
+        self._pending.clear()
+        error = {"code": -32000, "message": f"MCP pool bridge {self.name!r}: {reason}"}
+        for _upstream_id, pending in pending_items:
+            if isinstance(pending, asyncio.Future):
+                if not pending.done():
+                    pending.set_exception(ConnectionError(reason))
+                continue
+            await self._write_client_message(
+                pending.client,
+                {"jsonrpc": "2.0", "id": pending.original_id, "error": error},
+            )
+        for client in list(self._clients):
+            self._clients.discard(client)
+            await self._close_client_writer(client.writer)
+        server, self._server = self._server, None
+        if server is not None:
+            server.close()
 
     async def _route_upstream_message(self, message: dict[str, Any]) -> None:
         if "id" not in message:

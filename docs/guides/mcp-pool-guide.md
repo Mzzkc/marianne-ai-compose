@@ -267,6 +267,14 @@ The MCP pool integrates with the conductor lifecycle:
   and at most 3 attempts per crash loop; a server that stays up 30 seconds
   resets the attempt budget
 - Agent sheets will see technique unavailability in their next dispatch
+- A server whose process is alive but whose stdout the bridge can no longer
+  read (it closed the pipe, or wrote a line over the bridge's 64 MiB bound) is
+  treated the same way (GH #520): every request still waiting on it receives a
+  JSON-RPC error `-32000 MCP pool bridge '<name>': <reason>`, its clients are
+  closed, the bridge reports not running, and the monitor restarts it under
+  `restart_policy`. The conductor log carries `mcp_bridge.upstream_reader_stopped`
+  with the reason. One reply line may be a whole tool catalog (REA's is 3.5 MB),
+  so the bound is per line, not per catalog.
 
 ### MCP config not applied to instrument
 - Only instruments with `mcp_config_flag` or `mcp_config_workspace_path` in

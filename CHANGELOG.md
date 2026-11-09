@@ -67,6 +67,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fan-out musician messaging through a scratch-owned file mailbox (GH #467).** Concurrent fan-out voices had no way to exchange notes during a run — no harness adapter reaches them and the conductor only sees per-sheet results. `sheet.fan_out_messaging: file` (default; `none` omits it; explicit use without concurrent voices warns V234) prepares one append-only JSONL inbox per sheet under `<workspace>/.marianne-scratch/mailbox/`, guarded by advisory locks and opaque, strictly-increasing byte-cursor IDs per inbox. Shell-capable instruments get `MARIANNE_MAILBOX`, `MARIANNE_SCRATCH`, and `MARIANNE_SHEET` exported, and the new `mzt mail send <sheet|all> "<body>"` / `mzt mail read [--since <id>]` subcommands deliver and poll messages (`all` targets every initialized inbox except the sender's own; the CLI refuses to guess a job or sheet context). The conductor's log records each send (sender, recipient, UTF-8 byte count; never the body) and a traffic summary, and retains them (body-free) in the job checkpoint at every terminal settlement — COMPLETED, FAILED, or CANCELLED — so a job that ended in an error, timeout, or cancellation still records every delivered send when the conductor investigates a failed musician; failed jobs keep their scratch (and inboxes) for post-mortem. `mzt diagnose` shows the traffic (sender, recipient, byte counts, per-inbox totals, first/last timestamps) and `--json` adds `mailbox_traffic`; `merge_traffic` reconciles retained and live metadata across resume without double-counting. Message bodies never enter logs, checkpoints, or diagnosis.
 
 ### Fixed
+- **The MCP pool bridge no longer dies silently on a catalog-sized reply (GH #520).** The
+  upstream pipe was read with the default 64 KiB `StreamReader` limit; REA's `tools/list`
+  is one 3.5 MB line, so the reader raised once, the process stayed alive, `is_running`
+  stayed true, and every later request parked forever while the pool kept handing out the
+  dead socket. The bridge now reads lines up to 64 MiB, and when its reader stops for any
+  reason it answers every pending request with JSON-RPC error `-32000` naming the cause,
+  closes its clients, reports not running, and lets the pool monitor restart it under
+  `restart_policy` (`mcp_bridge.upstream_reader_stopped` in the log). Found by the first
+  live run of `artifact-analysis`.
 
 - **Compiler-emitted validators ground on THIS run, not on inherited artifacts (GH #508).**
   The score-count claim validator's second pattern was dead: inside the emitted
