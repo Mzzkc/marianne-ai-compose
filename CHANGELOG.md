@@ -29,6 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **`instrument_config.first_output_timeout_seconds`: per-sheet tri-state override of the CLI first-output silence bound (GH #502).** The profile-level bound (GH #434) ends an attempt that produces zero stdout/stderr bytes within N seconds as a `Stale execution` stall — correct for a streaming agent, wrong for a sheet that is legitimately slow to first byte (cold caches, backup or IO pressure). The key now works at all four instrument override scopes (score, movement, `instruments.<alias>.config`, `sheet.per_sheet_instrument_config` — an alias is applied before a per-sheet override) and is tri-state like `response_format`: omitted inherits the profile bound, a finite positive number widens or narrows it for that scope, and `null` disables it for that sheet without touching the shared profile or other concurrent sheets. The sheet timeout always caps execution — an override larger than it (or a disabled bound) never extends the attempt — and once any stdout or stderr byte arrives the bound is inert and only the sheet timeout governs. Invalid values (booleans, zero, negatives, nonfinite, non-numeric) are refused at both YAML load and adapter dispatch by one shared coercion helper (`coerce_first_output_timeout`), so YAML authors and direct `Sheet` callers cannot drift apart; the stale marker names the effective bound. CLI backends only: HTTP and interactive backends log `adapter.dispatch.first_output_timeout_unsupported` and ignore the key. `execution.base` gains the `FIRST_OUTPUT_TIMEOUT_UNSET` sentinel, the `FirstOutputTimeoutResolution` type, and the public `is_first_output_timeout_unset` predicate for downstream narrowing.
 
+- **`examples/engineering/artifact-analysis.yaml`: the shipped `kind: mcp` score (GH #499 rung 2).**
+  Characterizes a binary, bundle or package through REA over the conductor's pool. The
+  analyst is the only sheet with the technique (`phases: ["2"]`, the movement number); it
+  exports REA's own evidence bundle and closes the shared session. Every claim cites an
+  `evidence_id` from that bundle. A reviewer on another model family judges from the bundle
+  alone, never calling the tool; the release sheet is a `cli` sheet that refuses an approval
+  older than the claims, a claim the bundle cannot back, or a reviewer whose context receipt
+  names the analyst's instrument. Fixture source under `examples/engineering/assets/`. The
+  technique guide, pool guide, score-authoring and command skills point at it.
+
 - **REA (Reverse Engineer Anything) support, first rung (GH #499).** A pool entry for
   REA's stdio MCP server is documented in the MCP pool guide (interpreter and entry
   script spelled out, open/close discipline for its shared analysis state), and

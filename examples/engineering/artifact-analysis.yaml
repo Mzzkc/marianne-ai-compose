@@ -1,0 +1,413 @@
+# ╔═════════════════════════════════════════════════════════════════════════════╗
+# ║  ARTIFACT ANALYSIS — characterize a binary through REA, grounded in evidence  ║
+# ║                                                                               ║
+# ║  Patterns: The Write-Time Record + Rashomon Gate (one frame, one judge)       ║
+# ║            + The Unprimed Falsifier (the judge never re-queries the tool)     ║
+# ║                                                                               ║
+# ║  The shipped example for a `kind: mcp` technique over the conductor's pool    ║
+# ║  (GH #499 rung 2). REA — Reverse Engineer Anything, npm `rea-agents` — runs   ║
+# ║  as a pool server; the analyst sheet reaches its tools either natively (the   ║
+# ║  pool config the conductor hands MCP-capable CLIs) or through the generated   ║
+# ║  code bridge (`from techniques_rt import rea; rea.call("open_binary", …)`).   ║
+# ║  Every claim the analyst makes must cite an `evidence_id` from the bundle     ║
+# ║  REA itself exported, so the record is written at analysis time, not         ║
+# ║  reconstructed from prose afterwards.                                         ║
+# ║                                                                               ║
+# ║  Stages:                                                                      ║
+# ║    1  Preflight        cli: the artifact is a regular file; sha256 pinned     ║
+# ║   ┌ review loop (2-3) until review/APPROVED, max 3 passes                     ║
+# ║   │ 2  Characterize    analyst calls REA, exports evidence/bundle.json,       ║
+# ║   │                    writes 02-characterization.md + 02-claims.yaml         ║
+# ║   └ 3  Review          a reviewer on ANOTHER model family checks every claim  ║
+# ║                        against the bundle alone; APPROVE or REWORK           ║
+# ║    4  Release          cli: refuses unless APPROVED is newer than the claims, ║
+# ║                        the bundle digest is the preflight digest, and the     ║
+# ║                        reviewer's instrument differs from the analyst's       ║
+# ║                        (read from the context receipts, GH #513)             ║
+# ║                                                                               ║
+# ║  Shared state: REA keeps one analysis session per server and the pool gives   ║
+# ║  every musician on the conductor the same upstream session. The analyst      ║
+# ║  therefore opens its target and closes it (`close_binary`) before it ends;   ║
+# ║  two artifact-analysis jobs at once would otherwise read each other's        ║
+# ║  target. Run one at a time until the pool scopes state per job (#499 rung 5).║
+# ║                                                                               ║
+# ║  Venue: `mcp_pool.servers.rea` in ~/.marianne/conductor.yaml (recipe in       ║
+# ║  docs/guides/mcp-pool-guide.md; restart-only). `mzt doctor` prints REA's own  ║
+# ║  toolchain gaps under Providers: without Ghidra 12.1.x or Hopper, REA still  ║
+# ║  reads export tables, package graphs and strings on the host; the analyst    ║
+# ║  records what it could not do under `## Limitations` instead of guessing.    ║
+# ║                                                                               ║
+# ║  Fixture: examples/engineering/assets/artifact-analysis-fixture.c (gcc it).  ║
+# ║  Time: ~10-25 min | Cost: ~$2-8 (review loop capped at $20)                   ║
+# ╚═════════════════════════════════════════════════════════════════════════════╝
+
+name: artifact-analysis
+description: "Characterize a binary, bundle or package through REA over the MCP pool; every claim cites REA's own evidence bundle; an independent reviewer on another model family approves or sends it back; the release gate is fail-closed"
+
+workspace: ../../workspaces/artifact-analysis
+
+instrument: strong
+instrument_fallbacks: [codex-cli]
+instrument_config:
+  timeout_seconds: 1800
+
+instruments:
+  reviewer:
+    # The judge must not be the analyst's model. `strong` resolves per venue, so the
+    # release sheet reads both context receipts and refuses a same-instrument review;
+    # list the families most venues have that `strong` does not head with.
+    chain: [codex-cli, antigravity, opencode]
+    select: [balance]
+    config:
+      timeout_seconds: 1200
+
+movements:
+  1:
+    name: "Preflight"
+    instrument: cli
+    instrument_fallbacks: []
+  2:
+    name: "Characterize"
+  3:
+    name: "Review"
+    instrument: reviewer
+  4:
+    name: "Release"
+    instrument: cli
+    instrument_fallbacks: []
+
+# REA is available to the analyst only. The reviewer judges from the exported
+# bundle and never re-queries the tool: a judge that can ask the same oracle
+# the maker asked inherits the maker's blind spot (The Unprimed Falsifier).
+# Numbered movements match a technique that lists the movement number.
+techniques:
+  rea:
+    kind: mcp
+    phases: ["2"]
+    config:
+      server: rea
+
+sheet:
+  size: 1
+  total_items: 4
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+  loops:
+    2-3:
+      index: pass_no
+      until: 'file("review/APPROVED").exists'
+      max_iterations: 3
+      cost_limit_usd: 20.0
+  per_sheet_fallbacks:
+    1: []
+    4: []
+  per_sheet_instrument_config:
+    1: {timeout_seconds: 120}
+    4: {timeout_seconds: 120}
+
+parallel:
+  enabled: false
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 12000
+  lookback_sheets: 2
+  capture_files:
+    - "{{ workspace }}/02-characterization.md"
+    - "{{ workspace }}/02-claims.yaml"
+
+retry:
+  max_retries: 1
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+prompt:
+  variables:
+    # ABSOLUTE path to the artifact: an ELF/PE/Mach-O binary, an app bundle, an
+    # APK/IPA/JAR, a firmware image, a JavaScript bundle. Set per run:
+    #   mzt run examples/engineering/artifact-analysis.yaml --var artifact_path=/abs/path
+    artifact_path: "[CHANGE THIS: ABSOLUTE path to the binary or package to characterize]"
+    # What the characterization is for. The analyst answers THIS, not everything
+    # REA can print; the reviewer checks the claims serve it.
+    question: "What does this artifact do, what does it export or expose, and what would a consumer need to know before depending on it?"
+
+  template: |
+    {% if stage == 1 %}
+    set -euo pipefail
+    ws="{{ workspace }}"
+    art="{{ artifact_path }}"
+    mkdir -p "$ws/evidence" "$ws/review"
+    if [ ! -f "$art" ]; then
+      echo "FAIL artifact_path is not a regular file: '$art'" >&2; exit 1
+    fi
+    if [ ! -s "$art" ]; then
+      echo "FAIL artifact is empty: '$art'" >&2; exit 1
+    fi
+    sha=$(sha256sum "$art" | cut -d' ' -f1)
+    size=$(stat -c %s "$art")
+    kind=$(file -b "$art" 2>/dev/null | head -c 200 || echo unknown)
+    python3 - "$ws/00-preflight.json" "$art" "$sha" "$size" "$kind" <<'PY'
+    import json, sys
+    out, path, sha, size, kind = sys.argv[1:6]
+    json.dump({"artifact_path": path, "sha256": sha, "size_bytes": int(size), "file_kind": kind},
+              open(out, "w"), indent=2)
+    PY
+    echo "preflight ok sha256=$sha size=$size kind=$kind"
+
+    {% elif stage == 2 %}
+    # Characterize an artifact with REA — pass {{ pass_no }}
+
+    Artifact: `{{ artifact_path }}`
+    Its pinned digest is in `{{ workspace }}/00-preflight.json` (read it first; the
+    `sha256` there must equal what REA reports for the file you open).
+
+    The question this characterization answers:
+
+    > {{ question }}
+
+    ## Tools
+
+    REA (Reverse Engineer Anything) is attached to this sheet as the MCP server
+    `rea`. Use its tools directly if your harness lists them, or from code mode:
+
+    ```python
+    from techniques_rt import rea
+    rea.list_tools()
+    rea.call("open_binary", {"path": "{{ artifact_path }}"})
+    ```
+
+    Work in this order and do not skip the last two steps:
+
+    1. `inspect_native_exports` (ELF/PE) or `inspect_artifact` (archive, bundle,
+       APK, SEA carrier) on the path: these read on the host and need no engine.
+    2. `open_binary` on the path, then `binary_session` to learn which providers
+       are available HERE. `binary_overview`, `list_strings`, `list_procedures`
+       and `search_strings` need an analysis provider (Ghidra, Hopper, IDA, Kuna);
+       when they return `provider_unavailable`, record that under Limitations and
+       move on. Never state what a provider would have shown.
+    3. `export_evidence_bundle` to `{{ workspace }}/evidence/bundle.json` with
+       `overwrite: true`. Every claim you make below MUST cite an `evidence_id`
+       from `records[]` of this file. A claim with no evidence row is not a claim.
+    4. `close_binary` (no `snapshot_path` unless `binary_session` showed a concrete
+       provider analysis profile). The pool shares one REA session across every
+       musician on this conductor; a target left open is the next job's target.
+
+    {% if pass_no > 1 %}
+    ## Repair pass {{ pass_no }}
+
+    Read `{{ workspace }}/03-review-pass{{ pass_no - 1 }}.md`. It lists, by claim id,
+    what the reviewer could not confirm from the bundle. Fix each one: re-run the
+    tool and re-export the bundle, correct the claim, or move it to Limitations.
+    Do not argue with a finding in prose; change the artifact it points at.
+    {% endif %}
+
+    ## Write
+
+    `{{ workspace }}/02-claims.yaml`: a YAML list, each item
+    `{id: C1, claim: <one sentence>, evidence_id: <ev_…>, tool: <tool name>}`.
+    At least three claims; ids `C1`, `C2`, … in order. A claim is a checkable
+    statement about THIS file (an exported symbol, a string, a format, an
+    architecture, a dependency, a package entry), not a guess about intent.
+
+    `{{ workspace }}/02-characterization.md` with exactly these sections:
+    - `## Answer` — the question answered in 3-8 sentences, citing claim ids.
+    - `## Claims` — one line per claim: `C1 (ev_…, tool): text`.
+    - `## Limitations` — every REA call that returned unavailable, every provider
+      REA rejected and why (its own words), and what that leaves unknown.
+    - `## Session` — the `open_binary` result's sha256 and the `close_binary`
+      outcome, verbatim.
+
+    {% elif stage == 3 %}
+    # Review the characterization — pass {{ pass_no }}
+
+    You are the independent reviewer. You judge from disk only: do NOT call REA
+    or any analysis tool, do not open the artifact. A judge that can re-ask the
+    maker's oracle inherits the maker's blind spot.
+
+    Read, in this order:
+    1. `{{ workspace }}/00-preflight.json` — the pinned digest.
+    2. `{{ workspace }}/02-claims.yaml` and `{{ workspace }}/02-characterization.md`
+       (also captured above).
+    3. `{{ workspace }}/evidence/bundle.json` — REA's own export. `artifacts[]`
+       carries the digest REA computed; `records[]` carries one row per tool call
+       with `evidence_id`, `operation`, `normalized_result`, `limitations`.
+
+    For every claim decide one of:
+    - **confirmed** — its `evidence_id` exists in `records[]` and that row's
+      `normalized_result` says what the claim says (quote the field);
+    - **unsupported** — the row exists but does not say that, or says less;
+    - **unbound** — the `evidence_id` is not in the bundle.
+
+    Also check: the bundle's artifact sha256 equals the preflight sha256; the
+    Limitations section names every provider REA rejected (the bundle's
+    `providers[]` and the records' `limitations[]` are your reference); the
+    Answer section cites only confirmed claims and serves the question
+    "{{ question }}".
+
+    Write `{{ workspace }}/03-review-pass{{ pass_no }}.md`:
+
+    ```
+    verdict: APPROVE | REWORK
+    digest_match: yes | no
+    claims:
+      C1: confirmed | unsupported | unbound — <quoted field or what is missing>
+      …
+    findings:
+      - <claim id or section>: <what must change>
+    ```
+
+    APPROVE only when digest_match is yes, every claim is confirmed, and the
+    Answer cites nothing unconfirmed. On APPROVE, write the single line
+    `approved pass {{ pass_no }}` to `{{ workspace }}/review/APPROVED`. On REWORK,
+    do not create that file; the analyst repairs and you review again.
+    {% if pass_no >= 3 %}
+    This is the last pass. A REWORK here ends the job without a release; say so
+    in findings so the conductor sees it, and do not soften the verdict to avoid it.
+    {% endif %}
+
+    {% elif stage == 4 %}
+    set -euo pipefail
+    ws="{{ workspace }}"
+    out="$ws/04-release.json"
+    rm -f "$out"
+    fail() { echo "RELEASE REFUSED: $*" >&2; exit 1; }
+    [ -f "$ws/review/APPROVED" ] || fail "no review/APPROVED (the review loop ended REWORK)"
+    [ -f "$ws/02-claims.yaml" ] || fail "02-claims.yaml missing"
+    [ -f "$ws/evidence/bundle.json" ] || fail "evidence bundle missing"
+    # Prove THIS pass: the approval must postdate the claims it approves.
+    [ "$ws/review/APPROVED" -nt "$ws/02-claims.yaml" ] || fail "APPROVED is older than 02-claims.yaml (stale approval)"
+    python3 - "$ws" "$out" <<'PY'
+    import glob, json, os, sys
+    import yaml
+    ws, out = sys.argv[1], sys.argv[2]
+    pre = json.load(open(f"{ws}/00-preflight.json"))
+    bundle = json.load(open(f"{ws}/evidence/bundle.json"))
+    digests = {a.get("digest", {}).get("sha256") for a in bundle.get("artifacts", [])}
+    if pre["sha256"] not in digests:
+        sys.exit(f"RELEASE REFUSED: bundle artifact digests {sorted(d for d in digests if d)} "
+                 f"do not include preflight sha256 {pre['sha256']}")
+    ids = {r.get("evidence_id") for r in bundle.get("records", [])}
+    claims = yaml.safe_load(open(f"{ws}/02-claims.yaml")) or []
+    unbound = [c.get("id") for c in claims if c.get("evidence_id") not in ids]
+    if unbound:
+        sys.exit(f"RELEASE REFUSED: claims cite evidence the bundle lacks: {unbound}")
+    # Independence (GH #513): the newest receipt of sheet 3 must name a different
+    # instrument from the newest receipt of sheet 2.
+    def newest(sheet):
+        paths = glob.glob(f"{ws}/.marianne/context-receipts/*/sheet-{sheet:04d}-attempt-*.yaml")
+        if not paths:
+            sys.exit(f"RELEASE REFUSED: no context receipt for sheet {sheet}")
+        return yaml.safe_load(open(max(paths, key=os.path.getmtime)))
+    analyst, reviewer = newest(2).get("instrument"), newest(3).get("instrument")
+    if not analyst or not reviewer or analyst == reviewer:
+        sys.exit(f"RELEASE REFUSED: reviewer instrument {reviewer!r} is not independent of analyst {analyst!r}")
+    approved = open(f"{ws}/review/APPROVED").read().strip()
+    json.dump({"status": "released", "artifact_sha256": pre["sha256"],
+               "artifact_path": pre["artifact_path"], "claims": len(claims),
+               "analyst_instrument": analyst, "reviewer_instrument": reviewer,
+               "approval": approved}, open(out, "w"), indent=2)
+    print(f"released: {len(claims)} claims on {pre['sha256'][:12]}… analyst={analyst} reviewer={reviewer} ({approved})")
+    PY
+    {% endif %}
+
+validations:
+  - type: command_succeeds
+    description: "Preflight pinned the artifact: sha256 in 00-preflight.json equals sha256sum of artifact_path"
+    condition: "stage == 1"
+    timeout_seconds: 60
+    command: |
+      python3 - "{workspace}/00-preflight.json" <<'PY'
+      import hashlib, json, sys
+      pre = json.load(open(sys.argv[1]))
+      got = hashlib.sha256(open(pre["artifact_path"], "rb").read()).hexdigest()
+      assert got == pre["sha256"], f"preflight sha256 {pre['sha256']} != {got} on disk"
+      PY
+
+  - type: command_succeeds
+    description: "REA exported the bundle for THIS artifact: JSON with records and the preflight digest among its artifacts"
+    condition: "stage == 2"
+    timeout_seconds: 60
+    command: |
+      python3 - "{workspace}" <<'PY'
+      import json, sys
+      ws = sys.argv[1]
+      pre = json.load(open(f"{ws}/00-preflight.json"))
+      b = json.load(open(f"{ws}/evidence/bundle.json"))
+      assert b.get("records"), "bundle has no records: no REA tool call produced evidence"
+      digests = {a.get("digest", {}).get("sha256") for a in b.get("artifacts", [])}
+      assert pre["sha256"] in digests, f"bundle digests {digests} lack preflight {pre['sha256']}"
+      PY
+
+  - type: command_succeeds
+    description: "Every claim has an id, one sentence, a tool, and an evidence_id that exists in the bundle; at least three claims"
+    condition: "stage == 2"
+    timeout_seconds: 60
+    command: |
+      python3 - "{workspace}" <<'PY'
+      import json, re, sys, yaml
+      ws = sys.argv[1]
+      ids = {r.get("evidence_id") for r in json.load(open(f"{ws}/evidence/bundle.json")).get("records", [])}
+      claims = yaml.safe_load(open(f"{ws}/02-claims.yaml"))
+      assert isinstance(claims, list) and len(claims) >= 3, "02-claims.yaml must be a list of at least three claims"
+      for n, c in enumerate(claims, 1):
+          assert c.get("id") == f"C{n}", f"claim {n}: id must be C{n}, got {c.get('id')!r}"
+          assert isinstance(c.get("claim"), str) and len(c["claim"].split()) >= 4, f"{c.get('id')}: claim text too short"
+          assert c.get("tool"), f"{c.get('id')}: no tool named"
+          assert c.get("evidence_id") in ids, f"{c.get('id')}: evidence_id {c.get('evidence_id')!r} is not in the bundle"
+      PY
+
+  - type: command_succeeds
+    description: "The characterization has the four sections and cites every claim id"
+    condition: "stage == 2"
+    timeout_seconds: 30
+    command: |
+      python3 - "{workspace}" <<'PY'
+      import re, sys, yaml
+      ws = sys.argv[1]
+      s = open(f"{ws}/02-characterization.md", encoding="utf-8").read()
+      for h in ("## Answer", "## Claims", "## Limitations", "## Session"):
+          assert h in s, f"missing section {h}"
+      assert len(s.split()) >= 150, "characterization is too thin (<150 words)"
+      for c in yaml.safe_load(open(f"{ws}/02-claims.yaml")):
+          assert re.search(rf"\b{c['id']}\b", s), f"{c['id']} is never cited in the characterization"
+      PY
+
+  - type: command_succeeds
+    description: "The review for THIS pass is well formed; APPROVE wrote review/APPROVED after the claims, REWORK names a finding and wrote no marker"
+    condition: "stage == 3"
+    timeout_seconds: 30
+    command: |
+      python3 - "{workspace}" "{pass_no}" <<'PY'
+      import os, re, sys
+      ws, p = sys.argv[1], int(sys.argv[2])
+      path = f"{ws}/03-review-pass{p}.md"
+      s = open(path, encoding="utf-8").read()
+      m = re.search(r"^verdict:\s*(APPROVE|REWORK)\s*$", s, re.M)
+      assert m, "no `verdict: APPROVE|REWORK` line"
+      assert re.search(r"^digest_match:\s*(yes|no)\s*$", s, re.M), "no digest_match line"
+      assert re.search(r"^\s*C\d+:\s*(confirmed|unsupported|unbound)", s, re.M), "no per-claim rows"
+      marker = f"{ws}/review/APPROVED"
+      if m.group(1) == "APPROVE":
+          assert os.path.exists(marker), "APPROVE without review/APPROVED"
+          assert os.path.getmtime(marker) > os.path.getmtime(f"{ws}/02-claims.yaml"), "APPROVED predates the claims it approves"
+          assert not re.search(r"^\s*C\d+:\s*(unsupported|unbound)", s, re.M), "APPROVE with an unconfirmed claim"
+      else:
+          assert not os.path.exists(marker), "REWORK but review/APPROVED exists"
+          assert re.search(r"^\s*-\s*\S", s.split("findings:", 1)[1] if "findings:" in s else "", re.M), "REWORK with no findings"
+      PY
+
+  - type: command_succeeds
+    description: "Release wrote 04-release.json with status released"
+    condition: "stage == 4"
+    timeout_seconds: 30
+    command: |
+      python3 - "{workspace}/04-release.json" <<'PY'
+      import json, sys
+      r = json.load(open(sys.argv[1]))
+      assert r["status"] == "released" and r["claims"] >= 3, r
+      assert r["analyst_instrument"] != r["reviewer_instrument"], r
+      PY

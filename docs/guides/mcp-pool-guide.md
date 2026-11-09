@@ -88,6 +88,11 @@ that state is shared too: a sheet that opens a target closes it
 (`close_binary`, keeping `snapshot_path` if the analysis must survive) before
 it ends. `mzt doctor` runs REA's own read-only `rea doctor --json` for each
 such entry and reports its toolchain gaps in REA's words; it never installs.
+`examples/engineering/artifact-analysis.yaml` is the shipped score that uses
+this entry: one analyst sheet holds the technique, exports REA's evidence
+bundle and closes the session; the review and release sheets never touch the
+tool. Without an analysis engine REA still reads export tables, package graphs
+and strings on the host, and the score records the engine gaps as Limitations.
 
 ### Configuration Fields
 

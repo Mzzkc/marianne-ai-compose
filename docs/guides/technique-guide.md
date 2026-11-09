@@ -191,7 +191,12 @@ REA keeps analysis state across calls and the pool shares one upstream
 session across every musician on the conductor, so a sheet that opens a
 target closes it before it ends (`close_binary`, with `snapshot_path` when the
 analysis must survive for a later sheet). `mzt doctor` reports REA's own
-toolchain gaps under Providers.
+toolchain gaps under Providers. The shipped score
+[`examples/engineering/artifact-analysis.yaml`](../../examples/engineering/artifact-analysis.yaml)
+is the worked example: the technique lists only the analyst's movement number
+(`phases: ["2"]`), the reviewer on another model family judges from the
+exported evidence bundle without the tool, and the release gate refuses a claim
+whose `evidence_id` the bundle lacks.
 
 ### Skill Config
 
