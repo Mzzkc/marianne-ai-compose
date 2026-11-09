@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The composing release gate executes the first sheet and measures suite runtimes.**
+  Every static gate (`mzt validate --strict`, the release checker with a lock, the
+  orchestra gate) passed nine fleet scores on 2026-11-09 and three failed at runtime
+  within the first hour: a required injection over its `max_bytes`, two one-hour caps
+  on `cli` stages whose full product suite measured 68 minutes at the fleet's
+  parallelism, and a prepare check that assumed a branch. The composing skill and the
+  score-reviewer agent now require a first-sheet dry run in a fresh workspace with the
+  real injections, and a measured (not estimated) runtime for any sheet that runs a
+  whole test suite. GH #513, #515.
+
 ### Added
 - **`instrument_config.first_output_timeout_seconds`: per-sheet tri-state override of the CLI first-output silence bound (GH #502).** The profile-level bound (GH #434) ends an attempt that produces zero stdout/stderr bytes within N seconds as a `Stale execution` stall — correct for a streaming agent, wrong for a sheet that is legitimately slow to first byte (cold caches, backup or IO pressure). The key now works at all four instrument override scopes (score, movement, `instruments.<alias>.config`, `sheet.per_sheet_instrument_config` — an alias is applied before a per-sheet override) and is tri-state like `response_format`: omitted inherits the profile bound, a finite positive number widens or narrows it for that scope, and `null` disables it for that sheet without touching the shared profile or other concurrent sheets. The sheet timeout always caps execution — an override larger than it (or a disabled bound) never extends the attempt — and once any stdout or stderr byte arrives the bound is inert and only the sheet timeout governs. Invalid values (booleans, zero, negatives, nonfinite, non-numeric) are refused at both YAML load and adapter dispatch by one shared coercion helper (`coerce_first_output_timeout`), so YAML authors and direct `Sheet` callers cannot drift apart; the stale marker names the effective bound. CLI backends only: HTTP and interactive backends log `adapter.dispatch.first_output_timeout_unsupported` and ignore the key. `execution.base` gains the `FIRST_OUTPUT_TIMEOUT_UNSET` sentinel, the `FirstOutputTimeoutResolution` type, and the public `is_first_output_timeout_unset` predicate for downstream narrowing.
 
