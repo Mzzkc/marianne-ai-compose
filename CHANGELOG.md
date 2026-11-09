@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`stale_detection.watch_paths` (GH #516).** Idle detection measured activity only as
+  writes under the sheet's workspace, so a musician building in the project's git
+  worktree or a scratch clone was killed by the 3-strike backstop while writing code
+  (two fleet members, 2026-11-09, 5,469 s "idle" with files landing every minute).
+  Directories named in `watch_paths` (with `~` and `{{ workspace }}`/`{{ project_root }}`
+  templates) now count as activity; the liveness probe and backstop are unchanged.
+
 ### Changed
 - **The composing release gate executes the first sheet and measures suite runtimes.**
   Every static gate (`mzt validate --strict`, the release checker with a lock, the

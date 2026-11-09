@@ -3928,6 +3928,33 @@ class BatonAdapter:
         return newest
 
     @staticmethod
+    def _stale_watch_dirs(cfg: StaleDetectionConfig, sheet: Sheet) -> list[Path]:
+        """Resolve ``stale_detection.watch_paths`` for one sheet (GH #516).
+
+        Each entry may use ``~`` and the ``{{ workspace }}`` /
+        ``{{ project_root }}`` templates. Entries that do not resolve to an
+        existing directory are skipped silently: the walk is an activity
+        signal, never a gate.
+        """
+        if not cfg.watch_paths:
+            return []
+        project_root = str(sheet.variables.get("project_root", "")) if sheet.variables else ""
+        resolved: list[Path] = []
+        for raw in cfg.watch_paths:
+            text = (
+                raw.replace("{{ workspace }}", str(sheet.workspace))
+                .replace("{{workspace}}", str(sheet.workspace))
+                .replace("{{ project_root }}", project_root)
+                .replace("{{project_root}}", project_root)
+            )
+            if "{{" in text:
+                continue
+            path = Path(text).expanduser()
+            if path.is_dir():
+                resolved.append(path)
+        return resolved
+
+    @staticmethod
     def _process_is_alive(pid: int) -> bool:
         """Whether ``pid`` is a live (non-zombie) process (#344).
 
@@ -4044,6 +4071,10 @@ class BatonAdapter:
                 last_active = max(
                     last_active, self._newest_workspace_mtime(sheet.workspace)
                 )
+                # GH #516: writes outside the workspace (a project worktree,
+                # a scratch clone) are activity when the score names the root.
+                for watched in self._stale_watch_dirs(cfg, sheet):
+                    last_active = max(last_active, self._newest_workspace_mtime(watched))
             idle_seconds = time.time() - last_active
             if idle_seconds >= cfg.idle_timeout_seconds:
                 # #344: idle (no file writes) does NOT prove stuck. Probe the

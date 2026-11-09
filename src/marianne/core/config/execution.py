@@ -331,6 +331,11 @@ class StaleDetectionConfig(BaseModel):
       the end) looks idle. Set ``idle_timeout_seconds`` above such an
       instrument's expected silent duration, or leave detection disabled for
       those sheets.
+
+    A musician that writes OUTSIDE the score workspace (a build in the
+    project's git worktree, a clone under ``$MARIANNE_SCRATCH``) is also
+    invisible to the workspace walk. Name those directories in
+    ``watch_paths`` and their writes count as activity (GH #516).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -364,6 +369,19 @@ class StaleDetectionConfig(BaseModel):
         "genuinely-hung-but-alive process after N idle checks; the subprocess "
         "execution timeout is the ultimate safety net. 1 = kill on first idle "
         "check (legacy behaviour, may false-kill working agents).",
+    )
+
+    watch_paths: list[str] = Field(
+        default_factory=list,
+        description="Directories OUTSIDE the score workspace whose file writes "
+        "count as activity for idle detection (GH #516). Idle is measured from "
+        "the newest write under the sheet's workspace; a musician that builds in "
+        "the project's git worktree or a scratch clone writes nowhere the detector "
+        "looks and is killed as idle while working. List those roots here (`~` and "
+        "`{{ workspace }}`/`{{ project_root }}` templates allowed; an absent "
+        "directory is ignored). Conductor-owned subtrees are skipped as in the "
+        "workspace. The subprocess liveness probe and the 3-strike backstop apply "
+        "unchanged.",
     )
 
     @model_validator(mode="after")

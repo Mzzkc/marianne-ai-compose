@@ -833,12 +833,14 @@ Detects hung sheet executions that produce no output.
 | `idle_timeout_seconds` | `float` | `300.0` | `> 0` | Maximum seconds of inactivity before marking stale. Recommended minimum 120s for LLM workloads. |
 | `check_interval_seconds` | `float` | `30.0` | `> 0`, must be `< idle_timeout_seconds` | How often to check for idle executions |
 | `max_idle_checks_before_kill` | `int` | `3` | `>= 1` | Consecutive idle-and-still-alive checks before an idle sheet is killed (#344). 1 = kill on first idle check. |
+| `watch_paths` | `list[str]` | `[]` | | Directories outside the score workspace whose file writes count as activity (GH #516). Idle is measured from the newest write under the sheet's workspace; a musician that builds in the project's git worktree or a scratch clone writes nowhere the detector looks and is killed as idle while working. `~` and `{{ workspace }}`/`{{ project_root }}` templates allowed; an absent directory is ignored. |
 
 ```yaml
 stale_detection:
   enabled: true
   idle_timeout_seconds: 300
   check_interval_seconds: 30
+  watch_paths: ["{{ project_root }}", "~/Projects/WORKSPACES/my-part"]   # builds outside the workspace
 ```
 
 ---
