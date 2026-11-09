@@ -150,6 +150,11 @@ prompt:
     set -euo pipefail
     ws="{{ workspace }}"
     art="{{ artifact_path }}"
+    # A reused workspace must not carry a prior run's approval, review or bundle
+    # into this run: the release gate compares mtimes, and a stale APPROVED or a
+    # stale bundle for the same artifact would read as this run's.
+    rm -rf "$ws/evidence" "$ws/review"
+    rm -f "$ws"/02-claims.yaml "$ws"/02-characterization.md "$ws"/03-review-pass*.md "$ws"/04-release.json
     mkdir -p "$ws/evidence" "$ws/review"
     if [ ! -f "$art" ]; then
       echo "FAIL artifact_path is not a regular file: '$art'" >&2; exit 1

@@ -866,6 +866,10 @@
       },
       "parse": "ok"
     },
+    "venue:examples/engineering/artifact-analysis.yaml": {
+      "issues": {},
+      "parse": "ok"
+    },
     "venue:examples/engineering/codebase-rewrite.yaml": {
       "issues": {
         "V325": 4

@@ -88,7 +88,7 @@ gcc -O1 -o /tmp/greet examples/engineering/assets/artifact-analysis-fixture.c
 mzt run examples/engineering/artifact-analysis.yaml --var artifact_path=/tmp/greet
 ```
 
-Without Ghidra 12.1.x, Hopper or IDA, REA's engine-backed tools (`binary_overview`, `list_strings`, decompilation) report `provider_unavailable`; `mzt doctor` prints the gaps under Providers, and the characterization still releases on the host-readable facts with those gaps recorded. Run one artifact-analysis job at a time: the pool shares one REA session across every musician on the conductor.
+Without Ghidra 12.1.x, Hopper or IDA, REA's engine-backed tools (`binary_overview`, `list_strings`, decompilation) report `provider_unavailable`; `mzt doctor` prints the gaps under Providers, and the characterization still releases on the host-readable facts with those gaps recorded. Run one artifact-analysis job at a time: the pool shares one REA session across every musician on the conductor. The preflight sheet clears a reused workspace's evidence, review and claims, so a previous run's approval can never stand in for this run's.
 
 ### saas-app-builder.yaml
 
