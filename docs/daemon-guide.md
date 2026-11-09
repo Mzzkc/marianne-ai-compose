@@ -516,7 +516,12 @@ Key capabilities:
   re-queued PENDING on the fallback rather than parked WAITING on an instrument that
   is not limited; `mzt clear-rate-limits` with no instrument also sweeps any sheet
   left WAITING on an unlimited instrument back to PENDING. An expiry or a clear of
-  one instrument touches only that instrument's sheets.
+  one instrument touches only that instrument's sheets. A ready sheet whose
+  current instrument is rate-limited advances along its fallback chain at
+  dispatch (`baton.rate_limit.fallback_advanced` with `at: dispatch`) instead of
+  waiting for the limit to expire; this is how a loop member reopened on its
+  limited primary reaches the fallback its earlier pass already used (GH #521).
+  Only a sheet with no fallback left, or whose whole chain is limited, waits.
 - **Restart recovery** — baton state persists and reconciles with CheckpointState on restart
 - **Cost enforcement** — per-sheet and per-job cost limits enforced after every attempt
 - **Full prompt assembly** — the baton renders prompts through the complete pipeline

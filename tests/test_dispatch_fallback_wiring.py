@@ -128,9 +128,16 @@ class TestDispatchFallbackOnRateLimit:
     """Rate-limited instruments should NOT trigger fallback at dispatch time.
     Rate limits are transient — the baton waits for recovery."""
 
-    async def test_rate_limited_no_fallback(self) -> None:
-        """Even with fallback chain, rate-limited instruments are skipped,
-        not fallen back. Fallback only happens after retry exhaustion."""
+    async def test_rate_limited_with_fallback_advances_at_dispatch(self) -> None:
+        """A rate-limited primary with a fallback advances at dispatch (GH #521).
+
+        Until #521 this test pinned the opposite ("skipped, not fallen back"),
+        while the in-flight rate-limit handler already advanced the same sheet
+        to its fallback; a loop member reopened on its limited primary waited
+        out the whole limit beside idle fallback seats. Dispatch and the
+        in-flight handler now make the same transition. A sheet with no
+        fallback still waits (test_reopened_rate_limited_fallback_521).
+        """
         baton = BatonCore()
         sheet = SheetExecutionState(
             sheet_num=1,
@@ -139,6 +146,7 @@ class TestDispatchFallbackOnRateLimit:
             fallback_chain=["gemini-cli"],
         )
         baton.register_job("j1", {1: sheet}, {})
+        baton.register_instrument("gemini-cli")
 
         s = baton._jobs["j1"].sheets[1]
         s.status = BatonSheetStatus.READY
@@ -150,9 +158,8 @@ class TestDispatchFallbackOnRateLimit:
 
         result = await dispatch_ready(baton, config, _noop_callback)
 
-        # Should be skipped, NOT fallen back
-        assert result.dispatched_count == 0
-        assert s.instrument_name == "claude-code"  # Unchanged
+        assert result.dispatched_count == 1
+        assert s.instrument_name == "gemini-cli"
 
 
 class TestDispatchFallbackChainMultiple:

@@ -67,6 +67,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fan-out musician messaging through a scratch-owned file mailbox (GH #467).** Concurrent fan-out voices had no way to exchange notes during a run — no harness adapter reaches them and the conductor only sees per-sheet results. `sheet.fan_out_messaging: file` (default; `none` omits it; explicit use without concurrent voices warns V234) prepares one append-only JSONL inbox per sheet under `<workspace>/.marianne-scratch/mailbox/`, guarded by advisory locks and opaque, strictly-increasing byte-cursor IDs per inbox. Shell-capable instruments get `MARIANNE_MAILBOX`, `MARIANNE_SCRATCH`, and `MARIANNE_SHEET` exported, and the new `mzt mail send <sheet|all> "<body>"` / `mzt mail read [--since <id>]` subcommands deliver and poll messages (`all` targets every initialized inbox except the sender's own; the CLI refuses to guess a job or sheet context). The conductor's log records each send (sender, recipient, UTF-8 byte count; never the body) and a traffic summary, and retains them (body-free) in the job checkpoint at every terminal settlement — COMPLETED, FAILED, or CANCELLED — so a job that ended in an error, timeout, or cancellation still records every delivered send when the conductor investigates a failed musician; failed jobs keep their scratch (and inboxes) for post-mortem. `mzt diagnose` shows the traffic (sender, recipient, byte counts, per-inbox totals, first/last timestamps) and `--json` adds `mailbox_traffic`; `merge_traffic` reconciles retained and live metadata across resume without double-counting. Message bodies never enter logs, checkpoints, or diagnosis.
 
 ### Fixed
+- **A reopened loop sheet no longer waits out its primary's rate limit while its fallbacks
+  idle (GH #521).** `reset_for_flow` rewinds a reopened sheet to its primary, and dispatch
+  treated a rate-limited primary as "wait for expiry" even when the sheet had a fallback,
+  so a day-long quota timer parked a reviewer whose chain had three idle seats. Dispatch now
+  advances the chain the way the in-flight rate-limit handler does
+  (`baton.rate_limit.fallback_advanced`, `at: dispatch`); a sheet with no fallback, or
+  whose whole chain is limited, still waits. Found by `artifact-analysis` pass 2.
 - **The MCP pool bridge no longer dies silently on a catalog-sized reply (GH #520).** The
   upstream pipe was read with the default 64 KiB `StreamReader` limit; REA's `tools/list`
   is one 3.5 MB line, so the reader raised once, the process stayed alive, `is_running`

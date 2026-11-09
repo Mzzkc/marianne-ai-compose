@@ -397,25 +397,35 @@ async def dispatch_ready(
                 )
                 continue
 
-            # Check instrument rate limit (transient — don't fallback)
+            # Check instrument rate limit. A limit is transient, so a sheet with
+            # no fallback waits for RateLimitExpired. A sheet WITH a fallback
+            # advances to it here, the same transition _handle_rate_limit_hit
+            # makes for an in-flight sheet: a reopened loop member comes back
+            # on its primary (reset_for_flow rewinds the chain) and would
+            # otherwise wait out the whole limit while its fallbacks sit idle
+            # (GH #521: a day-long quota timer, three idle seats).
             if instrument in config.rate_limited_instruments:
-                _logger.info(
-                    "dispatch.skip.rate_limited",
-                    extra={
-                        "job_id": job_id,
-                        "sheet_num": sheet.sheet_num,
-                        "instrument": instrument,
-                    },
-                )
-                _record_dispatch_block(
-                    result,
-                    job_id=job_id,
-                    sheet=sheet,
-                    reason="rate_limited",
-                    skip_key=f"rate_limited:{instrument}",
-                    details={"instrument": instrument},
-                )
-                continue
+                advanced_to = baton._advance_rate_limited_sheet(sheet, job_id, config)
+                if advanced_to is not None:
+                    instrument = advanced_to
+                else:
+                    _logger.info(
+                        "dispatch.skip.rate_limited",
+                        extra={
+                            "job_id": job_id,
+                            "sheet_num": sheet.sheet_num,
+                            "instrument": instrument,
+                        },
+                    )
+                    _record_dispatch_block(
+                        result,
+                        job_id=job_id,
+                        sheet=sheet,
+                        reason="rate_limited",
+                        skip_key=f"rate_limited:{instrument}",
+                        details={"instrument": instrument},
+                    )
+                    continue
 
             # Check instrument availability — try fallback chain when
             # circuit breaker is OPEN or instrument is unregistered.

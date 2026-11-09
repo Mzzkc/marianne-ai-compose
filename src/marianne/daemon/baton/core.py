@@ -1198,6 +1198,53 @@ class BatonCore:
             return "unavailable"
         return "execution_failed"
 
+    def _advance_rate_limited_sheet(
+        self,
+        sheet: SheetExecutionState,
+        job_id: str,
+        config: Any,
+    ) -> str | None:
+        """Advance a ready sheet past rate-limited chain entries at dispatch (GH #521).
+
+        Walks the fallback chain while the current entry is in the dispatch
+        config's ``rate_limited_instruments``. Returns the first entry that is
+        not limited, or None when the chain is exhausted or there is nothing to
+        advance to (the sheet then waits for ``RateLimitExpired`` as before).
+        """
+        limited: set[str] = set(getattr(config, "rate_limited_instruments", set()))
+        advanced: str | None = None
+        while (sheet.instrument_name or "") in limited and sheet.has_fallback_available:
+            from_instrument = sheet.instrument_name or ""
+            to_instrument = sheet.advance_fallback("rate_limit")
+            if to_instrument is None:
+                break
+            self._ensure_instrument_registered(to_instrument)
+            sheet.status = BatonSheetStatus.PENDING
+            self._state_dirty = True
+            self._fallback_events.append(
+                InstrumentFallback(
+                    job_id=job_id,
+                    sheet_num=sheet.sheet_num,
+                    from_instrument=from_instrument,
+                    to_instrument=to_instrument,
+                    reason="rate_limit",
+                )
+            )
+            _logger.info(
+                "baton.rate_limit.fallback_advanced",
+                extra={
+                    "job_id": job_id,
+                    SHEET_NUM_KEY: sheet.sheet_num,
+                    "from_instrument": from_instrument,
+                    "fallback_instrument": to_instrument,
+                    "at": "dispatch",
+                },
+            )
+            advanced = to_instrument
+        if advanced is not None and advanced in limited:
+            return None
+        return advanced
+
     def _check_and_fallback_unavailable(self, sheet: SheetExecutionState, job_id: str) -> bool:
         """Check if the sheet's current instrument is unavailable.
 
