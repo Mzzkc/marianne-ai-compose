@@ -57,6 +57,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Compiler-emitted validators ground on THIS run, not on inherited artifacts (GH #508).**
+  The score-count claim validator's second pattern was dead: inside the emitted
+  rf-string `{0,24}` rendered as the tuple text `(0, 24)`, so "agent scores total
+  nine" against an empty `scores/` was never caught. The cadenza-completion
+  validator accepted any done task-board row whose evidence cell contained the
+  artifact's relative path, so a row from an earlier engagement passed the check
+  before this run wrote anything. The pattern is now `\D{0,24}`, and a row binds
+  only when it names this run's absolute artifact or its workspace, or the relative
+  path with an artifact no older than the board. Installed engagement scores need
+  recompiling to pick this up (`mzt compile`, GH #498's precedent). Compiler tests
+  execute both emitted bodies against a disk state that must fail and one that must
+  pass.
+
 - **`design-to-orchestra`'s gate no longer validates a composer's `composition-design.yaml` as a score (GH #517).**
   The composing skill asks for a design file before YAML; four composers wrote it beside
   their scores and the gate failed the pass on "not a Marianne score" while all nine real
