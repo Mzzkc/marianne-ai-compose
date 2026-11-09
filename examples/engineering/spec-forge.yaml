@@ -433,8 +433,11 @@ prompt:
 
     - **BLOCKER** — raised at CRITICAL or HIGH by at least two reviewers
       (same defect, possibly different words), or raised by one reviewer
-      and confirmed by you in the spec text as making a part unbuildable or
-      a stated need unmet. Blockers must be fixed before approval.
+      and confirmed by you in the spec text as making a part unbuildable, a
+      stated need unmet, or a guarantee the design promises (identity,
+      access, collective memory) broken. Agreement escalates; it is not a
+      prerequisite for a confirmed defect (GH #513). Blockers must be fixed
+      before approval.
     - **DEFERRED** — real, but it does not block the first usable version
       at tempo `{{ tempo }}`. It is recorded for the polish phase.
     - **DISCARDED** — a single-family finding you could not confirm, taste,

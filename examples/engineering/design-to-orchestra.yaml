@@ -403,6 +403,20 @@ prompt:
     - end with a verification sheet whose validations re-run the real checks
       (tests, coverage, lint, the part's integration checks against its
       contracts) and fail if any is red;
+    - make the repair loop able to iterate: a deterministic `cli` verifier
+      INSIDE the loop that exits non-zero ENDS the loop (the engine records
+      `range_failed`; it never re-runs the builder on its own). Either route
+      the failure back to the builder with
+      `triggers: {<verifier sheet>: {on_fail: [{goto: <builder sheet>}]}}`
+      (acknowledge V224 with `validate: {suppress: [V224]}`; a cli sheet has
+      no fallback to bypass), or have the verifier exit 0 and write a
+      diagnostic the next sheet consumes, keeping the final release gate
+      fail-closed. The stage-3 gate refuses a loop that cannot iterate;
+    - cast review voices on DISTINCT MODEL FAMILIES, judged by the model each
+      profile resolves to on this venue (`mzt instruments list` shows
+      `default_model`; a user-layer profile may point a harness at a model
+      another harness already serves). Two harness names for one model are
+      one voice;
     - write `{{ workspace }}/runs/<id>/deferred.md` with every finding the
       repair loop chose not to fix, for the polish phase.
 
@@ -575,8 +589,11 @@ prompt:
     Fix: the smallest change that resolves it
     ```
 
-    Severity is one of CRITICAL, HIGH, MEDIUM, LOW. If you find nothing
-    worth reporting, write the single line `NO FINDINGS`.
+    Severity is one of CRITICAL, HIGH, MEDIUM, LOW. End the file with a
+    `## Read` section listing every score file you read in full (one per
+    line). If you find nothing worth reporting, write the line `NO FINDINGS`
+    and then the `## Read` section; a `NO FINDINGS` that does not list every
+    score in `orchestra/` is not a review and fails the sheet.
 
     {% elif stage == 6 %}
     # Orchestra verdict — pass {{ pass_no }} of at most 3
@@ -584,12 +601,23 @@ prompt:
     Read `{{ workspace }}/04-gate.txt`,
     `{{ workspace }}/review/orchestra-1-pass{{ pass_no }}.md` and
     `{{ workspace }}/review/orchestra-2-pass{{ pass_no }}.md`, then the
-    scores the findings point at. The two reviews come from different model
-    families. Classify every finding:
+    scores the findings point at. Read the two voices' context receipts
+    (`{{ workspace }}/.marianne/context-receipts/*/sheet-00{{ 19 + 1 }}-*.yaml`
+    and `sheet-00{{ 19 + 2 }}-*.yaml`, the last attempt of each) and the
+    `## Read` section of each review: record under `voices:` which
+    instrument each voice ran on and how many of the scores it read. If
+    both voices resolved to one model family, or a `NO FINDINGS` voice read
+    fewer than all the scores, you have ONE review, not two: treat every
+    finding as single-voice and say so in `notes`. Classify every finding:
 
     - **BLOCKER** — every FAIL line in the gate; every CRITICAL or HIGH
       finding both reviewers raised (same defect, possibly different words);
-      and any single-reviewer CRITICAL you confirm in the score text.
+      any single-reviewer CRITICAL you confirm in the score text; and any
+      single-reviewer HIGH you confirm in the score text that breaks a hard
+      requirement the specs name (a repair loop that cannot iterate, a part
+      built where the spec forbids it, reviewers that are one model, a
+      guarantee the design promises). Agreement escalates; it is not a
+      prerequisite for a confirmed defect.
     - **DEFERRED** — real, but it does not stop the orchestra delivering
       the prototype at tempo `{{ tempo }}`. Append each to
       `{{ workspace }}/review/orchestra-deferred.md` as a `- ` bullet.
@@ -602,6 +630,9 @@ prompt:
     ```yaml
     pass: {{ pass_no }}
     verdict: APPROVE      # APPROVE only when the gate passed and no blockers remain
+    voices:
+      - {voice: 1, instrument: codex-cli, scores_read: 9}
+      - {voice: 2, instrument: antigravity, scores_read: 9}
     blockers:
       - score: 01-ingest.yaml
         fix: "..."
@@ -726,6 +757,29 @@ validations:
       assert sheet.get("loops"), f"{path.name}: no bounded repair loop"
       types = {v.get("type") for v in s.get("validations", [])}
       assert "command_succeeds" in types, f"{path.name}: no executed validation"
+      # A loop that cannot iterate is not a repair loop (GH #513): a `cli`
+      # member that exits non-zero ends the span `range_failed` unless an
+      # on_fail trigger routes it back into the span. Loop spans and trigger
+      # keys are stage numbers under fan_out, concrete sheets otherwise.
+      def span(k):
+          a, _, b = str(k).partition("-"); return int(a), int(b or a)
+      movements = s.get("movements") or {}
+      triggers = sheet.get("triggers") or {}
+      routed = set()
+      for key, trig in triggers.items():
+          lo, hi = span(key)
+          if any(isinstance(a, dict) and "goto" in a for a in (trig or {}).get("on_fail") or []):
+              routed.update(range(lo, hi + 1))
+      for key in sheet["loops"]:
+          lo, hi = span(key)
+          for n in range(lo, hi + 1):
+              mv = movements.get(n) or movements.get(str(n)) or {}
+              if mv.get("instrument") == "cli" and n not in routed:
+                  raise AssertionError(
+                      f"{path.name}: cli verifier at {n} sits inside loop {key} with no "
+                      f"on_fail goto; a red run would end the loop instead of repairing "
+                      f"(route triggers.{n}.on_fail back to sheet {lo}, or exit 0 with a diagnostic)"
+                  )
       # Prove THIS pass (GH #509): a repair musician that did nothing must not
       # be rescued by the previous pass's score. A score the last verdict or
       # the last gate named must be newer than the file that named it.
@@ -783,6 +837,27 @@ validations:
     pattern: "(?si)(### F\\d+.*[`*]*Severity[`*]*:[`*]*\\s*(CRITICAL|HIGH|MEDIUM|LOW)|^\\s*NO FINDINGS\\s*$)"
     condition: "stage == 5"
     description: "Review records findings with severities (or NO FINDINGS)"
+  # A review that found nothing proves it read everything (GH #513): one
+  # voice wrote NO FINDINGS twice after reading a third of the scores, and
+  # the verdict counted it as a second family.
+  - type: command_succeeds
+    command: |
+      python3 - {workspace} {instance} {pass_no} <<'PY'
+      import re, sys, pathlib
+      ws, voice, this_pass = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+      text = (ws / "review" / f"orchestra-{voice}-pass{this_pass}.md").read_text()
+      scores = sorted(p.name for p in (ws / "orchestra").glob("*.yaml")
+                      if not p.name.endswith(".generated-inputs.yaml"))
+      read_section = text.split("## Read", 1)[1] if "## Read" in text else ""
+      listed = {name for name in scores if name in read_section}
+      if re.search(r"^\s*NO FINDINGS\s*$", text, re.M):
+          missing = sorted(set(scores) - listed)
+          assert not missing, f"NO FINDINGS without reading: {missing}"
+      else:
+          assert "## Read" in text, "review lists no `## Read` section"
+      PY
+    condition: "stage == 5"
+    description: "A NO FINDINGS review lists every score it read"
 
   # Verdict: parsed, consistent with the gate, and the only writer of the
   # review/APPROVED marker that ends the loop and admits release. The last

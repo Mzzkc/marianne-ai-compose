@@ -49,6 +49,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`design-to-orchestra` and `spec-forge` no longer approve what one voice confirmed broken (GH #513).**
+  The orchestra's stage-3 gate refuses a generated score whose `cli` verifier sits inside
+  a repair loop with no `on_fail` goto (the engine ends such a loop `range_failed` on its
+  first red run, so the "bounded repair loop" could never repair); a review that writes
+  `NO FINDINGS` must list every score it read; and the verdict reads each voice's context
+  receipt, records which instrument each ran on and how much it read, counts two voices
+  on one model (or a voice that read a fraction) as one, and treats a confirmed
+  single-voice HIGH that breaks a hard requirement as a blocker. `spec-forge`'s triage
+  adopts the same rule. Composing skill, conducting reference and the design-to-score
+  guide say the same.
+
+### Fixed
+
 - **Fleet members are named for their fleet (GH #514).** A member took the bare file
   stem as its job ID, so `integration.yaml` became job `integration`, collided with an
   unrelated September job, and auto-fresh replaced that job's record while
