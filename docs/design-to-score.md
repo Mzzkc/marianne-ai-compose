@@ -97,7 +97,7 @@ integration score and a `type: fleet`, and gates every generated score:
 `mzt validate --strict` with no errors (so a generated score spells its
 workspace and injected paths with `~` or template variables, never an
 expanded `/home/...` path, which V004 refuses), the composing release
-checker with a lock, a review on two model families (judged by the model each voice actually ran on, read from its context receipt, not by harness name), and a verdict in which a confirmed single-voice HIGH that breaks a hard requirement is a blocker (GH #513). The gate also refuses a generated score whose repair loop cannot iterate: a `cli` verifier inside the loop needs an `on_fail` goto back to the builder, or the engine ends the loop `range_failed` on its first red run. It submits nothing unless
+checker with a lock, a review on two model families (judged by the model each voice actually ran on, read from its context receipt, not by harness name), and a verdict in which a confirmed single-voice HIGH that breaks a hard requirement is a blocker (GH #513). The gate also refuses a generated score whose RED pin set covers test modules but not the conftests and fixtures the assertions read (an oracle that can be walked around, GH #518), and one whose repair loop cannot iterate: a `cli` verifier inside the loop needs an `on_fail` goto back to the builder, or the engine ends the loop `range_failed` on its first red run. It submits nothing unless
 `--var submit=true`; otherwise `RUN.md` in the workspace names the commands
 and re-verifies each lock at start, so a score edited after review refuses
 to run.

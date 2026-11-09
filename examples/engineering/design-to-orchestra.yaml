@@ -405,6 +405,16 @@ prompt:
 
     - deliver the part's `## Prototype cut` first and prove it, then the rest;
     - run the part's review methods with authors and reviewers separated;
+    - make the independent oracle actually independent: when RED freezes the
+      blind-authored tests, the frozen manifest covers EVERY input the
+      assertions read (the mapped tests and map, every ancestor `conftest.py`
+      and the test package's `__init__`, imported assertion helpers, static
+      fixtures and golden documents), is re-hashed at every later
+      qualification or continuation boundary, and excludes only runtime
+      transcripts you name. A pin set that covers the test modules alone lets
+      a builder change an expected fixture after RED with every pinned test
+      still green (orchestra-memory-rev5, GH #518). Ship a control that edits
+      one fixture and one conftest after RED and must be refused;
     - end with a verification sheet whose validations re-run the real checks
       (tests, coverage, lint, the part's integration checks against its
       contracts) and fail if any is red;
@@ -785,6 +795,24 @@ validations:
                       f"on_fail goto; a red run would end the loop instead of repairing "
                       f"(route triggers.{n}.on_fail back to sheet {lo}, or exit 0 with a diagnostic)"
                   )
+      # An independent oracle pins every input its assertions read (GH #518):
+      # a support runner that writes a RED pin set must hash the mapped tests'
+      # ancestor conftests and the project's test fixtures, not test modules
+      # alone, or an expected fixture can change after RED unpinned.
+      support = ws / "orchestra" / "support"
+      if slot != 9 and support.is_dir():
+          part_dir = support / part["id"]
+          runner = next((f for f in part_dir.rglob("*.py")
+                         if f.is_file() and "test-pins" in f.read_text(errors="replace")), None) \
+                   if part_dir.is_dir() else None
+          if runner is not None:
+              text = runner.read_text(errors="replace")
+              missing = [w for w in ("conftest", "fixtures") if w not in text]
+              assert not missing, (
+                  f"{path.name}: {runner.relative_to(ws)} freezes a RED pin set that never names "
+                  f"{' or '.join(missing)}; an independent oracle pins every assertion input "
+                  f"(tests, ancestor conftests, assertion helpers, fixtures, golden documents)"
+              )
       # Prove THIS pass (GH #509): a repair musician that did nothing must not
       # be rescued by the previous pass's score. A score the last verdict or
       # the last gate named must be newer than the file that named it.

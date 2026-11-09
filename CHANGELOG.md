@@ -70,6 +70,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   execute both emitted bodies against a disk state that must fail and one that must
   pass.
 
+- **`design-to-orchestra` requires an independent oracle to pin every assertion input (GH #518).**
+  Two of nine generated scores froze a RED pin set over the test modules, acceptance map
+  and runner only; `conftest.py`, assertion helpers and fixtures were unpinned, so an
+  expected manifest could change after RED with every pinned test still green (reproduced
+  by a reviewer on `orchestra-memory-rev5`). The composition prompt now names the full
+  manifest, and the stage-3 gate refuses a support runner whose pin set never names
+  conftests or fixtures. Composing skill, conducting reference and the design-to-score
+  guide say the same.
+
 - **`design-to-orchestra`'s gate no longer validates a composer's `composition-design.yaml` as a score (GH #517).**
   The composing skill asks for a design file before YAML; four composers wrote it beside
   their scores and the gate failed the pass on "not a Marianne score" while all nine real
