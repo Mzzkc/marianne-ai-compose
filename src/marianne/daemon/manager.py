@@ -3942,6 +3942,29 @@ class JobManager:
         self_healing: bool = False,
     ) -> JobResponse:
         """Enable recurring ticks and resume active work when it is paused."""
+        # A fleet ID resumes the fleet (GH #515): every paused member, then any
+        # dependent group that was dropped when a dependency member failed and
+        # whose dependencies are success now (the member resubmitted under its
+        # fleet-scoped ID, GH #514). No RPC or CLI word changes: `mzt resume
+        # <fleet>` is the re-arm.
+        # getattr: tests build the manager as MagicMock(spec=JobManager), which
+        # has no instance attributes.
+        if job_id in (getattr(self, "_fleet_records", None) or {}):
+            from marianne.daemon.fleet import resume_fleet
+
+            outcome = await resume_fleet(self, job_id)
+            if "error" in outcome:
+                return JobResponse(job_id=job_id, status="rejected", message=str(outcome["error"]))
+            rearmed = outcome.get("rearmed") or []
+            resumed = outcome.get("resumed") or {}
+            return JobResponse(
+                job_id=job_id,
+                status="accepted",
+                message=(
+                    f"Fleet '{job_id}': resumed {len(resumed)} member(s)"
+                    + (f"; re-armed dropped group(s) {', '.join(rearmed)}" if rearmed else "")
+                ),
+            )
         record = await JobManager._schedule_for_job(self, job_id)
         if record is None:
             return await JobManager._resume_active_job(

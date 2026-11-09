@@ -49,6 +49,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Fleet members are named for their fleet (GH #514).** A member took the bare file
+  stem as its job ID, so `integration.yaml` became job `integration`, collided with an
+  unrelated September job, and auto-fresh replaced that job's record while
+  `mzt status integration` showed the stale job as the member. Members are now
+  `<fleet>--<stem>` through the same request field as `mzt run --job-id`, so two fleets
+  with a member of one stem never share an ID or a workspace.
+
+- **A required injection over its `max_bytes` is refused before dispatch (GH #515).**
+  V334 is an ERROR for a `required` item (WARNING stays for an optional one), and the
+  composing release checker measures every injection the sheet will use against its
+  cap, so a lock cannot be written over a required file the #474 dispatch guard will
+  refuse. Nine fleet scores had passed every static gate with such an item and one
+  died at sheet 1. A fleet also no longer loses its dependent groups for good when a
+  wave member fails: the dropped groups are recorded and shown in the fleet's status,
+  and `mzt resume <fleet>` submits them once the failed member, resubmitted under its
+  fleet ID, is complete.
+
 - **A project venue class file the conductor never read is refused at submit (GH #510).**
   The conductor resolves `.marianne/classes.yaml` from its own working directory
   (`$HOME` under the shipped unit), so a checkout's venue file reached `mzt validate`

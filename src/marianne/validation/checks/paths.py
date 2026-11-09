@@ -334,6 +334,10 @@ class InjectionSizeCheck:
     every sheet; this is the same measurement taken once, before the run,
     for paths that need no templating. A snapshot, not the contract — a
     ledger that is under the cap now can cross it on sheet 40 (GH #474).
+
+    A REQUIRED item over its cap is an ERROR: the sheet cannot run, and a
+    warning let nine fleet scores through every static gate to fail at
+    sheet 1 (GH #515). An optional item stays a WARNING (it will be dropped).
     """
 
     @property
@@ -382,7 +386,9 @@ class InjectionSizeCheck:
             issues.append(
                 ValidationIssue(
                     check_id=self.check_id,
-                    severity=self.severity,
+                    severity=(
+                        ValidationSeverity.ERROR if item.required else self.severity
+                    ),
                     message=(
                         f"Injection from {source} is {measured:,} bytes, over its "
                         f"max_bytes {item.max_bytes:,}: {path} — it will {fate} at "

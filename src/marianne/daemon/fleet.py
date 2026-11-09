@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from marianne.core.config.fleet import FleetConfig, FleetGroupConfig
+from marianne.core.config.workspace import sanitize_workspace_name
 from marianne.core.logging import get_logger
 from marianne.daemon.registry import DaemonJobStatus
 from marianne.daemon.task_utils import log_task_exception
@@ -61,6 +62,14 @@ class FleetRecord:
         self.member_jobs = member_jobs
         # Topologically sorted groups: each set runs concurrently
         self.group_order = group_order
+        # Groups whose dependencies failed and were therefore never submitted
+        # (GH #515). `resume_fleet` re-checks them: once every dependency is
+        # success again (a member resubmitted under its fleet-scoped ID), the
+        # group is submitted and leaves this set.
+        self.dropped_groups: set[str] = set()
+        # Set at launch so a later re-arm can submit a dropped group.
+        self.config_dir: Path = config_path.parent
+        self.scores_by_group: dict[str, list[str]] = {}
 
     @property
     def all_job_ids(self) -> list[str]:
@@ -195,12 +204,13 @@ async def submit_fleet(
         member_jobs=member_jobs,
         group_order=group_order,
     )
+    record.scores_by_group = scores_by_group
     manager._fleet_records[fleet_id] = record
 
     # Submit ungrouped scores first (no dependencies)
     if ungrouped:
         results = await _submit_score_batch(
-            manager, config_dir, ungrouped, member_jobs,
+            manager, config_dir, ungrouped, member_jobs, fleet_id=fleet_id,
         )
         if not all(r.status == "accepted" for r in results):
             return JobResponse(
@@ -274,7 +284,7 @@ async def _submit_group_layer(
         return []
 
     results = await _submit_score_batch(
-        manager, config_dir, layer_scores, member_jobs,
+        manager, config_dir, layer_scores, member_jobs, fleet_id=fleet_id,
     )
     if not all(r.status == "accepted" for r in results):
         _logger.warning(
@@ -311,11 +321,14 @@ async def _submit_dependent_group_layers(
             if dependencies_ok:
                 ready_groups.add(group_name)
             else:
+                record.dropped_groups.add(group_name)
                 _logger.warning(
                     "fleet.group_dependencies_failed",
                     fleet_id=record.fleet_id,
                     group=group_name,
                     dependencies=sorted(dependency_groups),
+                    rearm="resubmit the failed member under its fleet ID, then "
+                    "`mzt resume <fleet>` re-arms this group (GH #515)",
                 )
 
         await _submit_group_layer(
@@ -367,6 +380,8 @@ async def _submit_score_batch(
     config_dir: Path,
     score_paths: list[str],
     member_jobs: dict[str, str],
+    *,
+    fleet_id: str | None = None,
 ) -> list[JobResponse]:
     """Submit a batch of scores concurrently.
 
@@ -395,10 +410,21 @@ async def _submit_score_batch(
             )
             continue
 
-        request = JobRequest(config_path=resolved)
+        # A member is named for its fleet (GH #514): the bare stem collided
+        # with any earlier job of that name (`integration`), and auto-fresh
+        # then replaced that job's record and `mzt status integration`
+        # showed the stale job as the member. The job-id request field is
+        # the one `mzt run --job-id` uses (GH #505), so a score that omits
+        # `workspace:` also gets its own ~/workspaces/<fleet>--<stem>.
+        member_id = (
+            f"{fleet_id}--{sanitize_workspace_name(resolved.stem)}"
+            if fleet_id is not None
+            else None
+        )
+        request = JobRequest(config_path=resolved, job_id=member_id)
         tasks.append(asyncio.create_task(
             manager.submit_job(request),
-            name=f"fleet-submit-{resolved.stem}",
+            name=f"fleet-submit-{member_id or resolved.stem}",
         ))
 
     results = await asyncio.gather(*tasks)
@@ -447,7 +473,45 @@ async def resume_fleet(manager: JobManager, fleet_id: str) -> dict[str, Any]:
             _logger.warning("fleet.resume_member_failed", job_id=job_id, error=str(exc))
             results[job_id] = f"error: {exc}"
 
-    return {"fleet_id": fleet_id, "resumed": results}
+    rearmed = await _rearm_dropped_groups(manager, record)
+    return {"fleet_id": fleet_id, "resumed": results, "rearmed": rearmed}
+
+
+async def _rearm_dropped_groups(manager: JobManager, record: FleetRecord) -> list[str]:
+    """Submit dropped groups whose dependencies are all success now (GH #515).
+
+    A group is dropped when a dependency member fails. The operator fixes and
+    resubmits that member under its fleet-scoped ID (so ``member_jobs`` still
+    points at it); this re-reads the live statuses and submits every dropped
+    group whose dependencies are now in a success status. A group whose
+    dependencies are still red stays dropped and is named in the fleet status.
+    """
+    if not record.dropped_groups:
+        return []
+    groups = record.config.groups
+    rearmed: list[str] = []
+    for group_name in sorted(record.dropped_groups):
+        dependency_groups = set(groups[group_name].depends_on)
+        statuses: list[DaemonJobStatus | None] = []
+        for dep in dependency_groups:
+            for score_path in record.scores_by_group.get(dep, []):
+                job_id = record.member_jobs.get(score_path)
+                meta = manager._job_meta.get(job_id) if job_id else None
+                statuses.append(meta.status if meta is not None else None)
+        if statuses and all(status in _FLEET_DEPENDENCY_SUCCESS_STATUSES for status in statuses):
+            rearmed.append(group_name)
+    if rearmed:
+        await _submit_group_layer(
+            manager,
+            record.config_dir,
+            set(rearmed),
+            record.scores_by_group,
+            record.member_jobs,
+            fleet_id=record.fleet_id,
+        )
+        record.dropped_groups.difference_update(rearmed)
+        _logger.info("fleet.groups_rearmed", fleet_id=record.fleet_id, groups=rearmed)
+    return rearmed
 
 
 async def cancel_fleet(manager: JobManager, fleet_id: str) -> dict[str, Any]:
@@ -496,4 +560,7 @@ def get_fleet_status(manager: JobManager, fleet_id: str) -> dict[str, Any]:
             name: {"depends_on": cfg.depends_on}
             for name, cfg in record.config.groups.items()
         },
+        # Groups never submitted because a dependency member failed (GH #515):
+        # resubmit that member under its fleet ID, then resume the fleet.
+        "dropped_groups": sorted(record.dropped_groups),
     }

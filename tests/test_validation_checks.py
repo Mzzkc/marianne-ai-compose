@@ -1098,7 +1098,12 @@ class TestInjectionSizeCheck:
         config = JobConfig.from_yaml(config_path)
         return InjectionSizeCheck().check(config, config_path, yaml_content)
 
-    def test_directory_over_cap_warns_with_measured_size(self, tmp_path: Path) -> None:
+    def test_required_directory_over_cap_is_an_error_with_measured_size(
+        self, tmp_path: Path
+    ) -> None:
+        # A required item over its cap cannot run (the #474 dispatch guard fails
+        # the sheet), so it is an ERROR, not advice: nine fleet scores passed every
+        # static gate as a warning and one died at sheet 1 (GH #515).
         active = tmp_path / "active"
         active.mkdir()
         (active / "a.md").write_text("x" * 600)
@@ -1107,7 +1112,7 @@ class TestInjectionSizeCheck:
             tmp_path, f"{{directory: {active}, as: context, required: true, max_bytes: 1000}}"
         )
         assert [(i.check_id, i.severity) for i in issues] == [
-            ("V334", ValidationSeverity.WARNING)
+            ("V334", ValidationSeverity.ERROR)
         ]
         assert "1,200 bytes" in issues[0].message and "fail the sheet" in issues[0].message
         assert issues[0].metadata["measured"] == "1200"
