@@ -57,6 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`design-to-orchestra`'s gate no longer validates a composer's `composition-design.yaml` as a score (GH #517).**
+  The composing skill asks for a design file before YAML; four composers wrote it beside
+  their scores and the gate failed the pass on "not a Marianne score" while all nine real
+  scores passed. The sidecar is excluded wherever `*.generated-inputs.yaml` already is.
+
 - **`design-to-orchestra` and `spec-forge` no longer approve what one voice confirmed broken (GH #513).**
   The orchestra's stage-3 gate refuses a generated score whose `cli` verifier sits inside
   a repair loop with no `on_fail` goto (the engine ends such a loop `range_failed` on its

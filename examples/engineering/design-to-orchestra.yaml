@@ -29,7 +29,12 @@
 #                         (paths spelled for the strict gate: ~ or templates,
 #                         never an expanded home path, GH #511)
 #   4 Gate (cli)          per score: strict validate, release checker, lock;
-#                         the fleet: every member exists and is gated
+#                         the fleet: every member exists and is gated.
+#                         Sidecars beside a score are not scores and are not
+#                         gated: `<stem>.generated-inputs.yaml` (declared
+#                         run-generated inputs) and `<stem>.composition-design.yaml`
+#                         (the composing skill's design gate, checked by its
+#                         own `check_design.py`).
 #   5 Review          x2  two reviewers on different families read the scores
 #   6 Verdict             cross-section of both reviews and the gate
 #        └─ loop 3-6: until review/APPROVED exists, at most 3 passes
@@ -497,7 +502,7 @@ prompt:
       gated=""
       for score in "$orch"/*.yaml; do
         name=$(basename "$score")
-        case "$name" in fleet.yaml|*.generated-inputs.yaml) continue ;; esac
+        case "$name" in fleet.yaml|*.generated-inputs.yaml|*.composition-design.yaml) continue ;; esac
         [ -f "$score" ] || { echo "FAIL no generated scores in $orch"; fail=1; break; }
         lock="${score%.yaml}.lock.json"
         mzt validate "$score" --json > "$score.validate.json" 2> "$score.validate.err"
@@ -667,7 +672,7 @@ prompt:
       echo '```bash'
       echo "set -euo pipefail"
       for score in "$orch"/*.yaml; do
-        case "$(basename "$score")" in fleet.yaml|*.generated-inputs.yaml) continue ;; esac
+        case "$(basename "$score")" in fleet.yaml|*.generated-inputs.yaml|*.composition-design.yaml) continue ;; esac
         echo "python3 {{ composing_scripts }}/check_score_release.py $score --project-root {{ project_root }} --lock ${score%.yaml}.lock.json"
       done
       echo "mzt run $orch/fleet.yaml"
@@ -822,7 +827,7 @@ validations:
       report = (ws / "04-gate.txt").read_text()
       assert report.startswith(f"gate pass {this_pass} "), "gate report is not from this pass"
       scores = sorted(p.name for p in (ws / "orchestra").glob("*.yaml")
-                      if p.name != "fleet.yaml" and not p.name.endswith(".generated-inputs.yaml"))
+                      if p.name != "fleet.yaml" and not p.name.endswith((".generated-inputs.yaml", ".composition-design.yaml")))
       unjudged = [s for s in scores if not re.search(rf"^(PASS|FAIL) validate {re.escape(s)}\b", report, re.M)]
       assert scores and not unjudged, f"scores the gate did not judge: {unjudged or 'none generated'}"
       assert re.search(r"^(PASS|FAIL) fleet membership$", report, re.M), "fleet membership not checked"
@@ -847,7 +852,7 @@ validations:
       ws, voice, this_pass = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
       text = (ws / "review" / f"orchestra-{voice}-pass{this_pass}.md").read_text()
       scores = sorted(p.name for p in (ws / "orchestra").glob("*.yaml")
-                      if not p.name.endswith(".generated-inputs.yaml"))
+                      if not p.name.endswith((".generated-inputs.yaml", ".composition-design.yaml")))
       read_section = text.split("## Read", 1)[1] if "## Read" in text else ""
       listed = {name for name in scores if name in read_section}
       if re.search(r"^\s*NO FINDINGS\s*$", text, re.M):
