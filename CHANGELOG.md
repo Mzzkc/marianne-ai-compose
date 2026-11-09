@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   templates) now count as activity; the liveness probe and backstop are unchanged.
 
 ### Changed
+- **A maker/judge pair is cast as two explicit chains in opposite orders, never a class.**
+  `spread` separates voices within one alias; it cannot keep an analyst and its reviewer apart,
+  and a capability class on either seat resolves per venue (the first live run of
+  `artifact-analysis` seated both on codex-cli through a user class layer, and the release gate
+  refused it). The score-writing guide, the composing skill and the score-reviewer checklist now
+  say so; the release gate's receipt comparison stays as the last line.
 - **The composing release gate executes the first sheet and measures suite runtimes.**
   Every static gate (`mzt validate --strict`, the release checker with a lock, the
   orchestra gate) passed nine fleet scores on 2026-11-09 and three failed at runtime

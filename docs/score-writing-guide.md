@@ -1259,6 +1259,26 @@ movements:
     instrument: reviewer           # three voices, three different models
 ```
 
+`spread` separates voices *within* one alias. A maker/judge pair (one analyst
+and one reviewer, one builder and one verdict) spans two aliases, so `spread`
+cannot keep them apart, and a capability class on either seat resolves per
+venue and can land both on one model. Cast the pair as two explicit chains in
+opposite orders, so the same index never names the same profile:
+
+```yaml
+instruments:
+  analyst:
+    chain: [claude-code, codex-cli, antigravity, opencode]
+  reviewer:
+    chain: [antigravity, opencode, codex-cli, claude-code]
+```
+
+A release sheet that reads both seats' context receipts
+(`.marianne/context-receipts/<job>/sheet-00NN-attempt-00M.yaml`, field
+`instrument`) can then refuse a same-instrument review as a last line, but the
+casting makes it impossible rather than unlikely. `examples/engineering/artifact-analysis.yaml`
+is the shipped shape.
+
 ### Per-Sheet Instrument Assignment
 
 For fine-grained control, assign instruments to individual sheets:
