@@ -22,7 +22,11 @@
 #   3 Breakdown           system design, parts list, parallel waves, decisions
 #   4 Part specs      x8  one spec + one integration doc per part (empty slots skip)
 #   5 Review          x3  three reviewers on three model families (spread)
-#   6 Triage              mutual finds are blockers; single-family finds are notes
+#   6 Triage              mutual finds are blockers; a confirmed single-family
+#                         guarantee break too; no validation here fails the job
+#                         at the cap (a failed triage attempt would be retried
+#                         and the retry could approve, GH #519): stage 7 opens
+#                         the brief "Not yet approved" instead
 #        └─ loop 4-6: until review/verdict.yaml says APPROVE, at most 3 passes
 #   7 Stakeholder brief   the design laid out against the deeper needs;
 #                         the score then holds for the composer's decision

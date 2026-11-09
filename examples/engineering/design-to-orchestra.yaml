@@ -161,8 +161,10 @@ sheet:
 
   # Compose, gate, review, decide; repeat until the verdict sheet's
   # validation writes review/APPROVED. Passes 2+ change only what the
-  # verdict names. At the cap the verdict gate fails the job rather than
-  # releasing an unapproved orchestra. No cost cap on the span: ending the
+  # verdict names. At the cap the RELEASE sheet (cli, no fallback, no retry
+  # worth having) fails the job rather than releasing an unapproved orchestra;
+  # the check is not on the verdict sheet, because a failed verdict attempt
+  # is retried and the retry approved what the first attempt refused (GH #519). No cost cap on the span: ending the
   # loop on cost would skip that gate.
   loops:
     3-6:
@@ -656,7 +658,10 @@ prompt:
     Do not write `review/APPROVED` yourself; the score writes it from your
     verdict.
     {% if pass_no >= 3 %}
-    This is the last allowed pass. If blockers remain, write REWORK honestly.
+    This is the last allowed pass. If blockers remain, write REWORK honestly;
+    the release sheet refuses the hand-over and the composer decides. A
+    confirmed defect does not become "hardening" because the pass budget is
+    spent (GH #519).
     {% endif %}
 
     {% elif stage == 7 %}
@@ -908,6 +913,26 @@ validations:
       assert v["verdict"] != "APPROVE" or (gate_pass and not blockers), \
           "APPROVE requires GATE: PASS and no blockers"
       assert v["verdict"] != "REWORK" or blockers, "REWORK must name its blockers"
+      # Approval without repair (GH #519): if an earlier attempt of THIS pass
+      # wrote REWORK and nothing under orchestra/ changed since, an APPROVE now
+      # is a reclassification, not a repair.
+      prior = sorted((ws / "review" / "evidence").glob(f"orchestra-verdict-pass{this_pass}*/prior-verdict.yaml")) \
+          + sorted((ws / "review" / "evidence").glob(f"orchestra-verdict-pass{this_pass}*/confirmation.json"))
+      if v["verdict"] == "APPROVE" and prior:
+          import json
+          earlier_rework = False
+          for p in prior:
+              try:
+                  doc = yaml.safe_load(p.read_text()) if p.suffix == ".yaml" else json.loads(p.read_text())
+              except Exception:
+                  continue
+              if isinstance(doc, dict) and str(doc.get("pass")) == str(this_pass) and doc.get("verdict") == "REWORK":
+                  earlier_rework = True
+          if earlier_rework:
+              newest_score = max(f.stat().st_mtime for f in (ws / "orchestra").rglob("*") if f.is_file())
+              oldest_prior = min(p.stat().st_mtime for p in prior)
+              assert newest_score > oldest_prior, \
+                  "APPROVE after a REWORK of the same pass with no score changed since: approval without repair"
       marker = ws / "review/APPROVED"
       if v["verdict"] == "APPROVE":
           marker.write_text(f"pass {this_pass}\n")
@@ -916,11 +941,11 @@ validations:
       PY
     condition: "stage == 6"
     description: "Verdict is consistent with the gate"
-  - type: command_succeeds
-    command: 'test {pass_no} -lt 3 || test -f {workspace}/review/APPROVED'
-    condition: "stage == 6"
-    stage: 2
-    description: "Orchestra approved within the pass budget"
+  # The pass-budget check lives on the release sheet, not here (GH #519): a
+  # validation that fails the verdict ATTEMPT invites the baton to retry the
+  # verdict musician, and on orchestra-memory-rev5 the retry approved what
+  # the first attempt had refused with executed controls. The release sheet
+  # is a cli sheet with no fallback and asserts the marker under set -e.
 
   # Release: only an approved, gated orchestra is handed over, and its start
   # commands must actually pass on the scores as they stand now.

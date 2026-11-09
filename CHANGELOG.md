@@ -70,6 +70,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   execute both emitted bodies against a disk state that must fail and one that must
   pass.
 
+- **`design-to-orchestra` and `spec-forge`: the pass cap fails the release sheet, not the verdict musician (GH #519).**
+  The verdict sheet carried `test pass_no -lt 3 || test -f review/APPROVED`; a REWORK at
+  the cap failed the attempt, the baton retried the sheet, and the retry (same inputs,
+  another instrument) reclassified two confirmed HIGHs as "hardening" and approved.
+  The check is gone from the judgment sheets; the release sheet already refuses an
+  unapproved hand-over under `set -e` with no fallback, and spec-forge's brief opens
+  "Not yet approved". The verdict validation also refuses an APPROVE that follows a
+  REWORK of the same pass with no score changed since.
+
 - **`design-to-orchestra` requires an independent oracle to pin every assertion input (GH #518).**
   Two of nine generated scores froze a RED pin set over the test modules, acceptance map
   and runner only; `conftest.py`, assertion helpers and fixtures were unpinned, so an
