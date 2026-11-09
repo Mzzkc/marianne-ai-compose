@@ -34,7 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   analyst is the only sheet with the technique (`phases: ["2"]`, the movement number); it
   exports REA's own evidence bundle and closes the shared session. Every claim cites an
   `evidence_id` from that bundle. A reviewer on another model family judges from the bundle
-  alone, never calling the tool; the release sheet is a `cli` sheet that refuses an approval
+  alone, never calling the tool (the two seats are explicit chains in opposite orders, so a
+  venue's class layer cannot seat both on one model); the release sheet is a `cli` sheet that refuses an approval
   older than the claims, a claim the bundle cannot back, or a reviewer whose context receipt
   names the analyst's instrument. Fixture source under `examples/engineering/assets/`. The
   technique guide, pool guide, score-authoring and command skills point at it.

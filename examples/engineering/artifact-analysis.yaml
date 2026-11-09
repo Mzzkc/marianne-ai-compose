@@ -46,17 +46,26 @@ description: "Characterize a binary, bundle or package through REA over the MCP 
 
 workspace: ../../workspaces/artifact-analysis
 
-instrument: strong
-instrument_fallbacks: [codex-cli]
+instrument: analyst
 instrument_config:
   timeout_seconds: 1800
 
+# The judge must not be the analyst's model. Both seats are explicit chains in
+# OPPOSITE orders, so the same index never names the same profile: with every
+# instrument healthy the analyst is claude-code and the reviewer antigravity;
+# one unavailable head moves one seat, not both. A capability class would not
+# do here: `strong` resolves per venue (the first run of this score landed both
+# seats on codex-cli through a user class layer), and the release sheet, which
+# reads both context receipts, would refuse the same-instrument review after
+# the money was spent.
 instruments:
+  analyst:
+    chain: [claude-code, codex-cli, antigravity, opencode]
+    select: [balance]
+    config:
+      timeout_seconds: 1800
   reviewer:
-    # The judge must not be the analyst's model. `strong` resolves per venue, so the
-    # release sheet reads both context receipts and refuses a same-instrument review;
-    # list the families most venues have that `strong` does not head with.
-    chain: [codex-cli, antigravity, opencode]
+    chain: [antigravity, opencode, codex-cli, claude-code]
     select: [balance]
     config:
       timeout_seconds: 1200
@@ -68,6 +77,7 @@ movements:
     instrument_fallbacks: []
   2:
     name: "Characterize"
+    instrument: analyst
   3:
     name: "Review"
     instrument: reviewer
