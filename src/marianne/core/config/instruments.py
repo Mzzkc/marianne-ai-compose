@@ -151,6 +151,26 @@ class ModelCapacity(BaseModel):
         ge=0,
         description="Cost per 1000 output tokens (USD). 0 for free/local models.",
     )
+    cost_per_1k_cache_read: float | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Cost per 1000 input tokens served from the provider's prompt cache "
+            "(USD). Providers bill these at a fraction of the input rate (10% on "
+            "Anthropic and OpenAI, 25% on Google). Unset means the estimate "
+            "charges cache reads at cost_per_1k_input, so an unpriced row is "
+            "never cheaper than the input rate."
+        ),
+    )
+    cost_per_1k_cache_write: float | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Cost per 1000 input tokens written into the provider's prompt cache "
+            "(USD; Anthropic bills 125% of input). Unset charges cache writes at "
+            "cost_per_1k_input."
+        ),
+    )
     max_output_tokens: int | None = Field(
         default=None,
         ge=1,

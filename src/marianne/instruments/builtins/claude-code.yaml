@@ -46,6 +46,8 @@ models:
     context_window: 1000000
     cost_per_1k_input: 0.004
     cost_per_1k_output: 0.02
+    cost_per_1k_cache_read: 0.0002
+    cost_per_1k_cache_write: 0.005
     max_output_tokens: 128000
     max_concurrent: 4
 
@@ -76,12 +78,16 @@ models:
     context_window: 1000000
     cost_per_1k_input: 0.01
     cost_per_1k_output: 0.05
+    cost_per_1k_cache_read: 0.00025
+    cost_per_1k_cache_write: 0.0125
     max_output_tokens: 128000
     max_concurrent: 4
   - name: claude-opus-5
     context_window: 1000000
     cost_per_1k_input: 0.005
     cost_per_1k_output: 0.025
+    cost_per_1k_cache_read: 0.0005
+    cost_per_1k_cache_write: 0.00625
     max_output_tokens: 128000
     max_concurrent: 4
   # Sonnet 5: native 1M window; the [1m] suffix is not required.
@@ -89,6 +95,8 @@ models:
     context_window: 1000000
     cost_per_1k_input: 0.002
     cost_per_1k_output: 0.01
+    cost_per_1k_cache_read: 0.0002
+    cost_per_1k_cache_write: 0.0025
     max_output_tokens: 128000
     max_concurrent: 6
 
@@ -103,18 +111,24 @@ models:
     context_window: 200000
     cost_per_1k_input: 0.003
     cost_per_1k_output: 0.015
+    cost_per_1k_cache_read: 0.0003
+    cost_per_1k_cache_write: 0.00375
     max_output_tokens: 64000
     max_concurrent: 6
   - name: claude-sonnet-4-6
     context_window: 200000
     cost_per_1k_input: 0.003
     cost_per_1k_output: 0.015
+    cost_per_1k_cache_read: 0.0003
+    cost_per_1k_cache_write: 0.00375
     max_output_tokens: 64000
     max_concurrent: 6
   - name: "claude-sonnet-4-6[1m]"
     context_window: 1000000
     cost_per_1k_input: 0.003
     cost_per_1k_output: 0.015
+    cost_per_1k_cache_read: 0.0003
+    cost_per_1k_cache_write: 0.00375
     max_output_tokens: 64000
     max_concurrent: 6
 
@@ -127,14 +141,18 @@ models:
     max_concurrent: 4
   - name: claude-opus-4-6
     context_window: 200000
-    cost_per_1k_input: 0.015
-    cost_per_1k_output: 0.075
+    cost_per_1k_input: 0.005
+    cost_per_1k_output: 0.025
+    cost_per_1k_cache_read: 0.0005
+    cost_per_1k_cache_write: 0.00625
     max_output_tokens: 32000
     max_concurrent: 4
   - name: "claude-opus-4-6[1m]"
     context_window: 1000000
-    cost_per_1k_input: 0.015
-    cost_per_1k_output: 0.075
+    cost_per_1k_input: 0.005
+    cost_per_1k_output: 0.025
+    cost_per_1k_cache_read: 0.0005
+    cost_per_1k_cache_write: 0.00625
     max_output_tokens: 32000
     max_concurrent: 4
 
@@ -143,6 +161,8 @@ models:
     context_window: 200000
     cost_per_1k_input: 0.001
     cost_per_1k_output: 0.005
+    cost_per_1k_cache_read: 0.0001
+    cost_per_1k_cache_write: 0.00125
     max_output_tokens: 64000
     max_concurrent: 8
 

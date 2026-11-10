@@ -36,6 +36,8 @@ models:
     context_window: 272000
     cost_per_1k_input: 0.002
     cost_per_1k_output: 0.01
+    cost_per_1k_cache_read: 0.0002
+    cost_per_1k_cache_write: 0.0025
     max_output_tokens: 128000
     max_concurrent: 6
   # Luna: fast, affordable, high-volume tier ($0.1 / $0.5 per 1M).
@@ -43,6 +45,8 @@ models:
     context_window: 272000
     cost_per_1k_input: 0.0001
     cost_per_1k_output: 0.0005
+    cost_per_1k_cache_read: 0.00001
+    cost_per_1k_cache_write: 0.000125
     max_output_tokens: 128000
     max_concurrent: 8
   # Astra: flagship tier — 1,050,000-token API context (922,000 max input);
@@ -51,6 +55,8 @@ models:
     context_window: 272000
     cost_per_1k_input: 0.01
     cost_per_1k_output: 0.05
+    cost_per_1k_cache_read: 0.001
+    cost_per_1k_cache_write: 0.0125
     max_output_tokens: 128000
     max_concurrent: 4
 
@@ -61,42 +67,54 @@ models:
   # Sol: flagship reasoning tier.
   - name: gpt-5.6-sol
     context_window: 272000
-    cost_per_1k_input: 0.005
-    cost_per_1k_output: 0.030
+    cost_per_1k_input: 0.004
+    cost_per_1k_output: 0.02
+    cost_per_1k_cache_read: 0.0004
+    cost_per_1k_cache_write: 0.005
     max_output_tokens: 128000
     max_concurrent: 4
   - name: "gpt-5.6-sol[1m]"
     context_window: 1050000
-    cost_per_1k_input: 0.005
-    cost_per_1k_output: 0.030
+    cost_per_1k_input: 0.004
+    cost_per_1k_output: 0.02
+    cost_per_1k_cache_read: 0.0004
+    cost_per_1k_cache_write: 0.005
     max_output_tokens: 128000
     max_concurrent: 4
 
   # Terra: balanced agentic work tier.
   - name: gpt-5.6-terra
     context_window: 272000
-    cost_per_1k_input: 0.0025
-    cost_per_1k_output: 0.015
+    cost_per_1k_input: 0.002
+    cost_per_1k_output: 0.012
+    cost_per_1k_cache_read: 0.0002
+    cost_per_1k_cache_write: 0.0025
     max_output_tokens: 128000
     max_concurrent: 6
   - name: "gpt-5.6-terra[1m]"
     context_window: 1050000
-    cost_per_1k_input: 0.0025
-    cost_per_1k_output: 0.015
+    cost_per_1k_input: 0.002
+    cost_per_1k_output: 0.012
+    cost_per_1k_cache_read: 0.0002
+    cost_per_1k_cache_write: 0.0025
     max_output_tokens: 128000
     max_concurrent: 6
 
   # Luna: fast, affordable, high-throughput tier.
   - name: gpt-5.6-luna
     context_window: 272000
-    cost_per_1k_input: 0.001
-    cost_per_1k_output: 0.006
+    cost_per_1k_input: 0.0002
+    cost_per_1k_output: 0.0012
+    cost_per_1k_cache_read: 0.00002
+    cost_per_1k_cache_write: 0.00025
     max_output_tokens: 128000
     max_concurrent: 8
   - name: "gpt-5.6-luna[1m]"
     context_window: 1050000
-    cost_per_1k_input: 0.001
-    cost_per_1k_output: 0.006
+    cost_per_1k_input: 0.0002
+    cost_per_1k_output: 0.0012
+    cost_per_1k_cache_read: 0.00002
+    cost_per_1k_cache_write: 0.00025
     max_output_tokens: 128000
     max_concurrent: 8
 
@@ -105,11 +123,13 @@ models:
     context_window: 200000
     cost_per_1k_input: 0.002
     cost_per_1k_output: 0.008
+    cost_per_1k_cache_read: 0.0005
     max_output_tokens: 100000
   - name: o4-mini
     context_window: 200000
     cost_per_1k_input: 0.0011
     cost_per_1k_output: 0.0044
+    cost_per_1k_cache_read: 0.000275
     max_output_tokens: 100000
 
 cli:

@@ -112,6 +112,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   RED branch saw no marker, and the sheet passed. A gate musician that wrote nothing passed the
   gate (the approve-on-absence class, GH #513). The file must now exist and carry a `Verdict:`
   line before either branch is evaluated.
+- **Cost estimates price the model the sheet ran and bill cache traffic at the cache rate
+  (GH #522).** The adapter priced every sheet at the profile's default model's row, so a
+  claude-code seat pinned to Sonnet on a GLM-default host read as $0 and a codex-cli seat pinned
+  to gpt-6-astra was billed as gpt-6-sol; the estimate charged prompt-cache reads at the input
+  rate, about 5× the bill on an 88%-cache sheet. `ModelCapacity` gains optional
+  `cost_per_1k_cache_read` / `cost_per_1k_cache_write` (unset charges the input rate); the
+  estimate prices all four counts; the price row is the sheet's effective model, then the
+  default, then the first, logged as `adapter.price_row`. Thirty-one builtin price values were
+  corrected against models.dev (GPT-5.6 family, claude-opus-4-6, every Gemini row) and cache
+  prices added where the source has them.
 
 - **A reopened loop sheet no longer waits out its primary's rate limit while its fallbacks
   idle (GH #521).** `reset_for_flow` rewinds a reopened sheet to its primary, and dispatch

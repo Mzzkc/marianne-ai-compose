@@ -235,6 +235,31 @@ def checkpoint_to_baton_status(status: str) -> BatonSheetStatus:
     return BatonSheetStatus(status)
 
 
+def _price_row_for(
+    models: list[Any], effective_model: str | None, default_model: str | None,
+) -> Any:
+    """The ModelCapacity row a sheet is priced at (GH #522).
+
+    The sheet's effective model wins (exact name, then names compared with a
+    ``[1m]`` suffix stripped), then the profile's default model, then the
+    first row. ``models`` is non-empty by the caller's check.
+    """
+
+    def _norm(name: str | None) -> str:
+        return (name or "").removesuffix("[1m]").lower()
+
+    for wanted in (effective_model, default_model):
+        if not wanted:
+            continue
+        for row in models:
+            if row.name == wanted:
+                return row
+        for row in models:
+            if _norm(row.name) == _norm(wanted):
+                return row
+    return models[0]
+
+
 def _mcp_runtime_socket_paths(
     pool: Any,
     mcp_servers: dict[str, str],
@@ -3204,6 +3229,9 @@ class BatonAdapter:
                     mcp_code_bridge_active=mcp_code_bridge_active,
                     mcp_bind_mounts=mcp_bind_mounts,
                     event_generation=event_generation,
+                    effective_model=(
+                        str(state.model) if state.model is not None else None
+                    ),
                 ),
                 name=f"musician-{job_id}-s{sheet_num}",
             ),
@@ -3224,6 +3252,7 @@ class BatonAdapter:
         mcp_code_bridge_active: bool = False,
         mcp_bind_mounts: list[Path] | None = None,
         event_generation: int | None = None,
+        effective_model: str | None = None,
     ) -> None:
         """Wrapper around sheet_task that handles backend release.
 
@@ -3399,27 +3428,39 @@ class BatonAdapter:
                     )
                     return
 
-            # Resolve profile pricing from instrument registry (F-180)
+            # Resolve profile pricing from instrument registry (F-180). The
+            # row is the model this sheet is bound to (an alias pin, or the
+            # fallback's own model after advance_fallback), then the profile's
+            # default, then its first row (GH #522: a pinned seat used to be
+            # priced at the default row, so a claude-code seat pinned to
+            # Sonnet on a GLM-default host read as $0).
             cost_input: float | None = None
             cost_output: float | None = None
+            cost_cache_read: float | None = None
+            cost_cache_write: float | None = None
             if profile is not None:
                 try:
                     if (
                         hasattr(profile, "models")
                         and profile.models
                     ):
-                        # Use default model pricing, or first model
-                        model_cap = None
-                        if profile.default_model:
-                            model_cap = next(
-                                (m for m in profile.models
-                                 if m.name == profile.default_model),
-                                None,
-                            )
-                        if model_cap is None:
-                            model_cap = profile.models[0]
+                        model_cap = _price_row_for(
+                            profile.models, effective_model, profile.default_model,
+                        )
                         cost_input = model_cap.cost_per_1k_input
                         cost_output = model_cap.cost_per_1k_output
+                        cost_cache_read = model_cap.cost_per_1k_cache_read
+                        cost_cache_write = model_cap.cost_per_1k_cache_write
+                        _logger.debug(
+                            "adapter.price_row",
+                            extra={
+                                "job_id": job_id,
+                                "sheet_num": sheet.num,
+                                "instrument": actual_instrument,
+                                "model": effective_model,
+                                "priced_as": model_cap.name,
+                            },
+                        )
                 except Exception:  # noqa: BLE001 — profile pricing is best-effort; the hardcoded table applies
                     _logger.debug(
                         "adapter.profile_pricing_unavailable",
@@ -3469,6 +3510,8 @@ class BatonAdapter:
                 preamble=pre_preamble,
                 cost_per_1k_input=cost_input,
                 cost_per_1k_output=cost_output,
+                cost_per_1k_cache_read=cost_cache_read,
+                cost_per_1k_cache_write=cost_cache_write,
                 instrument_override=actual_instrument,
                 technique_router=technique_router,
                 code_executor=code_executor,

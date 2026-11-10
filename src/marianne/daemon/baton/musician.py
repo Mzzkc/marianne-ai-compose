@@ -93,6 +93,8 @@ async def sheet_task(
     preamble: str | None = None,
     cost_per_1k_input: float | None = None,
     cost_per_1k_output: float | None = None,
+    cost_per_1k_cache_read: float | None = None,
+    cost_per_1k_cache_write: float | None = None,
     instrument_override: str | None = None,
     technique_router: TechniqueRouter | None = None,
     code_executor: CodeModeExecutor | None = None,
@@ -370,6 +372,8 @@ async def sheet_task(
                 cost_per_1k_input=cost_per_1k_input,
                 cost_per_1k_output=cost_per_1k_output,
                 instrument_name=effective_instrument,
+                cost_per_1k_cache_read=cost_per_1k_cache_read,
+                cost_per_1k_cache_write=cost_per_1k_cache_write,
             ),
             cost_uncertain=_pricing_missing(cost_per_1k_input, cost_per_1k_output),
             input_tokens=exec_result.input_tokens or 0,
@@ -1577,6 +1581,9 @@ def _estimate_cost(
     cost_per_1k_input: float | None = None,
     cost_per_1k_output: float | None = None,
     instrument_name: str | None = None,
+    *,
+    cost_per_1k_cache_read: float | None = None,
+    cost_per_1k_cache_write: float | None = None,
 ) -> float:
     """Estimate cost from token counts and instrument pricing.
 
@@ -1626,7 +1633,23 @@ def _estimate_cost(
 
     # mypy: both are not-None inside this branch (guaranteed by _pricing_missing)
     assert cost_per_1k_input is not None and cost_per_1k_output is not None
+    # Prompt-cache traffic is billed at its own rates (GH #522). A row without
+    # cache prices charges cache tokens at the input rate, so an unpriced row
+    # is never cheaper than it was before the counts existed.
+    # Tolerate results that predate the cache fields (and test doubles): only
+    # a real integer count is billed.
+    _cr = getattr(exec_result, "cache_read_tokens", None)
+    _cw = getattr(exec_result, "cache_write_tokens", None)
+    cache_read = _cr if isinstance(_cr, int) else 0
+    cache_write = _cw if isinstance(_cw, int) else 0
+    read_rate = cost_per_1k_input if cost_per_1k_cache_read is None else cost_per_1k_cache_read
+    write_rate = (
+        cost_per_1k_input if cost_per_1k_cache_write is None else cost_per_1k_cache_write
+    )
     # Profile pricing: cost_per_1k means USD per 1000 tokens
-    return (input_tokens * cost_per_1k_input / 1_000) + (
-        output_tokens * cost_per_1k_output / 1_000
+    return (
+        (input_tokens * cost_per_1k_input / 1_000)
+        + (output_tokens * cost_per_1k_output / 1_000)
+        + (cache_read * read_rate / 1_000)
+        + (cache_write * write_rate / 1_000)
     )

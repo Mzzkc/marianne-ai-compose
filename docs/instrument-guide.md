@@ -631,8 +631,18 @@ models:
     context_window: 1000000      # Max context in tokens
     cost_per_1k_input: 0.00125   # USD per 1K input tokens
     cost_per_1k_output: 0.005    # USD per 1K output tokens
+    cost_per_1k_cache_read: 0.000125   # USD per 1K input tokens served from the prompt cache
+    cost_per_1k_cache_write: 0.0015625 # USD per 1K input tokens written to the cache (Anthropic bills 125%)
     max_output_tokens: 65536     # Max output tokens (null if unlimited)
 ```
+
+A sheet is priced at the row of the model it is bound to (an alias pin, or the
+fallback's own model), then the profile's default model, then the first row;
+`mzt status` and the loop cost caps read that figure. Cache prices are optional:
+a row without them charges cache tokens at the input rate, so an unpriced row is
+never cheaper than before cache counts existed. The shipped rows were last
+reconciled against models.dev on 2026-11-10; a drift audit lives in the
+token-efficiency notes until `mzt instruments prices` ships.
 
 Model metadata enables cost tracking in `mzt status` and context budget
 calculation. If you omit models, cost tracking shows `$0.00` and context
