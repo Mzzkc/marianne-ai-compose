@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   templates) now count as activity; the liveness probe and backstop are unchanged.
 
 ### Changed
+- **`codebase-rewrite` reconciles every already-green unit in one pass, then takes one unit of new
+  work.** Proof 4 iteration 3 spent a whole dispatch confirming three units one at a time; the unit
+  loop prompt now runs every PENDING or PARTIAL acceptance command at HEAD first. The score also
+  says, in a comment above `retry:`, why it ships with no job-level cost cap (the loops carry their
+  own `cost_limit_usd`; subscription routes price at $0) and how to add one sized from a prior
+  iteration's measured spend.
+
 - **When a profile is warranted, and when it is a pin.** The instrument guide, the
   score-authoring, composing and command skills now give the test: a user-layer profile
   changes the executable, output format, prompt delivery or error vocabulary; a model,

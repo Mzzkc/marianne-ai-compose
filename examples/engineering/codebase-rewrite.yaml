@@ -259,6 +259,12 @@ concert:
   enabled: true
   max_chain_depth: 10
 
+# No job-level cost cap by default: the loops each carry their own
+# `cost_limit_usd`, and on a subscription venue every route prices at $0, so a
+# cap would be inert (V228 names the routes). To stop a run on money, add:
+#   cost_limits: {enabled: true, max_cost_per_job: 300}
+# and size it from a prior iteration's measured loop spend, not a guess.
+
 retry:
   max_retries: 3
   base_delay_seconds: 15
