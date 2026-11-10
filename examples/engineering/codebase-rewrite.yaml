@@ -965,6 +965,11 @@ validations:
   # ── 9 Behaviour gate: GREEN only when it is ─────────────────────────────
   - type: command_succeeds
     command: |
+      # The gate file must exist and carry a verdict before either branch: an
+      # absent file used to fall into the RED branch and pass on "no marker",
+      # so a gate musician that wrote nothing passed the gate.
+      test -f "{workspace}/09-behaviour-gate.md" \
+        && grep -qE "\*\*Verdict:\*\*\s*(GREEN|RED)" "{workspace}/09-behaviour-gate.md" || exit 1
       if grep -qE "\*\*Verdict:\*\*\s*GREEN" "{workspace}/09-behaviour-gate.md"; then
         test -f "{workspace}/09-behaviour-green.txt" \
         && for i in 1 2 4; do grep -qE "\*\*Results:\*\*\s*PASS" "{workspace}/08-oracle-$i.md" || exit 1; done \

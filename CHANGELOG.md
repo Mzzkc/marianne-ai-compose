@@ -107,6 +107,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fan-out musician messaging through a scratch-owned file mailbox (GH #467).** Concurrent fan-out voices had no way to exchange notes during a run — no harness adapter reaches them and the conductor only sees per-sheet results. `sheet.fan_out_messaging: file` (default; `none` omits it; explicit use without concurrent voices warns V234) prepares one append-only JSONL inbox per sheet under `<workspace>/.marianne-scratch/mailbox/`, guarded by advisory locks and opaque, strictly-increasing byte-cursor IDs per inbox. Shell-capable instruments get `MARIANNE_MAILBOX`, `MARIANNE_SCRATCH`, and `MARIANNE_SHEET` exported, and the new `mzt mail send <sheet|all> "<body>"` / `mzt mail read [--since <id>]` subcommands deliver and poll messages (`all` targets every initialized inbox except the sender's own; the CLI refuses to guess a job or sheet context). The conductor's log records each send (sender, recipient, UTF-8 byte count; never the body) and a traffic summary, and retains them (body-free) in the job checkpoint at every terminal settlement — COMPLETED, FAILED, or CANCELLED — so a job that ended in an error, timeout, or cancellation still records every delivered send when the conductor investigates a failed musician; failed jobs keep their scratch (and inboxes) for post-mortem. `mzt diagnose` shows the traffic (sender, recipient, byte counts, per-inbox totals, first/last timestamps) and `--json` adds `mailbox_traffic`; `merge_traffic` reconciles retained and live metadata across resume without double-counting. Message bodies never enter logs, checkpoints, or diagnosis.
 
 ### Fixed
+- **`codebase-rewrite`'s behaviour gate refuses an absent gate file.** The stage-9 validation
+  branched on `grep GREEN 09-behaviour-gate.md`; when the file did not exist, grep failed, the
+  RED branch saw no marker, and the sheet passed. A gate musician that wrote nothing passed the
+  gate (the approve-on-absence class, GH #513). The file must now exist and carry a `Verdict:`
+  line before either branch is evaluated.
+
 - **A reopened loop sheet no longer waits out its primary's rate limit while its fallbacks
   idle (GH #521).** `reset_for_flow` rewinds a reopened sheet to its primary, and dispatch
   treated a rate-limited primary as "wait for expiry" even when the sheet had a fallback,
