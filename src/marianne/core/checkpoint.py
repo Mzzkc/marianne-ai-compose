@@ -802,6 +802,27 @@ class SheetState(BaseModel):
         default=None,
         description="Output tokens produced by this sheet execution",
     )
+    total_input_tokens: int = Field(
+        default=0,
+        description="Input tokens summed over every attempt of this sheet",
+    )
+    total_output_tokens: int = Field(
+        default=0,
+        description="Output tokens summed over every attempt of this sheet",
+    )
+    total_cache_read_tokens: int = Field(
+        default=0,
+        description=(
+            "Input tokens the provider served from its prompt cache, summed "
+            "over every attempt. Billed at the cache rate; the first number a "
+            "token-efficiency measure moves. 0 when the profile has no "
+            "cache_read_tokens_path."
+        ),
+    )
+    total_cache_write_tokens: int = Field(
+        default=0,
+        description="Input tokens written into the provider's prompt cache, summed over attempts",
+    )
     estimated_cost: float | None = Field(
         default=None,
         description="Estimated cost in USD for this sheet",
@@ -907,6 +928,10 @@ class SheetState(BaseModel):
         """
         self.attempt_results.append(result)
         self.total_cost_usd += result.cost_usd
+        self.total_input_tokens += int(getattr(result, "input_tokens", 0) or 0)
+        self.total_output_tokens += int(getattr(result, "output_tokens", 0) or 0)
+        self.total_cache_read_tokens += int(getattr(result, "cache_read_tokens", 0) or 0)
+        self.total_cache_write_tokens += int(getattr(result, "cache_write_tokens", 0) or 0)
         # #346: sticky — once any attempt lacked instrument pricing, the
         # accumulated cost is a $0-placeholder mix and stays cost-uncertain.
         if getattr(result, "cost_uncertain", False):
@@ -1476,6 +1501,14 @@ class CheckpointState(BaseModel):
     total_output_tokens: int = Field(
         default=0,
         description="Total output tokens produced across all sheets",
+    )
+    total_cache_read_tokens: int = Field(
+        default=0,
+        description="Input tokens served from the provider's prompt cache across all sheets",
+    )
+    total_cache_write_tokens: int = Field(
+        default=0,
+        description="Input tokens written into the provider's prompt cache across all sheets",
     )
     total_estimated_cost: float = Field(
         default=0.0,

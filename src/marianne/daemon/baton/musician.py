@@ -374,6 +374,8 @@ async def sheet_task(
             cost_uncertain=_pricing_missing(cost_per_1k_input, cost_per_1k_output),
             input_tokens=exec_result.input_tokens or 0,
             output_tokens=exec_result.output_tokens or 0,
+            cache_read_tokens=exec_result.cache_read_tokens or 0,
+            cache_write_tokens=exec_result.cache_write_tokens or 0,
             model_used=exec_result.model,
             model_echo_status=exec_result.model_echo_status,
             model_observed=exec_result.model_observed,

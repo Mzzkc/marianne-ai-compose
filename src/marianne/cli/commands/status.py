@@ -1110,8 +1110,10 @@ def _output_status_json(
         },
         "cost": {
             "total_estimated_cost": job.total_estimated_cost,
-            "total_input_tokens": job.total_input_tokens,
-            "total_output_tokens": job.total_output_tokens,
+            "total_input_tokens": _job_token_totals(job)["input"],
+            "total_output_tokens": _job_token_totals(job)["output"],
+            "total_cache_read_tokens": _job_token_totals(job)["cache_read"],
+            "total_cache_write_tokens": _job_token_totals(job)["cache_write"],
             "cost_limit_reached": job.cost_limit_reached,
             "cost_confidence": min(
                 (s.cost_confidence for s in job.sheets.values()
@@ -1859,6 +1861,30 @@ def _render_synthesis_results(job: CheckpointState) -> None:
     console.print(synth_table)
 
 
+def _job_token_totals(job: CheckpointState) -> dict[str, int]:
+    """Token totals for the job, summed from every sheet's attempt totals.
+
+    The job-level ``total_input_tokens`` fields were never written by the
+    baton (status printed 0 for every run), so the figure a reader sees is the
+    sheet sum; the job fields remain as the larger of the two for old
+    checkpoints a job-level tracker once filled.
+    """
+    sheets = list(job.sheets.values())
+    totals = {
+        "input": sum(getattr(s, "total_input_tokens", 0) or 0 for s in sheets),
+        "output": sum(getattr(s, "total_output_tokens", 0) or 0 for s in sheets),
+        "cache_read": sum(getattr(s, "total_cache_read_tokens", 0) or 0 for s in sheets),
+        "cache_write": sum(getattr(s, "total_cache_write_tokens", 0) or 0 for s in sheets),
+    }
+    totals["input"] = max(totals["input"], job.total_input_tokens or 0)
+    totals["output"] = max(totals["output"], job.total_output_tokens or 0)
+    job_read = getattr(job, "total_cache_read_tokens", 0) or 0
+    job_write = getattr(job, "total_cache_write_tokens", 0) or 0
+    totals["cache_read"] = max(totals["cache_read"], job_read)
+    totals["cache_write"] = max(totals["cache_write"], job_write)
+    return totals
+
+
 def _render_cost_summary(job: CheckpointState) -> None:
     """Render cost tracking summary — always shown for visibility.
 
@@ -1917,8 +1943,16 @@ def _render_cost_summary(job: CheckpointState) -> None:
         console.print(
             f"  Cost: [yellow]{cost_display}[/yellow] {limit_str}"
         )
-        console.print(f"  Input tokens:  {job.total_input_tokens:,}")
-        console.print(f"  Output tokens: {job.total_output_tokens:,}")
+        tokens = _job_token_totals(job)
+        console.print(f"  Input tokens:  {tokens['input']:,}")
+        if tokens["cache_read"] or tokens["cache_write"]:
+            share = tokens["cache_read"] / max(tokens["input"] + tokens["cache_read"], 1)
+            console.print(
+                f"  Cache read:    {tokens['cache_read']:,}  "
+                f"({share:.0%} of input served from the prompt cache; "
+                f"written {tokens['cache_write']:,})"
+            )
+        console.print(f"  Output tokens: {tokens['output']:,}")
         if is_estimated:
             console.print(
                 "  [dim]Cost is estimated from output size — actual cost may be"

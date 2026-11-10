@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Prompt-cache token counts, per sheet and per job (token-efficiency commission, 2026-11-10).**
+  Profiles gain `cli.output.cache_read_tokens_path` and `cache_write_tokens_path` (set on the
+  claude-code, claude-code-ollama and codex-cli builtins); the backend reads them from JSON and
+  JSONL output, the attempt event and the checkpoint sheet carry `cache_read_tokens` /
+  `cache_write_tokens`, every sheet sums its attempts into `total_*_tokens`, and `mzt status`
+  shows a `Cache read` line with the share of input served from the cache (`--json`:
+  `cost.total_cache_read_tokens`, `total_cache_write_tokens`). On Anthropic and OpenAI
+  `input_tokens` excludes cache reads, which were 88% of what the provider processed on one
+  23-turn Claude Code sheet; Marianne had been recording the other 12%. The job-level token
+  totals were also never summed before, so status read 0; they are now derived from the sheets.
+  Instrument guide, CLI reference, expert profile contract and command skill carry the words.
+
 - **`stale_detection.watch_paths` (GH #516).** Idle detection measured activity only as
   writes under the sheet's workspace, so a musician building in the project's git
   worktree or a scratch clone was killed by the 3-strike backstop while writing code

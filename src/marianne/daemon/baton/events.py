@@ -114,6 +114,10 @@ class SheetAttemptResult:
     cost_usd: float = 0.0
     input_tokens: int = 0
     output_tokens: int = 0
+    # Prompt-cache traffic, separate from input_tokens: billed at the cache
+    # rate and the first number a token-efficiency measure moves.
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
     # #346: True when the instrument profile had no per-token pricing, so
     # cost_usd is a $0 placeholder (not a fabricated rate). The sheet is
     # flagged cost-uncertain rather than billed at invented Claude Sonnet rates.

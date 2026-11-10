@@ -474,6 +474,25 @@ class CliOutputConfig(BaseModel):
         default=None,
         description="JSON dot-path to output token count",
     )
+    cache_read_tokens_path: str | None = Field(
+        default=None,
+        description=(
+            "JSON dot-path to the count of input tokens served from the "
+            "provider's prompt cache (Anthropic `cache_read_input_tokens`, "
+            "OpenAI `cached_input_tokens`). These tokens are billed at the "
+            "cache rate, not the input rate, and are the first number a "
+            "token-efficiency change must move; unset means the harness "
+            "does not report them, and the sheet records 0."
+        ),
+    )
+    cache_write_tokens_path: str | None = Field(
+        default=None,
+        description=(
+            "JSON dot-path to the count of input tokens written into the "
+            "provider's prompt cache this attempt (Anthropic "
+            "`cache_creation_input_tokens`, OpenAI `cache_write_input_tokens`)."
+        ),
+    )
     aggregate_tokens: bool = Field(
         default=False,
         description="When True, sum all wildcard matches for token paths "

@@ -401,6 +401,23 @@ def _structured_error_text(stdout: str) -> str:
     return "\n".join(found)
 
 
+def _extract_token_count(
+    data: object, path: str | None, aggregate: bool,
+) -> int | None:
+    """Read one token counter at ``path``; wildcard sums when ``aggregate``."""
+    if not path:
+        return None
+    if aggregate:
+        from marianne.utils.json_path import extract_json_path_all
+
+        total = sum(
+            int(t) for t in extract_json_path_all(data, path) if isinstance(t, (int, float))
+        )
+        return total if total > 0 else None
+    tok = extract_json_path(data, path)
+    return int(tok) if isinstance(tok, (int, float)) else None
+
+
 class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
     """Generic CLI backend driven by an InstrumentProfile.
 
@@ -995,6 +1012,8 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
         error_message: str | None = None
         input_tokens: int | None = None
         output_tokens: int | None = None
+        cache_read_tokens: int | None = None
+        cache_write_tokens: int | None = None
         # GH #489: the schema-valid object, kept whole for the sheet record.
         validated_object: dict[str, Any] | None = None
 
@@ -1113,6 +1132,12 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
                         tok = extract_json_path(data, output.output_tokens_path)
                         if isinstance(tok, (int, float)):
                             output_tokens = int(tok)
+                cache_read_tokens = _extract_token_count(
+                    data, output.cache_read_tokens_path, output.aggregate_tokens
+                )
+                cache_write_tokens = _extract_token_count(
+                    data, output.cache_write_tokens_path, output.aggregate_tokens
+                )
 
             except json.JSONDecodeError:
                 _logger.warning(
@@ -1122,9 +1147,10 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
                 )
 
         elif output.format == "jsonl" and stdout.strip():
-            result_text, error_message, input_tokens, output_tokens = (
-                self._parse_jsonl(stdout, is_success)
-            )
+            (
+                result_text, error_message, input_tokens, output_tokens,
+                cache_read_tokens, cache_write_tokens,
+            ) = self._parse_jsonl(stdout, is_success)
 
         # ExecutionResult invariant: success=True requires exit_code 0 or None.
         # When the instrument's success_exit_codes includes non-zero codes,
@@ -1162,6 +1188,8 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
             model=self._model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_write_tokens=cache_write_tokens,
             structured_output=validated_object if is_success else None,
         )
 
@@ -1169,7 +1197,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
         self,
         stdout: str,
         is_success: bool,
-    ) -> tuple[str, str | None, int | None, int | None]:
+    ) -> tuple[str, str | None, int | None, int | None, int | None, int | None]:
         """Parse JSONL output, finding the completion event.
 
         Args:
@@ -1177,13 +1205,16 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
             is_success: Whether the execution was successful.
 
         Returns:
-            Tuple of (result_text, error_message, input_tokens, output_tokens).
+            Tuple of (result_text, error_message, input_tokens, output_tokens,
+            cache_read_tokens, cache_write_tokens).
         """
         output = self._cli.output
         result_text = stdout
         error_message: str | None = None
         input_tokens: int | None = None
         output_tokens: int | None = None
+        cache_read_tokens: int | None = None
+        cache_write_tokens: int | None = None
 
         events: list[dict[str, Any]] = []
         for line in stdout.strip().splitlines():
@@ -1231,8 +1262,19 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
                 tok = extract_json_path(event, output.output_tokens_path)
                 if isinstance(tok, (int, float)):
                     output_tokens = int(tok)
+            if output.cache_read_tokens_path and cache_read_tokens is None:
+                tok = extract_json_path(event, output.cache_read_tokens_path)
+                if isinstance(tok, (int, float)):
+                    cache_read_tokens = int(tok)
+            if output.cache_write_tokens_path and cache_write_tokens is None:
+                tok = extract_json_path(event, output.cache_write_tokens_path)
+                if isinstance(tok, (int, float)):
+                    cache_write_tokens = int(tok)
 
-        return result_text, error_message, input_tokens, output_tokens
+        return (
+            result_text, error_message, input_tokens, output_tokens,
+            cache_read_tokens, cache_write_tokens,
+        )
 
     def _check_rate_limit(
         self, stdout: str, stderr: str, *, is_success: bool = False,

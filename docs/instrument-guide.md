@@ -549,6 +549,8 @@ applies to CLI backends; HTTP and interactive backends warn and ignore it.
 | `completion_event_filter` | No | | For JSONL: additional key-value filter |
 | `input_tokens_path` | No | | JSON dot-path to input token count |
 | `output_tokens_path` | No | | JSON dot-path to output token count |
+| `cache_read_tokens_path` | No | | JSON dot-path to the input tokens the provider served from its prompt cache (Anthropic `usage.cache_read_input_tokens`, OpenAI `usage.cached_input_tokens`). Billed at the cache rate; the first number a token-efficiency change moves. Unset records 0. |
+| `cache_write_tokens_path` | No | | JSON dot-path to the input tokens written into the prompt cache this attempt (Anthropic `usage.cache_creation_input_tokens`, OpenAI `usage.cache_write_input_tokens`) |
 
 **Output format modes:**
 
@@ -1036,3 +1038,10 @@ If token usage is zero, check that `cli.output.input_tokens_path` and
 `cli.output.output_tokens_path` point to the correct JSON paths in your tool's
 output. Use the wildcard syntax (`key.*`) for nested structures where the
 exact key varies.
+
+`input_tokens` is what the harness calls input; on Anthropic and OpenAI that
+excludes the tokens served from the prompt cache, which a long agentic sheet
+re-reads on every turn (one 23-turn Claude Code sheet on 2026-11-09 was
+139,198 input and 1,025,216 cache-read tokens). Set `cache_read_tokens_path`
+and `cache_write_tokens_path` so `mzt status` can show the cache share; a
+profile without them reports 0 and the share is unknown, not zero.
