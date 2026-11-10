@@ -28,6 +28,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   templates) now count as activity; the liveness probe and backstop are unchanged.
 
 ### Changed
+- **When a profile is warranted, and when it is a pin.** The instrument guide, the
+  score-authoring, composing and command skills now give the test: a user-layer profile
+  changes the executable, output format, prompt delivery or error vocabulary; a model,
+  timeout, interactive flag or reasoning level is an alias over the builtin. A copy of a
+  builtin made for a model pin replaces it whole and drops every key the builtin gains
+  later. The command skill carries the fork-to-alias migration recipe, and notes that
+  `mzt doctor`'s hygiene list counts job references, so a live grep of the scores tree
+  is the truth.
+
 - **The skills say what V228 means.** The validator and the configuration reference already said
   that a loop's `cost_limit_usd` cannot stop a route priced at $0; no skill said what a composer
   should do when the warning fires. The composing and score-authoring skills now do: on such a

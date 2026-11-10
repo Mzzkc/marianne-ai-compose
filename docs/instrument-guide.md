@@ -78,10 +78,20 @@ profile. Use `GEMINI_API_KEY` as the primary credential; existing
 `CLOUDSDK_CONFIG` configurations remain recognized auth signals. An auth
 signal in `mzt doctor` does not prove the credential works.
 
-From a Marianne source checkout, copy the **entire** shipped profile to the
-user layer. Profiles replace one another by name; a YAML fragment containing
-only `execution_status` does not inherit the builtin's command or models.
-If a local copy already exists, review and edit it instead of overwriting it:
+Before copying anything: a seat that differs from a builtin only in its model,
+timeout, `interactive` flag or reasoning level is an **alias** in the score
+(`instruments: {seat: {profile: codex-cli, config: {model: …}}}`), not a
+profile. A user-layer file is warranted only when the executable, output
+format, prompt delivery or error vocabulary differ from every builtin. A copy
+made for a model pin replaces the builtin whole and silently lacks every key the
+builtin gains afterwards (the first-output bound, quota vocabulary, cache token
+paths); on one venue three such copies carried over a thousand score references.
+
+When the user layer is the right place, copy the **entire** shipped profile from
+a Marianne source checkout. Profiles replace one another by name; a YAML
+fragment containing only `execution_status` does not inherit the builtin's
+command or models. If a local copy already exists, review and edit it instead of
+overwriting it:
 
 ```bash
 export GEMINI_API_KEY='<your Gemini API key>'
