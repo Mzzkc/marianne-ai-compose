@@ -1549,6 +1549,50 @@ mzt instruments list --json
 
 ---
 
+### `mzt instruments prices`
+
+Compare every profile's model prices with models.dev; `--write` updates the builtins.
+
+```
+Usage: mzt instruments prices [OPTIONS]
+```
+
+Marianne prices a sheet from the `models` rows of the profile it ran on. Those rows are maintained by hand and drift as providers reprice. This command fetches [models.dev](https://models.dev) `api.json` (MIT, bot-synced; input, output, cache-read and cache-write prices per model), maps each profile's model ids to a provider (`claude-code` → `anthropic`, its `glm-*` rows → `zai-coding-plan`; `codex-cli` → `openai`; `gemini-cli` → `google`; `opencode` `zai-coding-plan/*` → `zai-coding-plan`, the rest → `openrouter`) and reports each row as one of:
+
+- `match`: every price models.dev carries equals the row's. An unset cache price is compared at the rate the estimate would charge (the input rate).
+- `drift`: at least one price differs. The table shows the field, ours, and theirs in USD per 1K tokens.
+- `absent`: the provider is mapped but models.dev has no such model id (a retired id, a `:free` route).
+- `unmapped`: a profile with no provider mapping: a subscription route priced at $0 on purpose (`antigravity`), a local server, or a harness whose ids are its own.
+
+Builtin and user layers are compared separately, so a user `claude-code.yaml` does not hide drift in the builtin. Nothing refreshes at run time: prices change in a commit, after a person reads the table.
+
+#### Options
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--json` | | false | Output as JSON (`counts`, `rows`, `written`, `refused`, `source`) |
+| `--write` | | false | Rewrite the drifted price fields on the BUILTIN profile files in place, keeping their comments. User (`~/.marianne/instruments/`) and venue (`.marianne/instruments/`) files are reported under `refused` and left alone: they are yours to edit |
+| `--offline` | | false | Do not fetch; compare against the last saved snapshot |
+| `--snapshot PATH` | | `~/.marianne/cache/models.dev.api.json` | Compare against this `api.json` instead of fetching. Every successful fetch saves the default path |
+| `--all` | | false | Also list rows that match, are absent, or are unmapped |
+
+Exit codes: `0` nothing drifts (or every drifted row was written); `1` a drifted row remains; `2` the snapshot could not be fetched or read.
+
+#### Examples
+
+```bash
+# Report drift
+mzt instruments prices
+
+# Update the builtin rows in a source checkout, then review and commit the diff
+mzt instruments prices --write && git diff src/marianne/instruments/builtins/
+
+# CI or an air-gapped host: compare against a pinned snapshot
+mzt instruments prices --snapshot ./models.dev.api.json --json
+```
+
+---
+
 ### `mzt instruments check`
 
 Check readiness and configuration of a specific instrument.

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`mzt instruments prices`: model price drift against models.dev, with `--write` for the
+  builtins.** Profile price rows are hand-maintained; the 2026-11-10 audit found 16 of 87 builtin
+  rows wrong. The command fetches models.dev `api.json`, maps each profile's model ids to a
+  provider, and reports every row as match, drift, absent or unmapped, comparing builtin and user
+  layers separately. `--write` rewrites the four price fields on builtin files in place and keeps
+  their comments; user and venue profiles are reported and never touched. `--offline` and
+  `--snapshot` compare against a saved copy. Exit 0 clean, 1 drift remains, 2 no snapshot.
 - **Prompt-cache token counts, per sheet and per job (token-efficiency commission, 2026-11-10).**
   Profiles gain `cli.output.cache_read_tokens_path` and `cache_write_tokens_path` (set on the
   claude-code, claude-code-ollama and codex-cli builtins); the backend reads them from JSON and

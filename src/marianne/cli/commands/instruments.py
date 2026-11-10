@@ -809,3 +809,154 @@ def _check_json(profile: InstrumentProfile) -> None:
         result["reason"] = probe.reason
 
     output_json(result)
+
+
+# ---------------------------------------------------------------------------
+# mzt instruments prices — price drift against models.dev
+# ---------------------------------------------------------------------------
+
+
+@instruments_app.command(name="prices")
+def prices_command(
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    write: bool = typer.Option(
+        False,
+        "--write",
+        help=(
+            "Rewrite the drifted price fields on the BUILTIN profiles (the files under "
+            "the installed package). User (~/.marianne/instruments/) and venue "
+            "(.marianne/instruments/) profiles are reported and left alone: they "
+            "are the composer's. Commit the result like any other builtin change."
+        ),
+    ),
+    offline: bool = typer.Option(
+        False,
+        "--offline",
+        help="Do not fetch; compare against the last saved snapshot (see --snapshot).",
+    ),
+    snapshot: Path | None = typer.Option(
+        None,
+        "--snapshot",
+        help=(
+            "Path of a models.dev api.json to compare against instead of fetching "
+            "(default cache: ~/.marianne/cache/models.dev.api.json, written on every fetch)."
+        ),
+    ),
+    show_all: bool = typer.Option(
+        False,
+        "--all",
+        help="Also list rows that match, are absent from models.dev, or are unmapped.",
+    ),
+) -> None:
+    """Compare every profile's model prices with models.dev; --write updates the builtins.
+
+    Marianne prices a sheet from the profile's `models` rows; they drift as
+    providers reprice. models.dev (MIT, bot-synced) carries input, output,
+    cache-read and cache-write prices per model. Exit 0 when nothing drifts,
+    1 when a row drifts and was not written, 2 when the snapshot cannot be had.
+    """
+    from marianne.instruments.loader import profile_source_dirs
+    from marianne.instruments.prices import (
+        MODELS_DEV_URL,
+        PRICE_FIELDS,
+        PriceRow,
+        apply_drift,
+        compare_profiles,
+        default_cache_path,
+        fetch_snapshot,
+        load_layers,
+        load_snapshot_file,
+        save_snapshot,
+        summarize,
+    )
+
+    cache = snapshot if snapshot is not None else default_cache_path()
+    source: str
+    try:
+        if snapshot is not None or offline:
+            data = load_snapshot_file(cache)
+            source = str(cache)
+        else:
+            data = fetch_snapshot()
+            save_snapshot(data, cache)
+            source = MODELS_DEV_URL
+    except Exception as exc:  # noqa: BLE001 - every failure here is "no snapshot"
+        hint = "" if offline or snapshot is not None else f" (--offline reads {cache})"
+        output_error(f"cannot load models.dev prices: {exc}{hint}")
+        raise typer.Exit(2) from None
+
+    builtins_dir, org_dir, venue_dir = profile_source_dirs()
+    builtins, overlays = load_layers(builtins_dir, [org_dir, venue_dir])
+    rows = compare_profiles(builtins, data, builtins_dir=builtins_dir)
+    rows += compare_profiles(overlays, data, builtins_dir=builtins_dir)
+    counts = summarize(rows)
+
+    written: list[PriceRow] = []
+    refused: list[PriceRow] = []
+    if write:
+        written, refused = apply_drift(rows, builtins_dir=builtins_dir)
+
+    if json_output:
+        output_json(
+            {
+                "source": source,
+                "snapshot": str(cache),
+                "counts": counts,
+                "rows": [r.as_dict() for r in rows if show_all or r.status == "drift"],
+                "written": [f"{r.profile}:{r.model}" for r in written],
+                "refused": [f"{r.profile}:{r.model}" for r in refused],
+            }
+        )
+    else:
+        console.print(f"[dim]Prices from {source}[/dim]")
+        shown = [r for r in rows if show_all or r.status == "drift"]
+        if shown:
+            table = Table(title="Model prices vs models.dev (USD per 1K tokens)")
+            table.add_column("PROFILE")
+            table.add_column("MODEL")
+            table.add_column("STATUS")
+            table.add_column("FIELD")
+            table.add_column("OURS", justify="right")
+            table.add_column("MODELS.DEV", justify="right")
+            table.add_column("UPDATED")
+            for r in shown:
+                if r.status != "drift":
+                    table.add_row(r.profile, r.model, r.status, "", "", "", r.last_updated or "")
+                    continue
+                first = True
+                for f in PRICE_FIELDS:
+                    if f not in r.drifted:
+                        continue
+                    ours = r.ours.get(f)
+                    theirs = r.theirs.get(f)
+                    layer = "" if r.builtin else " (user layer)"
+                    table.add_row(
+                        r.profile if first else "",
+                        r.model if first else "",
+                        ("drift" + layer) if first else "",
+                        f.removeprefix("cost_per_1k_"),
+                        "unset" if ours is None else f"{ours:g}",
+                        "" if theirs is None else f"{theirs:g}",
+                        (r.last_updated or "") if first else "",
+                    )
+                    first = False
+            console.print(table)
+        console.print(
+            f"{counts['match']} match, {counts['drift']} drift, {counts['absent']} absent from "
+            f"models.dev, {counts['unmapped']} unmapped (subscription, local or harness-own ids)"
+        )
+        if write:
+            console.print(f"[green]wrote {len(written)} builtin row(s)[/green]")
+            for r in refused:
+                console.print(
+                    f"[yellow]left alone (not a builtin): {r.profile}:{r.model} "
+                    f"in {r.source_path}[/yellow]"
+                )
+        elif counts["drift"]:
+            console.print(
+                "[dim]Run with --write to update the builtin rows; "
+                "user-layer rows are yours to edit.[/dim]"
+            )
+
+    if counts["drift"] and len(written) < counts["drift"]:
+        raise typer.Exit(1)

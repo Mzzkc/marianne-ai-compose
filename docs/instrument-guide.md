@@ -640,9 +640,11 @@ A sheet is priced at the row of the model it is bound to (an alias pin, or the
 fallback's own model), then the profile's default model, then the first row;
 `mzt status` and the loop cost caps read that figure. Cache prices are optional:
 a row without them charges cache tokens at the input rate, so an unpriced row is
-never cheaper than before cache counts existed. The shipped rows were last
-reconciled against models.dev on 2026-11-10; a drift audit lives in the
-token-efficiency notes until `mzt instruments prices` ships.
+never cheaper than before cache counts existed. `mzt instruments prices`
+reports every row that differs from models.dev, and `--write` updates the
+builtin rows (never your own profiles); run it when a provider reprices or
+before trusting a cost figure. The shipped rows were last reconciled on
+2026-11-10.
 
 Model metadata enables cost tracking in `mzt status` and context budget
 calculation. If you omit models, cost tracking shows `$0.00` and context
@@ -1050,7 +1052,9 @@ errors:
 
 If `mzt status` shows `$0.00` for all sheets, your instrument profile likely
 has no `models` section with pricing. Add model entries with `cost_per_1k_input`
-and `cost_per_1k_output` to enable cost tracking.
+and `cost_per_1k_output` to enable cost tracking. If the figure looks wrong rather than
+zero, `mzt instruments prices` shows which rows have drifted from the provider's
+current prices.
 
 ### Token counts not extracted
 
