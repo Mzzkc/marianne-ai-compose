@@ -1136,7 +1136,7 @@ Recover sheets that completed work but were incorrectly marked as failed.
 Usage: mzt recover [OPTIONS] JOB_ID
 ```
 
-Runs validations for failed sheets without re-executing them. If validations pass, the sheet is marked as complete. This is useful when:
+Runs validations for failed and cascade-skipped sheets without re-executing them, in the same context execution validates in (the sheet's `stage`, `instance`, `movement`, prompt variables and open loop indices), so a `condition: "stage == N"` rule applies to exactly the sheets it applies to in a run. A sheet is marked complete only when at least one validation applies to it and all that apply pass. A sheet **no validation applies to** is reset to pending and counted on the summary line (`Reset to PENDING: 3 (2 with no applicable validation)`): an empty pass proves nothing (GH #523). This is useful when:
 - Claude CLI returned a non-zero exit code but the work was done
 - A transient error caused failure after files were created
 - You want to check if a failed sheet actually succeeded

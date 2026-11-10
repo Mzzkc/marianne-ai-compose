@@ -29,7 +29,6 @@ from rich.panel import Panel
 
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetStatus
 from marianne.core.config import JobConfig
-from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
 from marianne.daemon.clone import active_registry_db_path
 from marianne.execution.validation import SheetValidationResult, ValidationEngine
@@ -94,6 +93,55 @@ def _load_recovery_config(
             )
             return None
     return None
+
+
+def _recovery_sheet_contexts(
+    config: JobConfig, flow: dict[str, Any] | None = None,
+) -> dict[int, dict[str, Any]]:
+    """Each sheet's validation context, built the way execution builds it.
+
+    Recover used to assemble this dict by hand (``sheet_num`` plus the prompt
+    variables), so it lacked ``stage``, ``instance``, ``movement`` and every
+    other variable ``Sheet.template_variables()`` supplies. A validation
+    written ``condition: "stage == N"`` was then not applicable during
+    recovery, and a sheet nothing applied to read as "all passed" (GH #523).
+    One arm calls the other arm's primitive: ``build_sheets`` then
+    ``template_variables``. Returns ``{}`` when the sheets cannot be built
+    (a score this host cannot resolve); the caller then resets instead of
+    guessing.
+    """
+    from marianne.core.sheet import build_sheets
+
+    try:
+        sheets = build_sheets(config)
+    except Exception as exc:  # noqa: BLE001 — logged; recovery degrades to reset, never to a guess
+        _logger.warning(
+            "recover.sheet_context_unavailable",
+            error=str(exc),
+            detail="could not build sheets from the config; affected sheets are reset to "
+            "PENDING instead of being validated",
+        )
+        return {}
+    total_movements = len({sh.movement for sh in sheets}) or 1
+    contexts = {
+        sh.num: sh.template_variables(total_sheets=len(sheets), total_movements=total_movements)
+        for sh in sheets
+    }
+    # Loop indices, as the executor adds them (FlowRuntime.indices_for): a
+    # sheet inside a loop that has not completed validates with that loop's
+    # current iteration, so `{unit_pass}` in a path expands the same way.
+    from marianne.core.config.flow import span_range
+
+    for span, run in ((flow or {}).get("loops") or {}).items():
+        if not isinstance(run, dict) or run.get("phase") == "completed":
+            continue
+        name, iteration = run.get("index_name"), run.get("iteration")
+        if not isinstance(name, str) or not isinstance(iteration, int):
+            continue
+        for num in span_range(span):
+            if num in contexts:
+                contexts[num][name] = iteration
+    return contexts
 
 
 def _get_db_path() -> Path:
@@ -238,8 +286,11 @@ def recover(
 ) -> None:
     """Recover sheets that completed work but were incorrectly marked as failed.
 
-    This command runs validations for failed sheets without re-executing them.
-    If validations pass, the sheet is marked as complete.
+    This command runs validations for failed and cascade-skipped sheets without
+    re-executing them, in the context execution validates in (stage, instance,
+    loop indices). A sheet is marked complete only when at least one validation
+    applies to it and all that apply pass; a sheet no validation applies to is
+    reset to pending, never completed on an empty pass.
 
     This is useful when:
     - Claude CLI returned a non-zero exit code but the work was done
@@ -467,28 +518,43 @@ async def _recover_job(
     # Reset sheets and optionally validate
     reset_count = 0
     validated_count = 0
+    vacuous_count = 0
+    contexts: dict[int, dict[str, Any]] = (
+        _recovery_sheet_contexts(config, checkpoint.get("flow"))
+        if config and config.validations
+        else {}
+    )
 
     for skey in sorted(sheets_to_reset, key=int):
         snum = int(skey)
         sdata = sheets[skey]
         stale_completed = _has_stale_validation_failure(sdata)
 
-        if config and config.validations:
-            # Run validations to check if work was actually done
-            user_vars: dict[str, Any] = {
-                str(k): v for k, v in config.prompt.variables.items()
-            }
-            sheet_context: dict[str, Any] = {
-                **user_vars,
-                SHEET_NUM_KEY: snum,
-                "start_item": None,
-                "end_item": None,
-            }
+        if config and config.validations and snum in contexts:
+            # Run validations to check if work was actually done, in the
+            # same context the executor validates in (GH #523).
             validation_engine = ValidationEngine(
                 workspace=config.workspace,
-                sheet_context=sheet_context,
+                sheet_context=contexts[snum],
             )
             vresult = await validation_engine.run_validations(config.validations)
+
+            if vresult.rules_checked == 0:
+                # No validation applies to this sheet: nothing proves its
+                # work happened. Never complete it on an empty pass.
+                vacuous_count += 1
+                if stale_completed:
+                    console.print(
+                        f"  Sheet {snum}: [yellow]no validation applies — left unchanged[/yellow]"
+                    )
+                    continue
+                console.print(
+                    f"  Sheet {snum}: [yellow]no validation applies → reset to pending[/yellow]"
+                )
+                if not dry_run:
+                    _reset_sheet_data_for_retry(sdata)
+                reset_count += 1
+                continue
 
             if vresult.all_passed:
                 if not dry_run:
@@ -525,8 +591,9 @@ async def _recover_job(
         f"[bold]Recovery: {job_id}[/bold]\n"
         f"Before: {dict(sorted(before.items()))}\n"
         f"After:  {dict(sorted(after.items()))}\n\n"
-        f"Validated: {validated_count}, Reset to PENDING: {reset_count}\n"
-        f"Dry run: {dry_run}",
+        f"Validated: {validated_count}, Reset to PENDING: {reset_count}"
+        + (f" ({vacuous_count} with no applicable validation)" if vacuous_count else "")
+        + f"\nDry run: {dry_run}",
         title="Recovery",
     ))
 
