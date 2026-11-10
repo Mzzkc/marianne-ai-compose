@@ -28,6 +28,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   templates) now count as activity; the liveness probe and backstop are unchanged.
 
 ### Changed
+- **`codebase-rewrite`'s behaviour gate widens a reopened unit's acceptance instead of flipping
+  its status.** Proof 4 iteration 3 (clamonacc, 2026-11-10) exposed the spin: round 1 reopened seven
+  units for 40 differential failures, pass 1 of the unit loop reconciled all seven green at HEAD on
+  their old acceptance commands, round 2 failed the same 40 inputs and the old "reopened before ⇒
+  BLOCKED" rule retired the units with the evidence unfixed. The gate prompt now appends the failing
+  input (or the new red test) to the unit's Acceptance command cell in the same edit, the unit loop's
+  reconcile step treats a gate-named obligation as part of the acceptance, and BLOCKED is reserved
+  for a named host capability the venue lacks.
+
+### Changed
 - **`codebase-rewrite` reconciles every already-green unit in one pass, then takes one unit of new
   work.** Proof 4 iteration 3 spent a whole dispatch confirming three units one at a time; the unit
   loop prompt now runs every PENDING or PARTIAL acceptance command at HEAD first. The score also

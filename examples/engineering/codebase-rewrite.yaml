@@ -534,7 +534,11 @@ prompt:
     to DONE with that green tail and the commit that made it so, record the
     pass with `### Red run: not needed, acceptance green at <sha>`, and take
     the next row in the same pass. Only a red acceptance command earns a
-    rewrite.
+    rewrite. A row the behaviour gate reopened names the differential input or
+    test that failed; that obligation is part of the row's acceptance from
+    then on, so the old command's green does not reconcile it: run the named
+    input against both binaries (or the named test) and treat a difference as
+    the red run.
     {% if loops.unit_pass > 1 or loops.behaviour_round > 1 %}
     Read `{{ workspace }}/07-migration-log.md` and never redo a DONE unit.
     {% endif %}
@@ -639,9 +643,17 @@ prompt:
 
     **Not green:** for each failure, find the unit it implicates and set that
     unit back to PENDING in 05-rewrite-plan.md with the failing test or input
-    named. A unit already reopened in an earlier round becomes BLOCKED with
-    that evidence instead, so no round spins on it. Coverage below the floor
-    reopens the units whose code is uncovered, with "write tests for <lines>".
+    named, AND widen that unit's acceptance in the same edit: append the
+    failing input (or the new red test the unit must add) to its Acceptance
+    command cell. A reopened row whose acceptance is still the old command is
+    the spin: the next unit pass reconciles it green without a code change,
+    this gate fails on the same inputs, and the evidence is lost. BLOCKED is
+    only for a named host capability the venue lacks (a kernel API, a
+    privilege, a device), with the evidence in the row; "reopened before" is
+    never a reason. A unit that fails a second round with its acceptance
+    widened is reopened again, and the gate says which inputs survived the
+    fix. Coverage below the floor reopens the units whose code is uncovered,
+    with "write tests for <lines>".
 
     {{ write_to("09-behaviour-gate.md") }}
     Include `**Verdict:** GREEN` or `**Verdict:** RED`, the per-tier table,
