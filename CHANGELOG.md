@@ -125,6 +125,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fan-out musician messaging through a scratch-owned file mailbox (GH #467).** Concurrent fan-out voices had no way to exchange notes during a run — no harness adapter reaches them and the conductor only sees per-sheet results. `sheet.fan_out_messaging: file` (default; `none` omits it; explicit use without concurrent voices warns V234) prepares one append-only JSONL inbox per sheet under `<workspace>/.marianne-scratch/mailbox/`, guarded by advisory locks and opaque, strictly-increasing byte-cursor IDs per inbox. Shell-capable instruments get `MARIANNE_MAILBOX`, `MARIANNE_SCRATCH`, and `MARIANNE_SHEET` exported, and the new `mzt mail send <sheet|all> "<body>"` / `mzt mail read [--since <id>]` subcommands deliver and poll messages (`all` targets every initialized inbox except the sender's own; the CLI refuses to guess a job or sheet context). The conductor's log records each send (sender, recipient, UTF-8 byte count; never the body) and a traffic summary, and retains them (body-free) in the job checkpoint at every terminal settlement — COMPLETED, FAILED, or CANCELLED — so a job that ended in an error, timeout, or cancellation still records every delivered send when the conductor investigates a failed musician; failed jobs keep their scratch (and inboxes) for post-mortem. `mzt diagnose` shows the traffic (sender, recipient, byte counts, per-inbox totals, first/last timestamps) and `--json` adds `mailbox_traffic`; `merge_traffic` reconciles retained and live metadata across resume without double-counting. Message bodies never enter logs, checkpoints, or diagnosis.
 
 ### Fixed
+- **`codebase-rewrite`: an intended difference excuses only the lines it names (GH #530).** The
+  score let a bare filename in `04-differential/intended-differences.txt` exempt an input's whole
+  output, and the list was written by the musicians the oracle judges. In proof 4 one design rule
+  about connection framing was listed against 145 of 245 inputs and hid changed scan verdicts,
+  different scan commands and different exit codes; the gate reported 20 failures where a
+  field-scoped comparison found 134. A waiver is now `<input>  <scope>  # <rule>`, the scope being
+  `exit`, `stdout:+<regex>` or `stdout:-<regex>`; after those lines are set aside the outputs must
+  be equal. A bare filename is refused, `stdout:*` is counted and capped at a tenth of the corpus,
+  and only the behaviour gate admits a waiver. The comparison is a script shipped beside the score
+  (`examples/engineering/assets/differential_compare.py`) used by both the oracle prompt and its
+  validation. Replayed against proof 4's stored round-1 outputs with only the framing waiver the
+  rule described: 57 same, 6 intended, 158 failing.
 - **`mzt recover` no longer completes sheets whose validations did not apply (GH #523).** Recover
   built its validation context by hand, without `stage`, `instance` or loop indices, so every
   `condition: "stage == N"` rule was inapplicable during recovery, and a cascade-skipped sheet with

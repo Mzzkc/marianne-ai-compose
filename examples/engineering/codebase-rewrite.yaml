@@ -9,19 +9,21 @@
 # ║                                                                             ║
 # ║    coverage   the SOURCE is covered to `coverage_floor` (default 90%) by    ║
 # ║               tests before anything is rewritten; a shortfall is closed by  ║
-# ║               characterization tests written against the source and        ║
+# ║               characterization tests written against the source and         ║
 # ║               committed on their own                                        ║
 # ║    unit       `test_command`                                                ║
 # ║    integration`integration_test_command`                                    ║
 # ║    functional `functional_test_command` (black box: CLI, wire, HTTP)        ║
 # ║    differential the same inputs through `source_run_command` and            ║
-# ║               `target_run_command`; outputs must agree                      ║
+# ║               `target_run_command`; outputs must agree. An intended         ║
+# ║               difference is waived by scope (which lines, or the exit       ║
+# ║               code), never by filename alone                                ║
 # ║                                                                             ║
 # ║  After behaviour is complete, a bounded refinement loop improves the new    ║
-# ║  code: three critics on different models (idiom, spec, structural          ║
-# ║  fidelity to the source), then a refiner that keeps only edits the whole   ║
-# ║  oracle still passes. Matching the source's decomposition is rewarded in   ║
-# ║  the final scorecard, never required over a test, a spec rule or an idiom. ║
+# ║  code: three critics on different models (idiom, spec, structural           ║
+# ║  fidelity to the source), then a refiner that keeps only edits the whole    ║
+# ║  oracle still passes. Matching the source's decomposition is rewarded in    ║
+# ║  the final scorecard, never required over a test, a spec rule or an idiom.  ║
 # ║                                                                             ║
 # ║  Stages (one iteration):                                                    ║
 # ║    1  Reconnaissance       map modules, deps, spec drops/adds               ║
@@ -45,7 +47,7 @@
 # ║  Usage:                                                                     ║
 # ║    1. Copy this score next to the project you are rewriting                 ║
 # ║    2. Set prompt.variables (search [CHANGE THIS]); project_root is the      ║
-# ║       checkout the rewrite edits — the workspace holds only the ledgers    ║
+# ║       checkout the rewrite edits — the workspace holds only the ledgers     ║
 # ║    3. mzt start && mzt run codebase-rewrite.yaml --var project_root=/abs    ║
 # ║    4. mzt status codebase-rewrite --watch                                   ║
 # ║                                                                             ║
@@ -306,9 +308,12 @@ prompt:
     coverage_floor: 90
     # Differential contract: each command reads ONE input on stdin and writes
     # its result to stdout; the exit code is part of the result. The same
-    # input through both must give the same stdout and exit code, unless the
-    # input is listed in 04-differential/intended-differences.txt with the
-    # specification rule that changes it.
+    # input through both must give the same stdout and exit code, unless
+    # 04-differential/intended-differences.txt scopes the difference: the
+    # input's filename, WHAT may differ (exit, stdout:+<regex> for extra
+    # target lines, stdout:-<regex> for dropped source lines), then the
+    # specification rule. A waiver excuses only the lines it names; a bare
+    # filename is refused (assets/differential_compare.py).
     source_run_command: "[CHANGE THIS: e.g. python -m mytool]"
     target_run_command: "[CHANGE THIS: e.g. ./target/release/mytool]"
     # The branch in project_root every commit lands on (created from HEAD by
@@ -469,8 +474,17 @@ prompt:
        When the project ships language-neutral fixtures (input + expected
        output files), copy them in.
     3. List in `{{ workspace }}/04-differential/intended-differences.txt`
-       (one input filename per line, then `# <spec rule>`) every input whose
-       output the specification deliberately changes. Leave it empty if none.
+       every input whose output the specification deliberately changes, one
+       per line, as `<input filename>  <scope>  # <spec rule>`. The scope
+       says exactly what may differ, comma-separated: `exit`,
+       `stdout:+<regex>` (target lines matching it may be extra),
+       `stdout:-<regex>` (source lines matching it may be missing). After
+       those lines are set aside the two outputs must be equal, so a waiver
+       for added framing cannot hide a changed result on the same input. A
+       bare filename with no scope waives the whole output and is refused.
+       `stdout:*` exists for an input whose entire output is redesigned; it
+       is counted, and the gate fails when more than a tenth of the corpus
+       uses it. Leave the file empty if nothing is intended.
     4. Run each corpus input through `{{ source_run_command }}` now, and
        record that the source accepts the corpus.
 
@@ -603,17 +617,24 @@ prompt:
     {% endif %}
     {% else %}
     Feed every file in `{{ workspace }}/04-differential/inputs/` on stdin to
-    both commands and compare stdout and exit code:
+    both commands and compare stdout and exit code with the score's
+    comparator, which applies each waiver to exactly the lines it scopes:
     ```bash
     cd {{ project_root }}
-    for f in {{ workspace }}/04-differential/inputs/*; do
-      a=$(bash -c {{ source_run_command | tojson }} < "$f" 2>/dev/null; echo "exit=$?")
-      b=$(bash -c {{ target_run_command | tojson }} < "$f" 2>/dev/null; echo "exit=$?")
-      [ "$a" = "$b" ] || echo "DIFF $(basename "$f")"
-    done
+    python3 {{ score_dir }}/assets/differential_compare.py \
+      --inputs {{ workspace }}/04-differential/inputs \
+      --waivers {{ workspace }}/04-differential/intended-differences.txt \
+      --source {{ source_run_command | tojson }} \
+      --target {{ target_run_command | tojson }} \
+      | tee {{ workspace }}/08-differential-round-{{ loops.behaviour_round }}.txt
     ```
-    A DIFF is a failure unless that input is listed in
-    `04-differential/intended-differences.txt`.
+    It prints `SAME`, `INTENDED`, `DIFF` or `BADWAIVER` per input and a
+    `SUMMARY` line. `DIFF` is a failure, including an input that is listed
+    but still differs outside its waiver. `BADWAIVER` (a bare filename, an
+    unknown scope, a file not in the corpus) is a failure of the waiver
+    file, not of the rewrite: report it as such and do not edit the waiver
+    file to make this tier pass. Only the behaviour gate admits a waiver,
+    with the specification rule and the observed difference in front of it.
     {% endif %}
 
     Write `{{ workspace }}/08-oracle-{{ instance }}.md`:
@@ -643,6 +664,15 @@ prompt:
     ```bash
     echo "behaviour green: round {{ loops.behaviour_round }}, coverage <percent>" > {{ workspace }}/09-behaviour-green.txt
     ```
+
+    **Waivers are yours to admit, and only yours.** If the differential
+    report shows `BADWAIVER`, or a unit pass proposed a new line for
+    `04-differential/intended-differences.txt`, decide each one here with
+    the specification rule and the observed difference side by side: the
+    scope must name exactly the lines the rule changes and nothing else.
+    Record every waiver you admit or refuse in this gate file. A waiver
+    whose scope is wider than its rule is refused, and the input stays a
+    failure against the unit that owns it.
 
     **Not green:** for each failure, find the unit it implicates and set that
     unit back to PENDING in 05-rewrite-plan.md with the failing test or input
@@ -963,16 +993,10 @@ validations:
     description: "Functional verdict matches the functional command (SKIPPED only when none is set)"
   - type: command_succeeds
     command: |
-      cd {project_root}; diffs=0
-      intended=$(sed -e 's/#.*//' -e 's/[[:space:]]*$//' "{workspace}/04-differential/intended-differences.txt" 2>/dev/null | grep -v '^$')
-      for f in "{workspace}"/04-differential/inputs/*; do
-        n=$(basename "$f"); s=$(printf '%s' "$n" | sed 's/\.[^.]*$//')
-        printf '%s\n' "$intended" | grep -qxF -e "$n" -e "$s" && continue
-        a=$(bash -c {source_run_command} < "$f" 2>/dev/null; echo "exit=$?")
-        b=$(bash -c {target_run_command} < "$f" 2>/dev/null; echo "exit=$?")
-        [ "$a" = "$b" ] || diffs=$((diffs+1))
-      done
-      if grep -qE "\*\*Results:\*\*\s*PASS" "{workspace}/08-oracle-4.md"; then [ "$diffs" -eq 0 ]; else [ "$diffs" -gt 0 ]; fi
+      cd {project_root}
+      python3 {score_dir}/assets/differential_compare.py --inputs {workspace}/04-differential/inputs --waivers {workspace}/04-differential/intended-differences.txt --source {source_run_command} --target {target_run_command} > /dev/null
+      rc=$?
+      if grep -qE "\*\*Results:\*\*\s*PASS" "{workspace}/08-oracle-4.md"; then [ "$rc" -eq 0 ]; else [ "$rc" -ne 0 ]; fi
     condition: "stage == 8 and instance == 4"
     timeout_seconds: 1800
     description: "Differential verdict matches a real source/target comparison of the corpus"
