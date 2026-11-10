@@ -529,16 +529,19 @@ prompt:
     work, not a dead end: finish it or write why it is BLOCKED. Never write
     "no eligible unit" while a row is PENDING or PARTIAL.
 
-    **0. Reconcile first.** Run the unit's acceptance command at HEAD. If it is
-    already green (an earlier pass or a sibling unit covered it), set the row
-    to DONE with that green tail and the commit that made it so, record the
-    pass with `### Red run: not needed, acceptance green at <sha>`, and take
-    the next row in the same pass. Only a red acceptance command earns a
-    rewrite. A row the behaviour gate reopened names the differential input or
-    test that failed; that obligation is part of the row's acceptance from
-    then on, so the old command's green does not reconcile it: run the named
-    input against both binaries (or the named test) and treat a difference as
-    the red run.
+    **0. Reconcile first, all of it.** Run the acceptance command of EVERY
+    PENDING or PARTIAL row at HEAD before writing any code. Each row that is
+    already green (an earlier pass or a sibling unit covered it) becomes DONE
+    with that green tail and the commit that made it so, recorded as
+    `### Red run: not needed, acceptance green at <sha>`. Reconciliation is
+    cheap and a pass is not: a pass that reconciles three rows one at a time
+    spends three dispatches proving what one run of the table would. A row the
+    behaviour gate reopened names the differential input or test that failed;
+    that obligation is part of the row's acceptance from then on, so the old
+    command's green does not reconcile it: run the named input against both
+    binaries (or the named test) and treat a difference as the red run. Then
+    take the FIRST row still red as this pass's unit of new work. Only a red
+    acceptance command earns a rewrite.
     {% if loops.unit_pass > 1 or loops.behaviour_round > 1 %}
     Read `{{ workspace }}/07-migration-log.md` and never redo a DONE unit.
     {% endif %}
