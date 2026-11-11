@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **CI runs the `plugins` submodule's tests (GH #539).** The main suite's `testpaths = ["tests"]`
+  never reached `plugins/tests/` (239 tests: skill release manifests, word caps, the skill installer),
+  and the plugins repository had no CI, so three red tests landed on its main through ordinary
+  skill-text commits. A new `Plugins tests` job in `ci.yml` runs them at the pinned submodule commit
+  with the locked environment and `-o addopts=`; the plugins repository gains its own
+  `.github/workflows/tests.yml`. CLAUDE.md's four-layer rule now says a change to skill text runs them.
 - **`instrument_config.effort`: per-sheet reasoning effort, one vocabulary for every instrument
   (GH #535).** Over 245 musician sessions thinking was about 90% of output tokens on Claude models,
   while the `claude-code` profile pinned `--effort max` for every headless sheet. A sheet now sets

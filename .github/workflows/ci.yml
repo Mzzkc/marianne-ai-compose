@@ -95,6 +95,31 @@ jobs:
           path: coverage.xml
           if-no-files-found: ignore
 
+  plugins-tests:
+    name: Plugins tests
+    # The `plugins` submodule carries its own tests (skill release manifests,
+    # word caps, the skill installer). The main suite's testpaths = ["tests"]
+    # never reaches them, so skill-text commits could land red (GH #539,
+    # 2026-11-11). This job runs them at the submodule commit the pointer pins.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out the public plugins submodule (full history, real .git)
+        run: git submodule update --init plugins
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync dependencies (locked)
+        run: uv sync --extra dev --extra daemon --extra tui --locked --python 3.12
+      - name: Pytest in plugins/
+        # Run from plugins/ so its tests/ package and imports resolve. Pytest
+        # still finds the main pyproject.toml as its config (plugins/ has none),
+        # so -o addopts= drops `-n auto -m 'not playwright'`: xdist is not
+        # needed for a ~30 s suite and several tests write to shared fixtures.
+        working-directory: plugins
+        run: uv run --project .. pytest -q -p no:cacheprovider -o addopts= tests
+
   load-sensitive:
     name: Load-sensitive tests (stress-ng)
     runs-on: ubuntu-latest
