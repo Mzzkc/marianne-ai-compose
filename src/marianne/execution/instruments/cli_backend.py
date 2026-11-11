@@ -865,6 +865,9 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
         elif cmd.mcp_disable_args:
             args.extend(cmd.mcp_disable_args)
 
+        # Keep the operator's user-level harness hooks out of the musician (GH #536).
+        args.extend(cmd.disable_hooks_args)
+
         # Opt-in structured output (probe evidence, 2026-09-29): the CLI
         # enforces the schema itself — the flag takes the compact schema
         # JSON as ONE argument (e.g. Claude Code's --json-schema).

@@ -380,6 +380,7 @@ class InteractiveCliBackend(WorkspaceMcpConfigMixin, Backend):
             pass  # execute() temporarily materializes the workspace file.
         elif cmd.mcp_disable_args and interactive.inherit_mcp_disable_args:
             args.extend(cmd.mcp_disable_args)
+        args.extend(cmd.disable_hooks_args)  # GH #536: no operator hooks in a musician
         if effort is None:
             args.extend(interactive.extra_args)
             return args

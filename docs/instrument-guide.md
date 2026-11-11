@@ -611,6 +611,42 @@ messages with `mzt mail send <sheet|all> "<text>"` and poll with
 [CLI reference](cli-reference.md#musician-messaging). A received message is
 data, not an instruction.
 
+### Operator hooks and detecting a musician (GH #536)
+
+`MARIANNE_SHEET` is set in the environment of every sheet, headless and
+interactive, and is the supported way for a hook or wrapper to tell a musician
+from the operator's own session. Without a check, a user-level harness hook
+(a Claude Code `SessionStart` hook that loads memory files, say) runs in every
+sheet and its output is re-read on every request: one operator hook cost 212 of
+278 musician sessions about 28 KB each.
+
+```sh
+#!/bin/sh
+# Top of any user-level hook: do nothing inside a Marianne sheet.
+[ -n "${MARIANNE_SHEET:-}" ] && exit 0
+```
+
+**Security trade-off.** Musicians run with auto-approval
+(`--dangerously-skip-permissions`), so the operator's `PreToolUse` and
+`PostToolUse` hooks (command guards, secret scanners, audit loggers) may be the
+only guardrail on a sheet. The builtin `claude-code` profile therefore does NOT
+disable hooks: the recommended fix for a noisy hook is the `MARIANNE_SHEET`
+check above. Claude Code merges hook lists across settings sources (an empty
+`hooks.SessionStart` passed through `--settings` did not stop a user-level
+`SessionStart` hook, measured on 2.1.322), so no per-event override exists.
+The only switch is all-or-nothing: the opt-in profile field
+`cli.command.disable_hooks_args` (Claude Code form:
+`["--settings", '{"disableAllHooks":true}']`) in a profile copy, which disables
+EVERY operator hook in a musician, safety hooks included. (`--setting-sources
+project,local` and `--bare` would also drop the user-level gateway env and the
+login.) With the field unset the argv is unchanged.
+
+`mzt doctor` lists the user-level hooks by event and program name only. It
+marks `SessionStart` and `UserPromptSubmit` hooks as adding to every sheet's
+context unless they check `MARIANNE_SHEET`, `PreToolUse`/`PostToolUse`/`Stop`
+hooks as running in musicians (intended for safety hooks), and warns when a
+profile disables all hooks while `PreToolUse`/`PostToolUse` hooks exist.
+
 #### `cli` — Lifecycle bounds
 
 Every CLI attempt is one process tree. The backend starts the instrument in

@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Noisy operator hooks in musicians: doctor section, detection contract, opt-in switch (GH #536).**
+  A `SessionStart` hook that told Claude Code to read two memory files ran in 212 of 278 musician
+  sessions (about 28 KB each, re-read every request; 194k vs 103k context tokens in a paired
+  check). `mzt doctor` gains a "Musician hooks" section: user-level Claude Code hooks by event and
+  program name only (never arguments, env or inline scripts), `SessionStart`/`UserPromptSubmit`
+  flagged as adding to every sheet's context, `PreToolUse`/`PostToolUse`/`Stop` as running in
+  musicians. `MARIANNE_SHEET` is documented as the way for a hook to detect a musician and exit
+  early; that is the recommended fix. New opt-in profile field `cli.command.disable_hooks_args`
+  (Claude Code: `--settings '{"disableAllHooks":true}'`) disables EVERY operator hook in a musician,
+  safety hooks included; **builtin profiles leave it unset** because musicians run with
+  auto-approval and the operator's `PreToolUse` guards may be the only guardrail (doctor warns when
+  it is set and such hooks exist). Hook lists merge across settings sources, so no per-event
+  override exists. Unset, the argv is unchanged.
 - **`mzt validate` V336 (WARNING): a model seat that names no model (GH #538).** A profile with
   `default_model: null` (the `claude-code` builtin) runs a sheet on the harness's own default, which
   follows the operator's CLI settings and changed twice in a day on one host. V336 names the

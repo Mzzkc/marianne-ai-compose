@@ -240,6 +240,14 @@ cli:
       - "--strict-mcp-config"
       - "--mcp-config"
       - '{"mcpServers":{}}'
+    # GH #536: NOT set by default. `disable_hooks_args` would be
+    # ["--settings", '{"disableAllHooks":true}'], but musicians run with
+    # --dangerously-skip-permissions, so the operator's PreToolUse/PostToolUse
+    # hooks (command guards, secret scanners) may be the only guardrail, and
+    # that switch turns every hook off. Hook lists merge across settings
+    # sources (an empty `hooks.SessionStart` in --settings did not stop a
+    # user-level hook, measured 2026-11-11), so no per-event override exists.
+    # A noisy hook should check MARIANNE_SHEET; a profile copy may opt in.
     # GLM 5.3's post-training gains are realized at high/max reasoning.
     extra_flags:
       - "--effort"

@@ -279,6 +279,147 @@ def _get_all_profiles() -> dict[str, InstrumentProfile]:
     return load_all_profiles()
 
 
+_HOOK_INTERPRETERS = frozenset({
+    "bash", "sh", "zsh", "dash", "fish", "node", "nodejs", "deno", "bun", "env",
+    "python", "ruby", "perl", "php",
+})
+_INLINE_FLAGS = frozenset({"--eval", "--command", "--exec", "--print"})
+# Interpreter options that take the NEXT word as a value. What follows is not a
+# script path, so the name cannot be derived safely.
+_VALUE_FLAGS = frozenset({"-m", "-o", "-O", "-W", "-X", "-r", "--require", "--import", "--loader"})
+_ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+_SAFE_HOOK_NAME = re.compile(r"^[\w.+-]{1,64}$")
+_INLINE_SCRIPT = "<inline script>"
+_UNRECOGNISED = "<unrecognised>"
+# Hook events that put text into a sheet's context, and those that guard tools.
+_CONTEXT_EVENTS = frozenset({"SessionStart", "UserPromptSubmit"})
+_GUARD_EVENTS = frozenset({"PreToolUse", "PostToolUse", "Stop"})
+
+
+def _claude_user_settings_path() -> Path:
+    """Claude Code's user-level settings file (the operator's, not a project's)."""
+    return Path("~/.claude/settings.json").expanduser()
+
+
+def _interpreter_name(word: str) -> str:
+    """Basename of ``word`` with a version suffix removed: ``python3.12`` -> ``python``."""
+    return re.sub(r"[\d.]+$", "", word.rsplit("/", 1)[-1])
+
+
+def _is_inline_flag(word: str) -> bool:
+    """``-c``, ``-e``, ``-lc``, ``-ec``, ``--eval``, ``--command``: the script follows."""
+    if word in _INLINE_FLAGS:
+        return True
+    return bool(re.fullmatch(r"-[A-Za-z]*[ce][A-Za-z]*", word))
+
+
+def _hook_command_name(command: str) -> str:
+    """A display name for a hook command; never arguments, env or inline code.
+
+    Leading ``VAR=value`` words are skipped unprinted. A leading interpreter
+    (matched exactly, version suffix removed) is skipped to name the script it
+    runs; an interpreter given an inline script (``-c``/``-e``) yields the
+    placeholder ``<inline script>``. A name that is not a plain file name
+    yields ``<unrecognised>``.
+    """
+    import shlex
+
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return _UNRECOGNISED
+    index = 0
+    while index < len(words) and _ENV_ASSIGNMENT.match(words[index]):
+        index += 1
+    while index < len(words) and _interpreter_name(words[index]) in _HOOK_INTERPRETERS:
+        index += 1
+        while index < len(words) and (
+            words[index].startswith("-") or _ENV_ASSIGNMENT.match(words[index])
+        ):
+            if _is_inline_flag(words[index]):
+                return _INLINE_SCRIPT
+            if words[index] in _VALUE_FLAGS:
+                # The next word is this option's value (a module name, a shell
+                # option), not the script: never show it as the hook's name.
+                return _UNRECOGNISED
+            index += 1
+    if index >= len(words):
+        return _UNRECOGNISED
+    name = words[index].rsplit("/", 1)[-1]
+    return name if _SAFE_HOOK_NAME.match(name) else _UNRECOGNISED
+
+
+def _user_harness_hooks(settings_path: Path) -> list[dict[str, str]]:
+    """Each ``{event, command}`` in the user settings' hooks block (GH #536).
+
+    Only the event name and the command's basename are returned. An absent,
+    unreadable or oddly shaped file yields none.
+    """
+    try:
+        data = json_mod.loads(settings_path.read_text())
+    except (OSError, ValueError):
+        return []
+    hooks = data.get("hooks") if isinstance(data, dict) else None
+    if not isinstance(hooks, dict):
+        return []
+    rows: list[dict[str, str]] = []
+    for event, groups in hooks.items():
+        for group in groups if isinstance(groups, list) else []:
+            for hook in (group.get("hooks") if isinstance(group, dict) else None) or []:
+                command = hook.get("command") if isinstance(hook, dict) else None
+                if isinstance(command, str):
+                    rows.append({"event": str(event), "command": _hook_command_name(command)})
+    return rows
+
+
+def _claude_code_hooks_disabled() -> bool:
+    """True when the claude-code profile disables every operator hook in a musician."""
+    profile = _get_all_profiles().get("claude-code")
+    return bool(profile and profile.cli and profile.cli.command.disable_hooks_args)
+
+
+def _musician_hook_report(settings_path: Path, *, disabled: bool) -> dict[str, Any]:
+    """User-level Claude Code hooks that run inside a sheet (GH #536).
+
+    Context-injecting events (SessionStart, UserPromptSubmit) add to every
+    sheet's context unless the hook checks MARIANNE_SHEET. Tool-guard events
+    (PreToolUse, PostToolUse, Stop) run in musicians, which is intended for
+    safety hooks. When the profile disables all hooks, the guards do not run:
+    that is a warning, because musicians run with auto-approval.
+    """
+    hooks = _user_harness_hooks(settings_path)
+    for hook in hooks:
+        if hook["event"] in _CONTEXT_EVENTS:
+            hook["effect"] = (
+                "adds to every sheet's context unless the hook checks MARIANNE_SHEET"
+            )
+        elif hook["event"] in _GUARD_EVENTS:
+            hook["effect"] = "runs in musicians (intended for safety hooks)"
+        else:
+            hook["effect"] = "runs in musicians"
+    base: dict[str, Any] = {"hooks": hooks, "all_hooks_disabled": disabled}
+    if not hooks:
+        return {**base, "status": "ok", "detail": "no user-level Claude Code hooks"}
+    context = sum(1 for h in hooks if h["event"] in _CONTEXT_EVENTS)
+    if disabled:
+        guards = [h for h in hooks if h["event"] in ("PreToolUse", "PostToolUse")]
+        detail = (
+            f"{len(hooks)} user-level hook(s); the claude-code profile disables every "
+            "hook in musicians"
+        )
+        if guards:
+            return {**base, "status": "warning", "detail": detail + ", so the "
+                    f"{len(guards)} PreToolUse/PostToolUse hook(s) listed will NOT run "
+                    "in musicians, which run with auto-approval"}
+        return {**base, "status": "ok", "detail": detail}
+    detail = f"{len(hooks)} user-level hook(s) will run in musicians"
+    if context:
+        return {**base, "status": "warning", "detail": detail + f"; {context} "
+                "context-injecting hook(s) add to every sheet's context unless "
+                "they exit early when MARIANNE_SHEET is set"}
+    return {**base, "status": "ok", "detail": detail}
+
+
 def _dir_size_bytes(path: Path) -> int:
     """Total size of a directory tree (best-effort; 0 on errors)."""
     total = 0
@@ -918,6 +1059,11 @@ def doctor(
     # --- Provider checks (GH #499): REA's own doctor for each REA pool entry ---
     provider_checks = _rea_provider_checks(_rea_pool_entries())
 
+    # --- Musician hooks (GH #536) ---
+    musician_hooks = _musician_hook_report(
+        _claude_user_settings_path(), disabled=_claude_code_hooks_disabled(),
+    )
+
     # --- JSON output ---
     if json:
         result: dict[str, Any] = {
@@ -933,10 +1079,12 @@ def doctor(
             "storage_findings": storage_findings,
             "unreferenced_profiles": unreferenced_profiles,
             "provider_checks": provider_checks,
+            "musician_hooks": musician_hooks,
             "cleaned_paths": cleaned_paths,
             "warnings_count": len(warnings) + len(safety_warnings)
             + len(storage_findings) + len(unreferenced_profiles)
-            + sum(1 for row in provider_checks if row["status"] != "ok"),
+            + sum(1 for row in provider_checks if row["status"] != "ok")
+            + (1 if musician_hooks["status"] != "ok" else 0),
             "errors_count": len(errors),
         }
         out.print_json(json_mod.dumps(result))
@@ -1019,6 +1167,23 @@ def doctor(
         out.print(
             "    [dim]REA's doctor is read-only; it never installs. Fix a provider gap "
             "with REA's own setup (`npx rea-agents setup`), then rerun.[/dim]"
+        )
+
+    # Musician hooks (GH #536)
+    if musician_hooks["hooks"]:
+        out.print()
+        out.print("  [bold]Musician hooks:[/bold]")
+        icon = _status_icon(musician_hooks["status"])
+        out.print(f"  {icon} {musician_hooks['detail']}")
+        for hook in musician_hooks["hooks"]:
+            out.print(
+                f"      [dim]{hook['event']}: {hook['command']} ({hook['effect']})[/dim]"
+            )
+        if musician_hooks["status"] != "ok":
+            warnings.append(f"musician hooks: {musician_hooks['detail']}")
+        out.print(
+            "    [dim]A hook detects a musician with MARIANNE_SHEET "
+            "(see docs/instrument-guide.md).[/dim]"
         )
 
     # Summary

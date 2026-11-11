@@ -473,6 +473,21 @@ class CliCommand(BaseModel):
         "config is requested. Profile-driven — e.g. claude-code uses "
         "['--strict-mcp-config', '--mcp-config', '{\"mcpServers\":{}}'].",
     )
+    disable_hooks_args: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Opt-in (GH #536): harness flags that DISABLE EVERY OPERATOR HOOK in "
+            "a musician, including safety hooks. Applied to every headless and "
+            "interactive launch, after the MCP flags. Claude Code's form is "
+            "['--settings', '{\"disableAllHooks\":true}'] (--setting-sources and "
+            "--bare would also drop the user-level gateway env and login). "
+            "Musicians run with auto-approval, so the operator's PreToolUse/"
+            "PostToolUse guards may be the only guardrail: turning hooks off "
+            "removes them. Hook lists merge across settings sources, so there is "
+            "no per-event form. The builtin profiles leave this empty (argv "
+            "unchanged); a noisy hook should exit early when MARIANNE_SHEET is set."
+        ),
+    )
     timeout_flag: str | None = Field(
         default=None,
         description="Flag for per-execution timeout",

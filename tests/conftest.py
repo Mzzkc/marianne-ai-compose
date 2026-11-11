@@ -108,6 +108,21 @@ def _no_host_rea_pool_in_doctor(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _no_host_claude_settings_in_doctor(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    """`mzt doctor` lists the hooks in the operator's ``~/.claude/settings.json``
+    (GH #536). A test must never read the developer's real settings: its verdict
+    and output would depend on the host. Tests of the report pass a path.
+    """
+    import importlib
+
+    doctor_module = importlib.import_module("marianne.cli.commands.doctor")
+    absent = tmp_path_factory.mktemp("no-claude") / "settings.json"
+    monkeypatch.setattr(doctor_module, "_claude_user_settings_path", lambda: absent)
+
+
+@pytest.fixture(autouse=True)
 def _no_host_conductor_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
     """The developer's live conductor (its PID file and socket) must not turn a
     test's simulated "not running" into "busy" (GH #455). Tests of the busy
