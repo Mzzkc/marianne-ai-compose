@@ -62,7 +62,9 @@ class AuditLog:
         self._lock = threading.Lock()
         self._tails: dict[Path, tuple[int, str]] = {}  # path -> (next seq, last hash)
 
-    def path_for(self, dispatch_id: str, session_id: str) -> Path:
+    def path_for(self, dispatch_id: str | None, session_id: str) -> Path:
+        if dispatch_id is None:  # unattributable calls (unknown session ids) share one chain
+            return self._root / "_unattributed" / "probes.jsonl"
         return (
             self._root / _safe_id(dispatch_id, "dispatch_id")
             / f"{_safe_id(session_id, 'session_id')}.jsonl"
@@ -86,12 +88,14 @@ class AuditLog:
             ) from None
 
     def append(
-        self, *, dispatch_id: str, session_id: str, principal: str, event: str,
+        self, *, dispatch_id: str | None, session_id: str, principal: str, event: str,
         seal: bool = False, **fields: Any,
     ) -> dict[str, Any]:
         """Append one record (fsynced) and return it. ``seal`` stamps ``segment_hash``."""
         if event not in _EVENTS:
             raise SchemaViolation(f"unknown audit event {event!r}", subtype="audit_event_invalid")
+        if dispatch_id is None:
+            session_id = hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:16]
         path = self.path_for(dispatch_id, session_id)
         with self._lock:
             seq, prev = self._tail(path)

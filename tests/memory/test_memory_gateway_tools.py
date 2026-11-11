@@ -36,7 +36,7 @@ def files_backend(root: Path, **over: Any) -> Any:
 
 @pytest.fixture
 def gw(tmp_path: Path) -> Gateway:
-    g = Gateway()
+    g = Gateway(require_audit=False)
     g.register_backend("att-1", files_backend(tmp_path / "files"))
     return g
 
@@ -74,7 +74,7 @@ def test_bind_without_prior_verify_is_refused(gw: Gateway) -> None:
 
 
 def test_fetch_oversized_unit(tmp_path: Path) -> None:
-    g = Gateway()
+    g = Gateway(require_audit=False)
     g.register_backend("att-1", files_backend(tmp_path / "files", recall_cap_bytes=1024))
     sid = sess(g)
     big = "word " * 400
@@ -87,7 +87,7 @@ def test_fetch_oversized_unit(tmp_path: Path) -> None:
 
 
 def test_recall_cursor_pages_through_backend(tmp_path: Path) -> None:
-    g = Gateway()
+    g = Gateway(require_audit=False)
     g.register_backend("att-1", files_backend(tmp_path / "files", recall_cap_bytes=1024))
     sid = sess(g)
     for i in range(12):
@@ -148,7 +148,7 @@ def test_closed_session_refuses(gw: Gateway) -> None:
 
 
 def test_dispatch_recall_quota_e4(tmp_path: Path) -> None:
-    g = Gateway()
+    g = Gateway(require_audit=False)
     g.register_backend("att-1", files_backend(tmp_path / "files"))
     sid = sess(g, caps=MemoryCaps(dispatch_recall_quota_bytes=30))
     g.declare(sid, "quota fact " + "pad " * 20, provenance=EV)
@@ -195,7 +195,7 @@ class Fake:
 
 
 def fake_gw() -> tuple[Gateway, Fake]:
-    g, f = Gateway(), Fake()
+    g, f = Gateway(require_audit=False), Fake()
     g.register_backend("att-1", f)  # type: ignore[arg-type]
     return g, f
 
@@ -254,7 +254,7 @@ def test_ctx_permissions_are_the_session_ceiling_not_caller_data() -> None:
 
 
 def test_unregistered_attachment_is_refused() -> None:
-    g = Gateway()
+    g = Gateway(require_audit=False)
     with pytest.raises(Exception) as exc:
         sess(g)
     assert exc.value.subtype == "attachment_unbound"  # type: ignore[attr-defined]
@@ -267,7 +267,7 @@ def test_grant_ref_session_open_and_per_call_revocation(tmp_path: Path) -> None:
     store = GrantStore(tmp_path / "access")
     store.create("g1", P, "project/demo", ("read", "write"))
     f = Fake()
-    g = Gateway(grants=store)
+    g = Gateway(grants=store, require_audit=False)
     g.register_backend("att-1", f)  # type: ignore[arg-type]
     s = g.open_session(
         principal=P, attachment_id="att-1", scope=SCOPE, dispatch_id="d",
@@ -287,7 +287,7 @@ def test_grant_ref_session_open_and_per_call_revocation(tmp_path: Path) -> None:
 def test_grant_ref_must_match_principal_and_scope(tmp_path: Path) -> None:
     store = GrantStore(tmp_path / "access")
     store.create("g1", "agent:someone-else", "project/demo", ("read",))
-    g = Gateway(grants=store)
+    g = Gateway(grants=store, require_audit=False)
     g.register_backend("att-1", Fake())  # type: ignore[arg-type]
     with pytest.raises(ScopeRefused):
         g.open_session(

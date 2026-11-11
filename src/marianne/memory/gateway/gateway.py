@@ -54,7 +54,15 @@ TOOL_PERMISSIONS: dict[str, tuple[Permission, bool]] = {
 class Gateway:
     """A library a conductor can host. Holds no socket; reaches backends only via the Protocol."""
 
-    def __init__(self, *, grants: GrantStore | None = None, audit: AuditLog | None = None) -> None:
+    def __init__(
+        self, *, grants: GrantStore | None = None, audit: AuditLog | None = None,
+        require_audit: bool = True,
+    ) -> None:
+        if audit is None and require_audit:
+            raise SchemaViolation(
+                "a gateway without an audit log is refused",
+                subtype="audit_required", remedy="pass audit=AuditLog(...) or require_audit=False",
+            )
         self.sessions = SessionTable()
         self._audit = audit
         self._grants = grants
@@ -168,7 +176,16 @@ class Gateway:
     ) -> T:
         permission, _ = TOOL_PERMISSIONS[tool]
         started = time.time()
-        s = self.sessions.get(session_id)  # unknown session: nothing to attribute an audit line to
+        try:
+            s = self.sessions.get(session_id)
+        except MemoryBackendError as exc:
+            if self._audit is not None:  # probing for session ids is what the log is for
+                self._audit.append(
+                    dispatch_id=None, session_id=session_id, principal="unknown",
+                    event="operation", tool=tool, result_status="refused",
+                    error_code=exc.code.name,
+                )
+            raise
         try:
             s = self.sessions.admit_call(session_id, permission.value)
             self._check_grant(s, permission)

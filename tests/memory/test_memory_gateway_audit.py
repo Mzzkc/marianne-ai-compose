@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from marianne.memory import MemoryBackendError, PermissionDenied
+from marianne.memory import MemoryBackendError, NotFound, PermissionDenied, SchemaViolation
 from marianne.memory.backends.files import files_backend_factory, resolve_files_location
 from marianne.memory.gateway import AuditLog, Gateway, verify_audit_file
 
@@ -171,3 +171,23 @@ def test_unsafe_ids_cannot_escape_audit_root(tmp_path: Path) -> None:
     log = AuditLog(tmp_path / "audit")
     with pytest.raises(MemoryBackendError):
         log.append(dispatch_id="../x", session_id="s", principal=P, event="operation")
+
+
+def test_gateway_without_audit_raises_unless_opted_out() -> None:
+    with pytest.raises(SchemaViolation) as exc:
+        Gateway()
+    assert exc.value.subtype == "audit_required"
+    Gateway(require_audit=False)
+
+
+def test_unknown_session_probe_is_audited_hashed(tmp_path: Path) -> None:
+    g, _, _ = setup(tmp_path)
+    with pytest.raises(NotFound):
+        g.recall("s-probe-me", "q")
+    path = tmp_path / "audit" / "_unattributed" / "probes.jsonl"
+    rec = lines(path)[-1]
+    assert rec["dispatch_id"] is None
+    assert rec["session_id"] == hashlib.sha256(b"s-probe-me").hexdigest()[:16]
+    assert rec["tool"] == "recall" and rec["error_code"] == "E11"
+    assert "s-probe-me" not in path.read_text()
+    assert verify_audit_file(path).ok
