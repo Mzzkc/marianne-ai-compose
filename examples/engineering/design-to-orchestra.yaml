@@ -382,8 +382,8 @@ prompt:
         cast: strong
         why: "writes the tests before the builder starts, different family"
         tier: middle
-        effort: max           # omit for the profile default; max needs the reason below
-        effort_reason: "illustrative only: state why this role needs max, or drop the line"
+        # effort: omitted, so the profile default applies. Add `effort: max`
+        # only with an `effort_reason` line saying why this role needs it.
       - role: reviewer
         cast: review          # spread across families
         voices: 3
