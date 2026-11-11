@@ -82,3 +82,49 @@ class TestWeeklyLimitIsRateLimited:
         }])
         result = _claude_backend()._parse_output(stdout=stream, stderr="", exit_code=1)
         assert not result.rate_limited and result.error_type == "api_error"
+
+
+class TestStatedResetReachesTheBaton:
+    """GH #542: the provider's stated reset becomes rate_limit_wait_seconds."""
+
+    def test_wait_seconds_filled_from_stated_reset(self) -> None:
+        stream = json.dumps([{
+            "type": "result", "is_error": True, "api_error_status": 429,
+            "result": "You've hit your limit · resets in 3 hours",
+        }])
+        result = _claude_backend()._parse_output(stdout=stream, stderr="", exit_code=1)
+        assert result.rate_limited
+        assert result.rate_limit_wait_seconds == 3 * 3600
+
+    def test_no_stated_reset_leaves_wait_unset(self) -> None:
+        stream = json.dumps([{
+            "type": "result", "is_error": True, "api_error_status": 429,
+            "result": "You've hit your limit",
+        }])
+        result = _claude_backend()._parse_output(stdout=stream, stderr="", exit_code=1)
+        assert result.rate_limited and result.rate_limit_wait_seconds is None
+
+    def test_not_rate_limited_has_no_wait(self) -> None:
+        result = _claude_backend()._parse_output(stdout="ok", stderr="", exit_code=0)
+        assert result.rate_limit_wait_seconds is None
+
+
+class TestApiError429WithLimitWordingIsNotTransient:
+    def _classify(self, **kw: object):  # type: ignore[no-untyped-def]
+        from marianne.daemon.baton.musician import _classify_error
+        from marianne.execution.base import ExecutionResult
+
+        return _classify_error(ExecutionResult(
+            success=False, stdout="", stderr="", duration_seconds=0.0, exit_code=1, **kw
+        ))  # type: ignore[arg-type]
+
+    def test_limited_429_spends_no_retry(self) -> None:
+        got = self._classify(
+            error_type="api_error", rate_limited=True,
+            error_message="API error 429: You've hit your limit · resets 1:20pm (UTC)",
+        )
+        assert got.classification is None and got.error_code is None
+
+    def test_bare_429_stays_transient(self) -> None:
+        got = self._classify(error_type="api_error", error_message="API error 429: slow down")
+        assert got.classification == "TRANSIENT" and got.error_code == "E009"

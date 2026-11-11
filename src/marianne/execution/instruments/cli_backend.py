@@ -42,6 +42,7 @@ from marianne.core.config.workspace import (
     mailbox_root,
     scratch_root,
 )
+from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger
 from marianne.core.mailbox import SHEET_ENV_VAR
 from marianne.execution.base import (
@@ -300,6 +301,9 @@ def build_instrument_env(
         env[key] = os.path.expandvars(value)
     return env
 
+
+
+_WAIT_CLASSIFIER = ErrorClassifier()
 
 
 def _cli_api_error(data: Any) -> tuple[int | None, str] | None:
@@ -1094,6 +1098,9 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
 
         # Check rate limiting and error classification
         rate_limited = self._check_rate_limit(stdout, stderr, is_success=is_success)
+        rate_limit_wait_seconds = (
+            self._rate_limit_wait_seconds(stdout, stderr) if rate_limited else None
+        )
         error_type = self._classify_output_errors(
             stdout, stderr, is_success=is_success,
         )
@@ -1278,6 +1285,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
             exit_signal=exit_signal,
             exit_reason=exit_reason,
             rate_limited=rate_limited,
+            rate_limit_wait_seconds=rate_limit_wait_seconds,
             error_type=error_type,
             error_message=error_message,
             model=self._model,
@@ -1372,6 +1380,36 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
             cache_read_tokens, cache_write_tokens,
         )
 
+    def _rate_limit_scan_text(self, stdout: str, stderr: str) -> str:
+        """The error-channel text that rate-limit detection reads.
+
+        stderr, plus (for jsonl/json profiles) the terminal structured error
+        record. Agent prose on stdout never joins (GH #189).
+        """
+        text = stderr
+        # A structured-output CLI reports its quota refusal INSIDE the
+        # structured stream, not on stderr: codex `--json` ends with one
+        # JSONL record carrying codex_error_info "usage_limit_exceeded" and
+        # exits 1 with nothing on stderr (6 Nov 2026: eight no-op passes in
+        # six seconds, each retried as a plain failure, before anyone read
+        # the record). For a jsonl/json profile the terminal error record is
+        # part of the error channel, so its text joins the scan. Agent prose
+        # in earlier records stays out (GH #189).
+        output = self._cli.output
+        if output is not None and output.format in ("jsonl", "json"):
+            text = f"{stderr}\n{_structured_error_text(stdout)}"
+        return text
+
+    def _rate_limit_wait_seconds(self, stdout: str, stderr: str) -> float | None:
+        """The wait the provider stated for a detected rate limit (GH #542).
+
+        Parsed from the same text the detector read, so "resets 1:20pm (UTC)"
+        reaches the baton instead of its 60 s default.
+        """
+        return _WAIT_CLASSIFIER.extract_rate_limit_wait(
+            self._rate_limit_scan_text(stdout, stderr)
+        )
+
     def _check_rate_limit(
         self, stdout: str, stderr: str, *, is_success: bool = False,
     ) -> bool:
@@ -1400,18 +1438,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
         if is_success:
             return False
 
-        text = stderr
-        # A structured-output CLI reports its quota refusal INSIDE the
-        # structured stream, not on stderr: codex `--json` ends with one
-        # JSONL record carrying codex_error_info "usage_limit_exceeded" and
-        # exits 1 with nothing on stderr (6 Nov 2026: eight no-op passes in
-        # six seconds, each retried as a plain failure, before anyone read
-        # the record). For a jsonl/json profile the terminal error record is
-        # part of the error channel, so its text joins the scan. Agent prose
-        # in earlier records stays out (GH #189).
-        output = self._cli.output
-        if output is not None and output.format in ("jsonl", "json"):
-            text = f"{stderr}\n{_structured_error_text(stdout)}"
+        text = self._rate_limit_scan_text(stdout, stderr)
         for pattern in self._cli.errors.rate_limit_patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:

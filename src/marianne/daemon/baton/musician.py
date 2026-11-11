@@ -1490,6 +1490,13 @@ def _classify_error(exec_result: ExecutionResult) -> _ErrorClassification:
         # configuration bucket rather than misclassifying exit 1 as transient.
         return _ErrorClassification("EXECUTION_ERROR", exec_result.error_message, "E301")
 
+    # GH #542: a 429 that the backend already recognised as a rate limit (the
+    # provider's own limit wording matched) is weather with a stated end, not a
+    # transient error. It must not spend retries; the baton waits on it. This
+    # sits BEFORE the api_error branch, which would type it TRANSIENT E009.
+    if exec_result.rate_limited and exec_result.error_type == "api_error":
+        return _ErrorClassification(None, None, None)
+
     if exec_result.error_type == "api_error":
         # The API refused the request (GH #486). A 4xx other than 429 is the
         # request's fault — a schema the API will not take — and no retry on
