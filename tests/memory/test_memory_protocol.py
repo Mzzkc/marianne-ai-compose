@@ -348,7 +348,8 @@ _FORBIDDEN_IMPORTS = {
 
 
 @pytest.mark.parametrize(
-    "module", ["__init__.py", "backend_protocol.py", "errors.py", "model.py", "access.py"],
+    # access.py is deliberately absent: the gateway wave put the on-disk GrantStore there.
+    "module", ["__init__.py", "backend_protocol.py", "errors.py", "model.py"],
 )
 def test_contract_modules_are_pure(module: str) -> None:
     tree = ast.parse((SRC / module).read_text(encoding="utf-8"))
