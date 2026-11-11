@@ -15,6 +15,7 @@ import json
 import re
 import signal
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -995,3 +996,47 @@ class TestExitCodeNoneClassification126:
         """
         result = classifier.classify(exit_code=None, exit_reason=None)
         assert result.category == ErrorCategory.TRANSIENT
+
+
+class TestParseResetTimeWallClock:
+    """Issue #542: 12-hour clocks, dates and zones in provider reset text."""
+
+    NOW = datetime(2026, 11, 11, 19, 5, 0, tzinfo=ZoneInfo("UTC"))
+
+    def test_pm_with_minutes_and_utc_zone(self, classifier: ErrorClassifier) -> None:
+        text = "API error 429: You've hit your 5-hour limit · resets 1:20pm (UTC)"
+        # 19:05 UTC -> 13:20 UTC next day = 18h15m
+        assert classifier.parse_reset_time(text, now=self.NOW) == pytest.approx(
+            18 * 3600 + 15 * 60
+        )
+
+    def test_am_minutes_same_day_future(self, classifier: ErrorClassifier) -> None:
+        now = datetime(2026, 11, 11, 1, 0, tzinfo=ZoneInfo("UTC"))
+        assert classifier.parse_reset_time("resets 3:00am (UTC)", now=now) == 7200.0
+
+    def test_date_is_honoured_and_clamped(self, classifier: ErrorClassifier) -> None:
+        text = "weekly limit · resets Nov 9, 3am (UTC)"
+        # Nov 9 has passed in 2026, so next year: far away, clamped to the maximum.
+        assert classifier.parse_reset_time(text, now=self.NOW) == 86400.0
+
+    def test_date_within_a_day(self, classifier: ErrorClassifier) -> None:
+        now = datetime(2026, 11, 8, 20, 0, tzinfo=ZoneInfo("UTC"))
+        got = classifier.parse_reset_time("resets Nov 9, 3am (UTC)", now=now)
+        assert got == pytest.approx(7 * 3600)
+
+    def test_iana_zone(self, classifier: ErrorClassifier) -> None:
+        # 19:05 UTC is 20:05 in Amsterdam (CET); 9pm there is 55 minutes away.
+        got = classifier.parse_reset_time("resets 9pm (Europe/Amsterdam)", now=self.NOW)
+        assert got == pytest.approx(55 * 60)
+
+    def test_unknown_zone_does_not_raise(self, classifier: ErrorClassifier) -> None:
+        got = classifier.parse_reset_time("resets 9pm (Mars/Olympus)", now=self.NOW)
+        assert got is not None and 300.0 <= got <= 86400.0
+
+    def test_twelve_am_pm(self, classifier: ErrorClassifier) -> None:
+        assert classifier.parse_reset_time("resets 12pm (UTC)", now=self.NOW) == pytest.approx(
+            17 * 3600 - 5 * 60
+        )
+        assert classifier.parse_reset_time("resets 12am (UTC)", now=self.NOW) == pytest.approx(
+            5 * 3600 - 5 * 60
+        )

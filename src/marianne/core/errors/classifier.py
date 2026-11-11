@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 import signal
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from marianne.core.constants import (
     DEFAULT_QUOTA_WAIT_SECONDS,
@@ -113,6 +114,21 @@ _DEFAULT_RESET_TIME_PATTERNS: list[str] = [
     r"resets?\s+in\s+(\d+)\s*(hour|hr|minute|min)s?",
     r"reset.{0,20}(\d{1,2})\s*([ap]m)",
 ]
+
+_MONTHS = (
+    "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+)
+
+# "resets 1:20pm (UTC)", "resets Nov 9, 3am (Europe/Amsterdam)", "resets at 9pm".
+# Requires an am/pm marker or an H:MM so bare numbers never match.
+_WALL_CLOCK_RESET_RE = re.compile(
+    r"\bresets?\s+(?:at\s+)?"
+    r"(?:(?P<mon>jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+"
+    r"(?P<day>\d{1,2})(?:st|nd|rd|th)?,?\s+(?:at\s+)?)?"
+    r"(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<mer>[ap]m)?"
+    r"(?:\s*\((?P<zone>[^()]{1,64})\))?",
+    re.IGNORECASE,
+)
 
 _DEFAULT_MCP_PATTERNS: list[str] = [
     r"MCP server error",
@@ -232,7 +248,54 @@ class ErrorClassifier:
                     alternation, re.IGNORECASE
                 )
 
-    def parse_reset_time(self, text: str) -> float | None:
+    def _parse_wall_clock_reset(self, text: str, now: datetime | None) -> float | None:
+        """Parse "resets [Mon D,] H[:MM][am|pm] [(zone)]" into raw seconds.
+
+        Returns None when the text has no such phrase. The result is NOT
+        clamped. An unknown zone falls back to the machine-local zone.
+        """
+        for match in _WALL_CLOCK_RESET_RE.finditer(text):
+            minute_s, meridiem = match.group("minute"), match.group("mer")
+            if minute_s is None and meridiem is None:
+                continue
+            hour = int(match.group("hour"))
+            minute = int(minute_s or 0)
+            if meridiem:
+                if not 1 <= hour <= 12:
+                    continue
+                hour = hour % 12 + (12 if meridiem.lower() == "pm" else 0)
+            if hour > 23 or minute > 59:
+                continue
+
+            current = (now or datetime.now()).astimezone()
+            zone_name = (match.group("zone") or "").strip()
+            tz = current.tzinfo
+            if zone_name:
+                try:
+                    tz = ZoneInfo(zone_name)
+                except (KeyError, ValueError, OSError):
+                    tz = current.tzinfo
+            local_now = current.astimezone(tz)
+
+            try:
+                if match.group("mon"):
+                    month = _MONTHS.index(match.group("mon").lower()[:3]) + 1
+                    day = int(match.group("day"))
+                    target = local_now.replace(
+                        month=month, day=day, hour=hour, minute=minute, second=0, microsecond=0
+                    )
+                    if target <= local_now:
+                        target = target.replace(year=target.year + 1)
+                else:
+                    target = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                    if target <= local_now:
+                        target += timedelta(days=1)
+            except ValueError:
+                continue
+            return (target - local_now).total_seconds()
+        return None
+
+    def parse_reset_time(self, text: str, now: datetime | None = None) -> float | None:
         """Parse reset time from message and return seconds until reset.
 
         Supports patterns like:
@@ -248,6 +311,12 @@ class ErrorClassifier:
         Returns:
             Seconds until reset, or None if no reset time found.
             Returns minimum of RESET_TIME_MINIMUM_WAIT_SECONDS to avoid immediate retries.
+            A reset further away than RESET_TIME_MAXIMUM_WAIT_SECONDS is clamped
+            to it on purpose: wait, re-probe, wait again.
+
+        Wall-clock forms ("resets 1:20pm (UTC)", "resets Nov 9, 3am") honour an
+        optional month-day date and a parenthesised zone (UTC or IANA name).
+        ``now`` pins the clock for those forms (tests); defaults to the real time.
         """
 
         absolute_datetime = re.search(
@@ -273,6 +342,10 @@ class ErrorClassifier:
                 return self._clamp_wait(
                     (reset_time - datetime.now()).total_seconds()
                 )
+
+        wall_clock = self._parse_wall_clock_reset(text, now)
+        if wall_clock is not None:
+            return self._clamp_wait(wall_clock)
 
         compact = re.search(
             r"resets?\s+in\s+"
