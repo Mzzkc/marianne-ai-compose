@@ -63,7 +63,7 @@ from marianne.memory.errors import (
     Unauthenticated,
 )
 from marianne.memory.gateway.gateway import TOOL_PERMISSIONS, Gateway
-from marianne.memory.gateway.paths import socket_path_for
+from marianne.memory.gateway.paths import SocketDir, prepare_socket_dir
 from marianne.memory.gateway.session import Session
 
 WIRE_VERSION = "memory-gateway-wire/1"
@@ -108,6 +108,8 @@ class _Bound:
     path: Path
     server: asyncio.base_events.Server
     writers: set[asyncio.StreamWriter]
+    sockdir: SocketDir
+    stack: contextlib.ExitStack
 
 
 class MemoryEndpoint:
@@ -137,24 +139,34 @@ class MemoryEndpoint:
         return session, path
 
     async def bind(self, session: Session) -> Path:
-        path = socket_path_for(
-            self._run_dir, session.job_id, session.dispatch_id, session.attachment[0],
-        )
         if session.session_id in self._bound:
             return self._bound[session.session_id].path
-        with contextlib.suppress(FileNotFoundError):
-            if path.is_socket() and path.lstat().st_uid == os.getuid():
-                path.unlink()  # a stale socket from a crashed run
-        writers: set[asyncio.StreamWriter] = set()
+        stack = contextlib.ExitStack()
+        try:
+            sockdir = stack.enter_context(prepare_socket_dir(
+                self._run_dir, session.job_id, session.dispatch_id, session.attachment[0],
+            ))
+            sock = sockdir.bind_socket()
+            writers: set[asyncio.StreamWriter] = set()
 
-        async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-            await self._serve(session.session_id, writers, reader, writer)
+            async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+                await self._serve(session.session_id, writers, reader, writer)
 
-        server = await asyncio.start_unix_server(
-            handler, path=os.fspath(path), limit=self._limits.max_line_bytes,
+            try:
+                server = await asyncio.start_unix_server(
+                    handler, sock=sock, limit=self._limits.max_line_bytes,
+                )
+            except BaseException:
+                sock.close()
+                sockdir.unlink_socket()
+                raise
+        except BaseException:
+            stack.close()
+            raise
+        path = sockdir.socket_path
+        self._bound[session.session_id] = _Bound(
+            session.session_id, path, server, writers, sockdir, stack,
         )
-        os.chmod(path, 0o600)
-        self._bound[session.session_id] = _Bound(session.session_id, path, server, writers)
         return path
 
     async def close_session(self, session_id: str) -> None:
@@ -169,9 +181,9 @@ class MemoryEndpoint:
         bound.server.close()
         for w in list(bound.writers):
             w.close()
-        with contextlib.suppress(FileNotFoundError):
-            bound.path.unlink()
-        with contextlib.suppress(asyncio.TimeoutError, Exception):
+        bound.sockdir.unlink_socket()
+        bound.stack.close()
+        with contextlib.suppress(TimeoutError, Exception):
             await asyncio.wait_for(bound.server.wait_closed(), timeout=2.0)
 
     async def close(self) -> None:
@@ -212,7 +224,7 @@ class MemoryEndpoint:
                     line = await asyncio.wait_for(
                         reader.readline(), timeout=self._limits.idle_timeout_seconds,
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     return
                 except (ValueError, asyncio.LimitOverrunError):
                     await self._send(writer, _error_frame(None, SchemaViolation(
@@ -265,7 +277,7 @@ class MemoryEndpoint:
             if not isinstance(args, dict):
                 raise SchemaViolation("args must be an object", subtype="malformed_request")
             ignored = sorted(
-                {k for k in req if k in FORBIDDEN_FIELDS} | {k for k in args if k in FORBIDDEN_FIELDS}
+                (set(req) | set(args)) & FORBIDDEN_FIELDS
             )
             args = {k: v for k, v in args.items() if k not in FORBIDDEN_FIELDS}
             budget = req.get("budget_seconds")
