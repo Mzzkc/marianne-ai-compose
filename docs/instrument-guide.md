@@ -1120,7 +1120,10 @@ Marianne classifies execution errors into categories:
 
 - **RATE_LIMIT** — Detected via `rate_limit_patterns` or HTTP 429. The conductor
   pauses the instrument and schedules a retry when it recovers. Rate limits
-  do not count as failures.
+  do not count as failures. When a sheet's whole fallback chain is exhausted
+  and an entry is rate limited with a known expiry (the provider's stated reset,
+  e.g. `resets 1:20pm (UTC)`, clamped to 24 h), the sheet waits for the earliest
+  expiry and is redispatched to that entry rather than failing the job.
 - **AUTH_FAILURE** — The backend typed a credential rejection for the route:
   a CLI profile's own `auth_error_patterns` matched, an HTTP route returned
   401/403, or an interactive session hit its login gate. The sheet leaves that
