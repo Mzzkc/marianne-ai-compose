@@ -189,6 +189,13 @@ class ExecutionResult:
     cache_write_tokens: int | None = None
     """Input tokens written into the provider's prompt cache this attempt."""
 
+    usage_unmeasured: bool = False
+    """True when this backend could not measure token usage (GH #533).
+
+    The attempt's token fields are then absent, not zero; the musician flags
+    the attempt ``cost_uncertain`` so status never shows it as free.
+    """
+
     structured_output: dict[str, Any] | None = None
     """The validated JSON object of a ``response_format`` sheet (GH #489).
 

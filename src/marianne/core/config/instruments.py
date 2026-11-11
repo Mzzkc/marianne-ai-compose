@@ -647,6 +647,79 @@ class InteractiveGate(BaseModel):
         return v
 
 
+class InteractiveUsageConfig(BaseModel):
+    """Where an interactive harness records per-session token usage (GH #533).
+
+    A tmux session has no JSON stdout, so the backend picks the session id
+    itself, launches the harness with ``session_id_flag``, and after the sheet
+    reads the harness's own session record. Sessions whose profile has no
+    block, or whose record is missing or empty, are reported UNMEASURED
+    (``cost_uncertain``), never as a free zero.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id_flag: str = Field(
+        min_length=1,
+        description="CLI flag that lets the launcher choose the session id, "
+        "e.g. '--session-id'. The backend passes it with a fresh UUID.",
+    )
+    record_path: str = Field(
+        min_length=1,
+        description="Path or glob of the harness's per-session usage record. "
+        "'~' is expanded and '{session_id}' is replaced by the launched "
+        "session id, e.g. '~/.claude/projects/*/{session_id}.jsonl'. The "
+        "glob avoids re-deriving a directory slug; the newest match is read.",
+    )
+    record_filter: dict[str, str] = Field(
+        default_factory=dict,
+        description="JSON-path -> required string value; only record lines "
+        "matching every pair are counted, e.g. {'type': 'assistant'}.",
+    )
+    dedupe_key_path: str | None = Field(
+        default=None,
+        description="JSON path of the key shared by every line of one API "
+        "response (e.g. 'message.id'). The same key repeats across streamed "
+        "chunks; the last line per key is counted once. Unset counts every "
+        "matching line.",
+    )
+    model_path: str | None = Field(
+        default=None,
+        description="JSON path of the model name on a record line; the model "
+        "with the most output tokens becomes the observed model.",
+    )
+    ignore_models: list[str] = Field(
+        default_factory=list,
+        description="Model names whose lines carry no real usage and are "
+        "skipped, e.g. ['<synthetic>'].",
+    )
+    input_tokens_path: str | None = Field(
+        default=None, description="JSON path of input tokens on a record line.",
+    )
+    output_tokens_path: str | None = Field(
+        default=None, description="JSON path of output tokens on a record line.",
+    )
+    cache_read_tokens_path: str | None = Field(
+        default=None,
+        description="JSON path of prompt-cache read tokens on a record line.",
+    )
+    cache_write_tokens_path: str | None = Field(
+        default=None,
+        description="JSON path of prompt-cache write tokens on a record line.",
+    )
+
+    @model_validator(mode="after")
+    def _require_a_token_path(self) -> InteractiveUsageConfig:
+        """A usage block that reads no token field could only report zero."""
+        if not (self.input_tokens_path or self.output_tokens_path):
+            raise ValueError(
+                "interactive.usage needs input_tokens_path or output_tokens_path"
+            )
+        if "{session_id}" not in self.record_path:
+            raise ValueError("interactive.usage.record_path must contain {session_id}")
+        return self
+
+
 class InteractiveCliConfig(BaseModel):
     """How to drive a CLI instrument through a live interactive session.
 
@@ -740,6 +813,12 @@ class InteractiveCliConfig(BaseModel):
         default=2.0,
         gt=0,
         description="Seconds between screen polls in the drive loop.",
+    )
+    usage: InteractiveUsageConfig | None = Field(
+        default=None,
+        description="Where this harness records per-session token usage "
+        "(GH #533). Unset means interactive sheets on this instrument report "
+        "unmeasured usage (cost_uncertain), never zero.",
     )
     startup_timeout_seconds: float = Field(
         default=90.0,

@@ -277,6 +277,23 @@ cli:
     # Bottom 2 lines hold the status bar (token counter, mode hints) which
     # updates independently of work — excluded from the change hash.
     volatile_tail_lines: 2
+    # Token usage (GH #533): no JSON stdout in a tmux session, so the backend
+    # launches with --session-id and reads Claude Code's own session record.
+    # One API response spans several lines sharing message.id (last wins);
+    # <synthetic> lines carry no usage; subagent (isSidechain) lines in the
+    # same file ARE counted, subagent files elsewhere are not.
+    usage:
+      session_id_flag: "--session-id"
+      record_path: "~/.claude/projects/*/{session_id}.jsonl"
+      record_filter:
+        type: assistant
+      dedupe_key_path: "message.id"
+      model_path: "message.model"
+      ignore_models: ["<synthetic>"]
+      input_tokens_path: "message.usage.input_tokens"
+      output_tokens_path: "message.usage.output_tokens"
+      cache_read_tokens_path: "message.usage.cache_read_input_tokens"
+      cache_write_tokens_path: "message.usage.cache_creation_input_tokens"
   output:
     format: json
     result_path: "result"

@@ -375,7 +375,8 @@ async def sheet_task(
                 cost_per_1k_cache_read=cost_per_1k_cache_read,
                 cost_per_1k_cache_write=cost_per_1k_cache_write,
             ),
-            cost_uncertain=_pricing_missing(cost_per_1k_input, cost_per_1k_output),
+            cost_uncertain=_pricing_missing(cost_per_1k_input, cost_per_1k_output)
+            or bool(getattr(exec_result, "usage_unmeasured", False)),
             input_tokens=exec_result.input_tokens or 0,
             output_tokens=exec_result.output_tokens or 0,
             cache_read_tokens=exec_result.cache_read_tokens or 0,

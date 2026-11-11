@@ -1982,8 +1982,9 @@ def _render_cost_summary(job: CheckpointState) -> None:
     if uncertain:
         console.print(
             f"  [yellow]⚠ {uncertain} sheet(s) ran on an instrument with no pricing"
-            " — their cost is reported as $0 (unknown, not free). Add ModelCapacity"
-            " pricing to the instrument profile for real tracking.[/yellow]"
+            " or with unmeasured token usage — their cost is reported as $0 (unknown,"
+            " not free). Add ModelCapacity pricing, or an interactive usage block, to"
+            " the instrument profile for real tracking.[/yellow]"
         )
 
     if not cost_limits_enabled:

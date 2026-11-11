@@ -49,6 +49,7 @@ from marianne.execution.instruments.interactive.driver import (
     InteractiveSessionDriver,
     StaticNudgePolicy,
 )
+from marianne.execution.instruments.interactive.usage import apply_usage, read_session_usage
 from marianne.execution.instruments.interactive.model_nudge import BackendFactory, ModelNudgePolicy
 from marianne.execution.instruments.interactive.tmux import (
     MIN_TMUX_VERSION,
@@ -443,6 +444,13 @@ class InteractiveCliBackend(WorkspaceMcpConfigMixin, Backend):
             req_extensions = None
 
         command = self._build_command()
+        # GH #533: choose the session id so the harness's own usage record
+        # can be found after the sheet, when the profile declares one.
+        usage_cfg = self._interactive.usage
+        usage_session_id: str | None = None
+        if usage_cfg is not None:
+            usage_session_id = str(uuid.uuid4())
+            command = [*command, usage_cfg.session_id_flag, usage_session_id]
         # GH #487: per-attempt supervisor forensic report, next to the raw
         # transcript (same deliberate outside-any-workspace home: a debug
         # artifact whose writes must not freshen workspace mtimes). The
@@ -550,6 +558,20 @@ class InteractiveCliBackend(WorkspaceMcpConfigMixin, Backend):
                 ),
             )
         result = self._map_result(driver_result, duration)
+        # GH #533: on EVERY outcome the attempt cost tokens; never a free zero.
+        reading = await asyncio.to_thread(
+            read_session_usage, usage_cfg, usage_session_id,
+        )
+        apply_usage(result, reading)
+        _logger.info(
+            "interactive_usage_read",
+            instrument=self._profile.name,
+            session=session,
+            outcome=driver_result.outcome,
+            measured=reading.measured,
+            responses=reading.responses,
+            reason=reading.reason,
+        )
 
         _logger.info(
             "interactive_execute_complete",
