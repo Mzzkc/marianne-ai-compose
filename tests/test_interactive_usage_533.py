@@ -171,20 +171,29 @@ class TestBackendWiring:
         assert result.usage_unmeasured is True
 
 
-def test_unmeasured_attempt_is_cost_uncertain_through_musician_channel() -> None:
+def test_unmeasured_attempt_is_cost_uncertain_even_with_pricing() -> None:
+    from marianne.daemon.baton.musician import _attempt_cost_uncertain
+
+    unmeasured = ExecutionResult(
+        success=True, stdout="", stderr="", duration_seconds=1.0, usage_unmeasured=True,
+    )
+    measured = ExecutionResult(
+        success=True, stdout="", stderr="", duration_seconds=1.0, input_tokens=5,
+    )
+    assert _attempt_cost_uncertain(unmeasured, 0.003, 0.015) is True
+    assert _attempt_cost_uncertain(measured, 0.003, 0.015) is False
+    assert _attempt_cost_uncertain(measured, None, None) is True
+
+
+def test_unmeasured_flag_reaches_status_sheet_state() -> None:
     from marianne.core.checkpoint import SheetState
+    from marianne.daemon.baton.events import SheetAttemptResult
 
     sheet = SheetState(sheet_num=1)
-    sheet.cost_uncertain = False
-    # the musician sets SheetAttemptResult.cost_uncertain from usage_unmeasured;
-    # record_attempt then makes it sticky on the sheet (the field status renders).
-    from types import SimpleNamespace
-
-    attempt = SimpleNamespace(
-        cost_usd=0.0, duration_seconds=1.0, cost_uncertain=True,
-        input_tokens=0, output_tokens=0,
-    )
-    sheet.record_attempt(attempt)
+    sheet.record_attempt(SheetAttemptResult(
+        job_id="j", sheet_num=1, instrument_name="x", attempt=1,
+        cost_usd=0.0, cost_uncertain=True,
+    ))
     assert sheet.cost_uncertain is True
 
 

@@ -375,8 +375,9 @@ async def sheet_task(
                 cost_per_1k_cache_read=cost_per_1k_cache_read,
                 cost_per_1k_cache_write=cost_per_1k_cache_write,
             ),
-            cost_uncertain=_pricing_missing(cost_per_1k_input, cost_per_1k_output)
-            or bool(getattr(exec_result, "usage_unmeasured", False)),
+            cost_uncertain=_attempt_cost_uncertain(
+                exec_result, cost_per_1k_input, cost_per_1k_output,
+            ),
             input_tokens=exec_result.input_tokens or 0,
             output_tokens=exec_result.output_tokens or 0,
             cache_read_tokens=exec_result.cache_read_tokens or 0,
@@ -1575,6 +1576,19 @@ def _pricing_missing(
     ``None`` is.
     """
     return cost_per_1k_input is None or cost_per_1k_output is None
+
+
+def _attempt_cost_uncertain(
+    exec_result: ExecutionResult,
+    cost_per_1k_input: float | None,
+    cost_per_1k_output: float | None,
+) -> bool:
+    """Cost is unknown when pricing is missing OR the backend could not
+    measure usage (GH #533) — one flag, one channel, so status never shows
+    an unmeasured attempt as a confident $0."""
+    return _pricing_missing(cost_per_1k_input, cost_per_1k_output) or (
+        getattr(exec_result, "usage_unmeasured", False) is True
+    )
 
 
 def _estimate_cost(
