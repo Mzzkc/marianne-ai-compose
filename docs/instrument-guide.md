@@ -307,6 +307,8 @@ deterministic shell profile.
 
 ### Instrument Configuration
 
+**Pin the model on every model seat.** A profile with `default_model: null` (`claude-code`, `codex-cli`) leaves the model to the harness, so an unpinned seat follows whatever the operator last selected in that CLI: the score does not say which model ran, cost cannot be priced from it, and a flagship default can drain a shared subscription limit. Set `instrument_config.model`, an alias `config: {model: ...}`, or a class/chain entry `model`. `mzt validate` warns (V336) for every sheet and fallback that does not.
+
 Override instrument defaults with `instrument_config:`:
 
 ```yaml
@@ -659,6 +661,7 @@ applies to CLI backends; HTTP and interactive backends warn and ignore it.
 | `input_tokens_path` | No | | JSON dot-path to input token count |
 | `output_tokens_path` | No | | JSON dot-path to output token count |
 | `cache_read_tokens_path` | No | | JSON dot-path to the input tokens the provider served from its prompt cache (Anthropic `usage.cache_read_input_tokens`, OpenAI `usage.cached_input_tokens`). Billed at the cache rate; the first number a token-efficiency change moves. Unset records 0. |
+| `model_usage_path` | No | | JSON dot-path to an object keyed by model id (Claude Code `modelUsage`); the key with the most `outputTokens` is recorded as the attempt's observed model (`model_observed`), so a seat that named no model still shows what ran (GH #538) |
 | `cache_write_tokens_path` | No | | JSON dot-path to the input tokens written into the prompt cache this attempt (Anthropic `usage.cache_creation_input_tokens`, OpenAI `usage.cache_write_input_tokens`) |
 
 **Interactive token usage (`cli.interactive.usage`, GH #533).** A tmux session has no JSON

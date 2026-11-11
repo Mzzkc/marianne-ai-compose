@@ -50,6 +50,7 @@ from marianne.validation.checks.config import (
     VersionReferenceCheck,
 )
 from marianne.validation.checks.instrument_effort import SheetEffortCheck
+from marianne.validation.checks.instrument_model_pin import UnpinnedModelCheck
 from marianne.validation.checks.jinja import (
     BashArrayLengthCheck,
     FanOutStringFilterCheck,
@@ -116,6 +117,7 @@ __all__ = [
     "CliSchemaShapeCheck",
     "SchemaSheetInteractiveCheck",
     "SheetEffortCheck",
+    "UnpinnedModelCheck",
     "ClassModelConfigCheck",
     "ClassesFileValidCheck",
     "ClassChainSummaryCheck",

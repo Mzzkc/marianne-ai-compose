@@ -56,6 +56,7 @@ from marianne.validation.checks import (
     TechniqueSkillPathCheck,
     TemplateFileExistsCheck,
     TimeoutRangeCheck,
+    UnpinnedModelCheck,
     ValidationPathScopeCheck,
     ValidationTypeCheck,
     VariableShadowingCheck,
@@ -255,6 +256,7 @@ def create_default_checks() -> list[ValidationCheck]:
         SchemaSheetInteractiveCheck(),
         CliSchemaShapeCheck(),
         SheetEffortCheck(),
+        UnpinnedModelCheck(),
         ClassesFileValidCheck(),
         ClassChainSummaryCheck(),
         # Best-practice checks

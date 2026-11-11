@@ -318,6 +318,25 @@ def _cli_api_error(data: Any) -> tuple[int | None, str] | None:
     return (int(status) if isinstance(status, int) else None, str(message))
 
 
+def _observed_model(data: Any, path: str | None) -> str | None:
+    """The model id that did the most work, from a ``{model: usage}`` object."""
+    if not path:
+        return None
+    usage = extract_json_path(data, path)
+    if not isinstance(usage, dict):
+        return None
+    best: str | None = None
+    best_out = -1.0
+    for name, row in usage.items():
+        if not isinstance(name, str) or not name:
+            continue
+        out = row.get("outputTokens") if isinstance(row, dict) else None
+        weight = float(out) if isinstance(out, (int, float)) and not isinstance(out, bool) else 0.0
+        if weight > best_out:
+            best, best_out = name, weight
+    return best
+
+
 def _terminal_json_object(data: Any) -> Any:
     """The CLI's terminal result object from ``--output-format json`` output.
 
@@ -1062,6 +1081,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
         cache_write_tokens: int | None = None
         # GH #489: the schema-valid object, kept whole for the sheet record.
         validated_object: dict[str, Any] | None = None
+        model_observed: str | None = None
 
         if response_format is not None:
             # Schema mode — never fall through to plain result parsing:
@@ -1074,6 +1094,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
                     data = _terminal_json_object(json.loads(stdout))
                 except json.JSONDecodeError:
                     data = None
+            model_observed = _observed_model(data, output.model_usage_path)
             structured = (
                 data.get("structured_output")
                 if isinstance(data, dict) else None
@@ -1155,6 +1176,8 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
                     if not stderr.strip():
                         stderr = error_message
 
+                model_observed = _observed_model(data, output.model_usage_path)
+
                 # Extract tokens
                 if output.input_tokens_path:
                     if output.aggregate_tokens:
@@ -1232,6 +1255,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
             error_type=error_type,
             error_message=error_message,
             model=self._model,
+            model_observed=model_observed,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cache_read_tokens=cache_read_tokens,

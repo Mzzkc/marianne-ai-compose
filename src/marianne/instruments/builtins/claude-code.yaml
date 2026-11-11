@@ -324,6 +324,9 @@ cli:
     output_tokens_path: "usage.output_tokens"
     cache_read_tokens_path: "usage.cache_read_input_tokens"
     cache_write_tokens_path: "usage.cache_creation_input_tokens"
+    # The terminal JSON lists every model that did work; the heaviest is
+    # recorded as observed, so an unpinned seat shows what actually ran (#538).
+    model_usage_path: "modelUsage"
     aggregate_tokens: false  # Single model, no aggregation needed
   errors:
     # Exit codes

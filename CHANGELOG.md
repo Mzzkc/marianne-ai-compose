@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`mzt validate` V336 (WARNING): a model seat that names no model (GH #538).** A profile with
+  `default_model: null` (the `claude-code` builtin) runs a sheet on the harness's own default, which
+  follows the operator's CLI settings and changed twice in a day on one host. V336 names the
+  sheets and the instrument (fallback seats included) when no model is set at any scope (score,
+  movement, per-sheet, alias config, chain entry, class entry) and the profile declares no
+  `default_model`; it is silent for non-model instruments such as `cli`. The builtin default is
+  unchanged. The headless `claude-code` profile now declares `cli.output.model_usage_path:
+  "modelUsage"` (new optional field): the terminal JSON's heaviest model id is recorded as the
+  attempt's `model_observed`, so an unpinned seat shows what actually ran.
 - **CI runs the `plugins` submodule's tests (GH #539).** The main suite's `testpaths = ["tests"]`
   never reached `plugins/tests/` (239 tests: skill release manifests, word caps, the skill installer),
   and the plugins repository had no CI, so three red tests landed on its main through ordinary

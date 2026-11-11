@@ -297,7 +297,7 @@ keys:
 
 | Key | Description |
 |-----|-------------|
-| `model` | Model override. `null` uses the profile default. |
+| `model` | Model override. `null` uses the profile default. A profile with no `default_model` (`claude-code`, `codex-cli`) then runs on the harness's own default, which follows the operator's CLI settings: pin the model on every model seat (V336 warns). |
 | `timeout_seconds` | Per-sheet execution timeout (seconds). |
 | `interactive` | Force interactive (tmux-driven) or headless execution. Unset uses the profile default. |
 | `interactive_max_nudges` | Consecutive-idle nudge budget for interactive sheets. |
@@ -2308,6 +2308,7 @@ done
 | V101 | Undefined template variable (warning) | Check spelling against the built-ins (`workspace`, `score_dir`, `sheet_num`, loop indices, …) or add the variable to `prompt.variables` |
 | V103 | Very short timeout (warning) | Increase `instrument_config.timeout_seconds` |
 | V108 | Missing prelude/cadenza file (warning) | Check file path in `sheet.prelude` or `sheet.cadenzas`. Jinja-templated paths are skipped. |
+| V336 (warning) | A sheet's instrument has no `default_model` and no model is set at any scope: it runs on the harness's own default | Set `instrument_config.model: <id>`, an alias `config: {model: <id>}`, or a chain/class entry `model` |
 | V335 | `instrument_config.effort` the resolved profile or model cannot apply | Use a level the message lists, pick a model whose row maps it, run the sheet headless if the mapping is not interactive, or remove `effort` from the scope that reaches that instrument |
 | V305/V307/V308/V309 | Static launch-safety warning | Review the rendered prompt, raw CLI command, fan-out instrument map, or validation prompt labels before running |
 

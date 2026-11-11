@@ -711,6 +711,15 @@ class CliOutputConfig(BaseModel):
             "`cache_creation_input_tokens`, OpenAI `cache_write_input_tokens`)."
         ),
     )
+    model_usage_path: str | None = Field(
+        default=None,
+        description=(
+            "JSON dot-path to an object keyed by model id that the harness "
+            "reports for the attempt (Claude Code `modelUsage`). The key with "
+            "the most `outputTokens` is recorded as the OBSERVED model, so a "
+            "sheet that named no model still shows what ran (GH #538)."
+        ),
+    )
     aggregate_tokens: bool = Field(
         default=False,
         description="When True, sum all wildcard matches for token paths "
