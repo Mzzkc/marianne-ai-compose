@@ -25,6 +25,7 @@ from marianne.core.config.instruments import (
     InstrumentProfile,
     InteractiveCliConfig,
     InteractiveGate,
+    InteractiveUsageConfig,
     ModelCapacity,
 )
 from marianne.core.config.job import InstrumentDef, MovementDef
@@ -261,6 +262,60 @@ def test_interactive_cli_config_roundtrip(data: dict[str, Any]) -> None:
     assert restored.busy_patterns == cfg.busy_patterns
     assert restored.quiet_seconds == cfg.quiet_seconds
     assert len(restored.startup_gates) == len(cfg.startup_gates)
+
+
+_USAGE_PATH = st.text(alphabet="abcdefghijklmnopqrstuvwxyz_.", min_size=1, max_size=24)
+
+
+@st.composite
+def interactive_usage_config_strategy(draw: st.DrawFn) -> dict[str, Any]:
+    """A valid interactive usage block: a session-id template, an input or output
+    token path (the model refuses a cache-only block), and optional cache paths."""
+    required = draw(st.lists(
+        st.sampled_from(["input_tokens_path", "output_tokens_path"]), min_size=1, unique=True,
+    ))
+    optional = draw(st.lists(
+        st.sampled_from(["cache_read_tokens_path", "cache_write_tokens_path"]), unique=True,
+    ))
+    chosen = [*required, *optional]
+    data: dict[str, Any] = {
+        "session_id_flag": "--" + draw(st.text(alphabet="abcdefghij-", min_size=1, max_size=12)),
+        "record_path": draw(_USAGE_PATH) + "/{session_id}.jsonl",
+        "record_filter": draw(st.dictionaries(_USAGE_PATH, _USAGE_PATH, max_size=2)),
+        "ignore_models": draw(st.lists(_USAGE_PATH, max_size=2)),
+    }
+    for name in chosen:
+        data[name] = draw(_USAGE_PATH)
+    return data
+
+
+@pytest.mark.property_based
+@_pb_settings
+@given(data=interactive_usage_config_strategy())
+def test_interactive_usage_config_roundtrip(data: dict[str, Any]) -> None:
+    """InteractiveUsageConfig roundtrips, and its two invariants hold (GH #533)."""
+    cfg = InteractiveUsageConfig.model_validate(data)
+    assert "{session_id}" in cfg.record_path
+    restored = InteractiveUsageConfig.model_validate(cfg.model_dump())
+    assert restored == cfg
+
+
+@pytest.mark.property_based
+@_pb_settings
+@given(data=interactive_usage_config_strategy())
+def test_interactive_usage_config_refuses_a_block_that_measures_nothing(
+    data: dict[str, Any],
+) -> None:
+    """No token path, or a record path without the session id, is refused."""
+    cache_only = {
+        k: v for k, v in data.items()
+        if k not in ("input_tokens_path", "output_tokens_path")
+    }
+    cache_only["cache_read_tokens_path"] = "usage.cache"
+    with pytest.raises(ValueError):
+        InteractiveUsageConfig.model_validate(cache_only)
+    with pytest.raises(ValueError):
+        InteractiveUsageConfig.model_validate({**data, "record_path": "no-template.jsonl"})
 
 
 @pytest.mark.property_based

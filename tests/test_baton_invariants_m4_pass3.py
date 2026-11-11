@@ -68,6 +68,7 @@ from marianne.core.config.instruments import (
     InstrumentRouteBinding,
     InteractiveCliConfig,
     InteractiveGate,
+    InteractiveUsageConfig,
     ModelCapacity,
 )
 from marianne.core.config.job import (
@@ -233,6 +234,7 @@ ALL_CONFIG_MODELS: list[type[BaseModel]] = [
     CliErrorConfig,
     InteractiveGate,
     InteractiveCliConfig,
+    InteractiveUsageConfig,
     CliProfile,
     HttpProfile,
     InstrumentProfile,
