@@ -36,6 +36,33 @@ def _mapped_profiles_hint(profiles: dict[str, InstrumentProfile]) -> str:
     return "; ".join(rows) if rows else "none registered on this machine"
 
 
+def shadowed_builtin_sentence(profile: InstrumentProfile, mapping: str) -> str:
+    """One sentence when a higher-layer file hides a builtin's ``mapping`` block (GH #543).
+
+    Empty unless a builtin of the same name declares ``mapping`` and the
+    resolved profile came from a different (organization or venue) file.
+    """
+    source = profile._source_path
+    if source is None:
+        return ""
+    try:
+        from marianne.instruments.loader import InstrumentProfileLoader, profile_source_dirs
+
+        builtins_dir = profile_source_dirs()[0]
+        if source.parent == builtins_dir.resolve():
+            return ""
+        builtin = InstrumentProfileLoader.load_directories([builtins_dir]).get(profile.name)
+    except Exception:  # noqa: BLE001 — message text only; never block the finding
+        return ""
+    if builtin is None or getattr(builtin, mapping, None) is None:
+        return ""
+    return (
+        f" The builtin '{profile.name}' declares {mapping}:, but {source.name} "
+        f"({source.parent}) shadows it whole; `extends: {profile.name}` in that file "
+        f"inherits it."
+    )
+
+
 def _interactive(profile: InstrumentProfile, entry_config: Any) -> bool:
     """Whether dispatch would launch this entry interactively."""
     raw = entry_config.get("interactive")
@@ -139,6 +166,7 @@ class SheetEffortCheck:
                     message=(
                         f"{seat} {reason} (instrument_config.effort for sheet(s) "
                         f"{shown}); dispatch refuses those sheets"
+                        + (shadowed_builtin_sentence(profile, "effort") if unmapped else "")
                     ),
                     line=find_line_in_yaml(raw_yaml, "effort:"),
                     context=profile_name,

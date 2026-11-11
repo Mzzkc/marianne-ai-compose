@@ -17,7 +17,10 @@ from marianne.core.config.instruments import InstrumentProfile
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml
 from marianne.validation.checks.capability_classes import _load_context
-from marianne.validation.checks.instrument_effort import _interactive
+from marianne.validation.checks.instrument_effort import (
+    _interactive,
+    shadowed_builtin_sentence,
+)
 
 
 def _mapped_profiles_hint(profiles: dict[str, InstrumentProfile]) -> str:
@@ -100,7 +103,8 @@ class SheetToolsCheck:
         hint = _mapped_profiles_hint(ctx.profiles)
         for (profile_name, role, reason), nums in refused.items():
             shown = ", ".join(str(n) for n in nums[:8]) + (", ..." if len(nums) > 8 else "")
-            unmapped = ctx.profiles[profile_name].tools is None
+            profile = ctx.profiles[profile_name]
+            unmapped = profile.tools is None
             seat = (
                 f"instrument '{profile_name}'" if role == "primary"
                 else f"fallback instrument '{profile_name}'"
@@ -112,6 +116,7 @@ class SheetToolsCheck:
                     message=(
                         f"{seat} {reason} (instrument_config.tools for sheet(s) "
                         f"{shown}); dispatch refuses those sheets"
+                        + (shadowed_builtin_sentence(profile, "tools") if unmapped else "")
                     ),
                     line=find_line_in_yaml(raw_yaml, "tools:"),
                     context=profile_name,
