@@ -206,6 +206,7 @@ async def sheet_task(
             http_timeout_seconds=attempt_context.http_timeout_seconds,
             first_output_timeout_seconds=attempt_context.first_output_timeout_seconds,
             effort=attempt_context.effort,
+            tools=attempt_context.tools,
             http_timeout_resolved=True,
             expected_route=attempt_context.expected_route,
             route_model_override=attempt_context.route_model_override,

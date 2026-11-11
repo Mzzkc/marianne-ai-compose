@@ -99,6 +99,11 @@ class SheetRequestState:
     checked against the profile at dispatch. None keeps the profile's default
     effort flags. CLI and interactive backends replace their effort flag value
     with it; it never rides a pooled backend as mutable state."""
+    tools: tuple[str, ...] | None = None
+    """Harness tool names (instrument_config.tools, GH #534), already checked
+    against the profile at dispatch. None keeps the harness's default toolset;
+    () means no tools. CLI and interactive backends deliver it through the
+    profile's tools: flag; it never rides a pooled backend as mutable state."""
 
 
 @dataclass

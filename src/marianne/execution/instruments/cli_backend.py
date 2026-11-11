@@ -732,6 +732,10 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
             level, model=self._model, schema_mode=schema_mode,
         )
 
+    def tools_refusal(self, tools: list[str]) -> str | None:
+        """Why this instrument cannot run a sheet with ``tools`` (None = it can)."""
+        return self._profile.tools_refusal(tools)
+
     def _build_command(
         self,
         prompt: str,
@@ -742,6 +746,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
         prompt_extensions: tuple[str, ...] | None = None,
         response_format: dict[str, Any] | None = None,
         effort: str | None = None,
+        tools: tuple[str, ...] | None = None,
     ) -> list[str]:
         """Build the CLI command from the profile configuration.
 
@@ -771,6 +776,12 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
                 not map (for this sheet's mode and model) raises before any
                 spawn.
 
+            tools: Request-local toolset (``instrument_config.tools``, GH #534).
+                None keeps the fixed flags byte for byte; a list (possibly
+                empty) is delivered through the profile's ``tools:`` flag,
+                replacing a default there, and one the profile cannot apply
+                raises before any spawn.
+
         Returns:
             List of command arguments for subprocess.
 
@@ -793,6 +804,14 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
                     "to run the sheet at an effort it did not ask for"
                 )
             effort_native = self._profile.native_effort(effort, model=self._model)
+
+        if tools is not None:
+            tools_refusal = self.tools_refusal(list(tools))
+            if tools_refusal is not None:
+                raise ValueError(
+                    f"instrument '{self._profile.name}' {tools_refusal}. Refusing "
+                    "to run the sheet with a toolset it did not ask for"
+                )
 
         validated_schema_flag: str | None = None
         if response_format is not None:
@@ -894,10 +913,14 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
         # A sheet-level effort (GH #535) replaces the default effort value in
         # whichever flag set applies; it never adds a second effort flag.
         mapping = self._profile.effort
-        args.extend(
+        applied = (
             mapping.apply(fixed_flags, effort_native)
             if mapping is not None and effort_native is not None else fixed_flags
         )
+        tools_mapping = self._profile.tools
+        if tools is not None and tools_mapping is not None:
+            applied = tools_mapping.apply(list(applied), list(tools))
+        args.extend(applied)
 
         return args
 
@@ -1608,6 +1631,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
             prompt_extensions=req_extensions,
             response_format=response_format,
             effort=request.effort if request is not None else None,
+            tools=request.tools if request is not None else None,
         )
         if guarded_binding is not None:
             model_flag = self._cli.command.model_flag

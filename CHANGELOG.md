@@ -36,6 +36,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   skill-text commits. A new `Plugins tests` job in `ci.yml` runs them at the pinned submodule commit
   with the locked environment and `-o addopts=`; the plugins repository gains its own
   `.github/workflows/tests.yml`. CLAUDE.md's four-layer rule now says a change to skill text runs them.
+- **`instrument_config.tools`: per-sheet harness toolset (GH #534).** A sheet sets
+  `tools: [Read, Grep, ...]` at any `instrument_config` scope, an alias `config` or chain entry,
+  or a capability-class entry, using the harness's own tool names (no shared vocabulary); `[]` is
+  no tools, absent is the harness default. A profile declares a top-level `tools:` block
+  (`delivery: flag`, `flag`, `join`, optional `known`, `interactive`); the builtin `claude-code`
+  and `claude-code-ollama` use `--tools "Bash,Read"`, which `claude --help` documents as the list
+  of available tools (`--allowedTools` is a permission list and is not used). Applied
+  request-locally in the headless and interactive builders; a sheet that sets nothing builds the
+  same argv. `mzt validate` gains **V337** (ERROR): no mapping, an unknown name, or an
+  interactive sheet on a headless-only mapping; dispatch refuses the same sheets in the same words.
+  Measured on Claude Code: a one-turn probe sent 28.8k tokens with 29 tools and 14.0k with four,
+  and one small read-only task showed about 40% lower cost with four tools (three runs per arm;
+  direction, not size). Nothing is claimed for other harnesses; no other builtin declares a
+  mapping because their `--help` shows no tool-list option. `cli.command.allowed_tools_flag`,
+  which nothing read, is retired from the builtins and still accepted (ignored) in older profiles.
 - **`instrument_config.effort`: per-sheet reasoning effort, one vocabulary for every instrument
   (GH #535).** Over 245 musician sessions thinking was about 90% of output tokens on Claude models,
   while the `claude-code` profile pinned `--effort max` for every headless sheet. A sheet now sets

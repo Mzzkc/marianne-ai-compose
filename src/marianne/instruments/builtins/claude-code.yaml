@@ -188,6 +188,21 @@ effort:
   # downgraded.
   schema_levels: [minimal, low, medium, high]
 
+# Per-sheet toolset (GH #534): instrument_config.tools, in Claude Code's own
+# tool names (Bash, Read, Edit, Write, Grep, Glob, ...), is delivered as
+# `--tools "Bash,Read"`. Verified from `claude --help` (Claude Code 2.1.322):
+# `--tools <tools...>` "Specify the list of available tools from the built-in
+# set. Use "" to disable all tools, "default" to use the default set, or
+# specify tool names (e.g. "Bash,Edit,Read")." That flag limits the tool
+# definitions the model is given. `--allowedTools` / `--disallowedTools` are
+# permission lists only ("tool names to allow ... to deny") and are NOT used.
+# No `known:` list: the help text shows examples, not the full set, so any
+# name is passed through to Claude Code.
+tools:
+  delivery: flag
+  flag: "--tools"
+  join: comma
+
 cli:
   command:
     executable: claude
@@ -229,7 +244,6 @@ cli:
     # in the terminal result's `structured_output`.
     json_schema_flag: "--json-schema"
     system_prompt_flag: "--system-prompt"
-    allowed_tools_flag: "--allowedTools"
     mcp_config_flag: "--mcp-config"
     mcp_config_prefix_args:
       - "--strict-mcp-config"

@@ -436,7 +436,7 @@ and used by the conductor for instrument selection in future versions.
 | `output_format_flag` | No | | Flag for output format (`--output-format`, `--json`) |
 | `output_format_value` | No | | Value for output format flag (`json`). `null` = boolean flag |
 | `system_prompt_flag` | No | | Flag for system prompt |
-| `allowed_tools_flag` | No | | Flag for restricting tools |
+| `allowed_tools_flag` | No | | Deprecated and ignored (nothing ever read it); accepted so an older profile still loads. Use the profile's top-level `tools:` block (below). |
 | `mcp_config_flag` | No | | Flag for MCP server configuration |
 | `mcp_config_prefix_args` | No | `[]` | Args to add immediately before an active MCP config flag/path, such as `--strict-mcp-config` |
 | `mcp_config_workspace_path` | No | | Workspace-relative MCP config file path for CLIs that discover MCP servers from disk |
@@ -455,6 +455,61 @@ and used by the conductor for instrument selection in future versions.
 | `stdin_sentinel` | No | | What to put after `prompt_flag` when the prompt goes to stdin: `-` for Claude Code's `-p -`; `""` keeps the flag with an empty value (Antigravity's `-p ''`). Unset = omit the flag entirely |
 | `json_schema_flag` | No | | Flag that makes the CLI enforce a JSON schema, e.g. Claude Code's `--json-schema` (the shipped `claude-code` profile declares it). With it, a sheet's `instrument_config.response_format` (`type: json_schema`) is honoured and the terminal JSON's `structured_output` becomes the result; without it, such a sheet is refused at dispatch and `mzt validate` warns V311. Requires `output.format: json`. Schema mode rides on the model calling Claude Code's StructuredOutput tool: measured 2026-10-21, Claude models did 3/3, while the GLM-5.3 route through Claude Code missed it 1 time in 3 (it answered in prose, which the parser refuses and the baton retries). Prove the model you route with `mzt instruments check claude-code --live --model <m>`. A CLI that prints an array of events for `--output-format json` (Claude Code with `verbose: true` in its settings) is read from its last `type: result` object |
 | `stdin_json_template` | No | | For a CLI whose only stdin path is a structured stream: this object is written as ONE JSON line with every `"{prompt}"` string replaced by the prompt (nested keys are walked). Antigravity: `{event: user, message: {role: user, content: "{prompt}"}}` with `--input-format stream-json` |
+
+#### Per-sheet toolset: `tools:`
+
+A score sets `instrument_config.tools` (GH #534), a list of the harness's own
+tool names. A profile declares a top-level `tools:` block saying how the list is
+delivered:
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `delivery` | Yes | `flag`: `<flag> <names joined into one argument>` |
+| `flag` | Yes | The switch that limits the tool definitions the model is given |
+| `join` | No (`comma`) | `comma` or `space` |
+| `known` | No | Tool names the harness accepts; a name outside it is refused (V337). Absent = any name passes through |
+| `interactive` | No (`true`) | `false` when the interactive command has no such option |
+
+The flag must be the one that REMOVES tool definitions from the model's context,
+not one that only changes permissions. On Claude Code, `claude --help` (2.1.322)
+says `--tools <tools...>`: "Specify the list of available tools from the
+built-in set. Use "" to disable all tools, "default" to use the default set, or
+specify tool names (e.g. "Bash,Edit,Read")." `--allowedTools` is "Comma or
+space-separated list of tool names to allow" and `--disallowedTools` "to deny":
+permission lists, so the builtin uses `--tools`. A default already in the fixed
+flags is replaced, never doubled, and a sheet that sets nothing builds the same
+command as before. An empty list is delivered as one empty argument
+(`--tools ""`).
+
+What each builtin declares, verified on 2026-11-11 from `--help` and `--version`
+only (no model was called, and the `claude-code` flag was not exercised with a
+model call in this change):
+
+| Profile | Control | Declared | Verified from / why none |
+|---------|---------|----------|--------------------------|
+| `claude-code` | yes | `flag --tools`, comma-joined, no `known` list | `claude --help`, 2.1.322 (the help shows example names, not the full set) |
+| `claude-code-ollama` | yes | same block | same binary and flag; not exercised against a local model |
+| `antigravity` | none found | none | `agy --help`, 1.5.5: only `--dangerously-skip-permissions` (permissions) and `--disable-slash-commands` |
+| `codex-cli` | none found | none | `codex exec --help`, 0.166.0: no tool-list option |
+| `opencode` | none found | none | `opencode run --help`, 1.19.4: only `--auto` (permissions) |
+| `crush` | none found | none | `crush --help` and `crush run --help`, v0.98.2: no tool-list option |
+| `goose` | not equivalent | none | `goose run --help`, 1.30.0: `--with-builtin` adds extensions, not a per-tool list |
+| `gemini-cli` | permission only | none | `gemini --help`, 0.50.0: `--allowed-tools` skips confirmation (deprecated) and does not remove definitions |
+| `aider` | none found | none | `aider --help`, 0.86.2: only colour options mention tools |
+| `cline-cli`, `qwen-code`, `openclaw` | unverified | none | not installed where surveyed |
+| `cli`, `ollama` (HTTP) | n/a | none | a shell command, and an HTTP profile (`tools:` needs `kind: cli`) |
+
+"None found" means the help text lists no such option; a harness may still have
+one in a settings file, which this block cannot write.
+
+The `claude-code` block, verbatim:
+
+```yaml
+tools:
+  delivery: flag
+  flag: "--tools"
+  join: comma
+```
 
 #### Reasoning effort: one vocabulary, each profile maps it
 

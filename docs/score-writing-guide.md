@@ -305,6 +305,7 @@ keys:
 | `interactive_nudge_policy` | `static` (default) or `model` for screen-aware continuation. |
 | `interactive_nudge_instrument` | Registered headless instrument to call when the policy is `model`. |
 | `interactive_nudge_timeout_seconds` | Finite positive model-call timeout; defaults to 30 seconds, within the sheet deadline. |
+| `tools` | The harness tools the sheet may use (GH #534), by the harness's own names (Claude Code: `Bash`, `Read`, `Edit`, `Write`, `Grep`, `Glob`). `[]` = no tools; omit or `null` = harness default. A profile with no `tools:` mapping, or a name outside its `known` list, is refused (V337). |
 | `effort` | Reasoning effort for the sheet (GH #535), in one vocabulary for every instrument: `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. The resolved profile maps it to its harness's word (`claude-code` and `antigravity` `--effort`, `codex-cli` `-c model_reasoning_effort=…`, `opencode` `--variant` and `crush` `--reasoning-effort` per model). Omit or `null` keeps the profile default. A level the profile or model does not map, or a profile with no mapping, is refused (V335). |
 | `first_output_timeout_seconds` | CLI-only first-output silence bound (GH #502). Omit to inherit the profile, a finite positive number to override, `null` to disable. Capped by `timeout_seconds`; inert after the first output byte. |
 
@@ -325,6 +326,32 @@ sheet:
     7:
       timeout_seconds: 28800   # sheet 7 gets eight hours
 ```
+
+#### Narrowing a sheet's toolset
+
+`tools` limits which tool definitions the harness gives a sheet's model. On
+Claude Code, a one-turn probe measured a first request of 28.8k tokens with 29
+tools and 14.0k with four, and tool definitions are about half the fixed prefix
+every request pays. A paired check on one small read-only task, three runs per
+arm, showed about 40% lower cost with four tools. Read that as direction, not
+size: it is one task. Nothing is claimed for other harnesses.
+
+```yaml
+instrument_config:
+  tools: [Read, Grep, Glob]            # reviewers and recon sheets
+sheet:
+  per_sheet_instrument_config:
+    3:
+      tools: [Bash, Read, Edit, Write] # the sheet that changes files
+    5:
+      tools: []                        # pure text work: summarise, judge
+```
+
+Name tools the way the harness does; Marianne has no shared vocabulary for them.
+A sheet that sets nothing keeps the harness default, so a build movement needs no
+key. `mzt validate` refuses the key on a profile with no `tools:` mapping and a
+name outside the profile's `known` list (V337). A sheet whose prompt asks it to
+run a command or edit a file must keep the tool that does it.
 
 #### Reasoning effort per sheet
 
@@ -2309,6 +2336,7 @@ done
 | V103 | Very short timeout (warning) | Increase `instrument_config.timeout_seconds` |
 | V108 | Missing prelude/cadenza file (warning) | Check file path in `sheet.prelude` or `sheet.cadenzas`. Jinja-templated paths are skipped. |
 | V336 (warning) | A sheet's instrument has no `default_model` and no model is set at any scope: it runs on the harness's own default | Set `instrument_config.model: <id>`, an alias `config: {model: <id>}`, or a chain/class entry `model` |
+| V337 | `instrument_config.tools` the resolved profile cannot apply | Name only tools from the list the message gives, bind the sheet to a profile that declares a `tools:` block, run the sheet headless if the mapping is not interactive, or remove `tools` from the scope that reaches that instrument |
 | V335 | `instrument_config.effort` the resolved profile or model cannot apply | Use a level the message lists, pick a model whose row maps it, run the sheet headless if the mapping is not interactive, or remove `effort` from the scope that reaches that instrument |
 | V305/V307/V308/V309 | Static launch-safety warning | Review the rendered prompt, raw CLI command, fan-out instrument map, or validation prompt labels before running |
 

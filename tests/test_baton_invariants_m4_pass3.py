@@ -71,6 +71,7 @@ from marianne.core.config.instruments import (
     InteractiveGate,
     InteractiveUsageConfig,
     ModelCapacity,
+    ToolsMapping,
 )
 from marianne.core.config.job import (
     AliasEntry,
@@ -235,6 +236,7 @@ ALL_CONFIG_MODELS: list[type[BaseModel]] = [
     CliErrorConfig,
     InteractiveGate,
     EffortMapping,
+    ToolsMapping,
     InteractiveCliConfig,
     InteractiveUsageConfig,
     CliProfile,

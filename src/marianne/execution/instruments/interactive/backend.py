@@ -346,7 +346,17 @@ class InteractiveCliBackend(WorkspaceMcpConfigMixin, Backend):
             level, model=self._model, schema_mode=schema_mode, interactive=True,
         )
 
-    def _build_command(self, *, effort: str | None = None) -> list[str]:
+    def tools_refusal(self, tools: list[str]) -> str | None:
+        """Why this instrument cannot run a sheet with ``tools`` (None = it can).
+
+        Judged as an interactive launch (a mapping with ``interactive: false``
+        refuses every list here).
+        """
+        return self._profile.tools_refusal(tools, interactive=True)
+
+    def _build_command(
+        self, *, effort: str | None = None, tools: tuple[str, ...] | None = None,
+    ) -> list[str]:
         """Build the interactive launch argv.
 
         Interactive launch deliberately omits the headless machinery
@@ -381,18 +391,27 @@ class InteractiveCliBackend(WorkspaceMcpConfigMixin, Backend):
         elif cmd.mcp_disable_args and interactive.inherit_mcp_disable_args:
             args.extend(cmd.mcp_disable_args)
         args.extend(cmd.disable_hooks_args)  # GH #536: no operator hooks in a musician
-        if effort is None:
-            args.extend(interactive.extra_args)
-            return args
-        refusal = self.effort_refusal(effort, schema_mode=False)
-        mapping = self._profile.effort
-        if refusal is not None or mapping is None:
-            raise ValueError(
-                f"instrument '{self._profile.name}' {refusal}. Refusing to "
-                "run the sheet at an effort it did not ask for"
-            )
-        native = self._profile.native_effort(effort, model=self._model)
-        args.extend(mapping.apply(interactive.extra_args, native))
+        extra: list[str] = list(interactive.extra_args)
+        if effort is not None:
+            refusal = self.effort_refusal(effort, schema_mode=False)
+            mapping = self._profile.effort
+            if refusal is not None or mapping is None:
+                raise ValueError(
+                    f"instrument '{self._profile.name}' {refusal}. Refusing to "
+                    "run the sheet at an effort it did not ask for"
+                )
+            native = self._profile.native_effort(effort, model=self._model)
+            extra = mapping.apply(extra, native)
+        if tools is not None:
+            tools_refusal = self.tools_refusal(list(tools))
+            tools_mapping = self._profile.tools
+            if tools_refusal is not None or tools_mapping is None:
+                raise ValueError(
+                    f"instrument '{self._profile.name}' {tools_refusal}. Refusing to "
+                    "run the sheet with a toolset it did not ask for"
+                )
+            extra = tools_mapping.apply(extra, list(tools))
+        args.extend(extra)
         return args
 
     def _build_prompt(
@@ -474,6 +493,7 @@ class InteractiveCliBackend(WorkspaceMcpConfigMixin, Backend):
 
         command = self._build_command(
             effort=request.effort if request is not None else None,
+            tools=request.tools if request is not None else None,
         )
         # GH #533: choose the session id so the harness's own usage record
         # can be found after the sheet, when the profile declares one.

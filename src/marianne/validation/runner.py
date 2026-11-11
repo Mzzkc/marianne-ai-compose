@@ -51,6 +51,7 @@ from marianne.validation.checks import (
     SchemaSheetInteractiveCheck,
     ServedContextCheck,
     SheetEffortCheck,
+    SheetToolsCheck,
     SkipWhenSheetRangeCheck,
     TechniqueMcpInstrumentCheck,
     TechniqueSkillPathCheck,
@@ -257,6 +258,7 @@ def create_default_checks() -> list[ValidationCheck]:
         CliSchemaShapeCheck(),
         SheetEffortCheck(),
         UnpinnedModelCheck(),
+        SheetToolsCheck(),
         ClassesFileValidCheck(),
         ClassChainSummaryCheck(),
         # Best-practice checks

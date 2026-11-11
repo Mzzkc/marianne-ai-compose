@@ -46,6 +46,15 @@ models:
   cost_per_1k_output: 0.0
   max_output_tokens: 8192
   max_concurrent: 1
+# Per-sheet toolset (GH #534): the same `claude` binary, so the same `--tools`
+# flag (`claude --help`, Claude Code 2.1.322: "Specify the list of available
+# tools from the built-in set. Use "" to disable all tools"). Not exercised
+# against a local model.
+tools:
+  delivery: flag
+  flag: "--tools"
+  join: comma
+
 cli:
   command:
     executable: claude
@@ -61,7 +70,6 @@ cli:
     output_format_value: json
     json_schema_flag: --json-schema
     system_prompt_flag: --system-prompt
-    allowed_tools_flag: --allowedTools
     mcp_config_flag: --mcp-config
     mcp_config_prefix_args:
     - --strict-mcp-config

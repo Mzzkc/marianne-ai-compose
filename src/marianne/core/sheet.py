@@ -260,6 +260,8 @@ def _class_entry_config(entry: ClassEntry) -> dict[str, Any]:
         config["model"] = entry.config.model
     if entry.config.effort is not None:
         config["effort"] = entry.config.effort
+    if entry.config.tools is not None:
+        config["tools"] = list(entry.config.tools)
     return config
 
 
@@ -474,6 +476,8 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
             # movement or sheet scope that names effort (even null) wins.
             if chain[0].config.effort is not None and "effort" not in instrument_config:
                 instrument_config["effort"] = chain[0].config.effort
+            if chain[0].config.tools is not None and "tools" not in instrument_config:
+                instrument_config["tools"] = list(chain[0].config.tools)
             class_tail = chain[1:]
 
         instrument_name: str = resolved_instrument

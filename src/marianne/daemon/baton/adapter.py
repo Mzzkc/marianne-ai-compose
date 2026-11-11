@@ -3195,6 +3195,34 @@ class BatonAdapter:
                 )
             sheet_effort = _raw_effort
 
+        # Per-sheet toolset (GH #534): same shape as effort. The names are the
+        # harness's own, so the only judge is this backend's profile.
+        sheet_tools: tuple[str, ...] | None = None
+        _raw_tools = _icfg_rf.get("tools")
+        if _raw_tools is not None:
+            if not isinstance(_raw_tools, (list, tuple)) or not all(
+                isinstance(t, str) for t in _raw_tools
+            ):
+                raise ValueError(
+                    f"instrument_config.tools must be a list of tool names, got {_raw_tools!r}"
+                )
+            _tools_refusal = getattr(backend, "tools_refusal", None)
+            if not callable(_tools_refusal):
+                _shown = ", ".join(_raw_tools) if _raw_tools else "[] (no tools)"
+                raise ValueError(
+                    f"instrument '{effective_instrument}' backend "
+                    f"{type(backend).__name__} cannot apply "
+                    f"instrument_config.tools {_shown}: it carries no tools "
+                    "mapping (the profile's tools: block); known tools: none declared"
+                )
+            _trefusal = _tools_refusal(list(_raw_tools))
+            if _trefusal is not None:
+                raise ValueError(
+                    f"instrument '{effective_instrument}' {_trefusal}. Refusing "
+                    "to dispatch the sheet with a toolset it did not ask for"
+                )
+            sheet_tools = tuple(_raw_tools)
+
         mode = AttemptMode.NORMAL
         completion_suffix: str | None = None
         if state.completion_attempts > 0 and state.can_complete:
@@ -3221,6 +3249,7 @@ class BatonAdapter:
             response_format=sheet_response_format,
             first_output_timeout_seconds=first_output_timeout,
             effort=sheet_effort,
+            tools=sheet_tools,
             expected_route=state.expected_route,
             route_model_override=_icfg_rf.get("model"),
             route_provider_override=_icfg_rf.get("provider"),

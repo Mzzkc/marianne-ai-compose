@@ -28,6 +28,7 @@ from marianne.core.config.instruments import (
     InteractiveGate,
     InteractiveUsageConfig,
     ModelCapacity,
+    ToolsMapping,
 )
 from marianne.core.config.job import InstrumentDef, MovementDef
 from tests.conftest_adversarial import _nonneg_float, _positive_int
@@ -362,6 +363,43 @@ def test_effort_mapping_refuses_a_half_declared_shape(data: dict[str, Any]) -> N
     broken = {k: v for k, v in data.items() if k != needed}
     with pytest.raises(ValueError):
         EffortMapping.model_validate(broken)
+
+
+@st.composite
+def tools_mapping_strategy(draw: st.DrawFn) -> dict[str, Any]:
+    """A whole tools mapping (GH #534)."""
+    data: dict[str, Any] = {
+        "delivery": "flag",
+        "flag": "--" + draw(_NATIVE_WORD),
+        "join": draw(st.sampled_from(["comma", "space"])),
+        "interactive": draw(st.booleans()),
+    }
+    if draw(st.booleans()):
+        data["known"] = draw(st.lists(_NATIVE_WORD, min_size=1, max_size=6, unique=True))
+    return data
+
+
+@pytest.mark.property_based
+@_pb_settings
+@given(data=tools_mapping_strategy(), names=st.lists(_NATIVE_WORD, max_size=5, unique=True))
+def test_tools_mapping_roundtrip_and_delivery(data: dict[str, Any], names: list[str]) -> None:
+    """ToolsMapping roundtrips, and apply() always leaves exactly one flag pair."""
+    mapping = ToolsMapping.model_validate(data)
+    assert ToolsMapping.model_validate(mapping.model_dump()) == mapping
+    out = mapping.apply(["--keep", mapping.flag, "old", "--tail"], names)
+    assert out.count(mapping.flag) == 1
+    assert out[out.index(mapping.flag) + 1] == mapping.joined(names)
+    assert out[0] == "--keep" and out[-1] == "--tail"
+
+
+@pytest.mark.property_based
+@_pb_settings
+@given(data=tools_mapping_strategy())
+def test_tools_mapping_refuses_a_missing_flag(data: dict[str, Any]) -> None:
+    """A mapping with no flag is refused, never guessed."""
+    broken = {k: v for k, v in data.items() if k != "flag"}
+    with pytest.raises(ValueError):
+        ToolsMapping.model_validate(broken)
 
 
 @pytest.mark.property_based

@@ -72,6 +72,19 @@ class ClassEntryConfig(BaseModel):
         ),
     )
 
+    tools: list[str] | None = Field(
+        default=None,
+        description=(
+            "Harness tool names this class entry runs with (GH #534), delivered "
+            "by the entry's profile tools: block. On the primary entry an "
+            "instrument_config.tools set at score, movement or sheet scope wins "
+            "(null there restores the harness default); a fallback entry uses "
+            "only its own. [] means no tools; absent means the harness default. "
+            "A profile without a tools: block, or a name outside its known "
+            "list, is refused (V337)."
+        ),
+    )
+
     @model_serializer(mode="wrap")
     def _omit_unset_effort(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
         # A class map that never sets effort keeps its snapshot digest
@@ -79,6 +92,8 @@ class ClassEntryConfig(BaseModel):
         data: dict[str, Any] = handler(self)
         if data.get("effort") is None:
             data.pop("effort", None)
+        if data.get("tools") is None:
+            data.pop("tools", None)
         return data
 
 

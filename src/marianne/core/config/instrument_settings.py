@@ -118,6 +118,32 @@ class InstrumentSettings(BaseModel, Mapping[str, Any]):
         "never downgraded.",
     )
 
+    tools: list[str] | None = Field(
+        default=None,
+        description="The harness tools this sheet may use, by the harness's own "
+        "names (Claude Code: Bash, Read, Edit, Write, Grep, Glob, ...); there is "
+        "no cross-harness vocabulary. The resolved instrument profile's tools: "
+        "block says which flag delivers the list; that flag removes the other "
+        "tool definitions from the model's context. An empty list means no "
+        "tools; omit or null keeps the harness default toolset. A profile with "
+        "no tools: block, or a name outside its known: list, is refused (V337) "
+        "and never ignored.",
+    )
+
+    @field_validator("tools")
+    @classmethod
+    def _tool_names_are_plain(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return value
+        for name in value:
+            if not name.strip() or "," in name:
+                raise ValueError(
+                    f"tools entries must be non-empty names without a comma, got {name!r}"
+                )
+        if len(set(value)) != len(value):
+            raise ValueError("tools must not repeat a name")
+        return value
+
     def __iter__(self) -> Iterator[str]:  # type: ignore[override]
         # Scope merging must distinguish absent from explicitly set null.
         names = (name for name in type(self).model_fields if name in self.model_fields_set)

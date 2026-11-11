@@ -67,7 +67,7 @@ and constraints are extracted directly from the Pydantic v2 config models in
 | `description` | `str \| None` | `None` | Human-readable description |
 | `workspace` | `Path` | `./workspace` | Output directory. Resolved to absolute path at construction time. |
 | `instrument` | `str \| None` | `None` | Profile, score alias, or capability class. The packaged classes are `strong`, `workhorse`, `fast`, `cheap`, `writing`, `review`, `vision`, `local`, `high-context`, `image`, `video`; the vocabulary is the packaged `classes/default.yaml` itself, and a user (`~/.marianne/classes.yaml`) or venue (`.marianne/classes.yaml`) layer may define ANY further class name or tombstone a packaged one with `null` (GH #433). Run `mzt instruments classes show` to see resolved chains. If unset, defaults to `claude-code`. |
-| `instrument_config` | `InstrumentSettings` | `{}` | Typed per-score overrides. Keys: `timeout_seconds` (sheet execution timeout), `model`, `provider`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`, `interactive_nudge_policy`, `interactive_nudge_instrument`, `interactive_nudge_timeout_seconds`, `max_tokens`, `temperature`, `response_format`, `effort` (reasoning effort in Marianne's vocabulary `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, mapped by the resolved profile's `effort:` block; see below), `first_output_timeout_seconds` (CLI first-output silence bound, GH #502; omit to inherit the profile, a finite positive number to override, `null` to disable — see the [CLI timeout section](instrument-guide.md) for the full semantics). Unknown keys warn as V010/V011; executor support still varies. |
+| `instrument_config` | `InstrumentSettings` | `{}` | Typed per-score overrides. Keys: `timeout_seconds` (sheet execution timeout), `model`, `provider`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`, `interactive_nudge_policy`, `interactive_nudge_instrument`, `interactive_nudge_timeout_seconds`, `max_tokens`, `temperature`, `response_format`, `effort` (reasoning effort in Marianne's vocabulary `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, mapped by the resolved profile's `effort:` block; see below), `tools` (the harness tools this sheet may use, by the harness's own names; see below), `first_output_timeout_seconds` (CLI first-output silence bound, GH #502; omit to inherit the profile, a finite positive number to override, `null` to disable — see the [CLI timeout section](instrument-guide.md) for the full semantics). Unknown keys warn as V010/V011; executor support still varies. |
 | `instruments` | `dict[str, InstrumentDef]` | `{}` | Named instrument definitions local to this score. Declares reusable aliases referencing registered instrument profiles with optional overrides. Referenced by name in per-sheet or per-movement `instrument:` fields. See [instruments](#instruments). |
 | `movements` | `dict[int, MovementDef]` | `{}` | Movement declarations. Map of movement number to MovementDef. Each movement can specify a name, instrument, instrument config, and voice count. See [movements](#movements). |
 | `instrument_fallbacks` | `list[str]` | `[]` | Score-level fallback chain. Each profile, alias, or class is expanded in place; a primary class's tail runs before declared fallbacks. See [Instrument Fallbacks](#instrument-fallbacks). |
@@ -176,6 +176,42 @@ The profile side, for authors of instrument profiles (full guide in
 
 A model row's `effort_levels` replaces `levels` for that model (`{}` = that
 model has no control). A profile with no `effort:` block refuses the key.
+
+`tools` narrows the toolset of one sheet (GH #534). It is a list of the
+harness's own tool names, at any `instrument_config` scope (score, movement,
+per-sheet, alias `config`, chain entry, capability-class entry). There is no
+cross-harness vocabulary: on Claude Code the names are `Bash`, `Read`, `Edit`,
+`Write`, `Grep`, `Glob` and so on, and another harness has its own. Absent or
+`null` keeps the harness default, exactly as before; an empty list `[]` means no
+tools. The resolved profile's top-level `tools:` block says which flag delivers
+the list. That flag must be the one that removes the other tool definitions from
+the model's context, not a permission-only flag. A profile with no `tools:`
+block, or a name outside the block's `known:` list when one is declared, is
+refused by `mzt validate` (V337) and at dispatch, never ignored. A fallback
+takes `tools` only from its own entry. A capability-class entry's `tools`
+applies unless a score, movement or sheet scope names `tools`.
+
+```yaml
+instrument_config:
+  tools: [Read, Grep, Glob]    # score default: read-only sheets
+sheet:
+  per_sheet_instrument_config:
+    4:
+      tools: [Bash, Read, Edit, Write]   # the sheet that builds
+    7:
+      tools: null                        # back to the harness default
+```
+
+| `tools:` field | Meaning |
+|----------------|---------|
+| `delivery` | `flag` (the only shape) |
+| `flag` | The switch that limits the tool definitions, `--tools` on Claude Code |
+| `join` | `comma` (default, `Bash,Read`) or `space` |
+| `known` | Optional list of accepted tool names; absent = any name is passed through |
+| `interactive` | Default `true`; `false` refuses an interactive sheet that sets `tools` |
+
+`cli.command.allowed_tools_flag` is retired: no code ever read it. A profile that
+still carries it loads, and the field is ignored.
 
 `response_format` is opt-in. For OpenAI-compatible HTTP profiles, an omitted
 key inherits `http.response_format`, an explicit `null` disables it for that

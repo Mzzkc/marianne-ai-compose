@@ -174,6 +174,12 @@ class AttemptContext:
     (instrument_config.effort, GH #535); None keeps the profile default.
     Checked against the profile at dispatch, consumed request-locally."""
 
+    tools: tuple[str, ...] | None = None
+    """Harness tool names from this attempt's chain entry
+    (instrument_config.tools, GH #534); None keeps the harness default and
+    () means no tools. Checked against the profile at dispatch, consumed
+    request-locally."""
+
 
 # =============================================================================
 # SheetExecutionState — Phase 2 type alias

@@ -309,6 +309,95 @@ class EffortMapping(BaseModel):
         return result
 
 
+class ToolsMapping(BaseModel):
+    """How a profile delivers ``instrument_config.tools`` to its harness (GH #534).
+
+    Tool names are the harness's own; Marianne has no tool vocabulary. The
+    flag must be the one that REMOVES tool definitions from the model's
+    context (Claude Code ``--tools``), not a permission-only flag such as
+    ``--allowedTools``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    delivery: Literal["flag"] = Field(
+        description=(
+            "Where the tool list goes: 'flag' = `<flag> <joined names>` on the "
+            "command (claude-code `--tools \"Bash,Read\"`). An empty list is "
+            "delivered as one empty argument (`--tools \"\"`)."
+        ),
+    )
+    flag: str = Field(
+        min_length=1,
+        description=(
+            "The command-line switch that limits the tool definitions the model "
+            "is given, e.g. '--tools'. Not a permission-only flag."
+        ),
+    )
+    join: Literal["comma", "space"] = Field(
+        default="comma",
+        description="How names are joined into the flag's single argument: 'comma' "
+        "(Bash,Read) or 'space' (Bash Read).",
+    )
+    known: list[str] | None = Field(
+        default=None,
+        description=(
+            "Tool names this harness accepts. When set, a sheet naming any other "
+            "tool is refused (V337), so a typo is caught before the run; when "
+            "absent every name is passed through unchecked."
+        ),
+    )
+    interactive: bool = Field(
+        default=True,
+        description=(
+            "Whether an interactive (tmux) launch can carry the list. False when "
+            "the harness's interactive command has no such option; a sheet that "
+            "sets tools and runs interactively is then refused."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _known_is_whole(self) -> ToolsMapping:
+        if self.known is not None:
+            if not self.known:
+                raise ValueError("tools.known must not be empty; omit it to pass any name")
+            if len(set(self.known)) != len(self.known):
+                raise ValueError("tools.known must not repeat a name")
+            if any(not n.strip() or "," in n for n in self.known):
+                raise ValueError("tools.known names must be non-empty and contain no comma")
+        return self
+
+    def joined(self, tools: list[str]) -> str:
+        """The single argument that carries ``tools`` ('' for none)."""
+        return ("," if self.join == "comma" else " ").join(tools)
+
+    def apply(self, flags: list[str], tools: list[str]) -> list[str]:
+        """``flags`` with this mapping's flag set to ``tools``.
+
+        A default already in ``flags`` is replaced where it stands (never a
+        second one); with none, the pair is appended.
+        """
+        value = self.joined(tools)
+        result: list[str] = []
+        replaced = False
+        skip = False
+        for index, token in enumerate(flags):
+            if skip:
+                skip = False
+                continue
+            is_pair = token == self.flag and index + 1 < len(flags)
+            if is_pair or token == self.flag or token.startswith(f"{self.flag}="):
+                skip = is_pair
+                if not replaced:
+                    result.extend([self.flag, value])
+                    replaced = True
+                continue
+            result.append(token)
+        if not replaced:
+            result.extend([self.flag, value])
+        return result
+
+
 class ModelCapacity(BaseModel):
     """Per-model metadata for cost tracking and context management.
 
@@ -435,7 +524,9 @@ class CliCommand(BaseModel):
     )
     allowed_tools_flag: str | None = Field(
         default=None,
-        description="Flag for restricting available tools",
+        description="DEPRECATED, ignored (nothing ever read it). Kept accepted so a "
+        "user-layer profile that still has it loads. Declare the profile's top-level "
+        "tools: block instead (GH #534).",
     )
     mcp_config_flag: str | None = Field(
         default=None,
@@ -1378,6 +1469,18 @@ class InstrumentProfile(BaseModel):
         ),
     )
 
+    tools: ToolsMapping | None = Field(
+        default=None,
+        description=(
+            "The profile's per-sheet toolset mapping (GH #534): the flag that "
+            "limits which tool definitions the harness gives the model, how the "
+            "names are joined, and optionally the known tool names. With it a "
+            "sheet may set instrument_config.tools; without it (None) a sheet "
+            "that sets the key is refused by `mzt validate` (V337) and at "
+            "dispatch. Sheets that do not set the key are unaffected either way."
+        ),
+    )
+
     # Kind-specific profiles
     cli: CliProfile | None = Field(
         default=None,
@@ -1387,6 +1490,36 @@ class InstrumentProfile(BaseModel):
         default=None,
         description="HTTP-specific execution profile. Required when kind=http.",
     )
+
+    def tools_refusal(
+        self, tools: list[str], *, interactive: bool = False,
+    ) -> str | None:
+        """Why this profile cannot run a sheet with ``tools``, or None when it can.
+
+        The ONE wording shared by `mzt validate` (V337), dispatch and the
+        backends' command builders.
+        """
+        shown = ", ".join(tools) if tools else "[] (no tools)"
+        if self.tools is None or self.kind != "cli":
+            return (
+                "declares no tools mapping (the profile's tools: block), so "
+                f"instrument_config.tools {shown} cannot be applied; "
+                "known tools: none declared"
+            )
+        if interactive and not self.tools.interactive:
+            return (
+                "cannot carry instrument_config.tools on an interactive launch "
+                "(the profile's tools.interactive is false), so "
+                f"{shown} cannot be applied; set interactive: false on that sheet"
+            )
+        if self.tools.known is not None:
+            unknown = [t for t in tools if t not in self.tools.known]
+            if unknown:
+                return (
+                    f"does not know tool(s) {', '.join(repr(t) for t in unknown)}; "
+                    f"known tools: {', '.join(self.tools.known)}"
+                )
+        return None
 
     def effort_levels_for(self, model: str | None) -> dict[EffortLevel, str]:
         """Marianne level -> native word for ``model`` ({} = nothing mapped).
@@ -1492,6 +1625,14 @@ class InstrumentProfile(BaseModel):
                     "first, last, after <profile>, before <profile>"
                 )
         return value
+
+    @model_validator(mode="after")
+    def _validate_tools_mapping(self) -> InstrumentProfile:
+        if self.tools is not None and self.kind != "cli":
+            raise ValueError(
+                f"tools: block needs kind 'cli' (a flag on the command), not {self.kind!r}"
+            )
+        return self
 
     @model_validator(mode="after")
     def _validate_effort_mapping(self) -> InstrumentProfile:
