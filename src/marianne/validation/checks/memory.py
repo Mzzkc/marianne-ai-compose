@@ -9,8 +9,9 @@ Check IDs:
 - V340: ``system`` is not a backend this release ships
 - V342: a ``phases`` entry is not ``all``, a movement number, or a movement name
 - V344: ``scope`` fails the scope grammar
-- V345: caps out of range or unknown provenance; also an INFO note (message
-  prefix ``V345-NOTE``) when the deprecated ``off`` was read as ``optional``
+- V345: caps out of range or unknown provenance
+- V349: INFO note when the deprecated ``off`` was read as ``optional`` (its own
+  code: one code carries one check and one severity, so it can be suppressed)
 - V346: ``access`` fails the access grammar
 - V347: ``access`` names a grant, and no grant store exists yet
 """
@@ -228,9 +229,9 @@ class MemoryCapsInvalidCheck(_MemoryCheck):
 
 
 class MemoryProvenanceOffNote(_MemoryCheck):
-    """V345 (INFO, ``V345-NOTE``): ``provenance: off`` was read as ``optional``."""
+    """V349 (INFO): ``provenance: off`` was read as ``optional``."""
 
-    code = "V345"
+    code = "V349"
     sev = ValidationSeverity.INFO
     summary = "Notes that deprecated `provenance: off` was read as `optional`"
 
@@ -254,7 +255,7 @@ class MemoryProvenanceOffNote(_MemoryCheck):
                 raw_yaml,
                 "provenance",
                 f"{where}.provenance",
-                f"V345-NOTE: provenance 'off' is deprecated; normalized to 'optional' at {where}",
+                f"provenance 'off' is deprecated; normalized to 'optional' at {where}",
                 "Write `provenance: optional`",
             )
             for where in spots

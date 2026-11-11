@@ -66,17 +66,17 @@ def _ctx_default(tmp_path: Path) -> _ClassContext:
     )
 
 
-def test_registered_as_warning() -> None:
+def test_registered_as_info() -> None:
     from marianne.validation.output_contract import _known_suppression_severities
 
-    assert _known_suppression_severities()["V336"] == ValidationSeverity.WARNING
+    assert _known_suppression_severities()["V336"] == ValidationSeverity.INFO
 
 
 def test_unpinned_seat_warns_naming_sheets_and_instrument(tmp_path: Path) -> None:
     issues = _v336(_score(tmp_path), _ctx_default(tmp_path))
     assert len(issues) == 1
     issue = issues[0]
-    assert issue.check_id == "V336" and issue.severity == ValidationSeverity.WARNING
+    assert issue.check_id == "V336" and issue.severity == ValidationSeverity.INFO
     assert "'harness'" in issue.message and "1, 2, 3" in issue.message
     assert "default" in issue.message
     assert "instrument_config.model" in (issue.suggestion or "")

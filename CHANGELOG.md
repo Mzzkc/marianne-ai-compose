@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **`memory:` score key, validators V340/V342/V344-V347 (GH #496, wave A step 3).** A score may
+- **`memory:` score key, validators V340/V342/V344-V347 and V349 (GH #496, wave A step 3).** A score may
   declare named memory attachments (`backends`, `defaults`). The memory protocol and the `files`
   backend exist as a library; the conductor does not yet give a sheet access to a declared memory,
   so the key validates and `mzt validate` reports it with V327 as not yet wired. Scores without the
@@ -26,7 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   auto-approval and the operator's `PreToolUse` guards may be the only guardrail (doctor warns when
   it is set and such hooks exist). Hook lists merge across settings sources, so no per-event
   override exists. Unset, the argv is unchanged.
-- **`mzt validate` V336 (WARNING): a model seat that names no model (GH #538).** A profile with
+- **`mzt validate` V336 (INFO): a model seat that names no model (GH #538).** It is INFO, so
+  `--strict` still passes: 54 of the 65 shipped examples leave a `codex-cli` or `goose` seat
+  unpinned, and it rises to WARNING once those name a model. A profile with
   `default_model: null` (the `claude-code` builtin) runs a sheet on the harness's own default, which
   follows the operator's CLI settings and changed twice in a day on one host. V336 names the
   sheets and the instrument (fallback seats included) when no model is set at any scope (score,

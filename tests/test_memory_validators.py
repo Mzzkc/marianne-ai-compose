@@ -113,9 +113,9 @@ def test_v345_note_for_off_is_info_and_off_is_not_an_error(tmp_path: Path) -> No
     extra = _decl(system="files", caps="{provenance: off}")
     assert _run(MemoryCapsInvalidCheck(), tmp_path, extra) == []
     (note,) = _run(MemoryProvenanceOffNote(), tmp_path, extra)
-    assert note.check_id == "V345" and note.severity is ValidationSeverity.INFO
+    assert note.check_id == "V349" and note.severity is ValidationSeverity.INFO
     assert note.message.startswith(
-        "V345-NOTE: provenance 'off' is deprecated; normalized to 'optional'"
+        "provenance 'off' is deprecated; normalized to 'optional'"
     )
 
 
@@ -144,4 +144,4 @@ def test_not_wired_reported_by_v327(tmp_path: Path) -> None:
 
 def test_checks_registered_in_runner() -> None:
     ids = {c.check_id for c in create_default_checks()}
-    assert {"V340", "V342", "V344", "V345", "V346", "V347"} <= ids
+    assert {"V340", "V342", "V344", "V345", "V346", "V347", "V349"} <= ids

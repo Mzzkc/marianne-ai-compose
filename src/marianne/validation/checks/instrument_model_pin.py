@@ -30,7 +30,12 @@ def _is_unpinned_model_seat(profile: InstrumentProfile, entry_config: Any) -> bo
 
 
 class UnpinnedModelCheck:
-    """V336 (WARNING): a model seat whose model nothing in the score names."""
+    """V336 (INFO): a model seat whose model nothing in the score names.
+
+    INFO, not WARNING: 54 of the 65 shipped examples leave a codex-cli or goose
+    seat unpinned, and a WARNING fails ``mzt validate --strict`` on each of
+    them. It rises to WARNING once the builtins or the examples name a model.
+    """
 
     @property
     def check_id(self) -> str:
@@ -38,11 +43,11 @@ class UnpinnedModelCheck:
 
     @property
     def severity(self) -> ValidationSeverity:
-        return ValidationSeverity.WARNING
+        return ValidationSeverity.INFO
 
     @property
     def description(self) -> str:
-        return "Warns when a sheet runs on an instrument's own default model"
+        return "Notes when a sheet runs on an instrument's own default model"
 
     def check(
         self,

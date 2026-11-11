@@ -307,7 +307,7 @@ deterministic shell profile.
 
 ### Instrument Configuration
 
-**Pin the model on every model seat.** A profile with `default_model: null` (`claude-code`, `codex-cli`) leaves the model to the harness, so an unpinned seat follows whatever the operator last selected in that CLI: the score does not say which model ran, cost cannot be priced from it, and a flagship default can drain a shared subscription limit. Set `instrument_config.model`, an alias `config: {model: ...}`, or a class/chain entry `model`. `mzt validate` warns (V336) for every sheet and fallback that does not.
+**Pin the model on every model seat.** A profile with `default_model: null` (`claude-code`, `codex-cli`) leaves the model to the harness, so an unpinned seat follows whatever the operator last selected in that CLI: the score does not say which model ran, cost cannot be priced from it, and a flagship default can drain a shared subscription limit. Set `instrument_config.model`, an alias `config: {model: ...}`, or a class/chain entry `model`. `mzt validate` notes it (V336, INFO) for every sheet and fallback that does not; it does not fail `--strict`.
 
 Override instrument defaults with `instrument_config:`:
 

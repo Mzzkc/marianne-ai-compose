@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 BACKEND_NAME_PATTERN = r"^[a-z][a-z0-9-]{0,31}$"
 _BACKEND_NAME_RE = re.compile(BACKEND_NAME_PATTERN)
 
-#: Deprecated provenance spelling normalised to ``optional`` (V345-NOTE).
+#: Deprecated provenance spelling normalised to ``optional`` (V349 INFO note).
 PROVENANCE_ALIASES = {"off": "optional"}
 
 

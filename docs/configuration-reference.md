@@ -1451,7 +1451,7 @@ memory:
 | `memory.backends.<k>.settings` | map | `{}` | Passed to the backend unchanged |
 | `memory.defaults` | object | see below | Score-level defaults |
 | `memory.defaults.recall_cap_bytes` | int | `32768` | Per-recall page cap in bytes |
-| `memory.defaults.provenance` | enum | `required` | `required` or `optional`; the deprecated `off` is read as `optional` (V345 INFO note) |
+| `memory.defaults.provenance` | enum | `required` | `required` or `optional`; the deprecated `off` is read as `optional` (V349 INFO note) |
 | `memory.defaults.lock_timeout_seconds` | float | `10.0` | Outer timeout for one memory call |
 
 ## checkpoints

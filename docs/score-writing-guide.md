@@ -2354,7 +2354,7 @@ done
 | V101 | Undefined template variable (warning) | Check spelling against the built-ins (`workspace`, `score_dir`, `sheet_num`, loop indices, …) or add the variable to `prompt.variables` |
 | V103 | Very short timeout (warning) | Increase `instrument_config.timeout_seconds` |
 | V108 | Missing prelude/cadenza file (warning) | Check file path in `sheet.prelude` or `sheet.cadenzas`. Jinja-templated paths are skipped. |
-| V336 (warning) | A sheet's instrument has no `default_model` and no model is set at any scope: it runs on the harness's own default | Set `instrument_config.model: <id>`, an alias `config: {model: <id>}`, or a chain/class entry `model` |
+| V336 (info) | A sheet's instrument has no `default_model` and no model is set at any scope: it runs on the harness's own default | Set `instrument_config.model: <id>`, an alias `config: {model: <id>}`, or a chain/class entry `model` |
 | V337 | `instrument_config.tools` the resolved profile cannot apply | Name only tools from the list the message gives, bind the sheet to a profile that declares a `tools:` block, run the sheet headless if the mapping is not interactive, or remove `tools` from the scope that reaches that instrument |
 | V335 | `instrument_config.effort` the resolved profile or model cannot apply | Use a level the message lists, pick a model whose row maps it, run the sheet headless if the mapping is not interactive, or remove `effort` from the scope that reaches that instrument |
 | V305/V307/V308/V309 | Static launch-safety warning | Review the rendered prompt, raw CLI command, fan-out instrument map, or validation prompt labels before running |
