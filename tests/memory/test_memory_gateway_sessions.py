@@ -6,7 +6,14 @@ import time
 
 import pytest
 
-from marianne.memory import AuthorityRevoked, NotFound, SchemaViolation, Unauthenticated
+from marianne.memory import (
+    AuthorityRevoked,
+    DeadlineExceeded,
+    NotFound,
+    PermissionDenied,
+    SchemaViolation,
+    Unauthenticated,
+)
 from marianne.memory.gateway import MemoryCaps, SessionState, SessionTable
 
 P = "agent:musician-1"
@@ -94,16 +101,16 @@ def test_only_legal_transitions(src: str, dst: str) -> None:
 def test_admit_call_activates_on_first_call_and_gates_by_state() -> None:
     t = table()
     sid = open_one(t)
-    t.admit_call(sid, writes=True)
+    t.admit_call(sid, "write")
     assert t.get(sid).state is SessionState.ACTIVE
     t.transition(sid, SessionState.DRAINING)
-    t.admit_call(sid, writes=False)  # in-flight reads still allowed
+    t.admit_call(sid, "read")  # in-flight reads still allowed
     with pytest.raises(Exception) as exc:
-        t.admit_call(sid, writes=True)
+        t.admit_call(sid, "write")
     assert exc.value.subtype == "session_draining"  # type: ignore[attr-defined]
     t.transition(sid, SessionState.CLOSED)
     with pytest.raises(Unauthenticated):
-        t.admit_call(sid, writes=False)
+        t.admit_call(sid, "read")
 
 
 def test_revoked_session_refuses_with_e8() -> None:
@@ -111,7 +118,7 @@ def test_revoked_session_refuses_with_e8() -> None:
     sid = open_one(t)
     t.revoke(sid)
     with pytest.raises(AuthorityRevoked):
-        t.admit_call(sid, writes=False)
+        t.admit_call(sid, "read")
 
 
 def test_close_is_idempotent_and_revoke_after_close_is_noop() -> None:
@@ -132,3 +139,58 @@ def test_revoke_for_principal_revokes_live_sessions_only() -> None:
     assert t.get(a).state is SessionState.REVOKED
     assert t.get(b).state is SessionState.CLOSED
     assert t.get(c).state is SessionState.ADMITTED
+
+
+class Clock:
+    def __init__(self, now: float = 1000.0) -> None:
+        self.now = now
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def test_expired_session_is_refused_e10_and_made_terminal() -> None:
+    clk = Clock()
+    t = SessionTable(clock=clk)
+    sid = open_one(t, deadline_at=1010.0)
+    t.admit_call(sid, "read")
+    clk.now = 1010.0  # now >= deadline
+    with pytest.raises(DeadlineExceeded):
+        t.admit_call(sid, "read")
+    assert t.get(sid).state is SessionState.CLOSED
+    # second call after expiry is still refused, even if the clock were rewound
+    clk.now = 1000.0
+    with pytest.raises(Unauthenticated):
+        t.admit_call(sid, "read")
+
+
+def test_read_only_session_refused_for_declare_at_the_table() -> None:
+    t = table()
+    sid = open_one(t, permissions=("read",))
+    for perm in ("write", "bind", "forget", "verify"):
+        with pytest.raises(PermissionDenied):
+            t.admit_call(sid, perm)
+    assert t.get(sid).state is SessionState.ADMITTED  # a refusal does not activate
+    t.admit_call(sid, "read")
+
+
+def test_refusals_leave_call_count_unchanged() -> None:
+    clk = Clock()
+    t = SessionTable(clock=clk)
+    sid = open_one(t, permissions=("read",), deadline_at=1005.0)
+    t.admit_call(sid, "read")
+    assert t.get(sid).call_count == 1
+    with pytest.raises(PermissionDenied):
+        t.admit_call(sid, "write")
+    assert t.get(sid).call_count == 1
+    clk.now = 2000.0
+    with pytest.raises(DeadlineExceeded):
+        t.admit_call(sid, "read")
+    assert t.get(sid).call_count == 1
+
+
+def test_unknown_permission_name_is_schema_violation() -> None:
+    t = table()
+    sid = open_one(t)
+    with pytest.raises(SchemaViolation):
+        t.admit_call(sid, "fly")

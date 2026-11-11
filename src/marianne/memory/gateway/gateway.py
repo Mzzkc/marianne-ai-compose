@@ -145,8 +145,8 @@ class Gateway:
         self, session_id: str, tool: str, budget_seconds: float | None,
         call: Callable[[MemoryBackend, RequestContext, Session], T],
     ) -> T:
-        permission, writes = TOOL_PERMISSIONS[tool]
-        s = self.sessions.admit_call(session_id, writes=writes)
+        permission, _ = TOOL_PERMISSIONS[tool]
+        s = self.sessions.admit_call(session_id, permission.value)
         self._check_grant(s, permission)
         if permission.value not in s.permissions:
             raise PermissionDenied(

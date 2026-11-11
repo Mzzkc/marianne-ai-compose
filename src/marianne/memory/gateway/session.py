@@ -6,6 +6,7 @@ import math
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal
@@ -13,6 +14,7 @@ from typing import Literal
 from marianne.memory.access import AccessRef
 from marianne.memory.errors import (
     AuthorityRevoked,
+    DeadlineExceeded,
     NotFound,
     PermissionDenied,
     SchemaViolation,
@@ -40,6 +42,8 @@ _LEGAL: dict[SessionState, frozenset[SessionState]] = {
     SessionState.CLOSED: frozenset(),
     SessionState.REVOKED: frozenset(),
 }
+#: Permissions whose calls mutate state; refused while draining.
+WRITE_PERMISSIONS = frozenset({"write", "bind", "forget", "admin"})
 TERMINAL = frozenset({SessionState.CLOSED, SessionState.REVOKED})
 
 
@@ -80,7 +84,8 @@ class Session:
 class SessionTable:
     """Thread-safe table of sessions; legal transitions only."""
 
-    def __init__(self) -> None:
+    def __init__(self, clock: Callable[[], float] = time.time) -> None:
+        self._clock = clock
         self._sessions: dict[str, Session] = {}
         self._lock = threading.RLock()
 
@@ -104,7 +109,7 @@ class SessionTable:
             session_id=f"s-{uuid.uuid4().hex[:16]}", principal=principal,
             attachment=(attachment_id, canonical), permissions=tuple(permissions),
             caps=caps or MemoryCaps(), deadline_at=float(deadline_at),
-            dispatch_id=dispatch_id, job_id=job_id, opened_at=time.time(),
+            dispatch_id=dispatch_id, job_id=job_id, opened_at=self._clock(),
         )
         with self._lock:
             self._sessions[session.session_id] = session
@@ -128,8 +133,17 @@ class SessionTable:
             s.state = to
             return s
 
-    def admit_call(self, session_id: str, *, writes: bool) -> Session:
-        """Gate one call by state; the first successful gate activates the session."""
+    def admit_call(self, session_id: str, permission: str) -> Session:
+        """Gate one call by state, deadline and permission; the first success activates.
+
+        ``permission`` is the permission the tool needs. Every refusal leaves
+        ``call_count`` and the state untouched, except that an expired session
+        is moved to ``closed`` so it can never be used again.
+        """
+        if permission not in PERMISSION_VALUES:
+            raise SchemaViolation(
+                f"unknown permission {permission!r}", subtype="permission_invalid"
+            )
         with self._lock:
             s = self.get(session_id)
             if s.state is SessionState.REVOKED:
@@ -141,7 +155,19 @@ class SessionTable:
                 raise Unauthenticated(
                     "session is closed", subtype="session_closed", remedy="open a new session",
                 )
-            if s.state is SessionState.DRAINING and writes:
+            if self._clock() >= s.deadline_at:
+                s.state = SessionState.CLOSED
+                raise DeadlineExceeded(
+                    "the session deadline has passed", subtype="deadline_exceeded",
+                    remedy="open a new session",
+                )
+            if permission not in s.permissions:
+                raise PermissionDenied(
+                    f"call needs `{permission}`; session holds "
+                    f"{list(s.permissions) or 'no permissions'}",
+                    subtype="permission_denied",
+                )
+            if s.state is SessionState.DRAINING and permission in WRITE_PERMISSIONS:
                 raise PermissionDenied(
                     "session is draining; new writes are refused", subtype="session_draining",
                 )
