@@ -72,6 +72,8 @@ class Session:
     state: SessionState = SessionState.ADMITTED
     recall_bytes_used: int = 0
     call_count: int = 0
+    bytes_read: int = 0
+    bytes_written: int = 0
     last_receipt: str | None = None
     receipts: dict[str, str] = field(default_factory=dict)
     grant_ref: AccessRef | None = None

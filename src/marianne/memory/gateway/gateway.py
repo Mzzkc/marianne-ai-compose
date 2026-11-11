@@ -4,20 +4,23 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from marianne.memory.access import AccessRef, GrantStore, scope_covers
 from marianne.memory.backend_protocol import MemoryBackend, RequestContext
 from marianne.memory.errors import (
     AuthorityRevoked,
     DeadlineExceeded,
+    MemoryBackendError,
     NotFound,
     PermissionDenied,
     RecallCapExceeded,
     SchemaViolation,
     ScopeRefused,
 )
+from marianne.memory.gateway.audit import AuditLog
 from marianne.memory.gateway.session import (
+    TERMINAL,
     MemoryCaps,
     Session,
     SessionState,
@@ -51,8 +54,9 @@ TOOL_PERMISSIONS: dict[str, tuple[Permission, bool]] = {
 class Gateway:
     """A library a conductor can host. Holds no socket; reaches backends only via the Protocol."""
 
-    def __init__(self, *, grants: GrantStore | None = None) -> None:
+    def __init__(self, *, grants: GrantStore | None = None, audit: AuditLog | None = None) -> None:
         self.sessions = SessionTable()
+        self._audit = audit
         self._grants = grants
         self._backends: dict[str, MemoryBackend] = {}
 
@@ -94,10 +98,26 @@ class Gateway:
             job_id=job_id, caps=caps,
         )
         session.grant_ref = access if access is not None and access.kind == "grant" else None
+        if self._audit is not None:
+            self._audit.append(
+                dispatch_id=session.dispatch_id, session_id=session.session_id,
+                principal=session.principal, event="session_opened", scope=session.scope,
+                result_status="ok",
+            )
         return session
 
     def close_session(self, session_id: str) -> Session:
-        return self.sessions.close(session_id)
+        s = self.sessions.get(session_id)
+        was_live = s.state not in TERMINAL
+        self.sessions.close(session_id)
+        if self._audit is not None and was_live:
+            self._audit.append(
+                dispatch_id=s.dispatch_id, session_id=s.session_id, principal=s.principal,
+                event="session_closed", seal=True, scope=s.scope, result_status="ok",
+                call_count=s.call_count, bytes_read=s.bytes_read, bytes_written=s.bytes_written,
+                duration_seconds=time.time() - s.opened_at,
+            )
+        return s
 
     # ------------------------------------------------------------ the pipeline
 
@@ -144,18 +164,46 @@ class Gateway:
     def _run(
         self, session_id: str, tool: str, budget_seconds: float | None,
         call: Callable[[MemoryBackend, RequestContext, Session], T],
+        fact_id: str | None = None,
     ) -> T:
         permission, _ = TOOL_PERMISSIONS[tool]
-        s = self.sessions.admit_call(session_id, permission.value)
-        self._check_grant(s, permission)
-        if permission.value not in s.permissions:
-            raise PermissionDenied(
-                f"`{tool}` needs `{permission.value}`; session holds "
-                f"{list(s.permissions) or 'no permissions'}",
-                subtype="permission_denied",
-            )
-        ctx = self._context(s, permission, budget_seconds)
-        return call(self._backends[s.attachment[0]], ctx, s)
+        started = time.time()
+        s = self.sessions.get(session_id)  # unknown session: nothing to attribute an audit line to
+        try:
+            s = self.sessions.admit_call(session_id, permission.value)
+            self._check_grant(s, permission)
+            ctx = self._context(s, permission, budget_seconds)
+            result = call(self._backends[s.attachment[0]], ctx, s)
+        except MemoryBackendError as exc:
+            self._record(s, tool, started, fact_id, None, exc)
+            raise
+        self._record(s, tool, started, fact_id, result, None)
+        return result
+
+    def _record(
+        self, s: Session, tool: str, started: float, fact_id: str | None,
+        result: Any, exc: MemoryBackendError | None,
+    ) -> None:
+        if self._audit is None:
+            return
+        returned: list[str] = []
+        size = 0
+        if isinstance(result, dict):
+            fact_id = fact_id or result.get("fact_id")
+            for item in result.get("results", ()):
+                returned.append(item["fact_id"])
+                size += len(item["content"].encode("utf-8"))
+            if "bytes" in result:
+                size = len(str(result["bytes"]).encode("utf-8"))
+        if tool == "recall" or tool == "fetch":
+            s.bytes_read += size
+        self._audit.append(
+            dispatch_id=s.dispatch_id, session_id=s.session_id, principal=s.principal,
+            event="operation", scope=s.scope, tool=tool, fact_id=fact_id,
+            returned_fact_ids=returned, result_status="ok" if exc is None else "refused",
+            latency_ms=(time.time() - started) * 1000.0, bytes=size,
+            error_code=None if exc is None else exc.code.name,
+        )
 
     # ------------------------------------------------------------ the six tools
 
@@ -202,7 +250,7 @@ class Gateway:
                 s.receipts[result["fact_id"]] = token
             return result
 
-        return self._run(session_id, "verify", budget_seconds, go)
+        return self._run(session_id, "verify", budget_seconds, go, fact_id_or_hash)
 
     def bind(
         self, session_id: str, fact_id: str, target_symbol: str,
@@ -217,7 +265,7 @@ class Gateway:
                 )
             return b.bind(ctx, fact_id, target_symbol, receipt)
 
-        return self._run(session_id, "bind", budget_seconds, go)
+        return self._run(session_id, "bind", budget_seconds, go, fact_id)
 
     def forget(
         self, session_id: str, fact_id: str, reason: str = "", *,
@@ -227,7 +275,7 @@ class Gateway:
             s.receipts.pop(fact_id, None)
             return b.forget(ctx, fact_id, reason)
 
-        return self._run(session_id, "forget", budget_seconds, go)
+        return self._run(session_id, "forget", budget_seconds, go, fact_id)
 
     def fetch(
         self, session_id: str, unit_id: str, offset: int, length: int, *,
@@ -236,7 +284,7 @@ class Gateway:
         def go(b: MemoryBackend, ctx: RequestContext, s: Session) -> FetchResult:
             return b.fetch(ctx, unit_id, offset, length)
 
-        return self._run(session_id, "fetch", budget_seconds, go)
+        return self._run(session_id, "fetch", budget_seconds, go, unit_id)
 
 
 __all__ = ["TOOL_PERMISSIONS", "Gateway", "SessionState"]
