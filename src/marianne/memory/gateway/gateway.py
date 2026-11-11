@@ -274,9 +274,14 @@ class Gateway:
                         subtype="recall_cap_exceeded", remedy="narrow the query or fetch by unit",
                     )
                 cap = min(cap, remaining)
-            result = b.recall(ctx, query, self._scope(s, scope), limit, cursor)
-            # The Protocol carries no per-call cap, so the clamp min(recall_cap_bytes,
-            # quota_remaining) is applied here by cutting at a fact boundary.
+            result = b.recall(ctx, query, self._scope(s, scope), limit, cursor, cap_bytes=cap)
+            if not result["results"] and result["oversized"] and cap < s.caps.recall_cap_bytes:
+                raise RecallCapExceeded(
+                    f"no result fits the {cap} bytes the dispatch quota still allows",
+                    subtype="recall_cap_exceeded", remedy="fetch by unit or narrow the query",
+                )
+            # Second guard: the backend already honoured cap_bytes; trim again at a
+            # fact boundary in case it did not.
             kept: list[RecallItem] = []
             used = 0
             for item in result["results"]:

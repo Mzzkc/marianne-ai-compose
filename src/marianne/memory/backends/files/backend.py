@@ -633,9 +633,13 @@ class FilesBackend:
 
     def recall(
         self, ctx: RequestContext, query: str, scope: str, limit: int = 100,
-        cursor: str | None = None,
+        cursor: str | None = None, cap_bytes: int | None = None,
     ) -> RecallResult:
         self._guard(ctx, Permission.READ, scope)
+        if cap_bytes is not None and (
+            not isinstance(cap_bytes, int) or isinstance(cap_bytes, bool) or cap_bytes < 0
+        ):
+            raise files_error("argument_invalid", "cap_bytes must be a non-negative integer")
         if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
             raise files_error("argument_invalid", "limit must be a positive integer")
         payload = self._decode_cursor(cursor, query) if cursor is not None else None
@@ -651,21 +655,25 @@ class FilesBackend:
             now = float(payload["now"]) if payload else _now()
             pos = int(payload["pos"]) if payload else 0
             cap = self._cfg.recall_cap_bytes
+            if cap_bytes is not None:
+                cap = min(cap, cap_bytes)
             ranked = self._items(state, tiers, sections.tokens(query), now)
             oversized: list[OversizedUnit] = []
-            fits: list[_Item] = []
-            for item in ranked:
-                if item.unit.size > cap:
-                    oversized.append(oversized_unit_cursor(item.unit.unit_id, item.unit.size, cap))
-                else:
-                    fits.append(item)
-            if payload is not None:
-                oversized = []
+            if payload is None:
+                oversized = [
+                    oversized_unit_cursor(i.unit.unit_id, i.unit.size, cap)
+                    for i in ranked if i.unit.size > cap
+                ]
+            # ``pos`` indexes the full ranking, so a resumed cursor stays correct
+            # when the per-call cap differs from the one that issued it.
             page: list[RecallItem] = []
             used = 0
             index = pos
-            while index < len(fits) and len(page) < limit:
-                item = fits[index]
+            while index < len(ranked) and len(page) < limit:
+                item = ranked[index]
+                if item.unit.size > cap:
+                    index += 1
+                    continue
                 if used + item.unit.size > cap:
                     break
                 used += item.unit.size
@@ -677,10 +685,11 @@ class FilesBackend:
                 })
                 index += 1
             cut: PageCursor | None = None
-            if index < len(fits):
+            rest = [i for i in ranked[index:] if i.unit.size <= cap]
+            if rest:
                 cut = page_cursor(
-                    self._encode_cursor(query, tree, now, index),
-                    fits[index].unit.unit_id, len(fits) - index,
+                    self._encode_cursor(query, tree, now, ranked.index(rest[0])),
+                    rest[0].unit.unit_id, len(rest),
                 )
             return {"results": page, "cursor": cut, "oversized": oversized,
                     "explaining_path": None}

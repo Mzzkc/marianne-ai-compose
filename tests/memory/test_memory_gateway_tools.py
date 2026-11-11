@@ -382,3 +382,26 @@ def test_zero_remaining_quota_refuses_before_backend() -> None:
     with pytest.raises(RecallCapExceeded):
         g.recall(sid, "q")
     assert f.ctxs == []
+
+
+def test_gateway_passes_min_of_cap_and_quota_to_the_backend(tmp_path: Path) -> None:
+    seen: list[Any] = []
+
+    class Spy:
+        def __init__(self, inner: Any) -> None:
+            self.inner = inner
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self.inner, name)
+
+        def recall(self, ctx: RequestContext, *a: Any, **k: Any) -> Any:
+            seen.append(k.get("cap_bytes"))
+            return self.inner.recall(ctx, *a, **k)
+
+    g = Gateway(require_audit=False)
+    g.register_backend("att-1", Spy(files_backend(tmp_path / "files", recall_cap_bytes=1024)))
+    sid = sess(g, caps=MemoryCaps(recall_cap_bytes=400, dispatch_recall_quota_bytes=500))
+    g.declare(sid, "spy fact " + "pad " * 20, provenance=EV)
+    g.recall(sid, "spy")
+    g.recall(sid, "spy")
+    assert seen[0] == 400 and seen[1] <= 500 - 90

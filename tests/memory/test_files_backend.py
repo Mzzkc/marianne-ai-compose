@@ -755,3 +755,42 @@ def test_files_subtypes_are_a_closed_mapping() -> None:
     assert FILES_SUBTYPES["fact_not_found"] is ErrorCode.E11
     assert FILES_SUBTYPES["lock_timeout"] is ErrorCode.E9
     assert FILES_SUBTYPES["deadline_exceeded"] is ErrorCode.E10
+
+
+# ---------------------------------------------------------------- per-call cap
+
+
+def test_per_call_cap_bounds_the_page_and_a_resumed_cursor_continues(root: Path) -> None:
+    b = make(root)
+    texts = [f"capnote {n:02d} " + ("y" * 90) for n in range(10)]
+    for t in texts:
+        declare(b, t)
+    seen: list[str] = []
+    result = b.recall(ctx(), "capnote", "project/demo", cap_bytes=350)
+    pages = 0
+    while True:
+        pages += 1
+        assert sum(len(i["content"].encode()) for i in result["results"]) <= 350
+        assert result["results"]
+        seen.extend(i["content"] for i in result["results"])
+        if result["cursor"] is None:
+            break
+        # a different (smaller) cap on resume must not skip or repeat facts
+        result = b.recall(
+            ctx(), "capnote", "project/demo", cursor=result["cursor"]["cursor"],
+            cap_bytes=350 if pages % 2 else 250,
+        )
+    assert pages > 3
+    assert sorted(seen) == sorted(texts)
+
+
+def test_per_call_cap_defaults_to_backend_cap_and_never_exceeds_it(root: Path) -> None:
+    b = make(root, recall_cap_bytes=1024)
+    declare(b, "wide " + "z" * 200)
+    big = b.recall(ctx(), "wide", "project/demo", cap_bytes=10**9)
+    assert len(big["results"]) == 1 and big["oversized"] == []
+    small = b.recall(ctx(), "wide", "project/demo", cap_bytes=50)
+    assert small["results"] == [] and len(small["oversized"]) == 1
+    assert small["oversized"][0]["cap_bytes"] == 50
+    with pytest.raises(MemoryBackendError):
+        b.recall(ctx(), "wide", "project/demo", cap_bytes=-1)

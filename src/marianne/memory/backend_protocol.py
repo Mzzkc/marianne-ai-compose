@@ -142,8 +142,15 @@ class MemoryBackend(Protocol):
         scope: str,
         limit: int = 100,
         cursor: str | None = None,
+        cap_bytes: int | None = None,
     ) -> RecallResult:
-        """Facts relevant to ``query``, within the per-response byte cap."""
+        """Facts relevant to ``query``, within the per-response byte cap.
+
+        ``cap_bytes`` is an optional per-call ceiling the gateway sets to
+        ``min(recall_cap_bytes, quota_remaining)``; the backend applies the
+        smaller of it and its own cap, stops reading at it and returns its
+        cursor. ``None`` keeps the backend's own cap (the 1.1 behaviour).
+        """
         ...
 
     def verify(
