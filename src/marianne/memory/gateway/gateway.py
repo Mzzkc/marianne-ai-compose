@@ -130,6 +130,20 @@ class Gateway:
             )
         return s
 
+    def audit_endpoint_event(
+        self, session_id: str, *, tool: str | None, result_status: str,
+        error_code: str | None = None, **fields: Any,
+    ) -> None:
+        """Record an endpoint-level event (refused attempt, cancellation) for a session."""
+        if self._audit is None:
+            return
+        s = self.sessions.get(session_id)
+        self._audit.append(
+            dispatch_id=s.dispatch_id, session_id=s.session_id, principal=s.principal,
+            event="operation", scope=s.scope, tool=tool, result_status=result_status,
+            error_code=error_code, **fields,
+        )
+
     # ------------------------------------------------------------ the pipeline
 
     def _context(
