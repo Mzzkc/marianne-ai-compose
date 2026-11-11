@@ -58,6 +58,15 @@ from marianne.validation.checks.jinja import (
     JinjaSyntaxCheck,
     JinjaUndefinedVariableCheck,
 )
+from marianne.validation.checks.memory import (
+    MemoryAccessInvalidCheck,
+    MemoryCapsInvalidCheck,
+    MemoryGrantUnknownCheck,
+    MemoryPhasesInvalidCheck,
+    MemoryProvenanceOffNote,
+    MemoryScopeInvalidCheck,
+    MemorySystemUnknownCheck,
+)
 from marianne.validation.checks.paths import (
     AbsoluteHomePathCheck,
     CadenzaOrderingCheck,
@@ -78,6 +87,13 @@ from marianne.validation.checks.techniques import (
 )
 
 __all__ = [
+    "MemoryAccessInvalidCheck",
+    "MemoryCapsInvalidCheck",
+    "MemoryGrantUnknownCheck",
+    "MemoryPhasesInvalidCheck",
+    "MemoryProvenanceOffNote",
+    "MemoryScopeInvalidCheck",
+    "MemorySystemUnknownCheck",
     "DeprecatedSpellingCheck",
     "EnabledSettingsWarningCheck",
     "ReservedKeyUseCheck",

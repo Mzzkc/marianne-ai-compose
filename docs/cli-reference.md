@@ -611,6 +611,13 @@ code-registry and corpus-sweep tests.
 | WARNING | V208, V219–V220, V224, V226, V231–V232, V235, V315 | Built-in shadowing (deprecation); advisory structure and flow risks |
 | WARNING | V234 | A loopback `http` profile in the score's chain declares a `context_window` for its default model larger than the server reports on `GET /props` (`default_generation_settings.n_ctx`, which llama-server and PolyStrata share); the executor would size `max_tokens` to the profile and the first request would be refused with HTTP 400 (GH #494). Quiet when the server does not expose `/props` |
 | WARNING | V228 | A loop's `cost_limit_usd` cannot bind because every route in the span reports no cost — the message names the route and why (raw shell profile, no token paths, no models, or a $0 price); a priced CLI route such as `claude-code` or `codex-cli` DOES report cost and the cap binds (GH #453) |
+| ERROR | V340 | `memory.backends.<name>.system` is not a memory backend this release ships (only `files`) |
+| ERROR | V342 | A `memory` `phases` entry is not `all`, a movement number, or a movement name the score defines |
+| ERROR | V344 | A `memory` `scope` fails the scope grammar (`<family>/<id>` or `<family>:<id>`) |
+| ERROR | V345 | `memory` caps out of range (`recall_cap_bytes` 1024 to 1048576), an attachment cap above the score default, or an unknown `provenance` value |
+| INFO | V345 | Message prefixed `V345-NOTE`: `provenance: off` is deprecated and was read as `optional` |
+| ERROR | V346 | A `memory` `access` value is neither `inherit` nor `grant:<name>[@<version>]` |
+| ERROR | V347 | A `memory` `access` names a grant; no grant store exists yet, so only `inherit` is accepted |
 | WARNING | V327 | A score sets a reserved key — accepted, but no runtime code reads it; also warns when `movements.<N>.voices` cannot expand with the sheet's size/start settings |
 | WARNING | V328 | Deprecated spelling or key: root `max_wall_seconds` (now `schedule.max_wall_seconds`), `checkpoints:` (now `approvals:`), hook-level `on_failure` (now `if_hook_fails`), root `conductor` |
 | WARNING | V329 | A readable default-off section has settings but no `enabled` key; set `enabled: true` now or explicit `enabled: false` to opt out of next release's auto-enable rule |

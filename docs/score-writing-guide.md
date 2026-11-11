@@ -512,6 +512,25 @@ Enables passing outputs and files between sheets for multi-phase workflows.
 
 List of rules checked after each sheet execution. See [Validation Types](#validation-types).
 
+### `memory`
+
+Declares named memory attachments. This key is **not yet wired**: the memory protocol and the `files` backend exist as a library, but the conductor does not yet give a sheet access to a declared memory. `mzt validate` checks the shape (V340-V347) and reports the key with V327. Leave it out unless you are preparing a score for the wiring.
+
+This example is reserved syntax; it does nothing yet.
+
+```yaml
+memory:
+  backends:
+    main:
+      system: files
+      scope: person/legion
+      access: inherit
+      phases: ["all"]
+  defaults: {recall_cap_bytes: 32768, provenance: required}
+```
+
+See the [configuration reference](configuration-reference.md#memory) for every field.
+
 ### `notifications`
 
 | Field | Type | Default | Description |

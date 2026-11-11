@@ -1415,6 +1415,45 @@ learning:
 
 ---
 
+## memory
+
+*Source: `src/marianne/core/config/memory.py` — `MemoryConfig`, `MemoryBackendDecl`, `MemoryCaps`, `MemoryDefaults`*
+
+Declares named memory attachments for the score. **Reserved: not yet wired.** The memory protocol and the `files` backend exist as a library (`marianne.memory`); the conductor does not yet give a sheet access to a declared memory. The key validates (V340-V347) and `mzt validate` reports it with V327 as a key no runtime code reads. A score without `memory:` loads and runs exactly as before. `memory: {}` is legal.
+
+This example is reserved syntax; it does nothing yet.
+
+```yaml
+memory:
+  backends:
+    main:                       # attachment name: ^[a-z][a-z0-9-]{0,31}$
+      system: files
+      scope: person/legion
+      access: inherit
+      trust: gateway-only
+      trust_native: false
+      phases: ["all"]
+      caps: {recall_cap_bytes: 16384, provenance: required}
+      settings: {}
+  defaults: {recall_cap_bytes: 32768, provenance: required, lock_timeout_seconds: 10.0}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `memory.backends` | map | `{}` | Named attachments; each name matches `^[a-z][a-z0-9-]{0,31}$` |
+| `memory.backends.<k>.system` | string | required | Backend id; only `files` ships (V340) |
+| `memory.backends.<k>.scope` | string | none (`local:default`) | `<family>/<id>` or `<family>:<id>` (V344) |
+| `memory.backends.<k>.access` | string | `inherit` | `inherit` or `grant:<name>[@<version>]`; no grant store exists yet, so grants fail V347 (V346) |
+| `memory.backends.<k>.trust` | enum | `gateway-only` | `gateway-only`, `backend` or `trusted` |
+| `memory.backends.<k>.trust_native` | bool | `false` | Opt in to expose the backend's native tools |
+| `memory.backends.<k>.phases` | list | `["all"]` | `all`, movement numbers, or movement names (V342) |
+| `memory.backends.<k>.caps` | object | defaults | `recall_cap_bytes` (1024 to 1048576, not above the score default) and `provenance` (V345) |
+| `memory.backends.<k>.settings` | map | `{}` | Passed to the backend unchanged |
+| `memory.defaults` | object | see below | Score-level defaults |
+| `memory.defaults.recall_cap_bytes` | int | `32768` | Per-recall page cap in bytes |
+| `memory.defaults.provenance` | enum | `required` | `required` or `optional`; the deprecated `off` is read as `optional` (V345 INFO note) |
+| `memory.defaults.lock_timeout_seconds` | float | `10.0` | Outer timeout for one memory call |
+
 ## checkpoints
 
 *Source: `src/marianne/core/config/learning.py` — `CheckpointConfig`*

@@ -56,6 +56,7 @@ from marianne.core.config.learning import (
     GroundingConfig,
     LearningConfig,
 )
+from marianne.core.config.memory import MemoryConfig
 from marianne.core.config.orchestration import (
     ConcertConfig,
     ConductorConfig,
@@ -1159,6 +1160,14 @@ class JobConfig(BaseModel):
         "Referenced by name in per-sheet or per-movement instrument: fields.",
     )
 
+    memory: MemoryConfig | None = Field(
+        default=None,
+        description="Reserved: no runtime reader yet (V327 warns when set). "
+        "Named memory attachments for this score (backends, scope, access, "
+        "trust, phases, caps). The conductor does not yet give a sheet access "
+        "to a declared memory.",
+    )
+
     # Movement declarations (M4: movement-level instrument and voice config)
     movements: dict[int, MovementDef] = Field(
         default_factory=dict,
@@ -1405,7 +1414,8 @@ class JobConfig(BaseModel):
         explicit_stages = {str(key) for key in fan_out}
         for key, movement in movements.items():
             voices = (
-                movement.get("voices") if isinstance(movement, dict)
+                movement.get("voices")
+                if isinstance(movement, dict)
                 else getattr(movement, "voices", None)
             )
             if voices is not None and str(key) not in explicit_stages:
@@ -1444,22 +1454,25 @@ class JobConfig(BaseModel):
         from marianne.core.sheet import build_sheets
 
         issues: list[FlowIssue] = []
-        configured = {
-            loop.index: span for span, loop in self.sheet.loops.items()
-        }
+        configured = {loop.index: span for span, loop in self.sheet.loops.items()}
         for name, span in configured.items():
             if name in self.prompt.variables:
-                issues.append(FlowIssue(
-                    "V-FLOW-10", span,
-                    f"loop index {name!r} collides with prompt.variables[{name!r}]",
-                ))
+                issues.append(
+                    FlowIssue(
+                        "V-FLOW-10",
+                        span,
+                        f"loop index {name!r} collides with prompt.variables[{name!r}]",
+                    )
+                )
 
         sheets = build_sheets(self)
         total_movements = len({sheet.movement for sheet in sheets}) or 1
         for rule in self.validations:
             templates = (rule.path, rule.command, rule.working_directory, rule.pattern)
             used = {
-                name for template in templates if template is not None
+                name
+                for template in templates
+                if template is not None
                 for name in re.findall(r"(?<!\{)\{([A-Za-z][A-Za-z0-9_]*)\}(?!\})", template)
                 if name in configured
             }
@@ -1470,14 +1483,18 @@ class JobConfig(BaseModel):
                     context = sheet.template_variables(
                         total_sheets=len(sheets), total_movements=total_movements
                     )
-                    if (sheet.num not in allowed
-                            and check_validation_condition(rule.condition, context)):
+                    if sheet.num not in allowed and check_validation_condition(
+                        rule.condition, context
+                    ):
                         label = rule.description or rule.type
-                        issues.append(FlowIssue(
-                            "V-FLOW-16", span,
-                            f"validation {label!r} uses loop index {name!r} "
-                            f"but also applies to sheet {sheet.num}, outside loop {span}",
-                        ))
+                        issues.append(
+                            FlowIssue(
+                                "V-FLOW-16",
+                                span,
+                                f"validation {label!r} uses loop index {name!r} "
+                                f"but also applies to sheet {sheet.num}, outside loop {span}",
+                            )
+                        )
                         break
         if issues:
             raise FlowConfigError(tuple(issues))
@@ -1645,7 +1662,8 @@ class JobConfig(BaseModel):
 
 
 def merge_runtime_variables(
-    config: JobConfig, runtime_variables: dict[str, str],
+    config: JobConfig,
+    runtime_variables: dict[str, str],
 ) -> JobConfig:
     """Merge per-invocation ``--var`` variables into ``prompt.variables`` (#359).
 

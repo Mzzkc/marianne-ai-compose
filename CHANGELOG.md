@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`memory:` score key, validators V340/V342/V344-V347 (GH #496, wave A step 3).** A score may
+  declare named memory attachments (`backends`, `defaults`). The memory protocol and the `files`
+  backend exist as a library; the conductor does not yet give a sheet access to a declared memory,
+  so the key validates and `mzt validate` reports it with V327 as not yet wired. Scores without the
+  key are unchanged.
 - **Noisy operator hooks in musicians: doctor section, detection contract, opt-in switch (GH #536).**
   A `SessionStart` hook that told Claude Code to read two memory files ran in 212 of 278 musician
   sessions (about 28 KB each, re-read every request; 194k vs 103k context tokens in a paired

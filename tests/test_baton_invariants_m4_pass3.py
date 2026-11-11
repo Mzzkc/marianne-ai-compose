@@ -94,6 +94,12 @@ from marianne.core.config.learning import (
     GroundingHookConfig,
     LearningConfig,
 )
+from marianne.core.config.memory import (
+    MemoryBackendDecl,
+    MemoryCaps,
+    MemoryConfig,
+    MemoryDefaults,
+)
 from marianne.core.config.orchestration import (
     ConcertConfig,
     ConductorConfig,
@@ -199,6 +205,11 @@ ALL_CONFIG_MODELS: list[type[BaseModel]] = [
     PromptConfig,
     JobConfig,
     ValidateConfig,
+    # memory.py
+    MemoryBackendDecl,
+    MemoryCaps,
+    MemoryConfig,
+    MemoryDefaults,
     # judgment.py
     JudgmentConfig,
     # learning.py
@@ -334,6 +345,7 @@ class TestConfigStrictnessTotality:
                 "job",
                 "judgment",
                 "learning",
+                "memory",
                 "orchestration",
                 "spec",
                 "workspace",
@@ -743,6 +755,7 @@ class TestConfigFieldCountStability:
                 "job",
                 "judgment",
                 "learning",
+                "memory",
                 "orchestration",
                 "spec",
                 "workspace",
