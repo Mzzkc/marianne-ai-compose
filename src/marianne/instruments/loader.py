@@ -14,6 +14,12 @@ Later directories override earlier ones on name collision. This lets
 venue-specific profiles customize organization-wide defaults, which in
 turn customize built-in defaults.
 
+A file in the organization or venue layer may declare ``extends: <name>``
+(GH #543): the loader merges it over the named profile from the layers below
+(a file may extend its own name) and validates the result as one profile.
+Refusals (missing base, cycle, ``extends`` in a builtin, base not in a lower
+layer) are ``ProfileLoadFailure`` records with ``instrument_extends_*`` codes.
+
 Invalid YAML files, validation failures, and other errors are logged and
 skipped — one broken profile should not prevent other instruments from
 loading. This is a reliability-first design: degrade gracefully, log

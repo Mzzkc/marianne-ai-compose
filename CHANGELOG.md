@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Profile `extends` (GH #543).** An organization or venue instrument file may declare `extends: <name>` and carry only what differs; the loader merges it over the profile of that name from a lower layer. `mzt doctor` lists the builtin keys a whole copy lacks, and V335/V337 name a file that shadows a builtin's block.
 - **Memory shim, pure resolver and manifest (library only, GH #496).** `marianne.memory.shim` (stdio MCP server over the gateway socket), `marianne.memory.resolve` (the `memory:` key to frozen per-sheet bindings, no I/O) and `marianne.memory.manifest` (prompt block and MCP config entry). The conductor still does not open sessions at dispatch.
 - **Memory gateway socket endpoint and client (library only, GH #496).** `marianne.memory.gateway.endpoint` serves the six memory calls over a per-session Unix socket (same-UID `SO_PEERCRED`, newline-delimited JSON, `errors/1`), with a synchronous client and an optional per-call `cap_bytes` on `recall`. The conductor does not host it yet and the `memory:` key still has no runtime reader.
 - **Right-sizing pass in score building.** The composing skill, its design gate (`sizing` per stage; refuses several AI stages without it and `effort: max` without a reason), the score reviewer, `score-composer` and the casting stage of `design-to-orchestra` now make an author choose role, model tier, effort and toolset per sheet (toolset first; effort measured on one model only).

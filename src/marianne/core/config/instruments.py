@@ -1351,6 +1351,12 @@ class InstrumentProfile(BaseModel):
     - Models (what models are available, their costs and limits)
     - Execution config (CLI flags or HTTP endpoints)
     - Code-mode technique config (foundation — not wired in v1)
+
+    A file in the organization or venue layer may start with ``extends: <name>``
+    (GH #543). That key is read and removed by the loader, which deep-merges
+    the file over the named profile from a lower layer (mappings merge;
+    scalars and lists replace; an explicit null clears a key) before this
+    model validates the result, so it is not a field here.
     """
 
     model_config = ConfigDict(extra="forbid")

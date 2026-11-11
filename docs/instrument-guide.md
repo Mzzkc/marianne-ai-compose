@@ -353,6 +353,25 @@ Marianne loads instrument profiles from three directories, in order:
 Later directories override earlier ones on name collision. This lets you
 customize a built-in profile for your project without modifying Marianne's source.
 
+### Changing One Field of a Built-in: `extends`
+
+A file with the same name replaces the built-in whole. A full copy keeps
+working but never gains the blocks the built-in adds later. Use `extends`
+instead. The file is merged over the profile of that name from a lower layer.
+
+```yaml
+# ~/.marianne/instruments/claude-code.yaml
+extends: claude-code
+default_model: "glm-5.3[1m]"
+```
+
+Mappings merge key by key. Scalars and lists you write replace the base. An
+explicit `null` removes a key. `name` defaults to the base name. `extends`
+works only in organization and venue files, and the base must live in a layer
+below the file's own. A missing base, a cycle, or `extends` in a built-in is a
+load failure that `mzt doctor` reports. `mzt doctor` also lists the keys a
+whole copy of a built-in lacks.
+
 ### Writing a Profile
 
 Here is a minimal profile for a hypothetical CLI tool:
