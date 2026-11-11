@@ -956,6 +956,74 @@ class BatonCore:
             )
             return None
 
+    def _wait_for_earliest_rate_limit(self, job_id: str, sheet: SheetExecutionState) -> bool:
+        """Park an exhausted sheet WAITING on the chain entry that frees first (GH #542).
+
+        Considers every entry of the sheet's chain (the primary, each
+        fallback, and the current instrument). Entries whose instrument is
+        rate-limited with a future expiry are candidates; the earliest wins.
+        The sheet is rebound to it with a fresh budget, so the
+        ``RateLimitExpired`` timer already scheduled for that instrument
+        returns it to PENDING on the right entry.
+
+        Returns True when the sheet was parked, False when no entry is
+        waitable (the caller then continues its ordinary exhaustion path).
+        """
+        now = time.monotonic()
+        entries: list[str] = []
+        if sheet.primary_identity is not None and sheet.primary_identity.name:
+            entries.append(sheet.primary_identity.name)
+        for name in sheet.fallback_chain:
+            entries.append(name)
+        best_pos: int | None = None
+        best_name = ""
+        best_expiry = 0.0
+        for pos, name in enumerate(entries):
+            inst = self._instruments.get(name)
+            if (
+                inst is None
+                or not inst.rate_limited
+                or inst.rate_limit_expires_at is None
+                or inst.rate_limit_expires_at <= now
+            ):
+                continue
+            if best_pos is None or inst.rate_limit_expires_at < best_expiry:
+                best_pos, best_name, best_expiry = pos, name, inst.rate_limit_expires_at
+        if best_pos is None:
+            return False
+
+        has_primary = sheet.primary_identity is not None and bool(sheet.primary_identity.name)
+        from_instrument = sheet.instrument_name or ""
+        if has_primary and best_pos == 0:
+            sheet.current_instrument_index = 0
+            sheet.restore_primary_identity()
+        else:
+            chain_pos = best_pos - 1 if has_primary else best_pos
+            sheet.current_instrument_index = chain_pos + 1
+            sheet.instrument_name = best_name
+            sheet.model = (
+                sheet.fallback_configs[chain_pos].get("model")
+                if chain_pos < len(sheet.fallback_configs)
+                else None
+            )
+            sheet.instrument_model = sheet.model
+        sheet.normal_attempts = 0
+        sheet.completion_attempts = 0
+        sheet.status = BatonSheetStatus.WAITING
+        sheet.clear_dispatch_block()
+        self._state_dirty = True
+        _logger.warning(
+            "baton.sheet.waiting_for_stated_reset",
+            extra={
+                "job_id": job_id,
+                SHEET_NUM_KEY: sheet.sheet_num,
+                "from_instrument": from_instrument,
+                "instrument": best_name,
+                "wait_seconds": round(best_expiry - now, 1),
+            },
+        )
+        return True
+
     async def _handle_exhaustion(
         self, job_id: str, sheet_num: int, sheet: SheetExecutionState
     ) -> None:
@@ -1014,6 +1082,17 @@ class BatonCore:
                     },
                 )
                 return
+
+        # Path 1b (GH #542): a wall that announces when it ends must not cost
+        # the job. If any entry of this sheet's chain is rate-limited with a
+        # future expiry, wait for the earliest one rather than heal, escalate
+        # or fail. The existing RateLimitExpired timer redispatches the sheet.
+        # No ceiling: each wait is bound to a provider-stated expiry already
+        # clamped to RESET_TIME_MAXIMUM_WAIT_SECONDS, and an entry that fails
+        # for any other reason after its wait takes the ordinary exhaustion
+        # path (or waits on a different still-limited entry).
+        if self._wait_for_earliest_rate_limit(job_id, sheet):
+            return
 
         # Path 2: Self-healing (#201). Schedule one targeted, *enriched* retry.
         #
