@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal
 
+from marianne.memory.access import AccessRef
 from marianne.memory.errors import (
     AuthorityRevoked,
     NotFound,
@@ -69,6 +70,7 @@ class Session:
     call_count: int = 0
     last_receipt: str | None = None
     receipts: dict[str, str] = field(default_factory=dict)
+    grant_ref: AccessRef | None = None
 
     @property
     def scope(self) -> str:

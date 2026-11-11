@@ -4,6 +4,7 @@ A library a conductor can host; it holds no socket and no daemon. It reaches
 backends only through the ``memory-backend/1.1`` protocol.
 """
 
+from marianne.memory.gateway.gateway import TOOL_PERMISSIONS, Gateway
 from marianne.memory.gateway.session import (
     TERMINAL,
     MemoryCaps,
@@ -12,4 +13,7 @@ from marianne.memory.gateway.session import (
     SessionTable,
 )
 
-__all__ = ["TERMINAL", "MemoryCaps", "Session", "SessionState", "SessionTable"]
+__all__ = [
+    "TERMINAL", "TOOL_PERMISSIONS", "Gateway", "MemoryCaps", "Session", "SessionState",
+    "SessionTable",
+]
