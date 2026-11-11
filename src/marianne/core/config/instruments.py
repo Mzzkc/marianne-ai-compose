@@ -1359,6 +1359,9 @@ class InstrumentProfile(BaseModel):
     # Not score fields, not included in serialization, and never a settings body.
     _source_path: Path | None = PrivateAttr(default=None)
     _source_sha256: str | None = PrivateAttr(default=None)
+    # (base name, base layer) when the file declared ``extends`` (#543).
+    # Loader metadata like the two above: not a field, never serialized.
+    _extends: tuple[str, str] | None = PrivateAttr(default=None)
 
     # Identity
     name: str = Field(

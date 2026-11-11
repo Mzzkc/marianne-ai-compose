@@ -2209,7 +2209,7 @@ class JobManager:
         except OSError:
             return set()
         from marianne.instruments.classes import _instrument_positions
-        from marianne.instruments.loader import InstrumentProfileLoader
+        from marianne.instruments.loader import InstrumentProfileLoader, profile_source_dirs
 
         loaded = {profile.name for profile in self._instrument_registry.list_all()}
         bound = {name for _, name in _instrument_positions(config)}
@@ -2219,7 +2219,9 @@ class JobManager:
         if not missing:
             return set()
         try:
-            beside = InstrumentProfileLoader.load_directories([venue_dir])
+            beside = InstrumentProfileLoader.load_directories(
+                [venue_dir], lower_layers=list(profile_source_dirs()[:2]),
+            )
         except Exception:  # noqa: BLE001 — a broken venue dir is the loader's report, not this gate's
             return set()
         return {name for name in missing if name in beside}

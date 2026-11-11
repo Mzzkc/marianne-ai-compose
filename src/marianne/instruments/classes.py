@@ -355,7 +355,9 @@ def write_user_classes(
     profiles = InstrumentProfileLoader.load_directories([builtins_dir])
     # GH #469: rank shipped names using their effective user/venue overrides.
     # Additional user/venue names opt in through their own `class_hints`.
-    hinted = InstrumentProfileLoader.load_directories([org_dir, venue_dir])
+    hinted = InstrumentProfileLoader.load_directories(
+        [org_dir, venue_dir], lower_layers=[builtins_dir],
+    )
     probe = probe_builtin_profiles(profiles, hinted)
     classes = select_class_chains(probe)
     # A hinted profile the policy refused is reported in the file's header

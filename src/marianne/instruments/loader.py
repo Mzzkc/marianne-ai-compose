@@ -30,9 +30,11 @@ Usage:
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import ipaddress
 import socket
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -91,7 +93,12 @@ def route_identity(binding: InstrumentRouteBinding) -> tuple[str | int | None, .
 _SAFE_LOADER: type[yaml.SafeLoader] = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 _FileKey = tuple[str, int, int]
 _MemoValue = tuple[InstrumentProfile | None, "ProfileLoadFailure | None"]
-_profile_memo: dict[_FileKey, _MemoValue] = {}
+# Plain files are keyed by their own _FileKey; a profile built with `extends`
+# is keyed by the tuple of every _FileKey in its chain, so editing a BASE file
+# misses the memo and the extending profile is rebuilt (#543).
+_profile_memo: dict[Any, _MemoValue] = {}
+_MappingValue = tuple["dict[str, Any] | None", str, "ProfileLoadFailure | None"]
+_mapping_memo: dict[_FileKey, _MappingValue] = {}
 
 
 def _file_key(path: Path) -> _FileKey | None:
@@ -106,6 +113,201 @@ def clear_profile_memo() -> None:
     """Forget memoised profile loads (tests that rewrite a file in place
     within one mtime tick, or callers that want a cold read)."""
     _profile_memo.clear()
+    _mapping_memo.clear()
+
+
+@dataclass(frozen=True)
+class _Layer:
+    """One profile directory in precedence order (lowest first)."""
+
+    directory: Path
+    label: str
+    builtin: bool = False
+
+
+def _builtins_dir() -> Path:
+    return Path(__file__).resolve().parent / "builtins"
+
+
+def _make_layers(
+    directories: Sequence[str | Path], labels: Sequence[str] | None = None,
+) -> list[_Layer]:
+    """Layers for ``directories``; a directory already listed is dropped.
+
+    The venue default is a relative path that names the organization
+    directory itself from ``$HOME`` (GH #493); scanning it twice would only
+    make a profile that extends its own name look like a cycle.
+    """
+    builtin = _builtins_dir().resolve()
+    seen: set[Path] = set()
+    layers: list[_Layer] = []
+    for i, d in enumerate(directories):
+        path = Path(d)
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        is_builtin = resolved == builtin
+        label = (
+            labels[i] if labels is not None and i < len(labels)
+            else ("builtin" if is_builtin else str(path))
+        )
+        layers.append(_Layer(path, label, is_builtin))
+    return layers
+
+
+def _read_mapping(path: Path) -> _MappingValue:
+    """Read and YAML-parse one file to its raw mapping, memoised by file identity."""
+    key = _file_key(path)
+    if key is not None and key in _mapping_memo:
+        return _mapping_memo[key]
+    result = _read_mapping_uncached(path)
+    if key is not None:
+        _mapping_memo[key] = result
+    return result
+
+
+def _read_mapping_uncached(path: Path) -> _MappingValue:
+    try:
+        raw_bytes = path.read_bytes()
+        raw_text = raw_bytes.decode("utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        return None, "", ProfileLoadFailure(
+            path=path.resolve(), reason_code="instrument_file_read_error",
+            reason=str(e) or type(e).__name__,
+        )
+    sha = hashlib.sha256(raw_bytes).hexdigest()
+    try:
+        data: Any = yaml.load(raw_text, Loader=_SAFE_LOADER)  # noqa: S506 - SafeLoader variant
+    except yaml.YAMLError as e:
+        return None, sha, ProfileLoadFailure(
+            path=path.resolve(), reason_code="instrument_yaml_parse_error",
+            reason=str(e) or type(e).__name__,
+        )
+    if not isinstance(data, dict):
+        return None, sha, ProfileLoadFailure(
+            path=path.resolve(), reason_code="instrument_yaml_not_dict",
+            reason=f"file is {type(data).__name__}, expected a mapping",
+        )
+    return data, sha, None
+
+
+def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """Overlay wins: mappings merge, scalars and lists replace, ``None`` clears."""
+    merged = copy.deepcopy(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = copy.deepcopy(value)
+    return merged
+
+
+def _effective_name(data: dict[str, Any]) -> str | None:
+    name = data.get("name", data.get("extends"))
+    return name if isinstance(name, str) and name else None
+
+
+def _layer_files(layer: _Layer) -> dict[str, Path]:
+    """Profile name -> file in one layer; the last file alphabetically wins."""
+    out: dict[str, Path] = {}
+    if not layer.directory.is_dir():
+        return out
+    for f in sorted(
+        f for f in layer.directory.iterdir()
+        if f.is_file() and f.suffix in _YAML_EXTENSIONS
+    ):
+        data, _sha, failure = _read_mapping(f)
+        if failure is not None or data is None:
+            continue
+        name = _effective_name(data)
+        if name is not None:
+            out[name] = f
+    return out
+
+
+class _ExtendsError(Exception):
+    def __init__(self, code: str, reason: str) -> None:
+        super().__init__(reason)
+        self.code = code
+        self.reason = reason
+
+
+@dataclass
+class _Resolved:
+    data: dict[str, Any]
+    chain: list[tuple[Path, _FileKey | None, str]]  # (file, key, sha), own file first
+    base: tuple[str, str] | None  # (base name, base layer label) of the immediate base
+
+
+def _resolve_raw(
+    path: Path, layers: Sequence[_Layer], idx: int, stack: tuple[Path, ...],
+) -> _Resolved:
+    """Merge ``path`` (in ``layers[idx]``) over its ``extends`` chain.
+
+    Raises ``_ExtendsError`` with a typed code for each refusal.
+    """
+    data, sha, failure = _read_mapping(path)
+    if failure is not None or data is None:
+        assert failure is not None
+        raise _ExtendsError(failure.reason_code, failure.reason)
+    own = (path.resolve(), _file_key(path), sha)
+    if "extends" not in data:
+        return _Resolved(data, [own], None)
+
+    layer = layers[idx]
+    base_name = data["extends"]
+    if not isinstance(base_name, str) or not base_name.strip():
+        raise _ExtendsError(
+            "instrument_extends_invalid", "extends must be a non-empty profile name",
+        )
+    if layer.builtin:
+        raise _ExtendsError(
+            "instrument_extends_in_builtin",
+            "extends is not allowed in a builtin profile; builtins are the base layer",
+        )
+    if path.resolve() in stack:
+        raise _ExtendsError(
+            "instrument_extends_cycle",
+            f"extends cycle through {path.name} ({base_name!r})",
+        )
+    stack = (*stack, path.resolve())
+
+    for j in range(idx - 1, -1, -1):
+        base_file = _layer_files(layers[j]).get(base_name)
+        if base_file is None:
+            continue
+        if base_file.resolve() in stack:
+            raise _ExtendsError(
+                "instrument_extends_cycle",
+                f"extends cycle: {base_file.name} is already being resolved",
+            )
+        try:
+            base = _resolve_raw(base_file, layers, j, stack)
+        except _ExtendsError as e:
+            raise _ExtendsError(
+                e.code, f"base profile {base_name!r} ({layers[j].label}) cannot load: {e.reason}",
+            ) from None
+        overlay = {k: v for k, v in data.items() if k != "extends"}
+        merged = _deep_merge(base.data, overlay)
+        merged.setdefault("name", base_name)
+        return _Resolved(merged, [own, *base.chain], (base_name, layers[j].label))
+
+    elsewhere = [
+        lay.label for lay in layers[idx:]
+        if any(p != path for p in [_layer_files(lay).get(base_name)] if p is not None)
+    ]
+    if elsewhere:
+        raise _ExtendsError(
+            "instrument_extends_not_below",
+            f"extends {base_name!r} names a profile only in the same or a higher layer "
+            f"({', '.join(elsewhere)}); a file can extend only a profile from a layer below "
+            f"its own ({layer.label})",
+        )
+    raise _ExtendsError(
+        "instrument_extends_missing_base",
+        f"extends {base_name!r}: no profile of that name in any layer below {layer.label}",
+    )
 
 
 class InstrumentProfileLoader:
@@ -139,6 +341,9 @@ class InstrumentProfileLoader:
     @staticmethod
     def _scan_directory(
         directory: str | Path,
+        *,
+        layers: Sequence[_Layer] | None = None,
+        layer_index: int = 0,
     ) -> tuple[dict[str, InstrumentProfile], list[ProfileLoadFailure]]:
         """Scan one directory, reporting files that failed to load.
 
@@ -165,7 +370,7 @@ class InstrumentProfileLoader:
 
         for yaml_file in yaml_files:
             profile, failure = InstrumentProfileLoader._load_file_detailed(
-                yaml_file
+                yaml_file, layers=layers, layer_index=layer_index,
             )
             if failure is not None:
                 failures.append(failure)
@@ -192,6 +397,9 @@ class InstrumentProfileLoader:
     @staticmethod
     def load_directories(
         directories: list[str | Path],
+        *,
+        lower_layers: Sequence[str | Path] = (),
+        labels: Sequence[str] | None = None,
     ) -> dict[str, InstrumentProfile]:
         """Load profiles from multiple directories with override semantics.
 
@@ -201,23 +409,40 @@ class InstrumentProfileLoader:
             2. Organization profiles (~/.marianne/instruments/)
             3. Venue profiles (.marianne/instruments/, highest precedence)
 
+        A file may declare ``extends: <name>`` (#543): it is merged over the
+        named profile from the layers below it. ``lower_layers`` names
+        directories that sit below ``directories`` and are consulted only to
+        resolve ``extends``; their profiles are not returned.
+
         Args:
             directories: Ordered list of directories to scan. Missing
                 directories are silently skipped.
+            lower_layers: Directories below ``directories``, for ``extends``.
+            labels: Layer names for ``directories`` (messages and metadata).
 
         Returns:
             Merged dict of profile name → InstrumentProfile.
         """
         merged: dict[str, InstrumentProfile] = {}
+        lower = _make_layers(lower_layers)
+        own = _make_layers(
+            directories, labels,
+        )
+        # A directory listed below is not rescanned above.
+        lower_resolved = {lay.directory.resolve() for lay in lower}
+        own = [lay for lay in own if lay.directory.resolve() not in lower_resolved]
+        layers = [*lower, *own]
 
-        for directory in directories:
-            dir_profiles = InstrumentProfileLoader.load_directory(directory)
+        for i, layer in enumerate(own):
+            dir_profiles, _failures = InstrumentProfileLoader._scan_directory(
+                layer.directory, layers=layers, layer_index=len(lower) + i,
+            )
             for name, profile in dir_profiles.items():
                 if name in merged:
                     _logger.info(
                         "instrument_overridden_by_later_dir",
                         name=name,
-                        directory=str(directory),
+                        directory=str(layer.directory),
                     )
                 merged[name] = profile
 
@@ -242,17 +467,68 @@ class InstrumentProfileLoader:
     @staticmethod
     def _load_file_detailed(
         path: Path,
+        *,
+        layers: Sequence[_Layer] | None = None,
+        layer_index: int = 0,
     ) -> tuple[InstrumentProfile | None, ProfileLoadFailure | None]:
         """Memoised ``_load_file_uncached``: the same bytes (path, mtime,
-        size) parse once per process; a changed file is parsed afresh."""
+        size) parse once per process; a changed file is parsed afresh.
+
+        A file that declares ``extends`` (#543) is resolved against ``layers``
+        below ``layer_index`` and memoised under every file key in its chain,
+        so editing the base file rebuilds it.
+        """
         key = _file_key(path)
         if key is not None:
             hit = _profile_memo.get(key)
             if hit is not None:
                 return hit
+        data, _sha, _failure = _read_mapping(path)
+        if data is not None and "extends" in data:
+            return InstrumentProfileLoader._load_extending(
+                path, layers if layers is not None else [], layer_index,
+            )
         result = InstrumentProfileLoader._load_file_uncached(path)
         if key is not None:
             _profile_memo[key] = result
+        return result
+
+    @staticmethod
+    def _load_extending(
+        path: Path, layers: Sequence[_Layer], layer_index: int,
+    ) -> tuple[InstrumentProfile | None, ProfileLoadFailure | None]:
+        """Build one profile from a file that declares ``extends`` (#543)."""
+        if not layers:
+            layers = [_Layer(path.parent, "layer")]
+            layer_index = 0
+            note = " (no lower layer was supplied)"
+        else:
+            note = ""
+        try:
+            resolved = _resolve_raw(path, layers, layer_index, ())
+        except _ExtendsError as e:
+            _logger.warning(
+                "instrument_extends_error", file=str(path), code=e.code, error=e.reason,
+            )
+            return None, ProfileLoadFailure(
+                path=path.resolve(), reason_code=e.code, reason=e.reason + note,
+            )
+        memo_key = ("extends", *(k for _p, k, _s in resolved.chain))
+        if None not in memo_key:
+            hit = _profile_memo.get(memo_key)
+            if hit is not None:
+                return hit
+        digest = hashlib.sha256(
+            "\n".join(s for _p, _k, s in resolved.chain).encode("ascii"),
+        ).hexdigest()
+        result = InstrumentProfileLoader._validate_mapping(
+            resolved.data, path, digest,
+        )
+        profile = result[0]
+        if profile is not None and resolved.base is not None:
+            profile._extends = resolved.base
+        if None not in memo_key:
+            _profile_memo[memo_key] = result
         return result
 
     @staticmethod
@@ -267,50 +543,21 @@ class InstrumentProfileLoader:
         ``_load_file`` logs them; the failure record carries the same
         reason so reload callers can report it (#408 landing).
         """
-        try:
-            raw_bytes = path.read_bytes()
-            raw_text = raw_bytes.decode("utf-8")
-        except (OSError, UnicodeDecodeError) as e:
+        data, sha, failure = _read_mapping_uncached(path)
+        if failure is not None or data is None:
             _logger.warning(
-                "instrument_file_read_error",
+                failure.reason_code if failure else "instrument_file_read_error",
                 file=str(path),
-                error=str(e),
+                error=failure.reason if failure else "",
             )
-            return None, ProfileLoadFailure(
-                path=path.resolve(),
-                reason_code="instrument_file_read_error",
-                reason=str(e) or type(e).__name__,
-            )
+            return None, failure
+        return InstrumentProfileLoader._validate_mapping(data, path, sha)
 
-        # Parse YAML (C parser when available; SafeLoader semantics either way)
-        try:
-            data: Any = yaml.load(raw_text, Loader=_SAFE_LOADER)  # noqa: S506 - SafeLoader variant
-        except yaml.YAMLError as e:
-            _logger.warning(
-                "instrument_yaml_parse_error",
-                file=str(path),
-                error=str(e),
-            )
-            return None, ProfileLoadFailure(
-                path=path.resolve(),
-                reason_code="instrument_yaml_parse_error",
-                reason=str(e) or type(e).__name__,
-            )
-
-        # Must be a dict
-        if not isinstance(data, dict):
-            _logger.warning(
-                "instrument_yaml_not_dict",
-                file=str(path),
-                actual_type=type(data).__name__,
-            )
-            return None, ProfileLoadFailure(
-                path=path.resolve(),
-                reason_code="instrument_yaml_not_dict",
-                reason=f"file is {type(data).__name__}, expected a mapping",
-            )
-
-        # Validate through Pydantic
+    @staticmethod
+    def _validate_mapping(
+        data: dict[str, Any], path: Path, sha256: str,
+    ) -> tuple[InstrumentProfile | None, ProfileLoadFailure | None]:
+        """Validate one raw mapping through Pydantic and stamp loader metadata."""
         try:
             profile = InstrumentProfile.model_validate(data)
         except Exception as e:  # noqa: BLE001 — structured logger reports instrument_validation_error
@@ -340,8 +587,11 @@ class InstrumentProfileLoader:
         )
 
         profile._source_path = path.resolve()
-        profile._source_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+        profile._source_sha256 = sha256
         return profile, None
+
+
+_LAYER_LABELS = ("builtin", "organization", "venue")
 
 
 def profile_source_dirs(
@@ -387,7 +637,7 @@ def load_all_profiles(
     )
 
     yaml_profiles = InstrumentProfileLoader.load_directories(
-        [builtins_dir, org_dir, venue_dir]
+        [builtins_dir, org_dir, venue_dir], labels=_LAYER_LABELS,
     )
 
     profiles.update(yaml_profiles)
@@ -416,9 +666,11 @@ def load_all_profiles_with_failures(
         organization_dir=organization_dir, venue_dir=venue_dir,
     )
 
-    for directory in (builtins_dir, org_dir, venue_dir):
+    layers = _make_layers([builtins_dir, org_dir, venue_dir], _LAYER_LABELS)
+    for i, layer in enumerate(layers):
+        directory = layer.directory
         dir_profiles, dir_failures = InstrumentProfileLoader._scan_directory(
-            directory
+            directory, layers=layers, layer_index=i,
         )
         for name, profile in dir_profiles.items():
             if name in merged:

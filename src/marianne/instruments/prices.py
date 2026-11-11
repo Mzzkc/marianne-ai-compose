@@ -160,7 +160,9 @@ def load_layers(
     for d in overlay_dirs:
         if not d.is_dir():
             continue
-        for name, prof in InstrumentProfileLoader.load_directories([d]).items():
+        for name, prof in InstrumentProfileLoader.load_directories(
+            [d], lower_layers=[builtins_dir, *overlay_dirs[: overlay_dirs.index(d)]],
+        ).items():
             overlays[f"{name} ({d})"] = prof
     return builtins, overlays
 
