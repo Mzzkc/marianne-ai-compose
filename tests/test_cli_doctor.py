@@ -947,3 +947,43 @@ class TestCredentialExposure:
         names = doctor_mod._credential_env_names()
         assert "ZZ_TEST_TOKEN" in names
         assert all("super-secret-value" not in n for n in names)
+
+
+class TestShadowingCopies543:
+    """A whole copy of a builtin is listed by missing key NAMES (GH #543)."""
+
+    def test_copy_lists_missing_keys_and_extends_user_is_silent(self, tmp_path: Path) -> None:
+        from marianne.cli.commands.doctor import _scan_shadowing_copies
+
+        org = tmp_path / "org"
+        org.mkdir()
+        (org / "claude-code.yaml").write_text(
+            "name: claude-code\ndisplay_name: SECRET-VALUE\nkind: cli\n"
+            "cli:\n  command:\n    executable: claude\n    prompt_flag: '-p'\n"
+            "  output:\n    format: text\n  interactive:\n    enabled_by_default: false\n"
+        )
+        (org / "codex-cli.yaml").write_text(
+            "extends: codex-cli\ndefault_model: x\n"
+        )
+        (org / "my-own.yaml").write_text(_profile_yaml("my-own"))
+        findings = _scan_shadowing_copies(
+            organization_dir=org, venue_dir=tmp_path / "no-venue",
+        )
+        assert [f["name"] for f in findings] == ["claude-code"]
+        f = findings[0]
+        assert {"effort", "tools", "models"} <= set(f["missing_top_level"])
+        assert "interactive" not in f["missing_cli"]
+        assert "usage" in f["missing_cli_interactive"]
+        assert "extends: claude-code" in f["fix"]
+        assert "SECRET-VALUE" not in str(f)
+
+    def test_complete_copy_is_not_reported(self, tmp_path: Path) -> None:
+        from marianne.cli.commands.doctor import _scan_shadowing_copies, profile_source_dirs
+
+        org = tmp_path / "org"
+        org.mkdir()
+        src = profile_source_dirs()[0] / "claude-code.yaml"
+        (org / "claude-code.yaml").write_text(src.read_text())
+        assert _scan_shadowing_copies(
+            organization_dir=org, venue_dir=tmp_path / "no-venue",
+        ) == []

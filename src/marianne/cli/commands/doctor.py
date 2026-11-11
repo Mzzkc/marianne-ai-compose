@@ -705,6 +705,75 @@ def _scan_unreferenced_user_profiles(
     return findings
 
 
+def _scan_shadowing_copies(
+    *, organization_dir: Path | None = None, venue_dir: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Organization and venue files that replace a builtin whole (GH #543).
+
+    A file with a builtin's name and no ``extends`` hides every block the
+    builtin gains later. Reports the KEY NAMES the builtin has and the file
+    lacks: top-level keys, ``cli.*`` keys and ``cli.interactive.*`` keys.
+    Values are never read out.
+    """
+    from marianne.instruments.loader import (
+        _YAML_EXTENSIONS,
+        _read_mapping,
+    )
+
+    builtins_dir, org_dir, venue = profile_source_dirs(
+        organization_dir=organization_dir, venue_dir=venue_dir,
+    )
+    builtin_raw: dict[str, dict[str, Any]] = {}
+    if builtins_dir.is_dir():
+        for f in sorted(builtins_dir.iterdir()):
+            if f.is_file() and f.suffix in _YAML_EXTENSIONS:
+                data, _sha, failure = _read_mapping(f)
+                if failure is None and data is not None and isinstance(data.get("name"), str):
+                    builtin_raw[data["name"]] = data
+
+    def _keys(mapping: Any, *path: str) -> set[str]:
+        node: Any = mapping
+        for part in path:
+            node = node.get(part) if isinstance(node, dict) else None
+        return {str(k) for k in node} if isinstance(node, dict) else set()
+
+    findings: list[dict[str, Any]] = []
+    seen_dirs: set[Path] = set()
+    for layer, directory in (("user", org_dir), ("venue", venue)):
+        resolved = directory.resolve()
+        if resolved in seen_dirs or not directory.is_dir():
+            continue
+        seen_dirs.add(resolved)
+        for f in sorted(directory.iterdir()):
+            if not (f.is_file() and f.suffix in _YAML_EXTENSIONS):
+                continue
+            data, _sha, failure = _read_mapping(f)
+            if failure is not None or data is None or "extends" in data:
+                continue
+            name = data.get("name")
+            base = builtin_raw.get(name) if isinstance(name, str) else None
+            if base is None:
+                continue
+            missing_top = sorted(_keys(base) - _keys(data))
+            missing_cli = sorted(_keys(base, "cli") - _keys(data, "cli"))
+            missing_interactive = sorted(
+                _keys(base, "cli", "interactive") - _keys(data, "cli", "interactive")
+            )
+            if not (missing_top or missing_cli or missing_interactive):
+                continue
+            findings.append({
+                "kind": "shadowing_copy",
+                "layer": layer,
+                "name": name,
+                "path": str(f.resolve()),
+                "missing_top_level": missing_top,
+                "missing_cli": missing_cli,
+                "missing_cli_interactive": missing_interactive,
+                "fix": f"declare `extends: {name}` and keep only the keys that differ",
+            })
+    return findings
+
+
 _REA_ENTRY_MARKERS = ("rea-agents", "rea.mjs", "/rea ", "/rea mcp")
 
 
@@ -1056,6 +1125,8 @@ def doctor(
     # --- Instrument hygiene (GH #443) ---
     unreferenced_profiles = _scan_unreferenced_user_profiles()
 
+    shadowing_copies = _scan_shadowing_copies()
+
     # --- Provider checks (GH #499): REA's own doctor for each REA pool entry ---
     provider_checks = _rea_provider_checks(_rea_pool_entries())
 
@@ -1078,11 +1149,12 @@ def doctor(
             "safety_warnings": safety_warnings,
             "storage_findings": storage_findings,
             "unreferenced_profiles": unreferenced_profiles,
+            "shadowing_copies": shadowing_copies,
             "provider_checks": provider_checks,
             "musician_hooks": musician_hooks,
             "cleaned_paths": cleaned_paths,
             "warnings_count": len(warnings) + len(safety_warnings)
-            + len(storage_findings) + len(unreferenced_profiles)
+            + len(storage_findings) + len(unreferenced_profiles) + len(shadowing_copies)
             + sum(1 for row in provider_checks if row["status"] != "ok")
             + (1 if musician_hooks["status"] != "ok" else 0),
             "errors_count": len(errors),
@@ -1150,6 +1222,28 @@ def doctor(
         out.print(
             "    [dim]A seat is an alias over an existing profile (GH #443). "
             "Archive these files, or submit the score that needs them.[/dim]"
+        )
+
+    # Whole copies of a builtin (GH #543): key names only, never values.
+    if shadowing_copies:
+        out.print()
+        out.print(
+            f"  [bold]Instrument hygiene:[/bold] {len(shadowing_copies)} "
+            f"profile(s) replace a builtin whole"
+        )
+        for f in shadowing_copies:
+            out.print(f"  [yellow]![/yellow] {f['name']:<24} {f['path']}")
+            for label, keys in (
+                ("top-level", f["missing_top_level"]),
+                ("cli", f["missing_cli"]),
+                ("cli.interactive", f["missing_cli_interactive"]),
+            ):
+                if keys:
+                    out.print(f"      lacks {label}: {', '.join(keys)}")
+            warnings.append(f"profile replaces builtin: {f['name']}")
+        out.print(
+            "    [dim]Fix: put `extends: <name>` in the file and keep only the "
+            "keys that differ from the builtin.[/dim]"
         )
 
     # Provider checks (GH #499): REA speaks for its own toolchain.
