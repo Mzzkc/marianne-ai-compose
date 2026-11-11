@@ -1454,6 +1454,10 @@ memory:
 | `memory.defaults.provenance` | enum | `required` | `required` or `optional`; the deprecated `off` is read as `optional` (V349 INFO note) |
 | `memory.defaults.lock_timeout_seconds` | float | `10.0` | Outer timeout for one memory call |
 
+### The gateway socket endpoint (library only)
+
+`marianne.memory.gateway` also contains an in-process `Gateway` (six calls: `declare`, `recall`, `verify`, `bind`, `forget`, `fetch`; grants; hash-chained audit log) and, in `marianne.memory.gateway.endpoint`, a Unix-socket endpoint with a small synchronous client (`marianne.memory.gateway.client`). One listening socket exists per session, at `<run_dir>/s/s_<hash16>.sock` inside a `0700` directory, and the socket is the session: a request never names a session, principal or scope. **The conductor does not host this yet and the `memory:` key still has no runtime reader**, so no sheet can reach it today. Admission is same-UID via `SO_PEERCRED`: this stops other users, but it does not stop another process of the same user that learns the socket path. The protections against siblings are only the unguessable per-dispatch path, the `0700` directory and one session per socket.
+
 ## checkpoints
 
 *Source: `src/marianne/core/config/learning.py` — `CheckpointConfig`*

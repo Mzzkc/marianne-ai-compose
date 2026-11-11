@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Memory gateway socket endpoint and client (library only, GH #496).** `marianne.memory.gateway.endpoint` serves the six memory calls over a per-session Unix socket (same-UID `SO_PEERCRED`, newline-delimited JSON, `errors/1`), with a synchronous client and an optional per-call `cap_bytes` on `recall`. The conductor does not host it yet and the `memory:` key still has no runtime reader.
 - **Right-sizing pass in score building.** The composing skill, its design gate (`sizing` per stage; refuses several AI stages without it and `effort: max` without a reason), the score reviewer, `score-composer` and the casting stage of `design-to-orchestra` now make an author choose role, model tier, effort and toolset per sheet (toolset first; effort measured on one model only).
 - **`memory:` score key, validators V340/V342/V344-V347 (GH #496, wave A step 3).** A score may
 - **`memory:` score key, validators V340/V342/V344-V347 and V349 (GH #496, wave A step 3).** A score may
