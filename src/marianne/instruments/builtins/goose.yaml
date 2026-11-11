@@ -6,6 +6,9 @@
 #
 # Auth: Provider-specific API keys.
 
+# No effort: block (GH #535): `goose run --help` (1.30.0) lists no reasoning
+# option; a sheet that sets effort is refused.
+
 name: goose
 display_name: "Goose"
 description: "Block's Goose agent with extension support"

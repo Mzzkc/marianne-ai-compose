@@ -166,6 +166,28 @@ models:
     max_output_tokens: 64000
     max_concurrent: 8
 
+# Per-sheet reasoning effort (GH #535): instrument_config.effort in Marianne's
+# vocabulary maps to Claude Code's `--effort` levels, as printed by
+# `claude --help` (low, medium, high, xhigh, max; checked 2026-11-11, Claude
+# Code 2.1.322). Claude Code has nothing below low, so minimal runs at low. The
+# level replaces the value after --effort in extra_flags / schema_extra_flags
+# below and is appended to an interactive launch, which carries neither list.
+# A sheet that sets nothing keeps max, or high under --json-schema.
+effort:
+  delivery: flag
+  flag: "--effort"
+  levels:
+    minimal: low
+    low: low
+    medium: medium
+    high: high
+    xhigh: xhigh
+    max: max
+  # Schema sheets may ask only for levels measured to answer: max hangs (see
+  # schema_extra_flags) and xhigh is unmeasured, so both are refused, not
+  # downgraded.
+  schema_levels: [minimal, low, medium, high]
+
 cli:
   command:
     executable: claude

@@ -21,6 +21,7 @@ from marianne.core.config.instruments import (
     CliProfile,
     CodeModeConfig,
     CodeModeInterface,
+    EffortMapping,
     HttpProfile,
     InstrumentProfile,
     InteractiveCliConfig,
@@ -316,6 +317,51 @@ def test_interactive_usage_config_refuses_a_block_that_measures_nothing(
         InteractiveUsageConfig.model_validate(cache_only)
     with pytest.raises(ValueError):
         InteractiveUsageConfig.model_validate({**data, "record_path": "no-template.jsonl"})
+
+
+_EFFORT_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"]
+_NATIVE_WORD = st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1, max_size=8)
+
+
+@st.composite
+def effort_mapping_strategy(draw: st.DrawFn) -> dict[str, Any]:
+    """A whole effort mapping for each delivery shape (GH #535)."""
+    delivery = draw(st.sampled_from(["flag", "config_override", "body_field"]))
+    levels = draw(st.dictionaries(st.sampled_from(_EFFORT_LEVELS), _NATIVE_WORD, min_size=1))
+    data: dict[str, Any] = {"delivery": delivery, "levels": levels}
+    if delivery in ("flag", "config_override"):
+        data["flag"] = "--" + draw(_NATIVE_WORD)
+    if delivery in ("config_override", "body_field"):
+        data["key"] = draw(_NATIVE_WORD)
+    if draw(st.booleans()):
+        data["schema_levels"] = draw(
+            st.lists(st.sampled_from(sorted(levels)), min_size=1, unique=True),
+        )
+    data["interactive"] = draw(st.booleans())
+    return data
+
+
+@pytest.mark.property_based
+@_pb_settings
+@given(data=effort_mapping_strategy())
+def test_effort_mapping_roundtrip(data: dict[str, Any]) -> None:
+    """EffortMapping roundtrips for every delivery shape, and a mapped level stays mapped."""
+    mapping = EffortMapping.model_validate(data)
+    assert mapping.delivery == data["delivery"]
+    assert dict(mapping.levels) == data["levels"]
+    restored = EffortMapping.model_validate(mapping.model_dump())
+    assert restored == mapping
+
+
+@pytest.mark.property_based
+@_pb_settings
+@given(data=effort_mapping_strategy())
+def test_effort_mapping_refuses_a_half_declared_shape(data: dict[str, Any]) -> None:
+    """A delivery shape missing the field it needs is refused, never guessed."""
+    needed = "key" if data["delivery"] == "body_field" else "flag"
+    broken = {k: v for k, v in data.items() if k != needed}
+    with pytest.raises(ValueError):
+        EffortMapping.model_validate(broken)
 
 
 @pytest.mark.property_based

@@ -253,6 +253,16 @@ def _entry_label(profile: str, model: str | None) -> str:
     return f"{profile}/{model}" if model else profile
 
 
+def _class_entry_config(entry: ClassEntry) -> dict[str, Any]:
+    """The instrument_config a class entry contributes (model, effort when set)."""
+    config: dict[str, Any] = {}
+    if entry.config.model is not None:
+        config["model"] = entry.config.model
+    if entry.config.effort is not None:
+        config["effort"] = entry.config.effort
+    return config
+
+
 def _alias_profiles() -> dict[str, Any]:
     """Registered profiles for cost/context ordering; empty when unavailable.
 
@@ -460,6 +470,10 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
             resolved_instrument = chain[0].profile
             if chain[0].config.model is not None:
                 instrument_config["model"] = chain[0].config.model
+            # A class entry's effort is the default for its seat; a score,
+            # movement or sheet scope that names effort (even null) wins.
+            if chain[0].config.effort is not None and "effort" not in instrument_config:
+                instrument_config["effort"] = chain[0].config.effort
             class_tail = chain[1:]
 
         instrument_name: str = resolved_instrument
@@ -532,9 +546,7 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
             fallback_configs.append(merged_entry)
         for entry in class_tail:
             resolved_fallbacks.append(entry.profile)
-            fallback_configs.append(
-                {"model": entry.config.model} if entry.config.model is not None else {},
-            )
+            fallback_configs.append(_class_entry_config(entry))
         for fb_name in fallbacks:
             fb_def = config.instruments.get(fb_name)
             if fb_def is not None:
@@ -551,9 +563,7 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
                 used_class = True
                 for entry in classes.classes[fb_name].chain:
                     resolved_fallbacks.append(entry.profile)
-                    fallback_configs.append(
-                        {"model": entry.config.model} if entry.config.model is not None else {},
-                    )
+                    fallback_configs.append(_class_entry_config(entry))
             else:
                 resolved_fallbacks.append(fb_name)
                 fallback_configs.append({})

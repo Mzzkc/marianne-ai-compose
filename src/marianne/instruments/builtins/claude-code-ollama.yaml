@@ -14,6 +14,8 @@
 # streamed response -> JSON result/usage, successful exit 0 without --effort.
 # Output/error configuration follows the Claude Code harness contract;
 # real-model tool calls, JSON schema, and error responses remain unverified.
+# No effort: block: the seam was verified without --effort, so a
+# score that sets instrument_config.effort on this profile is refused (V335).
 # Model context ceilings (server num_ctx may be lower):
 # https://ollama.com/library/llama3.1 (128K), https://ollama.com/library/qwen3 (40K).
 # Configure Ollama context to suit the workload and available memory.

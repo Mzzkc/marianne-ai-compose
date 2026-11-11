@@ -1,6 +1,9 @@
 # Headless contract: Qwen Code v0.12.6, ac30c98a266a6335f8ebc7a9011f266cf6b63f13.
 # Source-derived fixtures and immutable vendor links: tests/fixtures/qwen_code/README.md.
 # No live authenticated execution verified; uses existing client auth/model settings.
+# No effort: block (GH #535): qwen is not installed where the mapping was
+# surveyed; a sheet that sets effort is refused.
+
 name: qwen-code
 display_name: "Qwen Code"
 description: "Qwen Code headless coding agent (saved OAuth or OpenAI-compatible provider)"

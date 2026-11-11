@@ -50,6 +50,10 @@
 # IneligibleTierError for the current individual tier; prefer Antigravity for
 # current Google CLI live runs unless Gemini API/gcloud auth is configured.
 
+# No effort: block (GH #535): gemini 0.50.0 --help has no reasoning flag; the
+# thinking level lives in settings.json modelConfigs (thinkingConfig), which no
+# Marianne delivery shape writes. A sheet that sets effort here is refused.
+
 name: gemini-cli
 display_name: "Gemini CLI"
 description: "Google's Gemini CLI with tool use and vision"

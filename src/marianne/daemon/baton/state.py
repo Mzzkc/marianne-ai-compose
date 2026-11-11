@@ -169,6 +169,11 @@ class AttemptContext:
     """CLI first-output bound: unset inherits the profile, None disables it,
     and a positive number overrides it request-locally for this attempt."""
 
+    effort: str | None = None
+    """Reasoning-effort level from this attempt's chain entry
+    (instrument_config.effort, GH #535); None keeps the profile default.
+    Checked against the profile at dispatch, consumed request-locally."""
+
 
 # =============================================================================
 # SheetExecutionState — Phase 2 type alias

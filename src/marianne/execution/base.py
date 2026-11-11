@@ -94,6 +94,11 @@ class SheetRequestState:
     first_output_timeout_seconds: FirstOutputTimeoutResolution = FIRST_OUTPUT_TIMEOUT_UNSET
     """CLI first-output bound: unset uses the profile, None disables it,
     and a positive number overrides it, capped by the sheet timeout."""
+    effort: str | None = None
+    """Reasoning-effort level (instrument_config.effort, GH #535), already
+    checked against the profile at dispatch. None keeps the profile's default
+    effort flags. CLI and interactive backends replace their effort flag value
+    with it; it never rides a pooled backend as mutable state."""
 
 
 @dataclass

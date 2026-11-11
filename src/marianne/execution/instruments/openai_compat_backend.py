@@ -153,6 +153,25 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         """Human-readable backend name including model."""
         return f"openai-compatible:{self.model}"
 
+    def effort_refusal(
+        self, level: str, *, schema_mode: bool, model: str | None = None,
+    ) -> str | None:
+        """Why this instrument cannot run a sheet at ``level`` (None = it can).
+
+        Judged against the loaded profile's ``effort:`` block (delivery
+        ``body_field``) for ``model``, or this backend's model when None.
+        A backend built without a profile carries no mapping.
+        """
+        if self._loaded_profile is None:
+            return (
+                "declares no reasoning-effort mapping (the profile's effort: "
+                f"block), so instrument_config.effort {level!r} cannot be "
+                "applied; accepted levels: none"
+            )
+        return self._loaded_profile.effort_refusal(
+            level, model=model or self.model, schema_mode=schema_mode,
+        )
+
     def set_api_key(self, api_key: str | None) -> None:
         """Set a key supplied by the runtime keyring, if one is available."""
         self._api_key = api_key
@@ -458,6 +477,26 @@ class OpenAICompatibleBackend(HttpxClientMixin, Backend):
         # configuration keeps the legacy four-key payload byte-identical.
         if response_format is not None:
             payload["response_format"] = response_format
+        # Reasoning effort (GH #535): request-local like every other payload
+        # field here; the profile's effort: block names the body path and the
+        # native word. Unset keeps the legacy payload byte-identical.
+        effort = request.effort if request is not None else None
+        if effort is not None:
+            refusal = self.effort_refusal(
+                effort, schema_mode=response_format is not None, model=requested_model,
+            )
+            mapping = (
+                self._loaded_profile.effort if self._loaded_profile is not None else None
+            )
+            if refusal is not None or mapping is None or self._loaded_profile is None:
+                raise ValueError(
+                    f"instrument '{self.name}' {refusal}. Refusing to send the "
+                    "request at an effort it did not ask for"
+                )
+            payload = mapping.apply_to_body(
+                payload,
+                self._loaded_profile.native_effort(effort, model=requested_model),
+            )
 
         guarded_client: httpx.AsyncClient | None = None
         expected = request.expected_route if request is not None else None

@@ -6,6 +6,9 @@
 #
 # Auth: Provider-specific API keys configured in Cline settings.
 
+# No effort: block (GH #535): cline is not installed where the mapping was
+# surveyed, so no flag could be verified; a sheet that sets effort is refused.
+
 name: cline-cli
 display_name: "Cline"
 description: "Cline CLI agent with structured exit codes"

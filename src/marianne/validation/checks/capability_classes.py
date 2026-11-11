@@ -153,6 +153,13 @@ def _entry_label(profile: str, model: str | None) -> str:
     return f"{profile}/{model}" if model else profile
 
 
+def _step_label(step: Any) -> str:
+    """A class step as V325 shows it: profile/model, plus its effort when set."""
+    label = _entry_label(step.profile, step.config.model)
+    effort = getattr(step.config, "effort", None)
+    return f"{label} (effort {effort})" if effort else label
+
+
 class ClassNameResolutionCheck:
     """V310 (ERROR): a class-shaped name that cannot resolve on this machine (V-CLS-02).
 
@@ -1042,9 +1049,7 @@ class ClassChainSummaryCheck:
         issues: list[ValidationIssue] = []
         for name in sorted(used):
             entry = ctx.class_map.classes[name]
-            chain = ", ".join(
-                _entry_label(step.profile, step.config.model) for step in entry.chain
-            )
+            chain = ", ".join(_step_label(step) for step in entry.chain)
             layer = next(
                 (r for r in ctx.class_map.layers if r.layer == entry.source_layer), None
             )
@@ -1060,10 +1065,7 @@ class ClassChainSummaryCheck:
                     context=name,
                     metadata={
                         "class_name": name,
-                        "chain": ",".join(
-                            _entry_label(step.profile, step.config.model)
-                            for step in entry.chain
-                        ),
+                        "chain": ",".join(_step_label(step) for step in entry.chain),
                         "layer": entry.source_layer,
                         "layer_path": str(layer.path) if layer is not None else "",
                         "layer_sha256": (layer.sha256 or "") if layer is not None else "",

@@ -3160,6 +3160,41 @@ class BatonAdapter:
                     },
                 )
 
+        # Reasoning effort (GH #535): the level of the chain entry this
+        # attempt runs on, judged against THIS backend's profile before any
+        # spawn. A fallback entry has its own config, so the primary's level
+        # never follows the sheet onto a different profile. A level the seat
+        # cannot apply fails dispatch — the sheet never runs at an effort its
+        # author did not ask for.
+        sheet_effort: str | None = None
+        _raw_effort = _icfg_rf.get("effort")
+        if _raw_effort is not None:
+            from marianne.core.config.instrument_settings import EFFORT_LEVELS
+
+            if _raw_effort not in EFFORT_LEVELS:
+                raise ValueError(
+                    "instrument_config.effort must be one of "
+                    f"{', '.join(EFFORT_LEVELS)}, got {_raw_effort!r}"
+                )
+            _effort_refusal = getattr(backend, "effort_refusal", None)
+            if not callable(_effort_refusal):
+                raise ValueError(
+                    f"instrument '{effective_instrument}' backend "
+                    f"{type(backend).__name__} cannot apply "
+                    f"instrument_config.effort {_raw_effort!r}: it carries no "
+                    "reasoning-effort mapping (the profile's effort: block); "
+                    "accepted levels: none"
+                )
+            _refusal = _effort_refusal(
+                _raw_effort, schema_mode=isinstance(sheet_response_format, dict),
+            )
+            if _refusal is not None:
+                raise ValueError(
+                    f"instrument '{effective_instrument}' {_refusal}. Refusing "
+                    "to dispatch the sheet at an effort it did not ask for"
+                )
+            sheet_effort = _raw_effort
+
         mode = AttemptMode.NORMAL
         completion_suffix: str | None = None
         if state.completion_attempts > 0 and state.can_complete:
@@ -3185,6 +3220,7 @@ class BatonAdapter:
             ),
             response_format=sheet_response_format,
             first_output_timeout_seconds=first_output_timeout,
+            effort=sheet_effort,
             expected_route=state.expected_route,
             route_model_override=_icfg_rf.get("model"),
             route_provider_override=_icfg_rf.get("provider"),

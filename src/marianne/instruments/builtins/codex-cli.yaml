@@ -120,17 +120,40 @@ models:
 
   # ── Legacy / prior-generation models ──
   - name: o3
+    # Not in codex 0.166.0's model catalog: no verified effort control.
+    effort_levels: {}
     context_window: 200000
     cost_per_1k_input: 0.002
     cost_per_1k_output: 0.008
     cost_per_1k_cache_read: 0.0005
     max_output_tokens: 100000
   - name: o4-mini
+    # Not in codex 0.166.0's model catalog: no verified effort control.
+    effort_levels: {}
     context_window: 200000
     cost_per_1k_input: 0.0011
     cost_per_1k_output: 0.0044
     cost_per_1k_cache_read: 0.000275
     max_output_tokens: 100000
+
+# Per-sheet reasoning effort (GH #535). Codex has no effort flag; `codex exec
+# --help` (codex-cli 0.166.0, checked 2026-11-11) documents `-c key=value`
+# config overrides, and the config key is `model_reasoning_effort`. Levels are
+# the ones codex's own model catalog lists as supported_reasoning_levels for
+# the gpt-6 and gpt-5.6 rows (low, medium, high, xhigh, max; `ultra` also adds
+# task delegation and is not mapped). Nothing below low: minimal runs at low.
+# Unset adds no override (codex's configured default).
+effort:
+  delivery: config_override
+  flag: "-c"
+  key: model_reasoning_effort
+  levels:
+    minimal: low
+    low: low
+    medium: medium
+    high: high
+    xhigh: xhigh
+    max: max
 
 cli:
   # GH #434: the stream's first event arrives within seconds of a healthy

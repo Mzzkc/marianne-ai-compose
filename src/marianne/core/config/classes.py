@@ -6,9 +6,19 @@ import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    StringConstraints,
+    model_serializer,
+    model_validator,
+)
+
+from marianne.core.config.instrument_settings import EffortLevel
 
 CLASS_NAME_PATTERN = r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
 ClassName = Annotated[str, StringConstraints(pattern=CLASS_NAME_PATTERN, max_length=40)]
@@ -45,7 +55,31 @@ def classes_digest(classes: dict[str, ClassSnapshotEntry]) -> str:
 
 class ClassEntryConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    model: str | None = Field(default=None, min_length=1)
+    model: str | None = Field(
+        default=None, min_length=1,
+        description="Model this class entry runs, replacing the profile's default_model.",
+    )
+    effort: EffortLevel | None = Field(
+        default=None,
+        description=(
+            "Reasoning effort this class entry runs at, in Marianne's vocabulary "
+            "(minimal, low, medium, high, xhigh, max), mapped by the entry's "
+            "profile effort: block (GH #535). On the primary entry an "
+            "instrument_config.effort set at score, movement or sheet scope wins "
+            "(null there restores the profile default); a fallback entry uses "
+            "only its own. A profile or model that does not map the level is "
+            "refused (V335) like any other scope."
+        ),
+    )
+
+    @model_serializer(mode="wrap")
+    def _omit_unset_effort(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # A class map that never sets effort keeps its snapshot digest
+        # byte-identical (resumed jobs compare digests of frozen chains).
+        data: dict[str, Any] = handler(self)
+        if data.get("effort") is None:
+            data.pop("effort", None)
+        return data
 
 
 class ClassEntry(BaseModel):

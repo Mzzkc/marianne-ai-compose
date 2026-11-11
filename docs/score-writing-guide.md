@@ -305,6 +305,7 @@ keys:
 | `interactive_nudge_policy` | `static` (default) or `model` for screen-aware continuation. |
 | `interactive_nudge_instrument` | Registered headless instrument to call when the policy is `model`. |
 | `interactive_nudge_timeout_seconds` | Finite positive model-call timeout; defaults to 30 seconds, within the sheet deadline. |
+| `effort` | Reasoning effort for the sheet (GH #535), in one vocabulary for every instrument: `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. The resolved profile maps it to its harness's word (`claude-code` and `antigravity` `--effort`, `codex-cli` `-c model_reasoning_effort=…`, `opencode` `--variant` and `crush` `--reasoning-effort` per model). Omit or `null` keeps the profile default. A level the profile or model does not map, or a profile with no mapping, is refused (V335). |
 | `first_output_timeout_seconds` | CLI-only first-output silence bound (GH #502). Omit to inherit the profile, a finite positive number to override, `null` to disable. Capped by `timeout_seconds`; inert after the first output byte. |
 
 Unknown keys are silently ignored — don't rely on keys outside this table.
@@ -324,6 +325,66 @@ sheet:
     7:
       timeout_seconds: 28800   # sheet 7 gets eight hours
 ```
+
+#### Reasoning effort per sheet
+
+`effort` lowers or raises how much a sheet's model reasons, in one vocabulary
+whatever the instrument: `minimal`, `low`, `medium`, `high`, `xhigh`, `max`.
+Reasoning is most of a Claude sheet's output tokens (about nine tenths over 245
+musician sessions in November 2026) and the `claude-code` profile asks for
+`max` on every headless sheet, so this is where a recon or release sheet can
+stop paying build-sheet prices. Set it at any `instrument_config` scope, or on
+an alias or class entry so every score that names the seat picks it up:
+
+```yaml
+instrument: claude-code
+movements:
+  1:
+    name: Recon
+    instrument_config:
+      effort: low              # read and list; no design decisions
+  3:
+    name: Review
+    instrument: reviewer
+sheet:
+  per_sheet_instrument_config:
+    9:
+      effort: low              # release sheet: tag, changelog, publish
+instruments:
+  reviewer:
+    chain:
+      - {profile: claude-code, config: {effort: medium}}
+      - {profile: codex-cli, config: {effort: medium}}
+```
+
+A class entry in `~/.marianne/classes.yaml` or `.marianne/classes.yaml` carries
+it the same way, so every score that names the class gets the level:
+
+```yaml
+classes:
+  review:
+    - {profile: codex-cli, config: {effort: medium}}
+    - {profile: claude-code, config: {model: claude-sonnet-5-5, effort: medium}}
+```
+
+On the primary entry, a score, movement or sheet `effort` wins over the class's.
+
+Sheets that set nothing keep the profile default, so a build or design movement
+needs no key. Each profile maps the vocabulary to its harness's own word, and
+not every instrument has every level: `minimal` runs at `low` on Claude Code,
+Antigravity and Codex; `opencode` and `crush` accept levels only on the models
+whose rows list them; `gemini-cli`, `aider`, `goose` and HTTP `ollama` have no
+mapping. The [instrument guide](instrument-guide.md#reasoning-effort-one-vocabulary-each-profile-maps-it)
+has the table. `mzt validate` refuses a level the resolved profile or model does
+not map (V335) and names the ones it does, so a wrong guess costs one validate
+run. On a schema sheet (`response_format`) `claude-code` accepts `minimal` to
+`high` only.
+
+What is measured: one small task, three runs per level. On Sonnet 5.5 `max`
+spent about 2.3 times the reasoning tokens of `high`; `low`, `medium` and
+`high` did not differ; Haiku showed no usable effect. Nothing else is measured,
+on Claude or on any other harness, so treat a lowered sheet as a hypothesis its
+validations must still pass.
 
 ### Multi-Instrument Scores
 
@@ -2247,6 +2308,7 @@ done
 | V101 | Undefined template variable (warning) | Check spelling against the built-ins (`workspace`, `score_dir`, `sheet_num`, loop indices, …) or add the variable to `prompt.variables` |
 | V103 | Very short timeout (warning) | Increase `instrument_config.timeout_seconds` |
 | V108 | Missing prelude/cadenza file (warning) | Check file path in `sheet.prelude` or `sheet.cadenzas`. Jinja-templated paths are skipped. |
+| V335 | `instrument_config.effort` the resolved profile or model cannot apply | Use a level the message lists, pick a model whose row maps it, run the sheet headless if the mapping is not interactive, or remove `effort` from the scope that reaches that instrument |
 | V305/V307/V308/V309 | Static launch-safety warning | Review the rendered prompt, raw CLI command, fan-out instrument map, or validation prompt labels before running |
 
 ---

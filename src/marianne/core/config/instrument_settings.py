@@ -8,6 +8,22 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
+EffortLevel = Literal["minimal", "low", "medium", "high", "xhigh", "max"]
+"""Marianne's reasoning-effort vocabulary (GH #535), lowest first.
+
+A score names one of these; each instrument profile maps it to its harness's
+own word in its ``effort:`` block. The words are the ones Claude Code,
+Antigravity and Codex print for their reasoning control (low .. max) plus
+``minimal``, "the least reasoning this seat offers", which OpenAI-family
+models and opencode variants name and which a profile whose lowest native
+level is ``low`` maps to ``low``. ``none`` (reasoning off) and Codex's
+``ultra`` (adds task delegation) are different requests and are not levels.
+"""
+
+EFFORT_LEVELS: tuple[EffortLevel, ...] = (
+    "minimal", "low", "medium", "high", "xhigh", "max",
+)
+
 
 def coerce_first_output_timeout(value: Any) -> float:
     """Single enforcement point for a first_output_timeout_seconds override.
@@ -88,6 +104,18 @@ class InstrumentSettings(BaseModel, Mapping[str, Any]):
     )
     response_format: str | dict[str, Any] | None = Field(
         default=None, description="Response format the instrument must enforce."
+    )
+    effort: EffortLevel | None = Field(
+        default=None,
+        description="Reasoning effort for the sheet in Marianne's vocabulary, "
+        "lowest first: minimal, low, medium, high, xhigh, max. The resolved "
+        "instrument profile's effort: block maps the level to its harness's "
+        "own word and delivery (a flag such as claude-code --effort, a config "
+        "override such as codex -c model_reasoning_effort=..., or an HTTP "
+        "request-body field); a model row's effort_levels can narrow it. Omit "
+        "or null to keep the profile default; a level the profile (or model) "
+        "does not map, or a profile with no mapping, is refused (V335) and "
+        "never downgraded.",
     )
 
     def __iter__(self) -> Iterator[str]:  # type: ignore[override]

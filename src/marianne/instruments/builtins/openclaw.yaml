@@ -1,6 +1,9 @@
 # Headless contract: OpenClaw v2026.10.1, e178c39e9aae3fa440735217f9aef9574f286677.
 # Source-derived fixtures: tests/fixtures/openclaw/README.md. No live auth verified.
 # agent exec defaults to full shell execution policy; use a trusted workspace.
+# No effort: block (GH #535): openclaw is not installed where the mapping was
+# surveyed; a sheet that sets effort is refused.
+
 name: openclaw
 display_name: "OpenClaw"
 description: "OpenClaw isolated headless coding agent using saved client configuration"

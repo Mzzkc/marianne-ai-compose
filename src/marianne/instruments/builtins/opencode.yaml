@@ -44,18 +44,21 @@ models:
   # Anthropic-compatible gateway's glm-5.3[1m] route); flash/highspeed
   # variants carry conservative output caps until officially documented.
   - name: "zai-coding-plan/glm-5.3"
+    effort_levels: {minimal: low, low: low, high: high, max: max}
     context_window: 1000000
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
     max_output_tokens: 131072
     max_concurrent: 4
   - name: "zai-coding-plan/glm-5.3-flash"
+    effort_levels: {minimal: low, low: low, high: high, max: max}
     context_window: 1000000
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
     max_output_tokens: 65536
     max_concurrent: 6
   - name: "zai-coding-plan/glm-5.3-highspeed"
+    effort_levels: {minimal: low, low: low, high: high, max: max}
     context_window: 1000000
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
@@ -203,6 +206,19 @@ models:
     cost_per_1k_output: 0.0
     max_output_tokens: 8192
     max_concurrent: 8
+
+# Per-sheet reasoning effort (GH #535). `opencode run --help` (1.19.4, checked
+# 2026-11-11): `--variant` "model variant (provider-specific reasoning effort)".
+# Variants differ per model, so the profile maps nothing itself and each model
+# row lists the variants `opencode models --verbose` reports for it (the
+# zai-coding-plan glm-5.3 family: low, high, max; glm-5.2, glm-5-turbo and
+# glm-4.7: none). Rows without effort_levels refuse the key. The TUI launch
+# (`opencode [project]`) has no --variant, so interactive sheets refuse it.
+effort:
+  delivery: flag
+  flag: "--variant"
+  levels: {}
+  interactive: false
 
 cli:
   # GH #434: the stream's first event arrives within seconds of a healthy

@@ -1,3 +1,6 @@
+# No effort: block (GH #535): llama3.1:8b has no reasoning control. A reasoning
+# model behind this endpoint can declare `effort: {delivery: body_field, key:
+# reasoning_effort, levels: {...}}` in a user-layer copy.
 name: ollama
 display_name: "Ollama"
 description: "Local Ollama execution through its OpenAI-compatible chat endpoint"

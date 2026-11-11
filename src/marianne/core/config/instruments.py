@@ -34,6 +34,8 @@ from pydantic import (
     model_validator,
 )
 
+from marianne.core.config.instrument_settings import EFFORT_LEVELS, EffortLevel
+
 
 class InstrumentRouteBinding(BaseModel):
     """Reviewed declared route, not proof of a service's loaded model weights."""
@@ -124,6 +126,189 @@ class CodeModeConfig(BaseModel):
     )
 
 
+class EffortMapping(BaseModel):
+    """How a profile delivers ``instrument_config.effort`` to its harness (GH #535).
+
+    A score names a level in Marianne's vocabulary (``minimal`` .. ``max``);
+    ``levels`` maps it to the harness's own word and ``delivery`` says where
+    that word goes. Third-party profiles under ``~/.marianne/instruments/`` or
+    ``.marianne/instruments/`` declare the same block; no code change is needed
+    to give a new harness the key.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    delivery: Literal["flag", "config_override", "body_field"] = Field(
+        description=(
+            "Where the native level goes. 'flag': `<flag> <native>` on the "
+            "command (claude-code and antigravity `--effort`, opencode "
+            "`--variant`, crush `--reasoning-effort`). 'config_override': "
+            "`<flag> <key>=<native>` (codex-cli `-c model_reasoning_effort=high`). "
+            "'body_field': the HTTP request JSON gets `<key>` = native (dotted "
+            "key = nested object), for kind: http profiles only. A default "
+            "already in extra_flags / schema_extra_flags / "
+            "cli.interactive.extra_args is replaced where it stands, never "
+            "joined by a second one."
+        ),
+    )
+    flag: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "The command-line switch: the effort flag itself for delivery "
+            "'flag' (e.g. '--effort'), the config-override switch for "
+            "'config_override' (e.g. codex '-c'). Required for both; not used "
+            "by 'body_field'."
+        ),
+    )
+    key: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "The configuration key for 'config_override' (codex: "
+            "'model_reasoning_effort') or the request-body path for "
+            "'body_field' (e.g. 'reasoning_effort', or 'reasoning.effort' for "
+            "a nested object). Not used by 'flag'."
+        ),
+    )
+    levels: dict[EffortLevel, str] = Field(
+        default_factory=dict,
+        description=(
+            "Marianne level -> the harness's native word, e.g. "
+            "{minimal: low, low: low, medium: medium, high: high}. Several "
+            "Marianne levels may share one native word; a Marianne level left "
+            "out is refused with the list of the ones that are mapped. {} = "
+            "the profile maps no level itself and each model row's "
+            "effort_levels decides (opencode, crush: levels differ per model)."
+        ),
+    )
+    schema_levels: list[EffortLevel] | None = Field(
+        default=None,
+        description=(
+            "The Marianne levels a schema sheet (instrument_config."
+            "response_format through json_schema_flag) may ask for. None = "
+            "every mapped level. Exists because a level right for free-form "
+            "work can break structured output: Claude Code 2.1.307 under "
+            "`--effort max` with `--json-schema` emits nothing until killed, so "
+            "claude-code lists only levels measured to answer. A schema sheet "
+            "asking for another level is refused, never downgraded; the "
+            "profile's own schema default must be a value one of these maps to."
+        ),
+    )
+    interactive: bool = Field(
+        default=True,
+        description=(
+            "Whether an interactive (tmux) launch can carry the level. False "
+            "when the harness's interactive command has no such option (the "
+            "opencode TUI has no --variant): a sheet that sets effort and runs "
+            "interactively is then refused, not run at the TUI's default."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _shape_is_whole(self) -> EffortMapping:
+        needs_flag = self.delivery in ("flag", "config_override")
+        needs_key = self.delivery in ("config_override", "body_field")
+        if needs_flag and self.flag is None:
+            raise ValueError(f"effort.delivery {self.delivery!r} needs effort.flag")
+        if not needs_flag and self.flag is not None:
+            raise ValueError("effort.flag is not used by delivery 'body_field'; remove it")
+        if needs_key and self.key is None:
+            raise ValueError(f"effort.delivery {self.delivery!r} needs effort.key")
+        if not needs_key and self.key is not None:
+            raise ValueError("effort.key is not used by delivery 'flag'; remove it")
+        for level, native in self.levels.items():
+            if not native.strip():
+                raise ValueError(f"effort.levels.{level} must not be empty")
+        if self.schema_levels is not None:
+            if not self.schema_levels:
+                raise ValueError(
+                    "effort.schema_levels must not be empty; omit it to accept "
+                    "every mapped level on schema sheets"
+                )
+            if len(set(self.schema_levels)) != len(self.schema_levels):
+                raise ValueError("effort.schema_levels must not contain a duplicate level")
+            if self.levels:
+                unknown = [lv for lv in self.schema_levels if lv not in self.levels]
+                if unknown:
+                    raise ValueError(
+                        f"effort.schema_levels {unknown} are not mapped in "
+                        f"effort.levels ({', '.join(self.levels)})"
+                    )
+        return self
+
+    def defaults_in(self, flags: list[str]) -> list[str]:
+        """Every native value a fixed flag list already sets through this mapping."""
+        values: list[str] = []
+        flag = self.flag
+        if flag is None:
+            return values
+        prefix = f"{self.key}=" if self.delivery == "config_override" else ""
+        for index, token in enumerate(flags):
+            if token == flag and index + 1 < len(flags):
+                value = flags[index + 1]
+            elif token.startswith(f"{flag}="):
+                value = token[len(flag) + 1:]
+            else:
+                continue
+            if value.startswith(prefix):
+                values.append(value[len(prefix):])
+        return values
+
+    def apply(self, flags: list[str], native: str) -> list[str]:
+        """``flags`` with this mapping's value set to ``native`` (CLI shapes).
+
+        A default is replaced where it stands (never a second one); with no
+        default the pair is appended. Another switch that shares the flag (a
+        second codex ``-c`` override) is kept. Callers check the refusal first.
+        """
+        flag = self.flag
+        if flag is None:
+            return list(flags)
+        is_override = self.delivery == "config_override"
+        prefix = f"{self.key}=" if is_override else ""
+        value = f"{prefix}{native}"
+        result: list[str] = []
+        replaced = False
+        skip = False
+        for index, token in enumerate(flags):
+            if skip:
+                skip = False
+                continue
+            current: str | None = None
+            is_pair = token == flag and index + 1 < len(flags)
+            if is_pair:
+                current = flags[index + 1]
+            elif token.startswith(f"{flag}="):
+                current = token[len(flag) + 1:]
+            if current is not None and current.startswith(prefix):
+                skip = is_pair
+                if not replaced:
+                    result.extend([flag, value])
+                    replaced = True
+                continue
+            result.append(token)
+        if not replaced:
+            result.extend([flag, value])
+        return result
+
+    def apply_to_body(self, payload: dict[str, Any], native: str) -> dict[str, Any]:
+        """``payload`` with this mapping's dotted ``key`` set to ``native`` (HTTP)."""
+        result = copy.deepcopy(payload)
+        if self.key is None:
+            return result
+        parts = self.key.split(".")
+        target = result
+        for part in parts[:-1]:
+            nested = target.get(part)
+            if not isinstance(nested, dict):
+                nested = {}
+                target[part] = nested
+            target = nested
+        target[parts[-1]] = native
+        return result
+
+
 class ModelCapacity(BaseModel):
     """Per-model metadata for cost tracking and context management.
 
@@ -182,6 +367,19 @@ class ModelCapacity(BaseModel):
         description="Maximum concurrent sheets using this model. "
         "The baton tracks concurrency per (instrument, model) pair. "
         "Sensible defaults by tier: haiku/flash=8, sonnet/pro=4, opus=2.",
+    )
+    effort_levels: dict[EffortLevel, str] | None = Field(
+        default=None,
+        description=(
+            "This model's own reasoning-effort map (Marianne level -> native "
+            "word), replacing the profile's effort.levels when the sheet runs "
+            "on this model. None = the profile's levels apply; {} = this model "
+            "has no reasoning control, so instrument_config.effort is refused "
+            "on it. Needs the profile's effort block (delivery shape). Exists "
+            "because a harness can run models with different controls: "
+            "opencode lists variants low/high/max for zai-coding-plan/glm-5.3 "
+            "and none for glm-4.7."
+        ),
     )
 
 
@@ -1140,6 +1338,22 @@ class InstrumentProfile(BaseModel):
         "execution; they just never appear in the prompt itself.",
     )
 
+    # Reasoning effort (GH #535): how instrument_config.effort reaches the harness
+    effort: EffortMapping | None = Field(
+        default=None,
+        description=(
+            "The profile's reasoning-effort mapping: which Marianne levels "
+            "(minimal, low, medium, high, xhigh, max) it accepts, the native "
+            "word for each, and the delivery shape (flag, config_override or "
+            "body_field). With it a sheet may set instrument_config.effort; "
+            "without it (None) a sheet that sets the key is refused by "
+            "`mzt validate` (V335) and at dispatch, even when extra_flags "
+            "happens to carry an effort flag. Sheets that do not set the key "
+            "are unaffected either way. A model row's effort_levels overrides "
+            "effort.levels for that model."
+        ),
+    )
+
     # Kind-specific profiles
     cli: CliProfile | None = Field(
         default=None,
@@ -1149,6 +1363,97 @@ class InstrumentProfile(BaseModel):
         default=None,
         description="HTTP-specific execution profile. Required when kind=http.",
     )
+
+    def effort_levels_for(self, model: str | None) -> dict[EffortLevel, str]:
+        """Marianne level -> native word for ``model`` ({} = nothing mapped).
+
+        A model row with ``effort_levels`` replaces the profile's map; a model
+        not listed (or None, the profile default) uses the profile's map.
+        """
+        if self.effort is None:
+            return {}
+        name = model if model is not None else self.default_model
+        if name is not None:
+            for row in self.models:
+                if row.name == name and row.effort_levels is not None:
+                    return dict(row.effort_levels)
+        return dict(self.effort.levels)
+
+    def accepted_effort_levels(
+        self, *, model: str | None, schema_mode: bool, interactive: bool = False,
+    ) -> list[str]:
+        """The Marianne levels a sheet may set here, in vocabulary order."""
+        if self.effort is None or (interactive and not self.effort.interactive):
+            return []
+        mapped = self.effort_levels_for(model)
+        allowed = (
+            set(self.effort.schema_levels)
+            if schema_mode and self.effort.schema_levels is not None
+            else set(mapped)
+        )
+        return [lv for lv in EFFORT_LEVELS if lv in mapped and lv in allowed]
+
+    def effort_refusal(
+        self, level: str, *, model: str | None, schema_mode: bool,
+        interactive: bool = False,
+    ) -> str | None:
+        """Why this profile cannot run a sheet at ``level``, or None when it can.
+
+        The ONE wording shared by `mzt validate` (V335), dispatch and the
+        backends' command builders, so the author reads the same sentence
+        wherever the refusal surfaces. It always ends with the accepted levels.
+        """
+        if self.effort is None:
+            return (
+                "declares no reasoning-effort mapping (the profile's effort: "
+                f"block), so instrument_config.effort {level!r} cannot be "
+                "applied; accepted levels: none"
+            )
+        if interactive and not self.effort.interactive:
+            return (
+                "cannot carry instrument_config.effort on an interactive launch "
+                "(the profile's effort.interactive is false: the harness's "
+                f"interactive command has no such option), so {level!r} cannot "
+                "be applied; set interactive: false on that sheet; accepted "
+                "levels: none"
+            )
+        accepted = self.accepted_effort_levels(
+            model=model, schema_mode=schema_mode, interactive=interactive,
+        )
+        if level in accepted:
+            return None
+        name = model if model is not None else self.default_model
+        row = next(
+            (r for r in self.models if name is not None and r.name == name), None,
+        )
+        # Name the model whenever it decides: its row carries effort_levels,
+        # or the profile maps nothing itself (levels vary by model).
+        model_decides = (
+            row is not None and row.effort_levels is not None
+        ) or not self.effort.levels
+        on_model = f" on model {name!r}" if name is not None and model_decides else ""
+        if not accepted:
+            return (
+                f"maps no reasoning-effort level{on_model}, so "
+                f"instrument_config.effort {level!r} cannot be applied; "
+                "accepted levels: none"
+            )
+        if schema_mode and level in self.effort_levels_for(model):
+            return (
+                f"does not run a schema sheet (response_format) at effort "
+                f"{level!r}: the profile's effort.schema_levels lists the "
+                "levels measured to return structured output; "
+                f"accepted levels: {', '.join(accepted)}"
+            )
+        return (
+            f"does not map effort {level!r}{on_model}"
+            f"{' on a schema sheet (response_format)' if schema_mode else ''}; "
+            f"accepted levels: {', '.join(accepted)}"
+        )
+
+    def native_effort(self, level: str, *, model: str | None) -> str:
+        """The harness word for ``level``; callers check ``effort_refusal`` first."""
+        return self.effort_levels_for(model)[level]  # type: ignore[index]
 
     @field_validator("class_hints")
     @classmethod
@@ -1163,6 +1468,64 @@ class InstrumentProfile(BaseModel):
                     "first, last, after <profile>, before <profile>"
                 )
         return value
+
+    @model_validator(mode="after")
+    def _validate_effort_mapping(self) -> InstrumentProfile:
+        """The effort mapping agrees with the delivery kind and the fixed flags."""
+        rows = [r.name for r in self.models if r.effort_levels is not None]
+        if self.effort is None:
+            if rows:
+                raise ValueError(
+                    f"models {rows} declare effort_levels but the profile has no "
+                    "effort: block saying how the level is delivered"
+                )
+            return self
+        effort = self.effort
+        if (effort.delivery == "body_field") != (self.kind == "http"):
+            raise ValueError(
+                f"effort.delivery {effort.delivery!r} does not fit kind "
+                f"{self.kind!r}: HTTP profiles use body_field, CLI profiles use "
+                "flag or config_override"
+            )
+        if self.cli is None:
+            return self
+        command = self.cli.command
+        native = {
+            v for m in [effort.levels, *(
+                r.effort_levels for r in self.models if r.effort_levels is not None
+            )] for v in m.values()
+        }
+        schema_native = {
+            v for m in [effort.levels, *(
+                r.effort_levels for r in self.models if r.effort_levels is not None
+            )] for lv, v in m.items()
+            if effort.schema_levels is None or lv in effort.schema_levels
+        }
+        schema_flags = (
+            command.schema_extra_flags if command.schema_extra_flags is not None
+            else command.extra_flags
+        )
+        schema_name = (
+            "schema_extra_flags" if command.schema_extra_flags is not None
+            else "extra_flags (which schema sheets inherit)"
+        )
+        checks: list[tuple[str, list[str], set[str], str]] = [
+            ("extra_flags", command.extra_flags, native, ""),
+            (schema_name, schema_flags, schema_native, " on a schema sheet"),
+        ]
+        if self.cli.interactive is not None:
+            checks.append(
+                ("cli.interactive.extra_args", self.cli.interactive.extra_args, native, ""),
+            )
+        for name, flags, allowed, where in checks:
+            for default in effort.defaults_in(flags):
+                if default not in allowed:
+                    raise ValueError(
+                        f"{name} sets effort {default!r} through {effort.flag}, "
+                        f"which no effort level this profile accepts{where} "
+                        f"maps to: {', '.join(sorted(allowed)) or 'none'}"
+                    )
+        return self
 
     @model_validator(mode="after")
     def _validate_kind_profile(self) -> InstrumentProfile:

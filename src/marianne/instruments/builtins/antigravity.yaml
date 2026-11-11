@@ -200,6 +200,24 @@ models:
     max_output_tokens: 65536
     max_concurrent: 4
 
+# Per-sheet reasoning effort (GH #535). `agy --help` on agy 1.5.5 (checked
+# 2026-11-11) lists `--effort` "Reasoning effort for the current CLI session
+# (low|medium|high|xhigh|max)" as a top-level option, so it applies to print
+# mode and to the interactive launch. agy has nothing below low: minimal runs
+# at low. Unset adds no flag (the session default). The -high/-medium/-low
+# suffix in a gemini model slug is a separate model choice made with `model:`;
+# Marianne does not rewrite slugs from effort.
+effort:
+  delivery: flag
+  flag: "--effort"
+  levels:
+    minimal: low
+    low: low
+    medium: medium
+    high: high
+    xhigh: xhigh
+    max: max
+
 cli:
   # GH #434: the stream's first event arrives within seconds of a healthy
   # start; 90 s of silence on both pipes is a dead session, struck early as

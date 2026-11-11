@@ -702,6 +702,17 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
             )
         return json_schema_flag
 
+    def effort_refusal(self, level: str, *, schema_mode: bool) -> str | None:
+        """Why this instrument cannot run a sheet at ``level`` (None = it can).
+
+        Judged for the model this backend will run (a model row may carry its
+        own effort_levels). Dispatch asks before spawning; ``_build_command``
+        asks again so a direct caller cannot bypass the profile's mapping.
+        """
+        return self._profile.effort_refusal(
+            level, model=self._model, schema_mode=schema_mode,
+        )
+
     def _build_command(
         self,
         prompt: str,
@@ -711,6 +722,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
         preamble: str | None = None,
         prompt_extensions: tuple[str, ...] | None = None,
         response_format: dict[str, Any] | None = None,
+        effort: str | None = None,
     ) -> list[str]:
         """Build the CLI command from the profile configuration.
 
@@ -718,6 +730,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
         [executable] [subcommand?] [auto_approve_flag?] [output_format_flag? value?]
         [model_flag? model?] [timeout_flag? timeout?] [prompt_flag?] <prompt>
         [json_schema_flag? schema?] [...extra_flags | ...schema_extra_flags]
+        (a sheet-level ``effort`` replaces the effort value inside those flags)
 
         Args:
             prompt: The prompt text (already assembled with preamble/extensions).
@@ -730,12 +743,37 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
                 (``json_schema`` type). When given, validated against the
                 profile's capability first and appended as
                 ``json_schema_flag`` + one compact-JSON argument.
+            effort: Request-local reasoning-effort level in Marianne's
+                vocabulary (``instrument_config.effort``). None keeps the
+                profile's fixed flags byte for byte. A level is mapped to the
+                harness word (profile ``effort.levels`` or the model row's
+                ``effort_levels``) and delivered per ``effort.delivery``,
+                replacing a default in the fixed flags; one the profile does
+                not map (for this sheet's mode and model) raises before any
+                spawn.
 
         Returns:
             List of command arguments for subprocess.
+
+        Raises:
+            ValueError: When ``effort`` is set and the profile declares no
+                mapping or does not map the level for this model (schema
+                sheets accept only ``effort.schema_levels``).
         """
         cmd = self._cli.command
         args: list[str] = [cmd.executable]
+
+        effort_native: str | None = None
+        if effort is not None:
+            refusal = self.effort_refusal(
+                effort, schema_mode=response_format is not None,
+            )
+            if refusal is not None:
+                raise ValueError(
+                    f"instrument '{self._profile.name}' {refusal}. Refusing "
+                    "to run the sheet at an effort it did not ask for"
+                )
+            effort_native = self._profile.native_effort(effort, model=self._model)
 
         validated_schema_flag: str | None = None
         if response_format is not None:
@@ -826,10 +864,18 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
         # schema_extra_flags when it declares them, because a flag that is
         # right for free-form work can hang structured output (claude-code
         # `--effort max` + `--json-schema`: zero bytes until killed).
-        if response_format is not None and cmd.schema_extra_flags is not None:
-            args.extend(cmd.schema_extra_flags)
-        else:
-            args.extend(cmd.extra_flags)
+        fixed_flags = (
+            cmd.schema_extra_flags
+            if response_format is not None and cmd.schema_extra_flags is not None
+            else cmd.extra_flags
+        )
+        # A sheet-level effort (GH #535) replaces the default effort value in
+        # whichever flag set applies; it never adds a second effort flag.
+        mapping = self._profile.effort
+        args.extend(
+            mapping.apply(fixed_flags, effort_native)
+            if mapping is not None and effort_native is not None else fixed_flags
+        )
 
         return args
 
@@ -1534,6 +1580,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
             preamble=req_preamble,
             prompt_extensions=req_extensions,
             response_format=response_format,
+            effort=request.effort if request is not None else None,
         )
         if guarded_binding is not None:
             model_flag = self._cli.command.model_flag

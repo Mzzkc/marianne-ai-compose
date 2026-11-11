@@ -61,6 +61,7 @@ def _class_report() -> tuple[dict[str, Any], bool]:
                 {
                     "profile": item.profile,
                     "model": item.config.model,
+                    "effort": item.config.effort,
                     "availability": available,
                     "reason": reason,
                 }

@@ -5,6 +5,10 @@
 #
 # Auth: Provider-specific API keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
 
+# No effort: block (GH #535): aider 0.86.2 has --reasoning-effort, but it passes
+# the value to whatever model/provider is configured and the accepted values
+# depend on that model; unverified, so a sheet that sets effort is refused.
+
 name: aider
 display_name: "Aider"
 description: "AI pair programming CLI (code editing focus)"

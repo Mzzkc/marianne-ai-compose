@@ -454,6 +454,105 @@ and used by the conductor for instrument selection in future versions.
 | `json_schema_flag` | No | | Flag that makes the CLI enforce a JSON schema, e.g. Claude Code's `--json-schema` (the shipped `claude-code` profile declares it). With it, a sheet's `instrument_config.response_format` (`type: json_schema`) is honoured and the terminal JSON's `structured_output` becomes the result; without it, such a sheet is refused at dispatch and `mzt validate` warns V311. Requires `output.format: json`. Schema mode rides on the model calling Claude Code's StructuredOutput tool: measured 2026-10-21, Claude models did 3/3, while the GLM-5.3 route through Claude Code missed it 1 time in 3 (it answered in prose, which the parser refuses and the baton retries). Prove the model you route with `mzt instruments check claude-code --live --model <m>`. A CLI that prints an array of events for `--output-format json` (Claude Code with `verbose: true` in its settings) is read from its last `type: result` object |
 | `stdin_json_template` | No | | For a CLI whose only stdin path is a structured stream: this object is written as ONE JSON line with every `"{prompt}"` string replaced by the prompt (nested keys are walked). Antigravity: `{event: user, message: {role: user, content: "{prompt}"}}` with `--input-format stream-json` |
 
+#### Reasoning effort: one vocabulary, each profile maps it
+
+A score sets `instrument_config.effort` (GH #535) in Marianne's vocabulary,
+lowest first: `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. The words are
+the ones Claude Code, Antigravity and Codex print for their reasoning control,
+plus `minimal`, "the least reasoning this seat offers", which OpenAI-family
+models and opencode variants name. `none` (reasoning off) and Codex's `ultra`
+(adds task delegation) are different requests and are not levels.
+
+A profile declares a top-level `effort:` block that maps those words to its
+harness's own and says how the word is delivered:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `delivery` | Yes | `flag`: `<flag> <native>` on the command. `config_override`: `<flag> <key>=<native>`. `body_field`: the HTTP request JSON gets `<key>` = native (`kind: http` only; a dotted key is a nested object) |
+| `flag` | `flag`, `config_override` | The effort flag (`--effort`, `--variant`), or the override switch (codex `-c`) |
+| `key` | `config_override`, `body_field` | Config key (codex `model_reasoning_effort`) or request-body path (`reasoning_effort`, `reasoning.effort`) |
+| `levels` | No (`{}`) | Marianne level → native word. Several levels may share a word (`minimal: low`); a level left out is refused naming the mapped ones. `{}` = each model row decides |
+| `schema_levels` | No | The Marianne levels a schema sheet (`response_format`) may use; unset = all mapped levels. The profile's own schema default must be a value one of them maps to |
+| `interactive` | No (`true`) | `false` when the harness's interactive command has no such option; an interactive sheet that sets `effort` is then refused |
+
+A model row may carry `effort_levels` (same shape as `levels`), which replaces
+the profile's map when the sheet runs on that model; `{}` means that model has
+no reasoning control. This exists because a harness can run models with
+different controls: `opencode models --verbose` lists variants `low`, `high`,
+`max` for `zai-coding-plan/glm-5.3` and none for `glm-4.7`.
+
+A sheet with `effort` set gets the native word where the profile's fixed flags
+(`extra_flags`, `schema_extra_flags`, `cli.interactive.extra_args`) already
+carry a default, replaced in place and never doubled, or appended where none
+stands. A sheet that does not set it builds exactly the command it built before
+the block existed, on every profile. Every default already in those flag lists
+must be a native value the block maps, or the profile does not load.
+
+What each builtin declares, verified on 2026-11-11 from `--help`, `--version`
+and the harness's local model catalog (no model was called, and no mapping
+other than `claude-code`'s was exercised with a model call):
+
+| Profile | Mapping | Delivery shape | Marianne levels accepted | Verified from / why none |
+|---------|---------|----------------|--------------------------|--------------------------|
+| `claude-code` | yes | `flag --effort` | all six (`minimal` runs as `low`); a schema sheet: `minimal` to `high` only. Default stays `max` (`high` on schema sheets) | `claude --help`, 2.1.322 |
+| `antigravity` | yes | `flag --effort` | all six (`minimal` runs as `low`) | `agy --help`, 1.5.5 |
+| `codex-cli` | yes | `config_override -c model_reasoning_effort=<v>` | all six (`minimal` runs as `low`); the `o3` and `o4-mini` rows accept none | `codex exec --help`, 0.166.0; levels from codex's local model catalog, in which `o3` and `o4-mini` do not appear |
+| `opencode` | yes, per model | `flag --variant`, `interactive: false` | the three `zai-coding-plan/glm-5.3` rows (`glm-5.3`, `-flash`, `-highspeed`): `minimal`, `low`, `high`, `max`; every other row none. Refused on interactive sheets (the TUI has no `--variant`) | `opencode run --help`, 1.19.4; `opencode models --verbose` variants |
+| `crush` | yes, per model | `flag --reasoning-effort` | `google/gemma-4-31b-it:free`: `minimal`, `low`, `medium`, `high`; every other row none (`qwen/qwen3-coder:free` cannot reason) | `crush run --help`, v0.98.2; crush's provider catalog |
+| `gemini-cli` | no | none | none | `gemini --help`, 0.50.0 has no flag; the control is `thinkingLevel` in `settings.json`, and no delivery shape writes a settings file |
+| `aider` | no | none | none | `aider --help`, 0.86.2 has `--reasoning-effort` but it passes values through to the configured model and provider; what they accept is unverified |
+| `goose` | no | none | none | `goose run --help`, 1.30.0 lists no reasoning option |
+| `claude-code-ollama` | no | none | none | the flag exists in Claude Code, but this profile's seam was verified without it |
+| `cline-cli`, `qwen-code`, `openclaw` | no | none | none | not installed where surveyed, so no flag could be verified |
+| `cli` | no | none | none | runs a shell command, not a model |
+| `ollama` (HTTP) | no | none | none | the default `llama3.1:8b` has no reasoning control and Ollama was not installed to check. The `body_field` shape is implemented and tested with a made-up profile only |
+
+Antigravity also encodes a tier in some model slugs (`gemini-3.8-flash-high`).
+That is a model choice, made with `model:`; Marianne does not rewrite a slug
+from `effort`, because the slug is the model identity the baton keys
+concurrency, cost and guarded routes on. Both can be set; what the harness does
+when the flag and the slug disagree has not been verified.
+
+The `claude-code` block, verbatim:
+
+```yaml
+effort:
+  delivery: flag
+  flag: "--effort"
+  levels: {minimal: low, low: low, medium: medium, high: high, xhigh: xhigh, max: max}
+  schema_levels: [minimal, low, medium, high]
+```
+
+Your own profile under `~/.marianne/instruments/` or `.marianne/instruments/`
+declares the same block, with no code change:
+
+```yaml
+name: my-reasoner
+kind: http
+default_model: my-model
+models:
+  - {name: my-model, context_window: 128000, cost_per_1k_input: 0, cost_per_1k_output: 0}
+effort:
+  delivery: body_field
+  key: reasoning_effort          # sent as {"reasoning_effort": "<native>"}
+  levels: {low: low, medium: medium, high: high}
+http:
+  base_url: http://localhost:8080/v1
+  schema_family: openai
+```
+
+Profiles replace one another whole, so a user-layer or venue copy of a builtin
+made before the block existed still works for every score that does not set
+`effort`, and refuses (V335, then dispatch) a score that does: copy the
+builtin's `effort:` block (and any row `effort_levels`), or delete the copy in
+favour of the builtin plus a score alias. Map only levels you have seen the
+harness accept in its own help or catalog, and run one sheet at each level
+before relying on it: `mzt instruments check --live` proves the profile's
+defaults, not each level. The only measurement so far is on Claude Code (one
+small task, three runs per level): Sonnet 5.5 spent about 2.3 times the
+reasoning tokens at `max` as at `high`, `low`/`medium`/`high` did not differ,
+and Haiku showed no usable effect. No saving is claimed for any other harness.
+
 #### Environment the musician receives
 
 CLI instruments receive only system essentials (`PATH`, `HOME`, `USER`,

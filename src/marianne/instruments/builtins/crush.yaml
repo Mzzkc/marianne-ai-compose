@@ -31,12 +31,14 @@ models:
   # ── Free-tier models (OpenRouter) ──
   # Tier 1: Recommended for code gen
   - name: "qwen/qwen3-coder:free"
+    effort_levels: {}  # crush catalog: can_reason false
     context_window: 262000
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
     max_output_tokens: 262000
     max_concurrent: 8
   - name: "google/gemma-4-31b-it:free"
+    effort_levels: {minimal: low, low: low, medium: medium, high: high}
     context_window: 262144
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
@@ -73,6 +75,17 @@ models:
     cost_per_1k_output: 0.0
     max_output_tokens: 96000
     max_concurrent: 8
+
+# Per-sheet reasoning effort (GH #535). `crush run --help` (v0.98.2, checked
+# 2026-11-11): `--reasoning-effort` "Levels depend on the model; unsupported
+# values are rejected with the accepted values listed". The profile maps
+# nothing itself; a row maps the levels crush's provider catalog lists for that
+# model (gemma-4-31b-it:free: low, medium, high; qwen3-coder: cannot reason).
+# Rows with no effort_levels refuse the key until someone checks them.
+effort:
+  delivery: flag
+  flag: "--reasoning-effort"
+  levels: {}
 
 cli:
   command:

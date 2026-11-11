@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`instrument_config.effort`: per-sheet reasoning effort, one vocabulary for every instrument
+  (GH #535).** Over 245 musician sessions thinking was about 90% of output tokens on Claude models,
+  while the `claude-code` profile pinned `--effort max` for every headless sheet. A sheet now sets
+  `effort: minimal | low | medium | high | xhigh | max` at any `instrument_config` scope, on an
+  alias `config` or chain entry, or on a capability-class entry in `classes.yaml` (so shipped
+  examples and the rosetta corpus pick it up through classes and aliases with no edit). An unknown
+  word fails at score load. Each profile maps the vocabulary in a new top-level `effort:` block:
+  `delivery` (`flag`, `config_override` or `body_field` for HTTP), `flag`/`key`, `levels`
+  (several Marianne levels may share one native word), `schema_levels`, `interactive`; a model
+  row's new `effort_levels` overrides the map for that model (`{}` = no control). Builtins, as
+  verified from each harness's `--help` and local model catalog: `claude-code` and `antigravity`
+  `--effort`; `codex-cli` `-c model_reasoning_effort=<v>`; `opencode` `--variant` and `crush`
+  `--reasoning-effort` per model; `gemini-cli`, `aider`, `goose`, `claude-code-ollama`,
+  `cline-cli`, `qwen-code`, `openclaw`, `cli` and `ollama` declare none. A default already in the
+  fixed flags is replaced, never doubled; a score that does not set the key builds the same
+  command as before on every profile. `mzt validate` gains **V335** (ERROR): no mapping, a level
+  the profile or model does not map, `xhigh`/`max` on a `claude-code` schema sheet (`max` with
+  `--json-schema` hangs), or an interactive sheet on a headless-only mapping, each naming the
+  accepted levels; dispatch refuses the same sheets. V325 shows a class entry's effort. Measured
+  so far (one small task, three runs per level): Sonnet 5.5 spent about 2.3x the reasoning tokens
+  at `max` as at `high`; `low`/`medium`/`high` did not differ; Haiku showed no usable effect.
+  Nothing else is measured.
 - **Interactive sheets now record token usage; unmeasured is never free (GH #533).** A sheet
   driven through tmux parsed no stdout, so it recorded 0 tokens and `mzt status` showed it as
   free (one 397 s claude-code sheet used 66,810 input, 1,119,744 cache-read and 6,860 output

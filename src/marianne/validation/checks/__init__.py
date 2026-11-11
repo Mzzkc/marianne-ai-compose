@@ -49,6 +49,7 @@ from marianne.validation.checks.config import (
     ValidationTypeCheck,
     VersionReferenceCheck,
 )
+from marianne.validation.checks.instrument_effort import SheetEffortCheck
 from marianne.validation.checks.jinja import (
     BashArrayLengthCheck,
     FanOutStringFilterCheck,
@@ -114,6 +115,7 @@ __all__ = [
     "AliasSelectCheck",
     "CliSchemaShapeCheck",
     "SchemaSheetInteractiveCheck",
+    "SheetEffortCheck",
     "ClassModelConfigCheck",
     "ClassesFileValidCheck",
     "ClassChainSummaryCheck",

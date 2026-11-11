@@ -67,7 +67,7 @@ and constraints are extracted directly from the Pydantic v2 config models in
 | `description` | `str \| None` | `None` | Human-readable description |
 | `workspace` | `Path` | `./workspace` | Output directory. Resolved to absolute path at construction time. |
 | `instrument` | `str \| None` | `None` | Profile, score alias, or capability class. The packaged classes are `strong`, `workhorse`, `fast`, `cheap`, `writing`, `review`, `vision`, `local`, `high-context`, `image`, `video`; the vocabulary is the packaged `classes/default.yaml` itself, and a user (`~/.marianne/classes.yaml`) or venue (`.marianne/classes.yaml`) layer may define ANY further class name or tombstone a packaged one with `null` (GH #433). Run `mzt instruments classes show` to see resolved chains. If unset, defaults to `claude-code`. |
-| `instrument_config` | `InstrumentSettings` | `{}` | Typed per-score overrides. Keys: `timeout_seconds` (sheet execution timeout), `model`, `provider`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`, `interactive_nudge_policy`, `interactive_nudge_instrument`, `interactive_nudge_timeout_seconds`, `max_tokens`, `temperature`, `response_format`, `first_output_timeout_seconds` (CLI first-output silence bound, GH #502; omit to inherit the profile, a finite positive number to override, `null` to disable — see the [CLI timeout section](instrument-guide.md) for the full semantics). Unknown keys warn as V010/V011; executor support still varies. |
+| `instrument_config` | `InstrumentSettings` | `{}` | Typed per-score overrides. Keys: `timeout_seconds` (sheet execution timeout), `model`, `provider`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`, `interactive_nudge_policy`, `interactive_nudge_instrument`, `interactive_nudge_timeout_seconds`, `max_tokens`, `temperature`, `response_format`, `effort` (reasoning effort in Marianne's vocabulary `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, mapped by the resolved profile's `effort:` block; see below), `first_output_timeout_seconds` (CLI first-output silence bound, GH #502; omit to inherit the profile, a finite positive number to override, `null` to disable — see the [CLI timeout section](instrument-guide.md) for the full semantics). Unknown keys warn as V010/V011; executor support still varies. |
 | `instruments` | `dict[str, InstrumentDef]` | `{}` | Named instrument definitions local to this score. Declares reusable aliases referencing registered instrument profiles with optional overrides. Referenced by name in per-sheet or per-movement `instrument:` fields. See [instruments](#instruments). |
 | `movements` | `dict[int, MovementDef]` | `{}` | Movement declarations. Map of movement number to MovementDef. Each movement can specify a name, instrument, instrument config, and voice count. See [movements](#movements). |
 | `instrument_fallbacks` | `list[str]` | `[]` | Score-level fallback chain. Each profile, alias, or class is expanded in place; a primary class's tail runs before declared fallbacks. See [Instrument Fallbacks](#instrument-fallbacks). |
@@ -113,6 +113,70 @@ backends; HTTP and interactive backends warn and ignore it. See the
 [Instrument Guide](instrument-guide.md) for the profile-level setting and
 worked examples.
 
+`effort` sets the reasoning effort of one sheet (GH #535), in one vocabulary
+for every harness, lowest first: `minimal`, `low`, `medium`, `high`, `xhigh`,
+`max`. Any other word fails when the score loads. The resolved instrument
+profile's `effort:` block maps the level to the harness's own word and says how
+it is delivered (a flag, a config override, or an HTTP request-body field); see
+the [instrument guide](instrument-guide.md#reasoning-effort-one-vocabulary-each-profile-maps-it)
+for the shapes and the table of what each builtin maps. `minimal` means the
+least reasoning the seat offers: on a harness whose lowest level is `low` it
+runs at `low`. A model row may narrow the map (`opencode` and `crush` levels
+differ per model). The only measurement so far: on one small task, three runs per
+level, Sonnet 5.5 spent about 2.3 times the reasoning tokens at `max` as at
+`high`; `low`, `medium` and `high` did not differ; Haiku showed no usable effect.
+Nothing has been measured on the other harnesses.
+
+Omit the key, or set `null` in a narrower scope, to keep the profile default
+(`claude-code`: `max`, or `high` on a schema sheet; every other builtin: the
+harness's own default, no flag). It is refused, never downgraded, when the
+profile declares no `effort:` block (`claude-code-ollama`, `gemini-cli`,
+`aider`, `goose`, the builtin `ollama`, any user-layer copy made before the
+block existed), when neither the profile nor the sheet's model maps the level,
+when a schema sheet asks for a level outside `effort.schema_levels`
+(`claude-code` refuses `xhigh` and `max` there; `max` with `--json-schema`
+hangs), and when an interactive sheet runs on a mapping marked
+`interactive: false` (the `opencode` TUI has no `--variant`). `mzt validate`
+reports V335 with the accepted levels, naming the model when its row decides,
+and dispatch refuses the same sheet. A fallback takes `effort` only from its own
+alias or class entry `config`, never from the primary's; on the primary, a
+capability-class entry's `effort` applies unless a score, movement or sheet
+scope names `effort`.
+
+```yaml
+instrument: claude-code
+instrument_config:
+  effort: high                 # score default for every sheet
+movements:
+  1:
+    instrument_config:
+      effort: low              # recon movement
+sheet:
+  per_sheet_instrument_config:
+    7:
+      effort: null             # sheet 7 back to the profile default (max)
+instruments:
+  reviewer:
+    chain:
+      - {profile: claude-code, config: {model: claude-sonnet-5-5, effort: medium}}
+      - {profile: codex-cli, config: {effort: medium}}   # -c model_reasoning_effort=medium
+```
+
+The profile side, for authors of instrument profiles (full guide in
+[instrument-guide.md](instrument-guide.md#reasoning-effort-one-vocabulary-each-profile-maps-it)):
+
+| `effort:` field | Meaning |
+|-----------------|---------|
+| `delivery` | `flag` (`<flag> <native>`), `config_override` (`<flag> <key>=<native>`) or `body_field` (HTTP request JSON `<key>` = native; HTTP profiles only, CLI profiles use the other two) |
+| `flag` | The effort flag, or the override switch (`-c`) |
+| `key` | Config key or dotted request-body path; required by `config_override` and `body_field` |
+| `levels` | Marianne level to native word; several levels may share a word. `{}` leaves the decision to each model row |
+| `schema_levels` | Marianne levels a `response_format` sheet may use; unset = all mapped levels |
+| `interactive` | Default `true`; `false` refuses an interactive sheet that sets `effort` |
+
+A model row's `effort_levels` replaces `levels` for that model (`{}` = that
+model has no control). A profile with no `effort:` block refuses the key.
+
 `response_format` is opt-in. For OpenAI-compatible HTTP profiles, an omitted
 key inherits `http.response_format`, an explicit `null` disables it for that
 sheet, and an object overrides it. Marianne validates the format declaration
@@ -133,7 +197,8 @@ validator rejects a draft URL it cannot resolve (GH #479) — and validates the
 returned structured JSON against it. The profile's `schema_extra_flags`, when
 declared, replace `extra_flags` on that command (the shipped `claude-code`
 profile drops from `--effort max` to `--effort high` for schema sheets, since
-max with `--json-schema` hangs on Claude Code 2.1.307). An unsupported
+max with `--json-schema` hangs on Claude Code 2.1.307; a sheet's own `effort`
+replaces that `high` only with a level in the profile's `effort.schema_levels`). An unsupported
 profile or format fails explicitly. Interactive CLI execution does not provide
 this schema contract, and score silence on `interactive` selects the profile's
 `cli.interactive.enabled_by_default` — true for `claude-code` and `antigravity` —
@@ -264,10 +329,28 @@ Use `mzt instruments classes show --json` to inspect chains and source digests,
 `mzt instruments classes write --if-absent` to generate a user map from
 available shipped profiles. The writer backs up any existing file before an
 authorized replacement and refuses hand edits unless given `--force`.
-Class entries accept a profile name or `{profile: NAME, config: {model: MODEL}}`.
-Other per-entry settings are refused because the fallback path cannot carry
-them consistently. A score-level `instrument_config.model` with a class primary
-is refused; put a fixed model in a score alias instead.
+Class entries accept a profile name or `{profile: NAME, config: {model: MODEL,
+effort: LEVEL}}`. `effort` is the Marianne reasoning level that entry runs at
+(GH #535), so a user or venue `classes.yaml` can give every score that names
+the class a level without editing the scores:
+
+```yaml
+version: 1
+classes:
+  review:
+    - {profile: codex-cli, config: {effort: medium}}
+    - {profile: claude-code, config: {model: claude-sonnet-5-5, effort: medium}}
+    - antigravity            # no effort: the harness default
+```
+
+On the primary entry, a score, movement or sheet `instrument_config.effort`
+wins over the class (`null` there restores the profile default); each fallback
+entry uses only its own. V335 judges every entry against its own profile, and
+V325 shows each entry's effort in the resolved chain. The packaged
+`default.yaml` sets no effort. Other per-entry settings are refused because the
+fallback path cannot carry them consistently. A score-level
+`instrument_config.model` with a class primary is refused; put a fixed model in
+a score alias instead.
 
 ---
 
