@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Callable
 from typing import Any, TypeVar
@@ -10,6 +11,7 @@ from marianne.memory.access import AccessRef, GrantStore, scope_covers
 from marianne.memory.backend_protocol import MemoryBackend, RequestContext
 from marianne.memory.errors import (
     AuthorityRevoked,
+    BackendUnreachable,
     DeadlineExceeded,
     MemoryBackendError,
     NotFound,
@@ -33,6 +35,7 @@ from marianne.memory.model import (
     ForgetResult,
     Permission,
     Provenance,
+    RecallItem,
     RecallResult,
     VerifyResult,
     parse_scope,
@@ -194,12 +197,25 @@ class Gateway:
         except MemoryBackendError as exc:
             self._record(s, tool, started, fact_id, None, exc)
             raise
+        except (KeyboardInterrupt, SystemExit, asyncio.CancelledError):
+            self._record(s, tool, started, fact_id, None, None, status="cancelled")
+            raise
+        except Exception as exc:
+            fault = BackendUnreachable(
+                "the backend call failed unexpectedly", subtype="backend_fault",
+                remedy="see the conductor log for the exception",
+            )
+            self._record(
+                s, tool, started, fact_id, None, fault, exception_type=type(exc).__name__,
+            )
+            raise fault from exc
         self._record(s, tool, started, fact_id, result, None)
         return result
 
     def _record(
         self, s: Session, tool: str, started: float, fact_id: str | None,
-        result: Any, exc: MemoryBackendError | None,
+        result: Any, exc: MemoryBackendError | None, *, status: str | None = None,
+        exception_type: str | None = None,
     ) -> None:
         if self._audit is None:
             return
@@ -214,10 +230,14 @@ class Gateway:
                 size = len(str(result["bytes"]).encode("utf-8"))
         if tool == "recall" or tool == "fetch":
             s.bytes_read += size
+        extra: dict[str, Any] = {"exception_type": exception_type} if exception_type else {}
         self._audit.append(
             dispatch_id=s.dispatch_id, session_id=s.session_id, principal=s.principal,
             event="operation", scope=s.scope, tool=tool, fact_id=fact_id,
-            returned_fact_ids=returned, result_status="ok" if exc is None else "refused",
+            returned_fact_ids=returned,
+            result_status=status or ("ok" if exc is None else (
+                "error" if exception_type else "refused")),
+            **extra,
             latency_ms=(time.time() - started) * 1000.0, bytes=size,
             error_code=None if exc is None else exc.code.name,
         )
@@ -244,14 +264,35 @@ class Gateway:
         cursor: str | None = None, budget_seconds: float | None = None,
     ) -> RecallResult:
         def go(b: MemoryBackend, ctx: RequestContext, s: Session) -> RecallResult:
+            cap = s.caps.recall_cap_bytes
             quota = s.caps.dispatch_recall_quota_bytes
-            if quota is not None and s.recall_bytes_used >= quota:
-                raise RecallCapExceeded(
-                    f"dispatch recall quota of {quota} bytes is spent",
-                    subtype="recall_cap_exceeded", remedy="narrow the query or fetch by unit",
-                )
+            if quota is not None:
+                remaining = quota - s.recall_bytes_used
+                if remaining <= 0:
+                    raise RecallCapExceeded(
+                        f"dispatch recall quota of {quota} bytes is spent",
+                        subtype="recall_cap_exceeded", remedy="narrow the query or fetch by unit",
+                    )
+                cap = min(cap, remaining)
             result = b.recall(ctx, query, self._scope(s, scope), limit, cursor)
-            s.recall_bytes_used += sum(len(i["content"].encode("utf-8")) for i in result["results"])
+            # The Protocol carries no per-call cap, so the clamp min(recall_cap_bytes,
+            # quota_remaining) is applied here by cutting at a fact boundary.
+            kept: list[RecallItem] = []
+            used = 0
+            for item in result["results"]:
+                size = len(item["content"].encode("utf-8"))
+                if used + size > cap:
+                    break
+                kept.append(item)
+                used += size
+            if result["results"] and not kept:
+                raise RecallCapExceeded(
+                    f"no result fits the {cap} bytes the dispatch quota still allows",
+                    subtype="recall_cap_exceeded", remedy="fetch by unit or narrow the query",
+                )
+            if len(kept) < len(result["results"]):
+                result = {**result, "results": kept, "cursor": None}
+            s.recall_bytes_used += used
             return result
 
         return self._run(session_id, "recall", budget_seconds, go)

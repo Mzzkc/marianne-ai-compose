@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 from typing import Any
@@ -150,11 +151,11 @@ def test_closed_session_refuses(gw: Gateway) -> None:
 def test_dispatch_recall_quota_e4(tmp_path: Path) -> None:
     g = Gateway(require_audit=False)
     g.register_backend("att-1", files_backend(tmp_path / "files"))
-    sid = sess(g, caps=MemoryCaps(dispatch_recall_quota_bytes=30))
+    sid = sess(g, caps=MemoryCaps(dispatch_recall_quota_bytes=150))
     g.declare(sid, "quota fact " + "pad " * 20, provenance=EV)
-    g.recall(sid, "quota")  # spends >= 30
+    g.recall(sid, "quota")  # ~90 bytes
     with pytest.raises(RecallCapExceeded):
-        g.recall(sid, "quota")
+        g.recall(sid, "quota")  # the 60 left cannot hold it
 
 
 # ---------------------------------------------------------------- fake backend
@@ -294,3 +295,90 @@ def test_grant_ref_must_match_principal_and_scope(tmp_path: Path) -> None:
             principal=P, attachment_id="att-1", scope=SCOPE, dispatch_id="d",
             deadline_at=time.time() + 60, access=parse_access("grant:g1"),
         )
+
+
+# ---------------------------------------------------------------- unexpected faults
+
+
+class Boom(Fake):
+    def __init__(self, exc: BaseException) -> None:
+        super().__init__()
+        self.exc = exc
+
+    def recall(self, ctx: RequestContext, *a: Any, **k: Any) -> Any:
+        raise self.exc
+
+
+def audited(tmp_path: Path, backend: Any) -> tuple[Gateway, str, Path]:
+    from marianne.memory.gateway import AuditLog
+
+    g = Gateway(audit=AuditLog(tmp_path / "audit"))
+    g.register_backend("att-1", backend)
+    s = g.open_session(
+        principal=P, attachment_id="att-1", scope=SCOPE, permissions=("read",),
+        dispatch_id="d1", deadline_at=time.time() + 60,
+    )
+    return g, s.session_id, tmp_path / "audit" / "d1" / f"{s.session_id}.jsonl"
+
+
+def test_unexpected_exception_is_typed_e5_audited_without_message(tmp_path: Path) -> None:
+    import json
+
+    from marianne.memory import BackendUnreachable
+
+    secret = ValueError("SECRET memory content")
+    g, sid, path = audited(tmp_path, Boom(secret))
+    with pytest.raises(BackendUnreachable) as exc:
+        g.recall(sid, "q")
+    assert exc.value.subtype == "backend_fault"
+    assert exc.value.__cause__ is secret
+    assert "SECRET" not in str(exc.value)
+    text = path.read_text()
+    assert "SECRET" not in text
+    rec = json.loads(text.splitlines()[-1])
+    assert rec["result_status"] == "error" and rec["error_code"] == "E5"
+    assert rec["exception_type"] == "ValueError"
+
+
+@pytest.mark.parametrize("exc_type", [KeyboardInterrupt, SystemExit, asyncio.CancelledError])
+def test_cancellation_is_audited_and_reraised_unchanged(tmp_path: Path, exc_type: Any) -> None:
+    import json
+
+    inst = exc_type()
+    g, sid, path = audited(tmp_path, Boom(inst))
+    with pytest.raises(exc_type) as exc:
+        g.recall(sid, "q")
+    assert exc.value is inst
+    rec = json.loads(path.read_text().splitlines()[-1])
+    assert rec["result_status"] == "cancelled" and rec["error_code"] is None
+
+
+# ---------------------------------------------------------------- quota
+
+
+def test_n_calls_never_return_more_than_the_quota(tmp_path: Path) -> None:
+    g = Gateway(require_audit=False)
+    g.register_backend("att-1", files_backend(tmp_path / "files", recall_cap_bytes=1024))
+    sid = sess(g, caps=MemoryCaps(dispatch_recall_quota_bytes=1500))
+    for i in range(10):
+        g.declare(sid, f"quota fact {i} " + "pad " * 50, provenance=EV)
+    total = 0
+    refused = False
+    for _ in range(6):
+        try:
+            r = g.recall(sid, "quota")
+        except RecallCapExceeded:
+            refused = True
+            break
+        total += sum(len(i["content"].encode()) for i in r["results"])
+    assert total <= 1500
+    assert refused
+
+
+def test_zero_remaining_quota_refuses_before_backend() -> None:
+    g, f = fake_gw()
+    sid = sess(g, caps=MemoryCaps(dispatch_recall_quota_bytes=10))
+    g.sessions.get(sid).recall_bytes_used = 10
+    with pytest.raises(RecallCapExceeded):
+        g.recall(sid, "q")
+    assert f.ctxs == []
