@@ -86,7 +86,6 @@ def read_usage_file(path: Path, config: InteractiveUsageConfig) -> UsageReading:
     when they are in the same file.
     """
     per_key: dict[str, tuple[int, int, int, int, str | None]] = {}
-    anonymous = 0
     try:
         with path.open("r", encoding="utf-8", errors="replace") as handle:
             for line_no, line in enumerate(handle):
@@ -100,7 +99,9 @@ def read_usage_file(path: Path, config: InteractiveUsageConfig) -> UsageReading:
                     data, config.record_filter,
                 ):
                     continue
-                model_raw = extract_json_path(data, config.model_path) if config.model_path else None
+                model_raw = (
+                    extract_json_path(data, config.model_path) if config.model_path else None
+                )
                 model = model_raw if isinstance(model_raw, str) and model_raw else None
                 if model in config.ignore_models:
                     continue
@@ -118,7 +119,6 @@ def read_usage_file(path: Path, config: InteractiveUsageConfig) -> UsageReading:
                 if isinstance(key_raw, str) and key_raw:
                     per_key[key_raw] = entry
                 else:
-                    anonymous += 1
                     per_key[f"\0line:{line_no}"] = entry
     except OSError as exc:
         return unmeasured(f"record unreadable: {type(exc).__name__}")

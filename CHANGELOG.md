@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Interactive sheets now record token usage; unmeasured is never free (GH #533).** A sheet
+  driven through tmux parsed no stdout, so it recorded 0 tokens and `mzt status` showed it as
+  free (one 397 s claude-code sheet used 66,810 input, 1,119,744 cache-read and 6,860 output
+  tokens). Profiles gain `cli.interactive.usage` (session-id flag, record path template, record
+  filter, dedupe key, model and token paths); the backend launches with a session id it chose and
+  reads the harness's own session record when the sheet ends, on every outcome, filling the token
+  fields and observed model. Declared on `claude-code` (`claude-code-ollama` has no interactive mode). A profile with no
+  block, or a missing or empty record, marks the attempt `cost_uncertain` (the existing flag)
+  instead of reporting zero; a user-layer `claude-code.yaml` needs its own `usage:` block.
 - **`mzt instruments prices`: model price drift against models.dev, with `--write` for the
   builtins.** Profile price rows are hand-maintained; the 2026-11-10 audit found 16 of 87 builtin
   rows wrong. The command fetches models.dev `api.json`, maps each profile's model ids to a

@@ -49,7 +49,6 @@ from marianne.execution.instruments.interactive.driver import (
     InteractiveSessionDriver,
     StaticNudgePolicy,
 )
-from marianne.execution.instruments.interactive.usage import apply_usage, read_session_usage
 from marianne.execution.instruments.interactive.model_nudge import BackendFactory, ModelNudgePolicy
 from marianne.execution.instruments.interactive.tmux import (
     MIN_TMUX_VERSION,
@@ -58,6 +57,7 @@ from marianne.execution.instruments.interactive.tmux import (
     TmuxError,
     sanitize_session_name,
 )
+from marianne.execution.instruments.interactive.usage import apply_usage, read_session_usage
 from marianne.execution.instruments.workspace_mcp_config import (
     MCP_WORKSPACE_CONFIG_LOCKS,
     WorkspaceMcpConfigMixin,

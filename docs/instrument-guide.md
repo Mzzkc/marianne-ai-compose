@@ -562,6 +562,22 @@ applies to CLI backends; HTTP and interactive backends warn and ignore it.
 | `cache_read_tokens_path` | No | | JSON dot-path to the input tokens the provider served from its prompt cache (Anthropic `usage.cache_read_input_tokens`, OpenAI `usage.cached_input_tokens`). Billed at the cache rate; the first number a token-efficiency change moves. Unset records 0. |
 | `cache_write_tokens_path` | No | | JSON dot-path to the input tokens written into the prompt cache this attempt (Anthropic `usage.cache_creation_input_tokens`, OpenAI `usage.cache_write_input_tokens`) |
 
+**Interactive token usage (`cli.interactive.usage`, GH #533).** A tmux session has no JSON
+stdout, so a profile declares where its harness writes a per-session usage record and the
+backend reads it when the sheet ends, on every outcome (completed, timeout, nudges exhausted,
+session lost). Keys: `session_id_flag` (launcher chooses the id; the backend passes a fresh
+UUID), `record_path` (path or glob with `{session_id}`, `~` expanded, newest match read),
+`record_filter` (path -> value a line must match), `dedupe_key_path` (one API response spans
+several lines; the last per key counts once), `model_path` and `ignore_models` (the observed
+model; lines of an ignored model carry no usage), and `input_tokens_path`,
+`output_tokens_path`, `cache_read_tokens_path`, `cache_write_tokens_path` (paths on a record
+line). Subagent lines are counted when they are in the same file; a subagent record in a
+separate file is not read. Only `claude-code` declares the block (`claude-code-ollama` has no interactive mode). A
+profile without it, or a missing, unreadable or empty record, yields an unmeasured sheet:
+`cost_uncertain` is set (the same flag as missing pricing), the token counts stay absent
+rather than 0, and `mzt status` warns that cost is unknown, not free. A user-layer
+`claude-code.yaml` replaces the builtin whole and needs its own `usage:` block.
+
 **Output format modes:**
 
 - **`text`** — Stdout is the result. No structured parsing. Use this for tools
