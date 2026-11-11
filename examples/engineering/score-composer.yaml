@@ -200,6 +200,7 @@ prompt:
     ```
     ## Task N: [Title]
     Phase: [which phase from the analysis]
+    Role: [recon/inventory | build | review | adversarial review | synthesis | gate/release | deterministic command]
     Depends on: [task numbers]
     Can parallel with: [task numbers, if any]
 
@@ -225,6 +226,10 @@ prompt:
     4. Run test: [command] — expect PASS
     5. Run full suite: [project test command] — expect PASS
     ```
+
+    Also record the ROLE of each task on a `Role:` line under `Phase:`: one of
+    recon/inventory, build, review, adversarial review, synthesis, gate/release,
+    or deterministic command. Movement 3 sizes each sheet from it.
 
     Order tasks so that:
     - Foundation tasks come first (config models, data structures)
@@ -286,6 +291,30 @@ prompt:
     **Instrument resilience:**
     - Include `instrument_fallbacks:` with at least one alternative
 
+    **Right-size each sheet:**
+    One instrument and one toolset on every sheet is the default to avoid.
+    From each task's `Role:` line, set per-sheet `instrument_config` (under
+    `sheet.per_sheet_instrument_config` or `movements`), or declare aliases
+    under `instruments:` and bind them per role. For each sheet decide:
+    - Toolset first: `instrument_config.tools`, the narrowest list the task
+      needs. A sheet that only reads supplied context and writes one report
+      needs file read and write, not a shell or web tools. `[]` means no
+      tools; absent means the harness default. Never narrow below what the
+      sheet's validations require it to produce.
+    - Model tier second: small for recon, inventory, formatting and gates;
+      middle for build and rubric review; top only for hard design and
+      adversarial review. Use an alias `config: {{ '{' }}model: ...{{ '}' }}`
+      or `instrument_config.model`.
+    - Effort third: leave `effort` absent (profile default) for almost
+      everything. `max` needs a stated reason in a YAML comment. Lowering
+      effort below high is not a proven saving on Claude Sonnet 5.5.
+    - A sheet that only runs a fixed command is a `cli` sheet with no model.
+    - `tools` is mapped on claude-code only and `effort` on claude-code,
+      antigravity, codex-cli, opencode and crush; put each on the entry whose
+      profile maps it.
+    - Independence of a maker/judge pair outranks cost; never remove a
+      fallback to save money.
+
     ### Critical Syntax Rules
 
     **Jinja2 vs Python format strings — the #1 source of silent bugs:**
@@ -332,6 +361,11 @@ prompt:
     - `condition` strings use `stage == N` format
     - `cross_sheet` config is present and reasonable
     - `instrument_fallbacks` is declared
+    - Right-sizing: sheets with different roles do not all share one
+      instrument, model, effort and toolset; `effort: max` has a stated
+      reason; no sheet whose prompt only reads and writes files keeps the
+      default toolset; no model sheet only runs a fixed command. Fix what
+      fails, then run `mzt validate` on the generated score if it is available
 
     ### 2. Completeness Check
     Verify against the task decomposition:
@@ -448,6 +482,34 @@ validations:
     condition: "stage == 3"
     stage: 2
     description: "Generated score has instrument fallbacks"
+
+  # A multi-sheet generated score must carry some sizing beyond one
+  # score-level instrument: per-sheet config, per-sheet instruments, an
+  # instrument_map, movement-level instrument or instrument_config, or role
+  # aliases under `instruments:`. This checks presence only; whether the
+  # choices fit each role is the Movement 4 review.
+  - type: command_succeeds
+    command: |
+      python3 - "{workspace}/{output_score}.yaml" <<'PY'
+      import sys, yaml
+      s = yaml.safe_load(open(sys.argv[1]))
+      sheet = s.get("sheet") or {}
+      items = sheet.get("total_items") or 0
+      if int(items) <= 1:
+          sys.exit(0)
+      sized = any((
+          sheet.get("per_sheet_instrument_config"),
+          sheet.get("per_sheet_instruments"),
+          sheet.get("instrument_map"),
+          s.get("instruments"),
+          any((m or {}).get("instrument") or (m or {}).get("instrument_config")
+              for m in (s.get("movements") or {}).values()),
+      ))
+      assert sized, "multi-sheet score has no per-sheet or alias-level sizing"
+      PY
+    condition: "stage == 3"
+    stage: 2
+    description: "Generated multi-sheet score sizes instruments per sheet or per role"
 
   # ── Stage 4: Validation & Refinement ──────────────────────────────────
   - type: file_exists

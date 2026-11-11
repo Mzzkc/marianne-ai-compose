@@ -350,6 +350,21 @@ prompt:
     into sheets, cast a persistent agent's lifecycle to loop on the part
     through its cadenza directory instead (`shape: agent-lifecycle`).
 
+    Right-size every role. For each one record its model tier, its effort, its
+    toolset and the reason. Toolset first, model tier second, effort third.
+    Small tier for recon, inventory, formatting and gates; middle for build and
+    rubric review; top only for hard design and adversarial review. Leave
+    `effort` out (profile default) for almost everything; `max` needs a stated
+    reason, and on Claude models lowering effort below high is not a proven
+    saving. Give the narrowest `tools` list the role's task needs: a role that
+    reads supplied context and writes one report needs file read and write, not
+    a shell or web tools; `[]` means no tools. A deterministic command is a
+    `cli` role with no model. Never narrow tools below what the role's
+    validations need it to produce. Independence of a maker/judge pair outranks
+    cost, and right-sizing never removes a fallback. `tools` and `effort` are
+    only accepted on profiles that map them (`tools` on claude-code only), so
+    the composition stage puts them on the entry whose profile does.
+
     Write `{{ workspace }}/casting/<NN>-<id>.yaml` (NN = slot, two digits):
 
     ```yaml
@@ -361,9 +376,14 @@ prompt:
       - role: builder
         cast: workhorse       # capability class, alias over an existing profile, or agent:<id>
         why: "long tool-driven edit/test cycles"
+        tier: middle          # small | middle | top, or a pinned model
+        tools: [Read, Edit, Write, Bash, Grep, Glob]   # narrowest list; [] = none; omit = harness default
       - role: test-author
         cast: strong
         why: "writes the tests before the builder starts, different family"
+        tier: middle
+        effort: max           # omit for the profile default; max needs the reason below
+        effort_reason: "illustrative only: state why this role needs max, or drop the line"
       - role: reviewer
         cast: review          # spread across families
         voices: 3
