@@ -51,7 +51,9 @@ import json
 import os
 import socket
 import struct
+import threading
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -75,11 +77,20 @@ FORBIDDEN_FIELDS = frozenset({
 })
 
 
+#: Worker threads the endpoint owns for all gateway calls (never the loop's default pool).
+MAX_GATEWAY_WORKERS = 8
+
+
 @dataclass(frozen=True)
 class EndpointLimits:
     max_line_bytes: int = 1_048_576
     max_connections_per_session: int = 4
     idle_timeout_seconds: float = 60.0
+    #: Calls running in worker threads per session. A client that disconnects does not
+    #: free its slot: the slot is released only when the thread actually returns.
+    max_in_flight_per_session: int = 4
+    #: How long ``close_session`` waits for in-flight calls before reporting them.
+    close_wait_seconds: float = 5.0
 
 
 PeerUidReader = Callable[[socket.socket], int | None]
@@ -125,6 +136,12 @@ class MemoryEndpoint:
         self._peer_uid = peer_uid_reader
         self._uid = os.getuid() if uid is None else uid
         self._bound: dict[str, _Bound] = {}
+        self._inflight: dict[str, int] = {}
+        self._inflight_lock = threading.Lock()
+        self.max_workers = MAX_GATEWAY_WORKERS
+        self._executor = ThreadPoolExecutor(
+            max_workers=self.max_workers, thread_name_prefix="memory-gateway",
+        )
 
     # ---------------------------------------------------------- lifecycle
 
@@ -169,10 +186,33 @@ class MemoryEndpoint:
         )
         return path
 
-    async def close_session(self, session_id: str) -> None:
-        """Stop listening, drop connections, unlink the socket, close the gateway session."""
+    async def close_session(self, session_id: str) -> int:
+        """Stop listening, drop connections, wait (bounded) for in-flight calls, unlink.
+
+        Returns how many calls were still running when the wait ran out (0 when clean); each
+        such case is audited as ``in_flight_at_close``. The gateway session is closed either way.
+        """
+        bound = self._bound.get(session_id)
+        if bound is not None:
+            bound.server.close()  # no new connections while draining
+            for w in list(bound.writers):
+                w.close()
+        end = asyncio.get_running_loop().time() + self._limits.close_wait_seconds
+        while self._in_flight(session_id) and asyncio.get_running_loop().time() < end:
+            await asyncio.sleep(0.02)
+        left = self._in_flight(session_id)
+        if left:
+            with contextlib.suppress(MemoryBackendError):
+                self._gateway.audit_endpoint_event(
+                    session_id, tool=None, result_status="in_flight_at_close", in_flight=left,
+                )
         await self.unbind(session_id)
         self._gateway.close_session(session_id)
+        return left
+
+    def _in_flight(self, session_id: str) -> int:
+        with self._inflight_lock:
+            return self._inflight.get(session_id, 0)
 
     async def unbind(self, session_id: str) -> None:
         bound = self._bound.pop(session_id, None)
@@ -186,9 +226,15 @@ class MemoryEndpoint:
         with contextlib.suppress(TimeoutError, Exception):
             await asyncio.wait_for(bound.server.wait_closed(), timeout=2.0)
 
-    async def close(self) -> None:
+    async def close(self) -> dict[str, int]:
+        """Close every session; returns {session_id: calls still running} for any that remain."""
+        report: dict[str, int] = {}
         for sid in list(self._bound):
-            await self.close_session(sid)
+            left = await self.close_session(sid)
+            if left:
+                report[sid] = left
+        self._executor.shutdown(wait=False, cancel_futures=True)
+        return report
 
     def socket_path(self, session_id: str) -> Path:
         return self._bound[session_id].path
@@ -315,7 +361,36 @@ class MemoryEndpoint:
         self, session_id: str, tool: str, method: Callable[..., Any],
         args: dict[str, Any], reader: asyncio.StreamReader,
     ) -> Any:
-        task = asyncio.ensure_future(asyncio.to_thread(method, session_id, **args))
+        limit = self._limits.max_in_flight_per_session
+        with self._inflight_lock:  # incremented BEFORE the thread starts
+            if self._inflight.get(session_id, 0) >= limit:
+                over = True
+            else:
+                over = False
+                self._inflight[session_id] = self._inflight.get(session_id, 0) + 1
+        if over:
+            with contextlib.suppress(MemoryBackendError):
+                self._gateway.audit_endpoint_event(
+                    session_id, tool=tool, result_status="refused", error_code="E5",
+                    reason="in_flight_limit",
+                )
+            raise BackendUnreachable(
+                f"{limit} calls are already running on this session",
+                subtype="in_flight_limit", remedy="wait for earlier calls to finish",
+            )
+
+        def release(_f: Future[Any]) -> None:  # runs when the thread returns (or never started)
+            with self._inflight_lock:
+                self._inflight[session_id] -= 1
+
+        try:
+            cf: Future[Any] = self._executor.submit(method, session_id, **args)
+        except BaseException:
+            with self._inflight_lock:
+                self._inflight[session_id] -= 1
+            raise
+        cf.add_done_callback(release)
+        task = asyncio.wrap_future(cf)
         try:
             while True:
                 done, _ = await asyncio.wait({task}, timeout=0.02)
@@ -324,13 +399,13 @@ class MemoryEndpoint:
                 if reader.at_eof():
                     raise asyncio.CancelledError
         except asyncio.CancelledError:
-            task.cancel()
+            task.cancel()  # cancels the future only if its thread has not started
             with contextlib.suppress(MemoryBackendError):
                 self._gateway.audit_endpoint_event(
-                    session_id, tool=tool, result_status="cancelled",
-                    abandoned_thread=True,
+                    session_id, tool=tool, result_status="cancelled", abandoned_thread=True,
                 )
-            # the worker thread cannot be interrupted; swallow its eventual outcome
+            # A running thread cannot be interrupted: the gateway records its real outcome
+            # when it returns; its slot stays counted until then.
             task.add_done_callback(lambda t: t.cancelled() or t.exception())
             raise
 

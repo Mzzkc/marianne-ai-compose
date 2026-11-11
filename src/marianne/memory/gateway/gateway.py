@@ -280,39 +280,46 @@ class Gateway:
         def go(b: MemoryBackend, ctx: RequestContext, s: Session) -> RecallResult:
             cap = s.caps.recall_cap_bytes
             quota = s.caps.dispatch_recall_quota_bytes
-            if quota is not None:
-                remaining = quota - s.recall_bytes_used
-                if remaining <= 0:
-                    raise RecallCapExceeded(
-                        f"dispatch recall quota of {quota} bytes is spent",
-                        subtype="recall_cap_exceeded", remedy="narrow the query or fetch by unit",
-                    )
-                cap = min(cap, remaining)
-            result = b.recall(ctx, query, self._scope(s, scope), limit, cursor, cap_bytes=cap)
-            if not result["results"] and result["oversized"] and cap < s.caps.recall_cap_bytes:
+            reserved = self.sessions.reserve_recall(s.session_id, cap)
+            if quota is not None and reserved <= 0:
                 raise RecallCapExceeded(
-                    f"no result fits the {cap} bytes the dispatch quota still allows",
-                    subtype="recall_cap_exceeded", remedy="fetch by unit or narrow the query",
+                    f"dispatch recall quota of {quota} bytes is spent or fully reserved",
+                    subtype="recall_cap_exceeded", remedy="narrow the query or fetch by unit",
                 )
-            # Second guard: the backend already honoured cap_bytes; trim again at a
-            # fact boundary in case it did not.
-            kept: list[RecallItem] = []
             used = 0
-            for item in result["results"]:
-                size = len(item["content"].encode("utf-8"))
-                if used + size > cap:
-                    break
-                kept.append(item)
-                used += size
-            if result["results"] and not kept:
-                raise RecallCapExceeded(
-                    f"no result fits the {cap} bytes the dispatch quota still allows",
-                    subtype="recall_cap_exceeded", remedy="fetch by unit or narrow the query",
-                )
-            if len(kept) < len(result["results"]):
-                result = {**result, "results": kept, "cursor": None}
-            s.recall_bytes_used += used
-            return result
+            try:
+                cap = reserved
+                result = b.recall(ctx, query, self._scope(s, scope), limit, cursor, cap_bytes=cap)
+                if (
+                    not result["results"] and result["oversized"]
+                    and cap < s.caps.recall_cap_bytes
+                ):
+                    raise RecallCapExceeded(
+                        f"no result fits the {cap} bytes the dispatch quota still allows",
+                        subtype="recall_cap_exceeded", remedy="fetch by unit or narrow the query",
+                    )
+                # Second guard: the backend already honoured cap_bytes; trim again at a
+                # fact boundary in case it did not.
+                kept: list[RecallItem] = []
+                for item in result["results"]:
+                    size = len(item["content"].encode("utf-8"))
+                    if used + size > cap:
+                        break
+                    kept.append(item)
+                    used += size
+                if result["results"] and not kept:
+                    raise RecallCapExceeded(
+                        f"no result fits the {cap} bytes the dispatch quota still allows",
+                        subtype="recall_cap_exceeded", remedy="fetch by unit or narrow the query",
+                    )
+                if len(kept) < len(result["results"]):
+                    result = {**result, "results": kept, "cursor": None}
+                return result
+            except BaseException:
+                used = 0  # a failed or cancelled call returns its whole reservation
+                raise
+            finally:
+                self.sessions.settle_recall(s.session_id, reserved, used)
 
         return self._run(session_id, "recall", budget_seconds, go)
 

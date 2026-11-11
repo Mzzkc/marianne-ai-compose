@@ -71,6 +71,7 @@ class Session:
     opened_at: float
     state: SessionState = SessionState.ADMITTED
     recall_bytes_used: int = 0
+    recall_reserved: int = 0
     call_count: int = 0
     bytes_read: int = 0
     bytes_written: int = 0
@@ -177,6 +178,28 @@ class SessionTable:
                 s.state = SessionState.ACTIVE
             s.call_count += 1
             return s
+
+    def reserve_recall(self, session_id: str, cap: int) -> int:
+        """Atomically reserve ``min(cap, quota - used - reserved)`` bytes; 0 means none left.
+
+        With no dispatch quota nothing is reserved and ``cap`` is returned unchanged.
+        """
+        with self._lock:
+            s = self._sessions[session_id]
+            quota = s.caps.dispatch_recall_quota_bytes
+            if quota is None:
+                return cap
+            amount = max(0, min(cap, quota - s.recall_bytes_used - s.recall_reserved))
+            s.recall_reserved += amount
+            return amount
+
+    def settle_recall(self, session_id: str, reserved: int, used: int) -> None:
+        """Return the whole reservation and account the bytes actually returned."""
+        with self._lock:
+            s = self._sessions[session_id]
+            if s.caps.dispatch_recall_quota_bytes is not None:
+                s.recall_reserved -= reserved
+            s.recall_bytes_used += used
 
     def close(self, session_id: str) -> Session:
         with self._lock:
