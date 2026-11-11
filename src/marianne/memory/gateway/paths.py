@@ -85,6 +85,13 @@ def _planned_path(
     return path
 
 
+def planned_socket_path(
+    run_dir: Path | str, job_id: str | None, dispatch_id: str, attachment_id: str,
+) -> Path:
+    """The per-dispatch socket path as pure computation: no I/O, nothing created or checked."""
+    return _planned_path(run_dir, job_id, dispatch_id, attachment_id)
+
+
 def _check_run_dir(run_dir: Path) -> None:
     try:
         st = os.lstat(run_dir)
@@ -230,5 +237,6 @@ def prepare_socket_dir(
 
 
 __all__ = [
-    "MAX_SOCKET_PATH_BYTES", "SocketDir", "prepare_socket_dir", "socket_hash", "socket_path_for",
+    "MAX_SOCKET_PATH_BYTES", "SocketDir", "planned_socket_path", "prepare_socket_dir",
+    "socket_hash", "socket_path_for",
 ]
