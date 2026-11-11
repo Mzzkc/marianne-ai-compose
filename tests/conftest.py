@@ -86,6 +86,28 @@ def _no_host_registry_in_doctor(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _no_host_rea_pool_in_doctor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`mzt doctor` runs ``rea doctor --json`` for each REA entry in the
+    operator's ``~/.marianne/conductor.yaml`` (GH #499). A test that invokes
+    doctor must never spawn the developer's REA: the call took 33 s on a loaded
+    host against a 30 s test timeout, so the suite's verdict depended on the
+    machine. Only the default (operator) path is neutralised; tests that pass
+    an explicit ``config_file`` or patch ``_rea_pool_entries`` are unaffected.
+    """
+    import importlib
+
+    doctor_module = importlib.import_module("marianne.cli.commands.doctor")
+    original = doctor_module._rea_pool_entries
+
+    def isolated(config_file: Path | None = None) -> list[tuple[str, str]]:
+        if config_file is None:
+            return []
+        return list(original(config_file))
+
+    monkeypatch.setattr(doctor_module, "_rea_pool_entries", isolated)
+
+
+@pytest.fixture(autouse=True)
 def _no_host_conductor_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
     """The developer's live conductor (its PID file and socket) must not turn a
     test's simulated "not running" into "busy" (GH #455). Tests of the busy
