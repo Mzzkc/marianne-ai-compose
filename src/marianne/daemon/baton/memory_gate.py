@@ -142,6 +142,19 @@ class _Registration:
     movement_names: dict[int, str]
 
 
+class _BackendRef:
+    """One reference on a registered backend; ``release`` is idempotent."""
+
+    def __init__(self, gate: MemoryDispatchGate, key: str) -> None:
+        self._gate: MemoryDispatchGate | None = gate
+        self.key = key
+
+    def release(self) -> None:
+        gate, self._gate = self._gate, None
+        if gate is not None:
+            gate._release_backend(self.key)
+
+
 @dataclass
 class _Open:
     job_id: str
@@ -325,8 +338,8 @@ class MemoryDispatchGate:
         self._endpoint: MemoryEndpoint | None = None
         self._audit: AuditLog | None = None
         self._executor: ThreadPoolExecutor | None = None
-        self._backend_refs: dict[str, int] = {}  # backend key -> live sessions on it
-        self._session_backend: dict[str, str] = {}  # session id -> backend key
+        self._backend_refs: dict[str, int] = {}  # backend key -> references held
+        self._session_backend: dict[str, _BackendRef] = {}  # session id -> its backend reference
         self._jobs: dict[str, _Registration] = {}
         self._open: dict[tuple[str, str], _Open] = {}
         self._workspaces: dict[str, set[Path]] = {}  # job -> workspaces given dispatch dirs
@@ -464,21 +477,22 @@ class MemoryDispatchGate:
             "lock_timeout_seconds": b.lock_timeout_seconds,
         })
 
-    def _register_backend(self, gateway: Gateway, b: ResolvedBinding) -> str:
+    def _register_backend(self, gateway: Gateway, b: ResolvedBinding) -> _BackendRef:
+        """Take a reference on this binding's backend, synchronously, on the loop.
+
+        The count is raised here, before any job is queued, so a sibling dispatch's last
+        close cannot drop the backend out from under an open that is still in flight. The
+        caller owns the returned handle and must ``release`` it, exactly once, on every path
+        that does not end in a recorded open session; a recorded session releases it when it
+        closes. The backend is closed and unregistered only when the count reaches zero.
+        """
         key = self._backend_key(b)
         if key not in gateway._backends:
             gateway.register_backend(key, self._build_backend(b))
-        return key
-
-    def _note_open(self, session_id: str, key: str) -> None:
-        self._session_backend[session_id] = key
         self._backend_refs[key] = self._backend_refs.get(key, 0) + 1
+        return _BackendRef(self, key)
 
-    def _note_closed(self, session_id: str) -> None:
-        """Last session of a backend closed: close and unregister the backend."""
-        key = self._session_backend.pop(session_id, None)
-        if key is None:
-            return
+    def _release_backend(self, key: str) -> None:
         left = self._backend_refs.get(key, 1) - 1
         if left > 0:
             self._backend_refs[key] = left
@@ -491,8 +505,17 @@ class MemoryDispatchGate:
             with contextlib.suppress(Exception):
                 close()
 
+    def _note_open(self, session_id: str, ref: _BackendRef) -> None:
+        """A session was recorded: it now owns the reference, released when it closes."""
+        self._session_backend[session_id] = ref
+
+    def _note_closed(self, session_id: str) -> None:
+        ref = self._session_backend.pop(session_id, None)
+        if ref is not None:
+            ref.release()
+
     def _open_one(
-        self, key: tuple[str, str], entry: _Open, b: ResolvedBinding, backend_key: str,
+        self, key: tuple[str, str], entry: _Open, b: ResolvedBinding, ref: _BackendRef,
         dispatch_id: str, job_id: str, deadline: float,
     ) -> asyncio.Future[tuple[Any, Path]]:
         """Queue one session open; its completion step (on the loop) assigns ownership.
@@ -508,7 +531,7 @@ class MemoryDispatchGate:
         async def run() -> None:
             try:
                 got = await endpoint.open_session(
-                    principal=b.principal, attachment_id=backend_key, scope=b.scope,
+                    principal=b.principal, attachment_id=ref.key, scope=b.scope,
                     permissions=b.permissions, dispatch_id=dispatch_id, deadline_at=deadline,
                     job_id=job_id, access=access if access.kind == "grant" else None,
                     ended=entry.ended,
@@ -520,12 +543,13 @@ class MemoryDispatchGate:
                     ),
                 )
             except BaseException as exc:  # noqa: BLE001 — handed to the awaiter
+                ref.release()  # no session was recorded: the reference goes back
                 if not result.done():
                     result.set_exception(exc)
                 return
             session, _path = got
             # Completion step, on the loop, regardless of any awaiter.
-            self._note_open(session.session_id, backend_key)
+            self._note_open(session.session_id, ref)
             if self._open.get(key) is entry and not (self._closing or self._closed):
                 entry.session_ids.append(session.session_id)
             else:
@@ -587,8 +611,12 @@ class MemoryDispatchGate:
             for b in bindings:
                 current = b.name
                 still_ours()
-                backend_key = self._register_backend(gateway, b)
-                fut = self._open_one(key, entry, b, backend_key, dispatch_id, job_id, deadline)
+                ref = self._register_backend(gateway, b)
+                try:
+                    fut = self._open_one(key, entry, b, ref, dispatch_id, job_id, deadline)
+                except BaseException:
+                    ref.release()
+                    raise
                 session, path = await asyncio.shield(fut)
                 opened.append(OpenedSession(b.name, session.session_id, path))
                 still_ours()
