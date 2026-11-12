@@ -95,10 +95,6 @@ class _RecordingGate(MemoryDispatchGate):
         self.calls.append("prepare")
         return await super().prepare(*a, **k)
 
-    def arm_deadline(self, *a: Any, **k: Any) -> None:
-        self.calls.append("arm_deadline")
-        super().arm_deadline(*a, **k)
-
     async def teardown(
         self, job_id: str, dispatch_id: str, *, only: Any = None,
     ) -> Any:
@@ -496,7 +492,7 @@ async def test_cancel_at_release_await_still_releases_once_and_tears_down(
         with pytest.raises(asyncio.CancelledError):
             await asyncio.wait_for(call, 10)
         for _ in range(200):  # the shielded task finishes on its own; bounded, event-driven
-            if gate.open_dispatches == 0 and pool.release_calls:
+            if gate.open_dispatches == 0 and pool.release_calls and not _sockets(short_tmp):
                 break
             await asyncio.sleep(0.01)
         assert len(pool.release_calls) == 1

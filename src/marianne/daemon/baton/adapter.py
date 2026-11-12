@@ -3656,13 +3656,6 @@ class BatonAdapter:
                     bind_mounts=mcp_bind_mounts or [],
                 )
 
-            # Memory: the sheet's clock starts here, the last point the adapter controls.
-            # (A workspace-config lock, if the instrument uses one, is taken inside the
-            # backend's execute; the gate's session ceiling covers that wait.)
-            _gate = getattr(self, "_memory_gate", None)
-            if memory_dispatch is not None and _gate is not None:
-                _gate.arm_deadline(job_id, memory_dispatch, sheet.timeout_seconds)
-
             await sheet_task(
                 job_id=job_id,
                 sheet=sheet,

@@ -113,10 +113,7 @@ def test_prepare_opens_sessions_and_returns_delivery(short_tmp: Path) -> None:
         report = await gate.teardown("j", "d1")
         assert report.clean
         assert sockets(short_tmp) == []
-        assert all(
-            s.state.value in {"closed", "CLOSED"} or "closed" in s.state.value.lower()
-            for s in gate._gateway.sessions._sessions.values()
-        )
+        assert _live_gateway_sessions(gate) == 0
 
     drive(short_tmp, body)
 
@@ -158,8 +155,7 @@ def test_second_attachment_failure_rolls_back_the_first(short_tmp: Path) -> None
         assert calls["n"] == 2
         assert sockets(short_tmp) == []
         assert gate.open_dispatches == 0
-        sessions = gate._gateway.sessions._sessions  # type: ignore[union-attr]
-        assert sessions and all("closed" in s.state.value.lower() for s in sessions.values())
+        assert _live_gateway_sessions(gate) == 0
 
     drive(short_tmp, body)
 
@@ -431,19 +427,41 @@ def test_entry_build_failure_tears_down(short_tmp: Path, monkeypatch: pytest.Mon
     drive(short_tmp, body)
 
 
-# --------------------------------------------------------- F3: the clock starts at execution
+# ------------------------------------------------- D2: the session lives as long as its dispatch
 
 
-class _Clock:
-    def __init__(self, now: float = 1_000_000.0) -> None:
-        self.now = now
+def test_session_outlives_its_sheet_timeout_and_dies_with_its_dispatch(short_tmp: Path) -> None:
+    async def main() -> None:
+        clk = _Clock()
+        run = short_tmp / "run"
+        run.mkdir(mode=0o700)
+        gate = MemoryDispatchGate(
+            run_dir=run, memory_root=short_tmp / "files", audit_dir=short_tmp / "audit",
+            user="ada", clock=clk,
+        )
+        try:
+            gate.register_job("j", two())
+            prepared = await gate.deliver(
+                "j", SHEET, timeout_seconds=100, existing_mcp_config=None,
+                workspace=short_tmp / "ws",
+            )
+            assert prepared is not None and gate._gateway is not None
+            sid = gate._open[("j", prepared.dispatch_id)].session_ids[0]
+            sessions = gate._gateway.sessions
+            assert sessions._clock is clk  # one clock: the gate's reaches the table
+            clk.now += 400  # a wait behind the workspace lock, well past the sheet timeout
+            sessions.admit_call(sid, "read")  # still works
+            await gate.teardown("j", prepared.dispatch_id)
+            with pytest.raises(MemoryBackendError):
+                sessions.admit_call(sid, "read")  # torn down: refused
+        finally:
+            await gate.shutdown()
 
-    def __call__(self) -> float:
-        return self.now
+    asyncio.run(asyncio.wait_for(main(), T))
 
 
-def test_session_armed_late_is_valid_for_the_full_sheet_timeout(short_tmp: Path) -> None:
-    from marianne.daemon.baton.memory_gate import DEADLINE_GRACE_SECONDS
+def test_leaked_session_hits_the_backstop_deadline(short_tmp: Path) -> None:
+    from marianne.daemon.baton.memory_gate import SESSION_CEILING_SECONDS
 
     async def main() -> None:
         clk = _Clock()
@@ -459,36 +477,23 @@ def test_session_armed_late_is_valid_for_the_full_sheet_timeout(short_tmp: Path)
                 "j", SHEET, timeout_seconds=100, existing_mcp_config=None,
                 workspace=short_tmp / "ws",
             )
-            assert prepared is not None
-            assert gate._gateway is not None
-            gate._gateway.sessions._clock = clk  # the same injected clock
+            assert prepared is not None and gate._gateway is not None
             sid = gate._open[("j", prepared.dispatch_id)].session_ids[0]
-            clk.now += 3 * 3600  # a long wait behind a workspace-config lock
-            sessions = gate._gateway.sessions
-            assert sessions.get(sid).deadline_at > clk.now  # still alive: clock not started
-            gate.arm_deadline("j", prepared.dispatch_id, 100)
-            assert sessions.get(sid).deadline_at == clk.now + 100 + DEADLINE_GRACE_SECONDS
-            clk.now += 100  # the whole sheet timeout later
-            sessions.admit_call(sid, "read")  # valid for the full timeout
-            clk.now += DEADLINE_GRACE_SECONDS + 1
+            clk.now += SESSION_CEILING_SECONDS + 1
             with pytest.raises(MemoryBackendError):
-                sessions.admit_call(sid, "read")
+                gate._gateway.sessions.admit_call(sid, "read")
         finally:
             await gate.shutdown()
 
     asyncio.run(asyncio.wait_for(main(), T))
 
 
-def test_arm_deadline_on_unknown_or_closed_dispatch_never_raises(short_tmp: Path) -> None:
-    async def body(gate: MemoryDispatchGate) -> None:
-        gate.arm_deadline("nope", "nope", 10)
-        gate.register_job("j", two())
-        d = await gate.prepare("j", SHEET, "d1", deadline())
-        assert d is not None
-        await gate.teardown("j", "d1")
-        gate.arm_deadline("j", "d1", 10)
+class _Clock:
+    def __init__(self, now: float = 1_000_000.0) -> None:
+        self.now = now
 
-    drive(short_tmp, body)
+    def __call__(self) -> float:
+        return self.now
 
 
 # ------------------------------------------------------------------ F5: policy is per session
@@ -606,31 +611,170 @@ def test_sweep_stale_without_run_dir_or_s_dir_is_a_noop(short_tmp: Path) -> None
     drive(short_tmp, body)
 
 
-def test_deliver_removes_foreign_memory_configs_but_not_own_or_others(short_tmp: Path) -> None:
+
+
+# ------------------------------------------------------------------ D1: one ordered worker
+
+
+def _slow_open(gate: MemoryDispatchGate, nth: int, seconds: float) -> None:
+    """Slow the n-th gateway open_session. It runs on the gate's worker thread."""
+    gw = gate._ensure()[0]
+    real = gw.open_session
+    calls = {"n": 0}
+
+    def slow(**kw: Any) -> Any:
+        calls["n"] += 1
+        if calls["n"] == nth:
+            time.sleep(seconds)
+        return real(**kw)
+
+    gw.open_session = slow  # type: ignore[method-assign]
+
+
+def test_cancel_during_threaded_open_leaves_no_live_session(short_tmp: Path) -> None:
     async def body(gate: MemoryDispatchGate) -> None:
-        ws = short_tmp / "ws"
-        ws.mkdir()
-        stale = ws / ".memory-mcp-deadbeefdeadbeef.json"
-        stale.write_text("{}")
-        other = ws / "keep.json"
-        other.write_text("{}")
-        target = short_tmp / "elsewhere.json"
-        target.write_text("{}")
-        link = ws / ".memory-mcp-1111111111111111.json"
-        link.symlink_to(target)
         gate.register_job("j", two())
-        first = await gate.deliver(
-            "j", SHEET, timeout_seconds=30, existing_mcp_config=None, workspace=ws,
-        )
-        assert first is not None
-        assert not stale.exists() and other.exists()
-        assert link.is_symlink() and target.exists()  # never followed, never deleted
-        # a sibling dispatch in the same workspace must not delete the first one's file
-        second = await gate.deliver(
+        _slow_open(gate, 2, 0.4)
+        task = asyncio.create_task(_deliver(gate, short_tmp))
+        await asyncio.sleep(0.2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await gate.drain()
+        assert _live_gateway_sessions(gate) == 0
+        assert gate.open_dispatches == 0
+        assert sockets(short_tmp) == []
+        assert gate._endpoint is not None and gate._endpoint._bound == {}
+
+    drive(short_tmp, body)
+
+
+def test_cancel_during_config_write_leaves_no_stray_file(
+    short_tmp: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import marianne.daemon.baton.memory_gate as mg
+
+    real = mg.merge_mcp_config
+
+    def slow(*a: Any, **k: Any) -> Any:
+        time.sleep(0.4)
+        return real(*a, **k)
+
+    async def body(gate: MemoryDispatchGate) -> None:
+        gate.register_job("j", two())
+        monkeypatch.setattr(mg, "merge_mcp_config", slow)
+        task = asyncio.create_task(_deliver(gate, short_tmp))
+        await asyncio.sleep(0.2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await gate.drain()
+        ws = short_tmp / "ws"
+        stray = [p for p in ws.rglob("*") if p.is_file()] if ws.exists() else []
+        assert stray == []
+        assert gate.open_dispatches == 0 and _live_gateway_sessions(gate) == 0
+
+    drive(short_tmp, body)
+
+
+def test_two_closes_of_one_session_write_one_sealed_row(short_tmp: Path) -> None:
+    import glob
+    import threading
+
+    from marianne.memory.gateway.audit import verify_audit_file
+
+    async def body(gate: MemoryDispatchGate) -> None:
+        gate.register_job("j", two())
+        d = await gate.prepare("j", SHEET, "d1", deadline())
+        assert d is not None and gate._gateway is not None
+        gw = gate._gateway
+        sid = d.sessions[0].session_id
+        real = gw.sessions.close_if_live
+
+        def slow(s: str) -> Any:
+            time.sleep(0.2)
+            return real(s)
+
+        gw.sessions.close_if_live = slow  # type: ignore[method-assign]
+        threads = [threading.Thread(target=gw.close_session, args=(sid,)) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        path = glob.glob(str(short_tmp / "audit" / "d1" / f"{sid}.jsonl"))[0]
+        assert Path(path).read_text().count("session_closed") == 1
+        assert verify_audit_file(path).ok
+
+    drive(short_tmp, body)
+
+
+def test_parallel_delivers_in_one_workspace_keep_both_configs(
+    short_tmp: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import marianne.daemon.baton.memory_gate as mg
+
+    real = mg.merge_mcp_config
+    calls = {"n": 0}
+
+    def slow_first(*a: Any, **k: Any) -> Any:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            time.sleep(0.5)
+        return real(*a, **k)
+
+    async def body(gate: MemoryDispatchGate) -> None:
+        gate.register_job("j", two())
+        monkeypatch.setattr(mg, "merge_mcp_config", slow_first)
+        ws = short_tmp / "ws"
+        a = asyncio.create_task(gate.deliver(
+            "j", SheetIdentity(1, 1, "work"), timeout_seconds=30, existing_mcp_config=None,
+            workspace=ws,
+        ))
+        await asyncio.sleep(0.1)
+        b = await gate.deliver(
             "j", SheetIdentity(2, 1, "work"), timeout_seconds=30, existing_mcp_config=None,
             workspace=ws,
         )
-        assert second is not None
-        assert first.mcp_config_path.exists() and second.mcp_config_path.exists()
+        pa = await a
+        assert pa is not None and b is not None
+        assert pa.mcp_config_path.exists() and b.mcp_config_path.exists()
+        assert gate.is_open("j", pa.dispatch_id) and gate.is_open("j", b.dispatch_id)
+
+    drive(short_tmp, body)
+
+
+def test_deregister_removes_stale_dispatch_dirs_but_not_live_or_symlinks(short_tmp: Path) -> None:
+    async def body(gate: MemoryDispatchGate) -> None:
+        ws = short_tmp / "ws"
+        gate.register_job("j", two())
+        live = await gate.deliver(
+            "j", SHEET, timeout_seconds=30, existing_mcp_config=None, workspace=ws,
+        )
+        assert live is not None
+        root = ws / ".marianne-memory"
+        stale = root / "deadbeefdeadbeef"
+        stale.mkdir()
+        (stale / "mcp.json").write_text("{}")
+        target = short_tmp / "elsewhere"
+        target.mkdir()
+        (target / "keep.txt").write_text("x")
+        (root / "linked").symlink_to(target)
+        gate.register_job("other", two())
+        gate.deregister_job("other")  # an unrelated job: nothing known about this workspace
+        await gate.drain()
+        assert stale.exists()
+        await gate.teardown("j", live.dispatch_id)
+        gate.register_job("j", two())
+        again = await gate.deliver(
+            "j", SheetIdentity(2, 1, "work"), timeout_seconds=30, existing_mcp_config=None,
+            workspace=ws,
+        )
+        assert again is not None
+        assert stale.exists()  # never during a live deliver
+        gate.deregister_job("j")
+        await gate.drain()
+        assert not stale.exists()
+        assert (root / "linked").is_symlink() and (target / "keep.txt").exists()
+        assert not again.mcp_config_path.exists()  # its own dispatch was torn down first
 
     drive(short_tmp, body)

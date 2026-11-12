@@ -6,6 +6,7 @@ import math
 import threading
 import time
 import uuid
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -87,9 +88,13 @@ class Session:
 class SessionTable:
     """Thread-safe table of sessions; legal transitions only."""
 
+    #: Closed sessions remembered by id after ``forget``, so a late call is told "closed".
+    TOMBSTONES = 1024
+
     def __init__(self, clock: Callable[[], float] = time.time) -> None:
         self._clock = clock
         self._sessions: dict[str, Session] = {}
+        self._tombstones: OrderedDict[str, None] = OrderedDict()
         self._lock = threading.RLock()
 
     def open(
@@ -123,6 +128,11 @@ class SessionTable:
             try:
                 return self._sessions[session_id]
             except KeyError:
+                if session_id in self._tombstones:
+                    raise Unauthenticated(
+                        "session is closed", subtype="session_closed",
+                        remedy="open a new session",
+                    ) from None
                 raise NotFound(f"no session {session_id!r}", subtype="session_not_found") from None
 
     def transition(self, session_id: str, to: SessionState) -> Session:
@@ -201,35 +211,32 @@ class SessionTable:
                 s.recall_reserved -= reserved
             s.recall_bytes_used += used
 
+    def close_if_live(self, session_id: str) -> tuple[Session, bool]:
+        """Close under the lock; ``True`` only for the one caller that made the transition."""
+        with self._lock:
+            s = self.get(session_id)
+            was_live = s.state not in TERMINAL
+            if was_live:
+                s.state = SessionState.CLOSED
+            return s, was_live
+
+    def forget(self, session_id: str) -> bool:
+        """Drop a terminal session from the table, keeping a bounded tombstone of its id."""
+        with self._lock:
+            s = self._sessions.get(session_id)
+            if s is None or s.state not in TERMINAL:
+                return False
+            del self._sessions[session_id]
+            self._tombstones[session_id] = None
+            while len(self._tombstones) > self.TOMBSTONES:
+                self._tombstones.popitem(last=False)
+            return True
+
     def close(self, session_id: str) -> Session:
         with self._lock:
             s = self.get(session_id)
             if s.state not in TERMINAL:
                 s.state = SessionState.CLOSED
-            return s
-
-    def set_deadline(self, session_id: str, deadline_at: float) -> Session:
-        """Move a live session's deadline later or earlier, under the table lock.
-
-        A closed, revoked or already-expired session is never revived: it is refused
-        (an expired one is also made terminal, as ``admit_call`` would).
-        """
-        if not isinstance(deadline_at, (int, float)) or not math.isfinite(deadline_at):
-            raise SchemaViolation("deadline_at must be finite", subtype="deadline_invalid")
-        with self._lock:
-            s = self.get(session_id)
-            if s.state in TERMINAL:
-                raise Unauthenticated(
-                    f"session is {s.state.value}; its deadline cannot be moved",
-                    subtype="session_closed", remedy="open a new session",
-                )
-            if self._clock() >= s.deadline_at:
-                s.state = SessionState.CLOSED
-                raise DeadlineExceeded(
-                    "the session had already expired", subtype="deadline_exceeded",
-                    remedy="open a new session",
-                )
-            s.deadline_at = float(deadline_at)
             return s
 
     def revoke(self, session_id: str) -> Session:

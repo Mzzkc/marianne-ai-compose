@@ -52,7 +52,7 @@ import os
 import socket
 import struct
 import threading
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -129,7 +129,11 @@ class MemoryEndpoint:
     def __init__(
         self, gateway: Gateway, *, run_dir: Path | str, limits: EndpointLimits | None = None,
         peer_uid_reader: PeerUidReader = read_peer_uid, uid: int | None = None,
+        blocking: Callable[..., Awaitable[Any]] | None = None,
     ) -> None:
+        # Where gateway open/close (which fsync the audit log) run. A host that wants every
+        # such action ordered passes its own runner; the default is a free thread.
+        self._blocking: Callable[..., Awaitable[Any]] = blocking or asyncio.to_thread
         self._gateway = gateway
         self._run_dir = Path(run_dir)
         self._limits = limits or EndpointLimits()
@@ -148,11 +152,11 @@ class MemoryEndpoint:
     async def open_session(self, **kwargs: Any) -> tuple[Session, Path]:
         """Admit a session on the gateway and bind its socket. Returns both."""
         # The audit append fsyncs: keep it off the event loop (the table and log are locked).
-        session = await asyncio.to_thread(lambda: self._gateway.open_session(**kwargs))
+        session = await self._blocking(lambda: self._gateway.open_session(**kwargs))
         try:
             path = await self.bind(session)
         except BaseException:
-            await asyncio.shield(asyncio.to_thread(self._gateway.close_session, session.session_id))
+            await asyncio.shield(self._blocking(self._gateway.close_session, session.session_id))
             raise
         return session, path
 
@@ -204,13 +208,13 @@ class MemoryEndpoint:
         left = self._in_flight(session_id)
         if left:
             with contextlib.suppress(MemoryBackendError):
-                await asyncio.to_thread(
+                await self._blocking(
                     lambda: self._gateway.audit_endpoint_event(
                         session_id, tool=None, result_status="in_flight_at_close", in_flight=left,
                     )
                 )
         await self.unbind(session_id)
-        await asyncio.shield(asyncio.to_thread(self._gateway.close_session, session_id))
+        await asyncio.shield(self._blocking(self._gateway.close_session, session_id))
         return left
 
     def _in_flight(self, session_id: str) -> int:

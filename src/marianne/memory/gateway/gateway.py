@@ -19,10 +19,10 @@ from marianne.memory.errors import (
     RecallCapExceeded,
     SchemaViolation,
     ScopeRefused,
+    Unauthenticated,
 )
 from marianne.memory.gateway.audit import AuditLog
 from marianne.memory.gateway.session import (
-    TERMINAL,
     MemoryCaps,
     Session,
     SessionState,
@@ -59,14 +59,15 @@ class Gateway:
 
     def __init__(
         self, *, grants: GrantStore | None = None, audit: AuditLog | None = None,
-        require_audit: bool = True,
+        require_audit: bool = True, clock: Callable[[], float] = time.time,
     ) -> None:
+        self._clock = clock
         if audit is None and require_audit:
             raise SchemaViolation(
                 "a gateway without an audit log is refused",
                 subtype="audit_required", remedy="pass audit=AuditLog(...) or require_audit=False",
             )
-        self.sessions = SessionTable()
+        self.sessions = SessionTable(clock=clock)
         self._audit = audit
         self._grants = grants
         self._backends: dict[str, MemoryBackend] = {}
@@ -117,17 +118,26 @@ class Gateway:
             )
         return session
 
-    def close_session(self, session_id: str) -> Session:
-        s = self.sessions.get(session_id)
-        was_live = s.state not in TERMINAL
-        self.sessions.close(session_id)
+    def close_session(self, session_id: str) -> Session | None:
+        """Close a session once. A second close (or a close of a forgotten id) is a no-op.
+
+        The live-to-closed transition and the ``was_live`` read happen in one locked
+        section, so exactly one caller writes the sealed audit row. Returns ``None`` when
+        the session was already forgotten.
+        """
+        try:
+            s, was_live = self.sessions.close_if_live(session_id)
+        except Unauthenticated:  # a tombstoned id: already closed, sealed and forgotten
+            return None
         if self._audit is not None and was_live:
             self._audit.append(
                 dispatch_id=s.dispatch_id, session_id=s.session_id, principal=s.principal,
                 event="session_closed", seal=True, scope=s.scope, result_status="ok",
                 call_count=s.call_count, bytes_read=s.bytes_read, bytes_written=s.bytes_written,
-                duration_seconds=time.time() - s.opened_at,
+                duration_seconds=self._clock() - s.opened_at,
             )
+        if was_live:
+            self.sessions.forget(session_id)
         return s
 
     def audit_endpoint_event(
@@ -149,7 +159,7 @@ class Gateway:
     def _context(
         self, s: Session, permission: Permission, budget_seconds: float | None,
     ) -> RequestContext:
-        now = time.time()
+        now = self._clock()
         budget = s.caps.per_call_budget_seconds
         if budget_seconds is not None:
             budget = min(budget, budget_seconds)
