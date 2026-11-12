@@ -1227,9 +1227,11 @@ def doctor(
     # Whole copies of a builtin (GH #543): key names only, never values.
     if shadowing_copies:
         out.print()
+        # One heading for the section: the unreferenced list above may have
+        # printed it already.
+        heading = "    " if unreferenced_profiles else "  [bold]Instrument hygiene:[/bold] "
         out.print(
-            f"  [bold]Instrument hygiene:[/bold] {len(shadowing_copies)} "
-            f"profile(s) replace a builtin whole"
+            f"{heading}{len(shadowing_copies)} profile(s) replace a builtin whole"
         )
         for f in shadowing_copies:
             out.print(f"  [yellow]![/yellow] {f['name']:<24} {f['path']}")
