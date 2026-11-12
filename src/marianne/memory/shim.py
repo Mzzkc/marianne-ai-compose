@@ -128,10 +128,21 @@ def _tool_result(payload: Any, *, is_error: bool) -> dict[str, Any]:
     }
 
 
+#: Subtypes that mean the sheet's session is gone, however the shim learned it.
+SESSION_ENDED_SUBTYPES = frozenset({
+    "deadline_exceeded", "session_closed", "connect_failed", "connection_closed",
+    "authority_revoked",
+})
+SESSION_ENDED_MESSAGE = "the memory session for this sheet has ended"
+
+
 def _error_payload(exc: MemoryBackendError) -> dict[str, Any]:
+    message = exc.detail
+    if exc.subtype in SESSION_ENDED_SUBTYPES:
+        message = f"{SESSION_ENDED_MESSAGE} ({exc.detail})"
     return {
         "code": exc.code.name, "name": exc.code.value, "subtype": exc.subtype,
-        "message": exc.detail, "remedy": exc.remedy,
+        "message": message, "remedy": exc.remedy,
     }
 
 

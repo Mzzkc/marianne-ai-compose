@@ -208,6 +208,30 @@ class SessionTable:
                 s.state = SessionState.CLOSED
             return s
 
+    def set_deadline(self, session_id: str, deadline_at: float) -> Session:
+        """Move a live session's deadline later or earlier, under the table lock.
+
+        A closed, revoked or already-expired session is never revived: it is refused
+        (an expired one is also made terminal, as ``admit_call`` would).
+        """
+        if not isinstance(deadline_at, (int, float)) or not math.isfinite(deadline_at):
+            raise SchemaViolation("deadline_at must be finite", subtype="deadline_invalid")
+        with self._lock:
+            s = self.get(session_id)
+            if s.state in TERMINAL:
+                raise Unauthenticated(
+                    f"session is {s.state.value}; its deadline cannot be moved",
+                    subtype="session_closed", remedy="open a new session",
+                )
+            if self._clock() >= s.deadline_at:
+                s.state = SessionState.CLOSED
+                raise DeadlineExceeded(
+                    "the session had already expired", subtype="deadline_exceeded",
+                    remedy="open a new session",
+                )
+            s.deadline_at = float(deadline_at)
+            return s
+
     def revoke(self, session_id: str) -> Session:
         with self._lock:
             s = self.get(session_id)

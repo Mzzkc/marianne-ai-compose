@@ -24,6 +24,7 @@ from marianne.daemon.baton.memory_gate import (
     can_deliver,
     merge_mcp_config,
 )
+from marianne.memory.errors import MemoryBackendError
 
 BUILTINS = Path(__file__).resolve().parents[2] / "src" / "marianne" / "instruments" / "builtins"
 SHEET = SheetIdentity(num=1, movement=1, phase="work")
@@ -426,5 +427,65 @@ def test_entry_build_failure_tears_down(short_tmp: Path, monkeypatch: pytest.Mon
             await gate.prepare("j", SHEET, "d1", deadline())
         assert sockets(short_tmp) == [] and gate.open_dispatches == 0
         assert _live_gateway_sessions(gate) == 0
+
+    drive(short_tmp, body)
+
+
+# --------------------------------------------------------- F3: the clock starts at execution
+
+
+class _Clock:
+    def __init__(self, now: float = 1_000_000.0) -> None:
+        self.now = now
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def test_session_armed_late_is_valid_for_the_full_sheet_timeout(short_tmp: Path) -> None:
+    from marianne.daemon.baton.memory_gate import DEADLINE_GRACE_SECONDS
+
+    async def main() -> None:
+        clk = _Clock()
+        run = short_tmp / "run"
+        run.mkdir(mode=0o700)
+        gate = MemoryDispatchGate(
+            run_dir=run, memory_root=short_tmp / "files", audit_dir=short_tmp / "audit",
+            user="ada", clock=clk,
+        )
+        try:
+            gate.register_job("j", two())
+            prepared = await gate.deliver(
+                "j", SHEET, timeout_seconds=100, existing_mcp_config=None,
+                workspace=short_tmp / "ws",
+            )
+            assert prepared is not None
+            assert gate._gateway is not None
+            gate._gateway.sessions._clock = clk  # the same injected clock
+            sid = gate._open[("j", prepared.dispatch_id)].session_ids[0]
+            clk.now += 3 * 3600  # a long wait behind a workspace-config lock
+            sessions = gate._gateway.sessions
+            assert sessions.get(sid).deadline_at > clk.now  # still alive: clock not started
+            gate.arm_deadline("j", prepared.dispatch_id, 100)
+            assert sessions.get(sid).deadline_at == clk.now + 100 + DEADLINE_GRACE_SECONDS
+            clk.now += 100  # the whole sheet timeout later
+            sessions.admit_call(sid, "read")  # valid for the full timeout
+            clk.now += DEADLINE_GRACE_SECONDS + 1
+            with pytest.raises(MemoryBackendError):
+                sessions.admit_call(sid, "read")
+        finally:
+            await gate.shutdown()
+
+    asyncio.run(asyncio.wait_for(main(), T))
+
+
+def test_arm_deadline_on_unknown_or_closed_dispatch_never_raises(short_tmp: Path) -> None:
+    async def body(gate: MemoryDispatchGate) -> None:
+        gate.arm_deadline("nope", "nope", 10)
+        gate.register_job("j", two())
+        d = await gate.prepare("j", SHEET, "d1", deadline())
+        assert d is not None
+        await gate.teardown("j", "d1")
+        gate.arm_deadline("j", "d1", 10)
 
     drive(short_tmp, body)

@@ -9,6 +9,7 @@ import pytest
 from marianne.memory import (
     AuthorityRevoked,
     DeadlineExceeded,
+    MemoryBackendError,
     NotFound,
     PermissionDenied,
     SchemaViolation,
@@ -194,3 +195,44 @@ def test_unknown_permission_name_is_schema_violation() -> None:
     sid = open_one(t)
     with pytest.raises(SchemaViolation):
         t.admit_call(sid, "fly")
+
+
+# ------------------------------------------------------------------ set_deadline (F3)
+
+
+def test_set_deadline_moves_a_live_session_both_ways() -> None:
+    clk = Clock()
+    t = SessionTable(clock=clk)
+    sid = open_one(t, deadline_at=1100.0)
+    t.set_deadline(sid, 1500.0)
+    assert t.get(sid).deadline_at == 1500.0
+    t.set_deadline(sid, 1200.0)
+    assert t.get(sid).deadline_at == 1200.0
+    clk.now = 1300.0
+    with pytest.raises(DeadlineExceeded):
+        t.admit_call(sid, "read")
+
+
+def test_set_deadline_cannot_resurrect_closed_revoked_or_expired() -> None:
+    clk = Clock()
+    t = SessionTable(clock=clk)
+    closed = open_one(t, deadline_at=2000.0)
+    t.close(closed)
+    revoked = open_one(t, deadline_at=2000.0)
+    t.revoke(revoked)
+    expired = open_one(t, deadline_at=1010.0)
+    clk.now = 1020.0
+    for sid in (closed, revoked, expired):
+        with pytest.raises(MemoryBackendError):
+            t.set_deadline(sid, 9000.0)
+    assert t.get(closed).state is SessionState.CLOSED
+    assert t.get(revoked).state is SessionState.REVOKED
+    with pytest.raises(Unauthenticated):  # the failed set_deadline already closed it
+        t.admit_call(expired, "read")
+
+
+def test_set_deadline_rejects_non_finite() -> None:
+    t = SessionTable(clock=Clock())
+    sid = open_one(t, deadline_at=1100.0)
+    with pytest.raises(MemoryBackendError):
+        t.set_deadline(sid, float("inf"))

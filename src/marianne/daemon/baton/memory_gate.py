@@ -43,8 +43,16 @@ from marianne.memory.resolve import ResolvedBinding, SheetPhase, resolve_memory
 
 _logger = get_logger("daemon.baton.memory_gate")
 
-#: Seconds added to a sheet's timeout when the adapter computes a session deadline.
+#: Seconds added to a sheet's timeout when a session is armed (see ``arm_deadline``).
 DEADLINE_GRACE_SECONDS = 60.0
+
+#: Hard ceiling on a session opened at dispatch, before its sheet starts running. A sheet
+#: can wait a long time to start (an instrument that materialises its MCP config in a
+#: workspace file holds a per-file lock for a whole run, and that lock is taken inside the
+#: backend's ``execute``, after the last point the adapter controls). The sheet's own clock
+#: therefore starts at ``arm_deadline``, called just before ``execute``; the ceiling only
+#: bounds a session whose sheet never starts, and ``teardown`` normally closes it first.
+SESSION_CEILING_SECONDS = 12 * 3600.0
 
 
 class MemoryGateError(Exception):
@@ -427,7 +435,7 @@ class MemoryDispatchGate:
         if job_id not in self._jobs:
             return None
         dispatch_id = f"s{sheet.num}-{uuid.uuid4().hex[:12]}"
-        deadline = self._clock() + max(timeout_seconds, 0.0) + DEADLINE_GRACE_SECONDS
+        deadline = self._clock() + SESSION_CEILING_SECONDS
         delivery = await self.prepare(job_id, sheet, dispatch_id, deadline)
         if delivery is None:
             return None
@@ -440,6 +448,26 @@ class MemoryDispatchGate:
             raise
         text = delivery.manifest
         return PreparedMemory(dispatch_id, text, path)
+
+    def arm_deadline(self, job_id: str, dispatch_id: str, timeout_seconds: float) -> None:
+        """Start the sheet's clock now: sessions end ``timeout + grace`` from this moment.
+
+        Called when execution actually begins. Never raises: an unknown or already-ended
+        dispatch is logged and left alone (the gateway refuses to revive a closed session).
+        """
+        entry = self._open.get((job_id, dispatch_id))
+        gateway = self._gateway
+        if entry is None or gateway is None:
+            return
+        deadline = self._clock() + max(timeout_seconds, 0.0) + DEADLINE_GRACE_SECONDS
+        for sid in entry.session_ids:
+            try:
+                gateway.sessions.set_deadline(sid, deadline)
+            except MemoryBackendError as exc:
+                _logger.warning(
+                    "memory_gate.arm_deadline_refused",
+                    extra={"job_id": job_id, "dispatch_id": dispatch_id, "reason": _reason(exc)},
+                )
 
     def schedule_teardown(self, job_id: str, dispatch_id: str) -> None:
         """Fire-and-forget ``teardown`` for a done-callback (needs a running loop)."""
@@ -512,7 +540,8 @@ class MemoryDispatchGate:
 
 
 __all__ = [
-    "DEADLINE_GRACE_SECONDS", "MemoryConfigCollision", "MemoryDelivery", "MemoryDispatchGate",
+    "DEADLINE_GRACE_SECONDS", "SESSION_CEILING_SECONDS", "MemoryConfigCollision",
+    "MemoryDelivery", "MemoryDispatchGate",
     "MemoryGateError", "OpenedSession", "PreparedMemory", "SheetIdentity", "TeardownReport",
     "can_deliver", "lookup_profile", "merge_mcp_config",
 ]

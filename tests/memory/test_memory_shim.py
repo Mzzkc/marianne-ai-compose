@@ -282,3 +282,18 @@ def test_bad_budget_is_refused() -> None:
     errs: list[str] = []
     assert main(["--socket", "/x", "--memory-budget-seconds", "0"], stderr=errs.append) == 2
     assert main(["--socket", "/x", "--memory-budget-seconds", "nan"], stderr=errs.append) == 2
+
+
+def test_ended_session_error_says_so_plainly(tmp_path: Path) -> None:
+    from marianne.memory.errors import DeadlineExceeded
+    from marianne.memory.shim import _error_payload
+
+    for subtype in ("deadline_exceeded", "session_closed"):
+        exc = DeadlineExceeded("the session deadline has passed", subtype=subtype)
+        assert "the memory session for this sheet has ended" in _error_payload(exc)["message"]
+    from marianne.memory.errors import BackendUnreachable
+
+    gone = BackendUnreachable("cannot connect", subtype="connect_failed")
+    assert "the memory session for this sheet has ended" in _error_payload(gone)["message"]
+    other = BackendUnreachable("x", subtype="transport_failed")
+    assert "has ended" not in _error_payload(other)["message"]
