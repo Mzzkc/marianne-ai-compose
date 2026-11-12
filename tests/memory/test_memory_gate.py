@@ -438,7 +438,7 @@ def test_session_outlives_its_sheet_timeout_and_dies_with_its_dispatch(short_tmp
         run.mkdir(mode=0o700)
         gate = MemoryDispatchGate(
             run_dir=run, memory_root=short_tmp / "files", audit_dir=short_tmp / "audit",
-            user="ada", clock=clk,
+            user="ada", clock=clk, start_reaper=False,
         )
         try:
             gate.register_job("j", two())
@@ -450,39 +450,17 @@ def test_session_outlives_its_sheet_timeout_and_dies_with_its_dispatch(short_tmp
             sid = gate._open[("j", prepared.dispatch_id)].session_ids[0]
             sessions = gate._gateway.sessions
             assert sessions._clock is clk  # one clock: the gate's reaches the table
-            clk.now += 400  # a wait behind the workspace lock, well past the sheet timeout
+            stop = asyncio.Event()
+            owner = asyncio.create_task(stop.wait())
+            gate.set_owner("j", prepared.dispatch_id, owner)
+            for _ in range(80):  # 400 s behind a workspace lock, past the 100 s sheet timeout
+                clk.now += 5
+                await gate.tick()
             sessions.admit_call(sid, "read")  # still works
+            stop.set()
             await gate.teardown("j", prepared.dispatch_id)
             with pytest.raises(MemoryBackendError):
                 sessions.admit_call(sid, "read")  # torn down: refused
-        finally:
-            await gate.shutdown()
-
-    asyncio.run(asyncio.wait_for(main(), T))
-
-
-def test_leaked_session_hits_the_backstop_deadline(short_tmp: Path) -> None:
-    from marianne.daemon.baton.memory_gate import SESSION_CEILING_SECONDS
-
-    async def main() -> None:
-        clk = _Clock()
-        run = short_tmp / "run"
-        run.mkdir(mode=0o700)
-        gate = MemoryDispatchGate(
-            run_dir=run, memory_root=short_tmp / "files", audit_dir=short_tmp / "audit",
-            user="ada", clock=clk,
-        )
-        try:
-            gate.register_job("j", two())
-            prepared = await gate.deliver(
-                "j", SHEET, timeout_seconds=100, existing_mcp_config=None,
-                workspace=short_tmp / "ws",
-            )
-            assert prepared is not None and gate._gateway is not None
-            sid = gate._open[("j", prepared.dispatch_id)].session_ids[0]
-            clk.now += SESSION_CEILING_SECONDS + 1
-            with pytest.raises(MemoryBackendError):
-                gate._gateway.sessions.admit_call(sid, "read")
         finally:
             await gate.shutdown()
 

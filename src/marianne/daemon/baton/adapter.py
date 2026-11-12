@@ -3045,6 +3045,8 @@ class BatonAdapter:
             )
             return True
         self._active_tasks[(job_id, sheet_num)] = task
+        if memory_dispatch is not None and self._memory_gate is not None:
+            self._memory_gate.set_owner(job_id, memory_dispatch, task)
         self._active_dispatch_epochs[(job_id, sheet_num)] = state.dispatch_epoch
         self._active_execution_details[(job_id, sheet_num)] = (
             effective_instrument,
