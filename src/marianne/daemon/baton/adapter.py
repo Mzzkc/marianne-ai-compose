@@ -2862,12 +2862,13 @@ class BatonAdapter:
         # else lives in memory_gate.py; the sessions it opens are torn down by the
         # musician's cleanup, or by every early exit below (`_memory_teardown`).
         memory_dispatch: str | None = None
+        memory_manifest: str | None = None
         if job_id in getattr(self, "_job_memory", {}):
             try:
                 (
-                    technique_manifest, mcp_config_path, memory_dispatch,
+                    memory_manifest, mcp_config_path, memory_dispatch,
                 ) = await self._prepare_dispatch_memory(
-                    job_id, sheet, technique_manifest, mcp_config_path,
+                    job_id, sheet, mcp_config_path,
                 )
             except Exception as exc:  # noqa: BLE001 — dispatch failure is delivered to the baton for retry handling
                 self._send_dispatch_failure(
@@ -3011,6 +3012,7 @@ class BatonAdapter:
                 effective_instrument=effective_instrument,
                 technique_manifest=technique_manifest,
                 technique_skill_docs=technique_skill_docs,
+                memory_manifest=memory_manifest,
                 mcp_config_path=mcp_config_path,
                 output_router_active=output_router_active,
                 mcp_code_bridge_active=mcp_code_bridge_active,
@@ -3130,6 +3132,7 @@ class BatonAdapter:
         effective_instrument: str,
         technique_manifest: str | None,
         technique_skill_docs: dict[str, str],
+        memory_manifest: str | None,
         mcp_config_path: Path | None,
         output_router_active: bool,
         mcp_code_bridge_active: bool,
@@ -3378,6 +3381,7 @@ class BatonAdapter:
                     effective_instrument=effective_instrument,
                     technique_manifest=technique_manifest,
                     technique_skill_docs=technique_skill_docs,
+                    memory_manifest=memory_manifest,
                     output_router_active=output_router_active,
                     mcp_code_bridge_active=mcp_code_bridge_active,
                     mcp_bind_mounts=mcp_bind_mounts,
@@ -3402,6 +3406,7 @@ class BatonAdapter:
         effective_instrument: str | None = None,
         technique_manifest: str | None = None,
         technique_skill_docs: dict[str, str] | None = None,
+        memory_manifest: str | None = None,
         output_router_active: bool = False,
         mcp_code_bridge_active: bool = False,
         mcp_bind_mounts: list[Path] | None = None,
@@ -3562,6 +3567,7 @@ class BatonAdapter:
                         ),
                         technique_manifest=technique_manifest,
                         technique_skill_docs=technique_skill_docs,
+                        memory_manifest=memory_manifest,
                         failure_history=self._build_failure_history(job_id, sheet.num),
                         spec_fragments=self._build_spec_fragments(job_id, sheet.num),
                         raw_prompt=(
@@ -3663,6 +3669,7 @@ class BatonAdapter:
                 total_movements=total_movements,
                 rendered_prompt=pre_rendered,
                 preamble=pre_preamble,
+                memory_manifest=memory_manifest,
                 cost_per_1k_input=cost_input,
                 cost_per_1k_output=cost_output,
                 cost_per_1k_cache_read=cost_cache_read,
@@ -3731,7 +3738,6 @@ class BatonAdapter:
         self,
         job_id: str,
         sheet: Sheet,
-        technique_manifest: str | None,
         mcp_config_path: Path | None,
     ) -> tuple[str | None, Path | None, str | None]:
         """Open this sheet's memory sessions; ``(manifest, mcp config, dispatch id)``.
@@ -3755,10 +3761,9 @@ class BatonAdapter:
             timeout_seconds=sheet.timeout_seconds,
             existing_mcp_config=mcp_config_path,
             workspace=sheet.workspace,
-            existing_manifest=technique_manifest,
         )
         if prepared is None:
-            return technique_manifest, mcp_config_path, None
+            return None, mcp_config_path, None
         return prepared.manifest, prepared.mcp_config_path, prepared.dispatch_id
 
     def _memory_backstop(self, job_id: str, memory_dispatch: str) -> None:

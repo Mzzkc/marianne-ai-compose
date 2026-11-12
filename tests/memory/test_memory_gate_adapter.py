@@ -263,3 +263,79 @@ async def test_deregister_job_tears_down_a_running_dispatch(short_tmp: Path) -> 
         await asyncio.gather(*list(adapter._active_tasks.values()), return_exceptions=True)
     finally:
         await gate.shutdown()
+
+
+# ------------------------------------------------------------------ F4: own prompt channel
+
+
+def _renderer_sheet(tmp: Path, template: str) -> Any:
+    from marianne.core.sheet import Sheet
+
+    return Sheet(
+        num=1, movement=1, voice=None, voice_count=1, instrument_name="claude-code",
+        instrument_config={}, workspace=tmp, prompt_template=template, timeout_seconds=30.0,
+    )
+
+
+def test_renderer_delivers_memory_block_once_even_with_techniques_template(
+    tmp_path: Path,
+) -> None:
+    from marianne.daemon.baton.prompt import PromptRenderer
+    from marianne.daemon.baton.state import AttemptContext, AttemptMode
+
+    renderer = PromptRenderer(
+        prompt_config=PromptConfig(), total_sheets=1, total_stages=1, parallel_enabled=False,
+    )
+    sheet = _renderer_sheet(tmp_path, "## Techniques Available\nUse them.")
+    ctx = AttemptContext(attempt_number=1, mode=AttemptMode.NORMAL)
+    block = "## Memory Available This Phase\n- notes"
+    out = renderer.render(
+        sheet, ctx, technique_manifest="TECHNIQUE-MANIFEST", memory_manifest=block,
+    )
+    assert out.prompt.count("## Memory Available This Phase") == 1
+    assert "TECHNIQUE-MANIFEST" not in out.prompt  # existing suppression is unchanged
+    assert any(
+        i["source"] == "memory:manifest" for i in out.context_manifest
+    )
+    plain = renderer.render(sheet, ctx)
+    assert "Memory Available" not in plain.prompt
+    assert not any(
+        i["source"] == "memory:manifest" for i in plain.context_manifest
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(30)
+async def test_memory_block_reaches_prompt_with_techniques_template(short_tmp: Path) -> None:
+    gate = make(short_tmp)
+    backend = _Recording()
+    pool = _BackendPool(backend, _Registry(profile("claude-code")))
+    adapter = BatonAdapter(max_concurrent_sheets=1)
+    adapter.set_backend_pool(pool)
+    adapter.set_memory_gate(gate)
+    sheet = _sheet(short_tmp).model_copy(update={"prompt_template": "## Techniques Available\nx"})
+    adapter.register_job(
+        "mem-job", [sheet], {1: []}, prompt_config=PromptConfig(template="x"), memory=MEMORY,
+    )
+    try:
+        await _complete(adapter, "mem-job")
+        assert backend.prompt is not None
+        assert backend.prompt.count("Memory Available This Phase") == 1
+    finally:
+        await gate.shutdown()
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(30)
+async def test_memory_block_reaches_prompt_without_a_renderer(short_tmp: Path) -> None:
+    gate = make(short_tmp)
+    backend = _Recording()
+    pool = _BackendPool(backend, _Registry(profile("claude-code")))
+    adapter = _adapter(pool, gate, short_tmp, memory=True)
+    adapter._job_renderers.pop("mem-job", None)
+    try:
+        await _complete(adapter, "mem-job")
+        assert backend.prompt is not None
+        assert backend.prompt.count("Memory Available This Phase") == 1
+    finally:
+        await gate.shutdown()

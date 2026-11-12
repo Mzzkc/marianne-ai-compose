@@ -418,7 +418,6 @@ class MemoryDispatchGate:
     async def deliver(
         self, job_id: str, sheet: SheetIdentity, *, timeout_seconds: float,
         existing_mcp_config: Path | None, workspace: Path,
-        existing_manifest: str | None = None,
     ) -> PreparedMemory | None:
         """``prepare`` + ``merge_config`` as one all-or-nothing step for the adapter.
 
@@ -440,8 +439,6 @@ class MemoryDispatchGate:
                 raise MemoryGateError("(mcp config)", _reason(exc)) from exc
             raise
         text = delivery.manifest
-        if existing_manifest:
-            text = f"{existing_manifest}\n\n{text}"
         return PreparedMemory(dispatch_id, text, path)
 
     def schedule_teardown(self, job_id: str, dispatch_id: str) -> None:

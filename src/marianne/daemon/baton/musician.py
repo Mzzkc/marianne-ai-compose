@@ -91,6 +91,7 @@ async def sheet_task(
     total_movements: int = 1,
     rendered_prompt: str | None = None,
     preamble: str | None = None,
+    memory_manifest: str | None = None,
     cost_per_1k_input: float | None = None,
     cost_per_1k_output: float | None = None,
     cost_per_1k_cache_read: float | None = None,
@@ -182,6 +183,7 @@ async def sheet_task(
                 sheet, attempt_context,
                 total_sheets=total_sheets,
                 total_movements=total_movements,
+                memory_manifest=memory_manifest,
             )
 
         # #202: warn-only token preflight on the rendered prompt (advisory —
@@ -584,6 +586,7 @@ def _build_prompt(
     *,
     total_sheets: int = 1,
     total_movements: int = 1,
+    memory_manifest: str | None = None,
 ) -> str:
     """Build the full execution prompt from the sheet template.
 
@@ -642,6 +645,8 @@ def _build_prompt(
         sections.append(rendered_template)
 
     # Skills/tools injections (early — before context)
+    if memory_manifest:
+        injected_skills = [*injected_skills, memory_manifest]
     skills_tools = _format_injection_section(injected_skills, injected_tools)
     if skills_tools:
         sections.append(skills_tools)

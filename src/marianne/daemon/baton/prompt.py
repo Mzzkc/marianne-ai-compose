@@ -148,6 +148,7 @@ class PromptRenderer:
         technique_manifest: str | None = None,
         technique_skill_docs: Mapping[str, str] | Sequence[str] | None = None,
         raw_prompt: bool = False,
+        memory_manifest: str | None = None,
     ) -> RenderedPrompt:
         """Render a full prompt for a sheet execution.
 
@@ -168,6 +169,9 @@ class PromptRenderer:
                 discovered by the technique resolver. Each entry is the full
                 text of a skill-kind technique document, injected as a
                 skill-category item alongside the manifest.
+            memory_manifest: The memory block for this sheet. Its own channel, never
+                part of the technique manifest, so a template that already lists
+                techniques cannot suppress it. Injected once, as ``memory:manifest``.
             raw_prompt: When True (driven by the instrument profile's
                 ``raw_prompt`` field), verify required attachments but do not
                 deliver their bytes, then skip technique injection, completion
@@ -222,6 +226,15 @@ class PromptRenderer:
                     category=InjectionCategory.SKILL,
                     delivered_content=technique_manifest,
                     delivery_kind="inline-technique-manifest",
+                )
+            if memory_manifest:
+                context.injected_skills.append(memory_manifest)
+                self._record_delivery(
+                    context,
+                    source="memory:manifest",
+                    category=InjectionCategory.SKILL,
+                    delivered_content=memory_manifest,
+                    delivery_kind="inline-memory-manifest",
                 )
 
         # Layer 4-8: Build prompt through PromptBuilder (raw_prompt short-circuits inside)
