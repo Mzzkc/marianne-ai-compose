@@ -593,7 +593,7 @@ def test_cancel_during_config_write_leaves_no_stray_file(
 ) -> None:
     import marianne.daemon.baton.memory_gate as mg
 
-    real = mg.merge_mcp_config
+    real = mg._merged_document  # the gate's config write builds its document here
 
     def slow(*a: Any, **k: Any) -> Any:
         time.sleep(0.4)
@@ -601,7 +601,7 @@ def test_cancel_during_config_write_leaves_no_stray_file(
 
     async def body(gate: MemoryDispatchGate) -> None:
         gate.register_job("j", two())
-        monkeypatch.setattr(mg, "merge_mcp_config", slow)
+        monkeypatch.setattr(mg, "_merged_document", slow)
         task = asyncio.create_task(_deliver(gate, short_tmp))
         await asyncio.sleep(0.2)
         task.cancel()

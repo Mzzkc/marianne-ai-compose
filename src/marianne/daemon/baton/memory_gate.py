@@ -38,7 +38,6 @@ import hashlib
 import json
 import os
 import queue
-import shutil
 import stat
 import tempfile
 import threading
@@ -236,19 +235,10 @@ def lookup_profile(backend_pool: Any, instrument: str) -> Any:
         return None
 
 
-def merge_mcp_config(
-    existing_path: Path | str | None,
-    entries: Mapping[str, Mapping[str, Any]],
-    dest_dir: Path | str,
-    *,
-    name: str = ".memory-mcp.json",
-) -> Path:
-    """Write ``dest_dir/name`` holding the existing config's servers plus ``entries``.
-
-    Atomic (temp file in the same directory, fsync, ``os.replace``), mode 0600. A name
-    present in both the existing config and ``entries`` is refused, never overwritten.
-    The existing file is only read.
-    """
+def _merged_document(
+    existing_path: Path | str | None, entries: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """The existing config's servers plus ``entries``; a name in both is refused."""
     document: dict[str, Any] = {}
     servers: dict[str, Any] = {}
     if existing_path is not None:
@@ -267,6 +257,24 @@ def merge_mcp_config(
         )
     servers.update({key: dict(value) for key, value in entries.items()})
     document["mcpServers"] = servers
+    return document
+
+
+def merge_mcp_config(
+    existing_path: Path | str | None,
+    entries: Mapping[str, Mapping[str, Any]],
+    dest_dir: Path | str,
+    *,
+    name: str = ".memory-mcp.json",
+) -> Path:
+    """Write ``dest_dir/name`` holding the existing config's servers plus ``entries``.
+
+    Atomic (temp file in the same directory, fsync, ``os.replace``), mode 0600. A name
+    present in both the existing config and ``entries`` is refused, never overwritten.
+    The existing file is only read. (The gate itself writes through
+    :func:`_write_dispatch_config`, which never follows a symlink.)
+    """
+    document = _merged_document(existing_path, entries)
     dest = Path(dest_dir)
     dest.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(dir=dest, prefix=".memory-mcp-", suffix=".tmp")
@@ -285,24 +293,110 @@ def merge_mcp_config(
     return target
 
 
+_DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+
+
+def _open_private_dir(parent_fd: int, name: str, *, create: bool) -> int:
+    """Open ``name`` under ``parent_fd`` as a real directory we own; never follows a symlink.
+
+    Creates it (0700) when asked. A symlink, a non-directory or a foreign owner raises
+    ``OSError``; the caller turns that into a typed refusal.
+    """
+    if create:
+        with contextlib.suppress(FileExistsError):
+            os.mkdir(name, 0o700, dir_fd=parent_fd)
+    fd = os.open(name, _DIR_FLAGS, dir_fd=parent_fd)
+    try:
+        if os.fstat(fd).st_uid != os.getuid():
+            raise PermissionError(f"{name!r} is not owned by this user")
+        if create:
+            os.fchmod(fd, 0o700)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _open_workspace(workspace: Path, *, create: bool) -> int:
+    """The workspace root, resolved once (the caller's own path) and opened as a directory."""
+    if create:
+        workspace.mkdir(parents=True, exist_ok=True)
+    return os.open(workspace.resolve(), os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+
+
 def _write_dispatch_config(
     existing_path: Path | str | None, entries: Mapping[str, Mapping[str, Any]], ddir: Path,
 ) -> Path:
-    """Worker job: create ``ddir`` (0700) and write ``ddir/mcp.json`` (0600)."""
-    ddir.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    ddir.mkdir(mode=0o700, exist_ok=True)
-    os.chmod(ddir, 0o700)
-    return merge_mcp_config(existing_path, entries, ddir, name="mcp.json")
+    """Worker job: create ``ddir`` (0700) and write ``ddir/mcp.json`` (0600) without symlinks.
+
+    The workspace, ``.marianne-memory`` and the hash directory are each opened
+    ``O_DIRECTORY | O_NOFOLLOW`` relative to the one before; the file is created
+    ``O_EXCL | O_NOFOLLOW``. A symlink or non-directory on the way is a typed refusal.
+    """
+    document = _merged_document(existing_path, entries)
+    workspace = ddir.parent.parent
+    fds: list[int] = []
+    try:
+        try:
+            fds.append(_open_workspace(workspace, create=True))
+            fds.append(_open_private_dir(fds[-1], CONFIG_DIR_NAME, create=True))
+            fds.append(_open_private_dir(fds[-1], ddir.name, create=True))
+            fd = os.open(
+                "mcp.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                0o600, dir_fd=fds[-1],
+            )
+        except OSError as exc:
+            raise MemoryGateError(
+                "(mcp config)", f"cannot create the dispatch directory safely: {exc}",
+            ) from exc
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps(document, indent=2))
+                handle.flush()
+                os.fsync(handle.fileno())
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink("mcp.json", dir_fd=fds[-1])
+            raise
+    finally:
+        for open_fd in reversed(fds):
+            os.close(open_fd)
+    return ddir / "mcp.json"
+
+
+def _remove_dispatch_dir_at(config_fd: int, name: str) -> None:
+    """Remove ``name`` (a real directory we own) under ``config_fd``; never follows a link."""
+    try:
+        fd = _open_private_dir(config_fd, name, create=False)
+    except OSError:
+        return  # gone, a symlink, a non-directory or foreign: not ours to remove
+    try:
+        for entry in os.listdir(fd):
+            with contextlib.suppress(OSError):
+                os.unlink(entry, dir_fd=fd)
+    finally:
+        os.close(fd)
+    with contextlib.suppress(OSError):
+        os.rmdir(name, dir_fd=config_fd)
 
 
 def _remove_dispatch_dir(ddir: Path) -> None:
-    """Worker job: remove one dispatch directory (a real directory only; never a symlink)."""
+    """Worker job: remove one dispatch directory through descriptors; never follows a symlink."""
     try:
-        info = os.lstat(ddir)
+        ws_fd = _open_workspace(ddir.parent.parent, create=False)
     except OSError:
         return
-    if stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid():
-        shutil.rmtree(ddir, ignore_errors=True)
+    try:
+        try:
+            config_fd = _open_private_dir(ws_fd, CONFIG_DIR_NAME, create=False)
+        except OSError:
+            return
+        try:
+            _remove_dispatch_dir_at(config_fd, ddir.name)
+        finally:
+            os.close(config_fd)
+    finally:
+        os.close(ws_fd)
 
 
 def _remove_dispatch_dirs(workspace: Path, keep: set[Path]) -> int:
@@ -311,23 +405,38 @@ def _remove_dispatch_dirs(workspace: Path, keep: set[Path]) -> int:
     Only real directories directly inside ``<workspace>/.marianne-memory`` that we own and
     whose name is 16 hex digits are touched; symlinks and everything else are left alone.
     """
-    root = workspace / CONFIG_DIR_NAME
     try:
-        if not stat.S_ISDIR(os.lstat(root).st_mode):
-            return 0
-        names = os.listdir(root)
+        ws_fd = _open_workspace(workspace, create=False)
     except OSError:
         return 0
     removed = 0
-    for name in names:
-        if len(name) != 16 or any(c not in "0123456789abcdef" for c in name):
-            continue
-        path = root / name
-        if path in keep:
-            continue
-        before = path.exists()
-        _remove_dispatch_dir(path)
-        removed += int(before and not path.exists())
+    try:
+        try:
+            config_fd = _open_private_dir(ws_fd, CONFIG_DIR_NAME, create=False)
+        except OSError:
+            return 0
+        try:
+            kept = {p.name for p in keep if p.parent.name == CONFIG_DIR_NAME}
+            for name in os.listdir(config_fd):
+                if len(name) != 16 or any(c not in "0123456789abcdef" for c in name):
+                    continue
+                if name in kept:
+                    continue
+                try:
+                    info = os.stat(name, dir_fd=config_fd, follow_symlinks=False)
+                except OSError:
+                    continue
+                if not stat.S_ISDIR(info.st_mode):
+                    continue
+                _remove_dispatch_dir_at(config_fd, name)
+                try:
+                    os.stat(name, dir_fd=config_fd, follow_symlinks=False)
+                except OSError:
+                    removed += 1
+        finally:
+            os.close(config_fd)
+    finally:
+        os.close(ws_fd)
     return removed
 
 
