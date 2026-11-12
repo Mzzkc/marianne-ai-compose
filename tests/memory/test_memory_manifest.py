@@ -51,12 +51,11 @@ def test_config_entry_shape_and_deny_list() -> None:
     assert key == mcp_entry_key(b) == "memory-notes"
     assert entry == {
         "command": sys.executable,
-        "args": [
-            "-m", "marianne.memory.shim", "--socket", str(sock),
-            "--memory-budget-seconds", "7.5",
-        ],
+        "args": ["-m", "marianne.memory.shim", "--memory-budget-seconds", "7.5"],
+        "env": {"MARIANNE_MEMORY_SOCKET": str(sock)},
     }
-    assert set(entry) == {"command", "args"}  # no env, no cwd
+    assert set(entry) == {"command", "args", "env"}  # no cwd
+    assert str(sock) not in json.dumps(entry["args"])  # argv is world-readable via /proc
     blob = json.dumps({key: entry}).lower()
     for term in ("principal", "grant", "permission", "access", "admin", "export", "credential",
                  "session", USER, SCOPE, "person:", "token"):

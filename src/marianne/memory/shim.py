@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -34,6 +35,8 @@ from marianne.memory.gateway.client import MemoryGatewayClient
 SHIM_NAME = "marianne-memory-shim"
 SHIM_VERSION = "1"
 DEFAULT_BUDGET_SECONDS = 10.0
+#: Environment variable that carries the gateway socket path (argv stays path-free).
+SOCKET_ENV = "MARIANNE_MEMORY_SOCKET"
 #: A single input line over this many bytes is refused, never buffered whole.
 MAX_LINE_BYTES = 1_048_576
 SUPPORTED_PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
@@ -280,15 +283,22 @@ def main(
     stdout: BinaryIO | None = None, stderr: Callable[[str], object] | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(prog="python -m marianne.memory.shim", add_help=True)
-    parser.add_argument("--socket", required=True, help="path of the gateway socket")
+    parser.add_argument(
+        "--socket", default=None,
+        help=f"path of the gateway socket (default: ${SOCKET_ENV})",
+    )
     parser.add_argument(
         "--memory-budget-seconds", type=float, default=DEFAULT_BUDGET_SECONDS,
         help="clamp on every call's timeout (default 10.0)",
     )
     ns = parser.parse_args(argv)
     err = stderr or (lambda s: sys.stderr.write(s + "\n"))
+    socket_path = ns.socket or os.environ.get(SOCKET_ENV)
+    if not socket_path:
+        err(f"memory shim: no socket given (use --socket or ${SOCKET_ENV})")
+        return 2
     try:
-        shim = MemoryShim(ns.socket, ns.memory_budget_seconds)
+        shim = MemoryShim(socket_path, ns.memory_budget_seconds)
     except ValueError as exc:
         err(f"memory shim: {exc}")
         return 2

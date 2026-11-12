@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from marianne.memory.resolve import ResolvedBinding
-from marianne.memory.shim import DEFAULT_BUDGET_SECONDS
+from marianne.memory.shim import DEFAULT_BUDGET_SECONDS, SOCKET_ENV
 
 TOOL_LINES: tuple[tuple[str, str], ...] = (
     ("declare", "record a fact, with the evidence it rests on"),
@@ -50,13 +50,16 @@ def mcp_config_entry(
     binding: ResolvedBinding, socket_path: Any, *,
     budget_seconds: float = DEFAULT_BUDGET_SECONDS,
 ) -> tuple[str, dict[str, Any]]:
-    """``(entry key, entry)`` launching the shim against one socket; nothing else."""
+    """``(entry key, entry)`` launching the shim against one socket; nothing else.
+
+    The socket path goes in ``env``, not argv (argv is readable by any local user).
+    """
     return mcp_entry_key(binding), {
         "command": sys.executable,
-        "args": [
-            "-m", SHIM_MODULE, "--socket", str(socket_path),
-            "--memory-budget-seconds", str(float(budget_seconds)),
-        ],
+        "args": ["-m", SHIM_MODULE, "--memory-budget-seconds", str(float(budget_seconds))],
+        # The socket path travels in the environment, not argv: any local user can read a
+        # process's argv, but only the same user can read its environment.
+        "env": {SOCKET_ENV: str(socket_path)},
     }
 
 

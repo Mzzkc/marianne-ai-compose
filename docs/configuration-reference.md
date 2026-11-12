@@ -1471,6 +1471,7 @@ At dispatch the conductor reads the score's `memory:` key (`marianne.daemon.bato
 - Delivery is all-or-nothing: if any attachment cannot be opened, nothing stays open and the sheet's dispatch fails with a message that names the attachment and the backend's reason (`Memory setup failed before backend acquisition`).
 - Memory reaches an instrument only through an MCP config. An instrument whose profile has neither `mcp_config_flag` nor `mcp_config_workspace_path` (for example `cli`, which has no model), or whose backend cannot be handed a config, is refused at dispatch with `memory_delivery_unsupported: <instrument>: <reason>`; the backend is released and nothing is left open.
 - Only `access: inherit` and the `files` backend are available. Files live under `~/.marianne/memory/files`, the audit log under `~/.marianne/memory/audit`, and sockets under `~/.marianne/run/s`.
+- The shim receives its socket path in the `MARIANNE_MEMORY_SOCKET` environment variable, not on its command line. Limit that remains: any process of the same user can read that environment, and all jobs of one conductor share one principal, so a sheet with a shell can reach another job's memory session if it finds the socket path.
 - A memory server name that already exists in the technique MCP config is refused rather than overwritten.
 
 ## checkpoints

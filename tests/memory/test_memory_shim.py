@@ -297,3 +297,15 @@ def test_ended_session_error_says_so_plainly(tmp_path: Path) -> None:
     assert "the memory session for this sheet has ended" in _error_payload(gone)["message"]
     other = BackendUnreachable("x", subtype="transport_failed")
     assert "has ended" not in _error_payload(other)["message"]
+
+
+def test_shim_reads_socket_from_environment_and_argv_carries_no_path(
+    short_tmp: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marianne.memory.shim import SOCKET_ENV
+
+    errs: list[str] = []
+    monkeypatch.delenv(SOCKET_ENV, raising=False)
+    assert main(["--memory-budget-seconds", "5"], stderr=errs.append) == 2  # no socket anywhere
+    monkeypatch.setenv(SOCKET_ENV, str(short_tmp / "none.sock"))
+    assert main(["--memory-budget-seconds", "5"], stderr=errs.append) == 1  # got as far as connect

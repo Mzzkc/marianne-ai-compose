@@ -22,10 +22,10 @@ EV = {"evidence_locator": "test:evidence"}
 class _EntryShim(ShimProc):
     """The real shim, launched from the gate's generated command line (not a hand-built one)."""
 
-    def __init__(self, command: str, args: list[str]) -> None:
+    def __init__(self, command: str, args: list[str], env: dict[str, str]) -> None:
         self.p = subprocess.Popen(
             [command, *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, env=child_env(),
+            stderr=subprocess.PIPE, env={**child_env(), **env},
         )
         self._lines: queue.Queue[bytes] = queue.Queue()
         threading.Thread(target=self._pump, daemon=True).start()
@@ -46,11 +46,12 @@ def test_shim_from_generated_entry_declares_recalls_then_fails_after_teardown(
             )
             assert delivery is not None
             entry = delivery.mcp_entries["memory-notes"]
-            sock = Path(entry["args"][entry["args"].index("--socket") + 1])
+            sock = Path(entry["env"]["MARIANNE_MEMORY_SOCKET"])
+            assert str(sock) not in " ".join(entry["args"])
             assert sock.exists()
 
             def work() -> tuple[str, ShimProc]:
-                sp = _EntryShim(entry["command"], entry["args"])
+                sp = _EntryShim(entry["command"], entry["args"], entry["env"])
                 try:
                     sp.rpc("initialize", {"protocolVersion": "2025-06-18"})
                     sp.send_raw(b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n')

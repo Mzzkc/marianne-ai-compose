@@ -14,6 +14,11 @@ backend is acquired, ``teardown`` when the dispatch ends).
   the technique servers plus one shim entry per attachment. The file names a
   socket and nothing else: no principal, scope, grant or session id.
 * ``teardown`` never raises into the caller; it reports what it could not stop.
+* Same-UID limit (stated once): the shim learns its socket path from its environment, but
+  any process of the same user can read that from ``/proc``, and every job of one conductor
+  shares one principal, so a sheet with a shell can reach another job's session if it finds
+  the path. Protection is only the per-dispatch path, the 0700 directory and one session
+  per socket.
 """
 
 from __future__ import annotations
