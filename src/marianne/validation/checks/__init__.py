@@ -60,6 +60,7 @@ from marianne.validation.checks.jinja import (
 )
 from marianne.validation.checks.memory import (
     MemoryAccessInvalidCheck,
+    MemoryCamSettingsCheck,
     MemoryCapsInvalidCheck,
     MemoryGrantUnknownCheck,
     MemoryPhasesInvalidCheck,
@@ -88,6 +89,7 @@ from marianne.validation.checks.techniques import (
 
 __all__ = [
     "MemoryAccessInvalidCheck",
+    "MemoryCamSettingsCheck",
     "MemoryCapsInvalidCheck",
     "MemoryGrantUnknownCheck",
     "MemoryPhasesInvalidCheck",

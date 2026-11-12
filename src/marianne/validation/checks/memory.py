@@ -1,4 +1,4 @@
-"""Memory score-key checks (V340, V342, V344-V347; GH #496, spec 03).
+"""Memory score-key checks (V340, V342, V344-V347, V350; GH #496, spec 03).
 
 The conductor reads the ``memory:`` key at dispatch: a sheet's attachments are
 delivered to instruments that accept an MCP config, and a dispatch to an
@@ -8,6 +8,7 @@ rules live in one place.
 
 Check IDs:
 - V340: ``system`` is not a backend this release ships
+- V350: ``system: cam`` settings are incomplete, contradictory or carry a literal key
 - V342: a ``phases`` entry is not ``all``, a movement number, or a movement name
 - V344: ``scope`` fails the scope grammar
 - V345: caps out of range or unknown provenance
@@ -19,6 +20,7 @@ Check IDs:
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -30,8 +32,16 @@ from marianne.memory.model import SCOPE_FAMILIES, parse_scope
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml, parsed_document
 
-#: Backends that exist in this release (the files backend ships as a library).
-SHIPPED_SYSTEMS: tuple[str, ...] = ("files",)
+#: Backends that exist in this release (both ship as libraries; ``cam`` is a
+#: client for the separate CAM program and reaches it only over HTTP).
+SHIPPED_SYSTEMS: tuple[str, ...] = ("files", "cam")
+CAM_SETTINGS: tuple[str, ...] = (
+    "base_url", "api_key_env", "api_key_file", "timeout_seconds", "allow_remote",
+)
+#: A value shaped like a pasted secret (long unbroken token), as opposed to an
+#: environment variable name (UPPER_SNAKE) or a path.
+_SECRET_SHAPE = re.compile(r"^(?=.*\d)(?=.*[A-Za-z])[A-Za-z0-9_\-]{24,}$")
+_ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 RECALL_CAP_MIN = 1024
 RECALL_CAP_MAX = 1024 * 1024
 _PROVENANCE = ("required", "optional")
@@ -315,4 +325,54 @@ class MemoryGrantUnknownCheck(_MemoryCheck):
                     "Use `access: inherit`",
                 )
             )
+        return issues
+
+
+class MemoryCamSettingsCheck(_MemoryCheck):
+    """V350: ``system: cam`` settings cannot build a CAM client."""
+
+    code = "V350"
+    summary = "Memory `system: cam` settings are incomplete, contradictory or hold a literal key"
+
+    def check(self, config: JobConfig, config_path: Path, raw_yaml: str) -> list[ValidationIssue]:
+        issues = []
+        for name, decl in _declared(config):
+            if decl.system != "cam":
+                continue
+            where = f"memory.backends.{name}.settings"
+            s = decl.settings
+
+            def bad(marker: str, message: str, suggestion: str, where: str = where) -> None:
+                issues.append(self._issue(raw_yaml, marker, where, message, suggestion))
+
+            for key in sorted(set(s) - set(CAM_SETTINGS)):
+                bad(key, f"{where}.{key} is not a cam setting; accepted: {', '.join(CAM_SETTINGS)}",
+                    "Remove it or use an accepted setting")
+            base = s.get("base_url")
+            if not isinstance(base, str) or not base.strip():
+                bad("settings", f"{where}.base_url is required for `system: cam`",
+                    "Add `base_url: http://127.0.0.1:8321`")
+            elif base.startswith("http://") and not re.match(
+                r"^http://(127\.0\.0\.1|localhost)(:\d+)?(/|$)", base
+            ):
+                bad(base, f"{where}.base_url `{base}` is plain http to a non-loopback host; "
+                    "only loopback may use http, and a remote CAM needs `allow_remote: true` "
+                    "and https",
+                    "Use http://127.0.0.1:<port> or an https:// URL with allow_remote: true")
+            env, file = s.get("api_key_env"), s.get("api_key_file")
+            if (env is None) == (file is None):
+                bad("settings", f"{where} must name exactly one of api_key_env and api_key_file",
+                    "Set `api_key_env: CAM_API_KEY` (the NAME of an environment variable) or "
+                    "`api_key_file: <path>`")
+            if isinstance(env, str) and not _ENV_NAME.match(env):
+                bad(env, f"{where}.api_key_env must be the NAME of an environment variable "
+                    "(letters, digits and underscores, such as CAM_API_KEY); the value written "
+                    "is not one and may be a literal secret, which must never be put in a "
+                    "score (it is not repeated here)",
+                    "Export the key in the conductor's environment and write only its name, "
+                    "for example `api_key_env: CAM_API_KEY`")
+            if isinstance(file, str) and _SECRET_SHAPE.match(file):
+                bad(file, f"{where}.api_key_file looks like a literal secret, not a path",
+                    "Write the path of a file that holds the key, or name an environment "
+                    "variable with `api_key_env` instead")
         return issues

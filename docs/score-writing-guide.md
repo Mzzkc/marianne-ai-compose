@@ -514,9 +514,7 @@ List of rules checked after each sheet execution. See [Validation Types](#valida
 
 ### `memory`
 
-Declares named memory attachments. This key is **not yet wired**: the memory protocol and the `files` backend exist as a library, but the conductor does not yet give a sheet access to a declared memory. `mzt validate` checks the shape (V340-V347) and reports the key with V327. Leave it out unless you are preparing a score for the wiring.
-
-This example is reserved syntax; it does nothing yet.
+Declares named memory attachments. At dispatch the conductor opens a gateway session per attachment active in the sheet's phase and hands the musician six memory tools through an MCP shim; the instrument must accept an MCP config (not `cli`), or the dispatch is refused with `memory_delivery_unsupported`. `mzt validate` checks the shape (V340-V347, V350). A score without `memory:` runs exactly as before. Backends: `files` and `cam` (a separate program reached only over its HTTP API); only `access: inherit` is available.
 
 ```yaml
 memory:

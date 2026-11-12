@@ -89,8 +89,8 @@ class MemoryBackendDecl(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     system: str = Field(
-        description="Memory backend id. `files` is the only backend that ships "
-        "today; V340 names the accepted set.",
+        description="Memory backend id: `files` (local tier files) or `cam` (the separate "
+        "CAM program, reached only over its HTTP API). V340 names the accepted set.",
     )
     scope: str | None = Field(
         default=None,
@@ -121,7 +121,10 @@ class MemoryBackendDecl(BaseModel):
     )
     settings: dict[str, Any] = Field(
         default_factory=dict,
-        description="Backend-specific settings forwarded verbatim; validated by the backend.",
+        description="Backend-specific settings forwarded verbatim; validated by the backend. "
+        "For `cam`: `base_url`, exactly one of `api_key_env` (an environment variable NAME) "
+        "or `api_key_file` (a path), `timeout_seconds`, `allow_remote`; V350 checks them. "
+        "Never write a key itself here.",
     )
 
     @field_validator("phases", mode="before")

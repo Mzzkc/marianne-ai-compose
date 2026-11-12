@@ -66,7 +66,7 @@ def test_v340_message(tmp_path: Path) -> None:
     (issue,) = _run(MemorySystemUnknownCheck(), tmp_path, _decl(system="file"))
     assert issue.check_id == "V340" and issue.severity is ValidationSeverity.ERROR
     assert issue.message == (
-        "memory.backends.main.system `file` is not a known memory backend; accepted: files"
+        "memory.backends.main.system `file` is not a known memory backend; accepted: files, cam"
     )
     assert "system: files" in (issue.suggestion or "")
 

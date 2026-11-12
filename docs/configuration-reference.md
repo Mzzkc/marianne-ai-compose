@@ -1460,9 +1460,9 @@ learning:
 
 *Source: `src/marianne/core/config/memory.py` — `MemoryConfig`, `MemoryBackendDecl`, `MemoryCaps`, `MemoryDefaults`*
 
-Declares named memory attachments for the score. At dispatch the conductor opens a gateway session per attachment active in the sheet's phase and hands the musician six memory tools through an MCP shim (see *Delivery to a sheet* below). The key validates with V340-V347. A score without `memory:` loads and runs exactly as before. `memory: {}` is legal and attaches one `default` files-backed memory.
+Declares named memory attachments for the score. At dispatch the conductor opens a gateway session per attachment active in the sheet's phase and hands the musician six memory tools through an MCP shim (see *Delivery to a sheet* below). The key validates with V340-V347 and V350. A score without `memory:` loads and runs exactly as before. `memory: {}` is legal and attaches one `default` files-backed memory.
 
-Only the `files` backend and `access: inherit` are available today.
+The `files` and `cam` backends and `access: inherit` are available today.
 
 ```yaml
 memory:
@@ -1482,19 +1482,47 @@ memory:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `memory.backends` | map | `{}` | Named attachments; each name matches `^[a-z][a-z0-9-]{0,31}$` |
-| `memory.backends.<k>.system` | string | required | Backend id; only `files` ships (V340) |
+| `memory.backends.<k>.system` | string | required | Backend id: `files` or `cam` (V340) |
 | `memory.backends.<k>.scope` | string | none (`local:default`) | `<family>/<id>` or `<family>:<id>` (V344) |
 | `memory.backends.<k>.access` | string | `inherit` | `inherit` or `grant:<name>[@<version>]`; no grant store exists yet, so grants fail V347 (V346) |
 | `memory.backends.<k>.trust` | enum | `gateway-only` | `gateway-only`, `backend` or `trusted` |
 | `memory.backends.<k>.trust_native` | bool | `false` | Opt in to expose the backend's native tools |
 | `memory.backends.<k>.phases` | list | `["all"]` | `all`, movement numbers, or movement names (V342) |
 | `memory.backends.<k>.caps` | object | defaults | `recall_cap_bytes` (1024 to 1048576, not above the score default) and `provenance` (V345) |
-| `memory.backends.<k>.settings` | map | `{}` | Passed to the backend unchanged |
+| `memory.backends.<k>.settings` | map | `{}` | Passed to the backend unchanged; for `cam` see below (V350) |
 | `memory.defaults` | object | see below | Score-level defaults |
 | `memory.defaults.recall_cap_bytes` | int | `32768` | Per-recall page cap in bytes |
 | `memory.defaults.provenance` | enum | `required` | `required` or `optional`; the deprecated `off` is read as `optional` (V349 INFO note) |
 | `memory.defaults.lock_timeout_seconds` | float | `10.0` | Outer timeout for one memory call |
 
+### The `cam` backend
+
+`system: cam` attaches CAM, a separate program with its own licence, as a second memory backend. Marianne reaches it only across a process boundary over CAM's HTTP API, using the standard library; it does not import, copy or depend on CAM, and a test enforces that.
+
+```yaml
+memory:
+  backends:
+    shared:
+      system: cam
+      scope: project/demo
+      settings:
+        base_url: http://127.0.0.1:8321   # loopback http, or https with allow_remote: true
+        api_key_env: CAM_API_KEY          # the NAME of an environment variable, never the key
+        timeout_seconds: 10
+```
+
+| Setting | Description |
+|---------|-------------|
+| `base_url` | Required. `http://127.0.0.1` or `http://localhost` only; any other host needs `allow_remote: true` and `https://` |
+| `api_key_env` / `api_key_file` | Exactly one: an environment variable name, or a file path holding the key. A literal key is refused (V350) and is never logged or put in an error |
+| `timeout_seconds` | Per-request ceiling; each request also stops at the call deadline |
+| `allow_remote` | Permit a non-loopback host (https only). Default `false` |
+
+What it can do today: `declare`, `recall` and `health` (a CAM running without an embedding model reports `degraded`, since recall is then lexical). `verify`, `bind`, `forget`, `fetch`, `stream_facts` and `migration_ingest` are refused with E7 `capability_unsupported` naming the operation, because CAM has no such operation yet. CAM recall has no cursor, so a recall is trimmed to the call's byte cap at a fact boundary on Marianne's side and the omitted facts are only counted. Every Marianne principal appears to CAM as the one key's principal until CAM ships stamped principals; the scope is passed through as CAM's scope.
+
+The conductor builds the backend with `backend_factory("cam")` from the attachment's `settings:`; a CAM that is down fails the dispatch of that sheet with the attachment's name, the same all-or-nothing rule as any attachment.
+
+The test `tests/memory/test_cam_backend_live.py` starts CAM's own server from a local CAM checkout and runs a real declare, recall, health and wrong-key round trip. It is marked `cam_live` and skips itself unless a CAM checkout with its own virtual environment exists (default `~/Projects/cam`, or the directory in `MARIANNE_CAM_DIR`); CI has no CAM, so it skips there.
 ### The gateway socket endpoint
 
 `marianne.memory.gateway` also contains an in-process `Gateway` (six calls: `declare`, `recall`, `verify`, `bind`, `forget`, `fetch`; grants; hash-chained audit log) and, in `marianne.memory.gateway.endpoint`, a Unix-socket endpoint with a small synchronous client (`marianne.memory.gateway.client`). One listening socket exists per session, at `<run_dir>/s/s_<hash16>.sock` inside a `0700` directory, and the socket is the session: a request never names a session, principal or scope. The conductor hosts it at dispatch (see "Delivery to a sheet" below). Admission is same-UID via `SO_PEERCRED`: this stops other users, but it does not stop another process of the same user that learns the socket path. The protections against siblings are only the unguessable per-dispatch path, the `0700` directory and one session per socket.
@@ -1511,7 +1539,7 @@ At dispatch the conductor reads the score's `memory:` key (`marianne.daemon.bato
 
 - Delivery is all-or-nothing: if any attachment cannot be opened, nothing stays open and the sheet's dispatch fails with a message that names the attachment and the backend's reason (`Memory setup failed before backend acquisition`).
 - Memory reaches an instrument only through an MCP config. An instrument whose profile has neither `mcp_config_flag` nor `mcp_config_workspace_path` (for example `cli`, which has no model), or whose backend cannot be handed a config, is refused at dispatch with `memory_delivery_unsupported: <instrument>: <reason>`; the backend is released and nothing is left open.
-- Only `access: inherit` and the `files` backend are available. Files live under `~/.marianne/memory/files`, the audit log under `~/.marianne/memory/audit`, and sockets under `~/.marianne/run/s`.
+- Only `access: inherit` is available. The backend is chosen by `memory.backends.<name>.system` (`files` or `cam`) through `marianne.memory.backends.backend_factory`. Files-backed memory lives under `~/.marianne/memory/files`, the audit log under `~/.marianne/memory/audit`, and sockets under `~/.marianne/run/s`.
 - The shim receives its socket path in the `MARIANNE_MEMORY_SOCKET` environment variable, not on its command line. This hides the path from other users only: a process of the same user can read `/proc/<pid>/environ` too, and all jobs of one conductor share one principal, so a sheet with a shell can reach another job's memory session if it finds the socket path.
 - A memory server name that already exists in the technique MCP config is refused rather than overwritten.
 
