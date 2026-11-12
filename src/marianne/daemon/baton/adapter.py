@@ -110,11 +110,13 @@ if TYPE_CHECKING:
     from marianne.core.config.flow import LoopConfig, SheetTriggerConfig
     from marianne.core.config.job import PromptConfig
     from marianne.core.config.learning import LearningConfig
+    from marianne.core.config.memory import MemoryConfig
     from marianne.core.config.spec import SpecCorpusConfig, SpecFragment
     from marianne.core.config.workspace import CrossSheetConfig
     from marianne.core.flow_state import FlowState
     from marianne.daemon.baton.backend_pool import BackendPool
     from marianne.daemon.baton.dispatch import DispatchConfig
+    from marianne.daemon.baton.memory_gate import MemoryDispatchGate
     from marianne.daemon.baton.prompt import PromptRenderer
     from marianne.daemon.baton.timer import TimerHandle
     from marianne.daemon.event_bus import EventBus
@@ -740,6 +742,12 @@ class BatonAdapter:
         # from this map (backward compat — resolution skipped, manifest None).
         self._job_techniques: dict[str, dict[str, Any]] = {}
 
+        # Memory (GH #496): jobs that declare a `memory:` key, and the gate the
+        # conductor injects. All logic lives in daemon/baton/memory_gate.py; a job
+        # without `memory:` is absent from this map and never touches the gate.
+        self._memory_gate: MemoryDispatchGate | None = None
+        self._job_memory: dict[str, tuple[MemoryConfig, dict[int, str]]] = {}
+
         # Internal A2A runtime state. Agent cards are registered per running
         # job; inboxes hold delegated tasks until the target's next A2A-enabled
         # sheet renders its prompt. These structures are in-memory only today;
@@ -814,6 +822,13 @@ class BatonAdapter:
         """Inject the shared MCP pool used for dispatch-time config files."""
         self._mcp_pool = pool
 
+    def set_memory_gate(self, gate: MemoryDispatchGate | None) -> None:
+        """Inject the memory dispatch gate; jobs already registered are handed to it."""
+        self._memory_gate = gate
+        if gate is not None:
+            for job_id, (memory, names) in self._job_memory.items():
+                gate.register_job(job_id, memory, names)
+
     def configure_retry(
         self,
         *,
@@ -865,6 +880,8 @@ class BatonAdapter:
         pacing_seconds: float = 0.0,
         live_sheets: dict[int, SheetExecutionState] | None = None,
         techniques: dict[str, Any] | None = None,
+        memory: MemoryConfig | None = None,
+        memory_movement_names: dict[int, str] | None = None,
         stale_detection: StaleDetectionConfig | None = None,
         spec_config: SpecCorpusConfig | None = None,
         spec_tags: dict[int, list[str]] | None = None,
@@ -971,6 +988,11 @@ class BatonAdapter:
         if techniques:
             self._job_routers[job_id] = TechniqueRouter()
             self._job_techniques[job_id] = techniques
+
+        if memory is not None:
+            self._job_memory[job_id] = (memory, dict(memory_movement_names or {}))
+            if self._memory_gate is not None:
+                self._memory_gate.register_job(job_id, memory, memory_movement_names)
 
         # #209: code execution needs a router to classify output into code
         # blocks, even when no techniques are declared. Store the config and
@@ -1625,6 +1647,8 @@ class BatonAdapter:
         self._completion_results.pop(job_id, None)
         self._job_routers.pop(job_id, None)
         self._job_techniques.pop(job_id, None)
+        if self._job_memory.pop(job_id, None) is not None and self._memory_gate is not None:
+            self._memory_gate.deregister_job(job_id)
         self._ensure_a2a_state()
         self._a2a_registry.deregister(job_id)
         self._a2a_inboxes.pop(job_id, None)
@@ -1686,6 +1710,8 @@ class BatonAdapter:
         pacing_seconds: float = 0.0,
         live_sheets: dict[int, SheetExecutionState] | None = None,
         techniques: dict[str, Any] | None = None,
+        memory: MemoryConfig | None = None,
+        memory_movement_names: dict[int, str] | None = None,
         stale_detection: StaleDetectionConfig | None = None,
         spec_config: SpecCorpusConfig | None = None,
         spec_tags: dict[int, list[str]] | None = None,
@@ -1780,6 +1806,11 @@ class BatonAdapter:
         if techniques:
             self._job_routers[job_id] = TechniqueRouter()
             self._job_techniques[job_id] = techniques
+
+        if memory is not None:
+            self._job_memory[job_id] = (memory, dict(memory_movement_names or {}))
+            if self._memory_gate is not None:
+                self._memory_gate.register_job(job_id, memory, memory_movement_names)
 
         # #209: restore opt-in code execution across resume so a resumed
         # job still classifies + runs code blocks (router ensured even
@@ -2825,6 +2856,25 @@ class BatonAdapter:
             )
             return True
 
+        # Memory (GH #496): one dict lookup for a job without `memory:`. Everything
+        # else lives in memory_gate.py; the sessions it opens are torn down by the
+        # musician's cleanup, or by every early exit below (`_memory_teardown`).
+        memory_dispatch: str | None = None
+        if job_id in self._job_memory:
+            try:
+                (
+                    technique_manifest, mcp_config_path, memory_dispatch,
+                ) = await self._prepare_dispatch_memory(
+                    job_id, sheet, technique_manifest, mcp_config_path,
+                )
+            except Exception as exc:  # noqa: BLE001 — dispatch failure is delivered to the baton for retry handling
+                self._send_dispatch_failure(
+                    job_id, sheet_num, effective_instrument,
+                    f"Memory setup failed before backend acquisition: {exc}",
+                    state=state,
+                )
+                return True
+
         # Interactive-mode request (per-sheet, from the merged instrument
         # config). Tri-state: key absent → None (the pool applies the
         # profile's default — interactive for instruments with verified
@@ -2857,6 +2907,7 @@ class BatonAdapter:
                 if not self._is_dispatch_registration_current(
                     job_id, sheet_num, registration_token, registered_state
                 ):
+                    await self._memory_teardown(job_id, memory_dispatch)
                     return False
                 if (
                     interactive_requested
@@ -2888,7 +2939,11 @@ class BatonAdapter:
                     )
                 else:
                     raise
+        except asyncio.CancelledError:
+            await self._memory_teardown(job_id, memory_dispatch)
+            raise
         except Exception as exc:  # noqa: BLE001 — structured logger reports adapter.dispatch.backend_acquire_failed
+            await self._memory_teardown(job_id, memory_dispatch)
             if not self._is_dispatch_registration_current(
                 job_id, sheet_num, registration_token, registered_state
             ):
@@ -2921,7 +2976,28 @@ class BatonAdapter:
             await asyncio.shield(
                 self._backend_pool.release(effective_instrument, backend)
             )
+            await self._memory_teardown(job_id, memory_dispatch)
             return False
+
+        if memory_dispatch is not None:
+            from marianne.daemon.baton.memory_gate import can_deliver, lookup_profile
+
+            refusal = can_deliver(backend, lookup_profile(self._backend_pool, effective_instrument))
+            if refusal is not None:
+                await asyncio.shield(
+                    self._backend_pool.release(effective_instrument, backend)
+                )
+                await self._memory_teardown(job_id, memory_dispatch)
+                if not self._is_dispatch_registration_current(
+                    job_id, sheet_num, registration_token, registered_state
+                ):
+                    return False
+                self._send_dispatch_failure(
+                    job_id, sheet_num, effective_instrument,
+                    f"memory_delivery_unsupported: {effective_instrument}: {refusal}",
+                    state=state,
+                )
+                return True
 
         try:
             task, mode = self._create_musician_task_after_acquire(
@@ -2938,6 +3014,7 @@ class BatonAdapter:
                 mcp_code_bridge_active=mcp_code_bridge_active,
                 mcp_bind_mounts=mcp_bind_mounts,
                 event_generation=event_generation,
+                memory_dispatch=memory_dispatch,
             )
         except Exception as exc:  # noqa: BLE001 — structured logger reports adapter.dispatch.mcp_config_reset_failed
             if hasattr(backend, "set_mcp_config"):
@@ -2952,6 +3029,7 @@ class BatonAdapter:
             await asyncio.shield(
                 self._backend_pool.release(effective_instrument, backend)
             )
+            await self._memory_teardown(job_id, memory_dispatch)
             if not self._is_dispatch_registration_current(
                 job_id, sheet_num, registration_token, registered_state
             ):
@@ -2981,6 +3059,13 @@ class BatonAdapter:
                 dispatch_epoch=state.dispatch_epoch,
             )
         )
+        if memory_dispatch is not None:
+            # Backstop for a task cancelled before it ever started (its finally
+            # never runs). The gate's teardown is idempotent, so this is a no-op
+            # when the musician's own cleanup already ran.
+            task.add_done_callback(
+                lambda _t: self._memory_backstop(job_id, memory_dispatch)
+            )
 
         _logger.info(
             "adapter.dispatch.spawned",
@@ -3048,6 +3133,7 @@ class BatonAdapter:
         mcp_code_bridge_active: bool,
         mcp_bind_mounts: list[Path],
         event_generation: int,
+        memory_dispatch: str | None = None,
     ) -> tuple[asyncio.Task[None], AttemptMode]:
         """Finish all fallible setup while the caller still owns the lease."""
         prior_failure = self._build_healing_context(state, job_id, sheet_num)
@@ -3297,6 +3383,7 @@ class BatonAdapter:
                     effective_model=(
                         str(state.model) if state.model is not None else None
                     ),
+                    memory_dispatch=memory_dispatch,
                 ),
                 name=f"musician-{job_id}-s{sheet_num}",
             ),
@@ -3318,6 +3405,7 @@ class BatonAdapter:
         mcp_bind_mounts: list[Path] | None = None,
         event_generation: int | None = None,
         effective_model: str | None = None,
+        memory_dispatch: str | None = None,
     ) -> None:
         """Wrapper around sheet_task that handles backend release.
 
@@ -3633,6 +3721,62 @@ class BatonAdapter:
                         },
                         exc_info=True,
                     )
+
+            # Memory sessions end with the dispatch, after the backend is free.
+            await self._memory_teardown(job_id, memory_dispatch)
+
+    async def _prepare_dispatch_memory(
+        self,
+        job_id: str,
+        sheet: Sheet,
+        technique_manifest: str | None,
+        mcp_config_path: Path | None,
+    ) -> tuple[str | None, Path | None, str | None]:
+        """Open this sheet's memory sessions; ``(manifest, mcp config, dispatch id)``.
+
+        Raises when memory cannot be delivered (no gate, or the gate refuses); nothing
+        stays open on a raise. Returns the inputs unchanged when no attachment is
+        active for this sheet.
+        """
+        gate = self._memory_gate
+        if gate is None:
+            raise RuntimeError(
+                "the score declares `memory:` but this conductor has no memory gate"
+            )
+        from marianne.daemon.baton.memory_gate import SheetIdentity
+        from marianne.daemon.baton.techniques import movement_phase_name
+
+        movement = sheet.movement or sheet.num
+        prepared = await gate.deliver(
+            job_id,
+            SheetIdentity(sheet.num, movement, movement_phase_name(movement)),
+            timeout_seconds=sheet.timeout_seconds,
+            existing_mcp_config=mcp_config_path,
+            workspace=sheet.workspace,
+            existing_manifest=technique_manifest,
+        )
+        if prepared is None:
+            return technique_manifest, mcp_config_path, None
+        return prepared.manifest, prepared.mcp_config_path, prepared.dispatch_id
+
+    def _memory_backstop(self, job_id: str, memory_dispatch: str) -> None:
+        gate = self._memory_gate
+        if gate is not None and gate.is_open(job_id, memory_dispatch):
+            gate.schedule_teardown(job_id, memory_dispatch)
+
+    async def _memory_teardown(self, job_id: str, memory_dispatch: str | None) -> None:
+        """End one dispatch's memory sessions. Never raises; a no-op without memory."""
+        gate = self._memory_gate
+        if memory_dispatch is None or gate is None:
+            return
+        try:
+            await asyncio.shield(gate.teardown(job_id, memory_dispatch))
+        except (Exception, asyncio.CancelledError):  # noqa: BLE001 — teardown must not mask the dispatch outcome
+            _logger.warning(
+                "adapter.memory_teardown_failed",
+                extra={"job_id": job_id, "dispatch_id": memory_dispatch},
+                exc_info=True,
+            )
 
     def _on_musician_done(
         self,

@@ -25,6 +25,7 @@ import json
 import os
 import tempfile
 import time
+import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -96,6 +97,15 @@ class TeardownReport:
         return not self.in_flight and not self.errors
 
 
+@dataclass(frozen=True)
+class PreparedMemory:
+    """What the adapter needs from one dispatch: the text to append and the config to attach."""
+
+    dispatch_id: str
+    manifest: str
+    mcp_config_path: Path
+
+
 @dataclass
 class _Registration:
     config: MemoryConfig
@@ -132,6 +142,17 @@ def can_deliver(backend: Any, profile: Any) -> str | None:
     ):
         return "the profile has no mcp_config_flag and no mcp_config_workspace_path"
     return None
+
+
+def lookup_profile(backend_pool: Any, instrument: str) -> Any:
+    """The instrument profile the pool would use, or ``None`` when it cannot be read."""
+    registry = getattr(backend_pool, "_registry", None)
+    if registry is None:
+        return None
+    try:
+        return registry.get(instrument)
+    except Exception:  # noqa: BLE001 — an unreadable profile means "cannot confirm delivery"
+        return None
 
 
 def merge_mcp_config(
@@ -350,6 +371,44 @@ class MemoryDispatchGate:
             raise MemoryGateError("(mcp config)", "no open dispatch owns this config")
         return path
 
+    async def deliver(
+        self, job_id: str, sheet: SheetIdentity, *, timeout_seconds: float,
+        existing_mcp_config: Path | None, workspace: Path,
+        existing_manifest: str | None = None,
+    ) -> PreparedMemory | None:
+        """``prepare`` + ``merge_config`` as one all-or-nothing step for the adapter.
+
+        Returns ``None`` when the job has no active attachment for this sheet. On any
+        failure everything opened is torn down before the error propagates.
+        """
+        if job_id not in self._jobs:
+            return None
+        dispatch_id = f"s{sheet.num}-{uuid.uuid4().hex[:12]}"
+        deadline = self._clock() + max(timeout_seconds, 0.0) + DEADLINE_GRACE_SECONDS
+        delivery = await self.prepare(job_id, sheet, dispatch_id, deadline)
+        if delivery is None:
+            return None
+        try:
+            path = self.merge_config(job_id, dispatch_id, delivery, existing_mcp_config, workspace)
+        except BaseException as exc:
+            await asyncio.shield(self.teardown(job_id, dispatch_id))
+            if isinstance(exc, Exception) and not isinstance(exc, MemoryGateError):
+                raise MemoryGateError("(mcp config)", _reason(exc)) from exc
+            raise
+        text = delivery.manifest
+        if existing_manifest:
+            text = f"{existing_manifest}\n\n{text}"
+        return PreparedMemory(dispatch_id, text, path)
+
+    def schedule_teardown(self, job_id: str, dispatch_id: str) -> None:
+        """Fire-and-forget ``teardown`` for a done-callback (needs a running loop)."""
+        try:
+            task = asyncio.get_running_loop().create_task(self.teardown(job_id, dispatch_id))
+        except RuntimeError:
+            return
+        self._background.add(task)
+        task.add_done_callback(self._background.discard)
+
     # ------------------------------------------------------------ teardown
 
     async def teardown(self, job_id: str, dispatch_id: str) -> TeardownReport:
@@ -415,6 +474,9 @@ class MemoryDispatchGate:
 
     # ------------------------------------------------------------ introspection
 
+    def is_open(self, job_id: str, dispatch_id: str) -> bool:
+        return (job_id, dispatch_id) in self._open
+
     @property
     def open_dispatches(self) -> int:
         return len(self._open)
@@ -422,6 +484,6 @@ class MemoryDispatchGate:
 
 __all__ = [
     "DEADLINE_GRACE_SECONDS", "MemoryConfigCollision", "MemoryDelivery", "MemoryDispatchGate",
-    "MemoryGateError", "OpenedSession", "SheetIdentity", "TeardownReport", "can_deliver",
-    "merge_mcp_config",
+    "MemoryGateError", "OpenedSession", "PreparedMemory", "SheetIdentity", "TeardownReport",
+    "can_deliver", "lookup_profile", "merge_mcp_config",
 ]

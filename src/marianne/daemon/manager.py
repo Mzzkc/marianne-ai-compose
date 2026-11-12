@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import getpass
 import hashlib
 import json
 import os
@@ -309,6 +310,14 @@ def _reopen_loops_for_resume(
         run.iteration_started_at = time.time()
         reopened += 1
     return reopened
+
+
+def _memory_user() -> str:
+    """The principal's user name; a conductor with no passwd entry must still boot."""
+    try:
+        return getpass.getuser().replace(" ", "_") or f"uid{os.getuid()}"
+    except (KeyError, OSError):
+        return f"uid{os.getuid()}"
 
 
 @dataclass
@@ -715,6 +724,7 @@ class JobManager:
 
         self._baton_adapter: BatonAdapter | None = None
         self._mcp_pool: Any | None = None
+        self._memory_gate: Any | None = None
         # #171: live instrument registry, retained for SIGHUP hot-reload.
         self._instrument_registry: InstrumentRegistry | None = None
         self._class_map: ClassMap | None = None
@@ -972,6 +982,20 @@ class JobManager:
                 except Exception:  # noqa: BLE001 — structured logger reports manager.mcp_pool_stop_after_start_failed
                     _logger.warning("manager.mcp_pool_stop_after_start_failed", exc_info=True)
                 self._mcp_pool = None
+
+        # Memory dispatch gate (GH #496). Construction is cheap and does no I/O: the
+        # gateway, endpoint and audit log are created on the first dispatch of a
+        # score that declares `memory:`.
+        from marianne.daemon.baton.memory_gate import MemoryDispatchGate
+
+        _marianne_home = Path.home() / ".marianne"
+        self._memory_gate = MemoryDispatchGate(
+            run_dir=_marianne_home / "run",
+            memory_root=_marianne_home / "memory" / "files",
+            audit_dir=_marianne_home / "memory" / "audit",
+            user=_memory_user(),
+        )
+        self._baton_adapter.set_memory_gate(self._memory_gate)
 
         # Populate per-model concurrency from instrument profiles. Boot and
         # reload share this exact mechanism (#408) so the caps lifecycle
@@ -5492,6 +5516,14 @@ class JobManager:
             finally:
                 self._mcp_pool = None
 
+        if self._memory_gate is not None:
+            try:
+                await self._memory_gate.shutdown()
+            except Exception:  # noqa: BLE001 — structured logger reports manager.memory_gate_stop_failed
+                _logger.warning("manager.memory_gate_stop_failed", exc_info=True)
+            finally:
+                self._memory_gate = None
+
         # Stop all observers for any remaining jobs
         for jid in list(self._job_meta.keys()):
             await self._stop_observer(jid)
@@ -6919,6 +6951,10 @@ class JobManager:
             flow_state=initial_state.flow,
             flow_variables=config.prompt.variables or {},
             techniques=config.techniques or None,
+            memory=config.memory,
+            memory_movement_names={
+                n: m.name for n, m in config.movements.items() if m.name
+            },
             stale_detection=config.stale_detection,
             spec_config=spec_config,  # #204
             spec_tags=config.sheet.spec_tags or None,  # #204
@@ -7293,6 +7329,10 @@ class JobManager:
             pacing_seconds=float(config.pause_between_sheets_seconds),
             live_sheets=checkpoint.sheets,
             techniques=config.techniques or None,
+            memory=config.memory,
+            memory_movement_names={
+                n: m.name for n, m in config.movements.items() if m.name
+            },
             stale_detection=config.stale_detection,
             spec_config=spec_config,  # #204
             spec_tags=config.sheet.spec_tags or None,  # #204
