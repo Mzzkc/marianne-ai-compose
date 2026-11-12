@@ -147,11 +147,12 @@ class MemoryEndpoint:
 
     async def open_session(self, **kwargs: Any) -> tuple[Session, Path]:
         """Admit a session on the gateway and bind its socket. Returns both."""
-        session = self._gateway.open_session(**kwargs)
+        # The audit append fsyncs: keep it off the event loop (the table and log are locked).
+        session = await asyncio.to_thread(lambda: self._gateway.open_session(**kwargs))
         try:
             path = await self.bind(session)
         except BaseException:
-            self._gateway.close_session(session.session_id)
+            await asyncio.shield(asyncio.to_thread(self._gateway.close_session, session.session_id))
             raise
         return session, path
 
@@ -203,11 +204,13 @@ class MemoryEndpoint:
         left = self._in_flight(session_id)
         if left:
             with contextlib.suppress(MemoryBackendError):
-                self._gateway.audit_endpoint_event(
-                    session_id, tool=None, result_status="in_flight_at_close", in_flight=left,
+                await asyncio.to_thread(
+                    lambda: self._gateway.audit_endpoint_event(
+                        session_id, tool=None, result_status="in_flight_at_close", in_flight=left,
+                    )
                 )
         await self.unbind(session_id)
-        self._gateway.close_session(session_id)
+        await asyncio.shield(asyncio.to_thread(self._gateway.close_session, session_id))
         return left
 
     def _in_flight(self, session_id: str) -> int:

@@ -311,7 +311,7 @@ def test_gate_merge_config_is_removed_by_teardown(short_tmp: Path) -> None:
         gate.register_job("j", two())
         d = await gate.prepare("j", SHEET, "d1", deadline())
         assert d is not None
-        path = gate.merge_config("j", "d1", d, None, short_tmp / "ws")
+        path = await gate.merge_config("j", "d1", d, None, short_tmp / "ws")
         assert path.exists() and set(json.loads(path.read_text())["mcpServers"]) == set(
             d.mcp_entries
         )
@@ -529,3 +529,36 @@ def test_same_attachment_two_jobs_each_keep_their_own_policy(
         assert sorted(b._cfg.provenance for b in backends) == ["optional", "required"]
 
     drive(short_tmp, body)
+
+
+# ------------------------------------------------------------------ F7: no fsync on the loop
+
+
+def test_fsync_never_runs_on_the_event_loop_thread(
+    short_tmp: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import threading
+
+    seen: list[tuple[str, bool]] = []
+    real = os.fsync
+    loop_thread: list[int] = []
+
+    def spy(fd: int) -> None:
+        seen.append(("fsync", threading.get_ident() == loop_thread[0]))
+        real(fd)
+
+    monkeypatch.setattr(os, "fsync", spy)
+
+    async def body(gate: MemoryDispatchGate) -> None:
+        loop_thread.append(threading.get_ident())
+        gate.register_job("j", two())
+        prepared = await gate.deliver(
+            "j", SHEET, timeout_seconds=30, existing_mcp_config=None,
+            workspace=short_tmp / "ws",
+        )
+        assert prepared is not None
+        await gate.teardown("j", prepared.dispatch_id)
+
+    drive(short_tmp, body)
+    assert seen, "expected audit and config fsyncs"
+    assert not [s for s in seen if s[1]], "an fsync ran on the event loop thread"

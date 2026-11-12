@@ -235,6 +235,7 @@ class MemoryDispatchGate:
         self._closed = False
         self._closing = False
         self._preparing: set[asyncio.Task[Any]] = set()
+        self._tearing: set[asyncio.Task[Any]] = set()
 
     def now(self) -> float:
         return self._clock()
@@ -271,8 +272,11 @@ class MemoryDispatchGate:
 
     async def drain(self) -> None:
         """Wait for teardowns scheduled by ``deregister_job``."""
-        if self._background:
-            await asyncio.gather(*list(self._background), return_exceptions=True)
+        pending = [*self._background, *self._tearing]
+        me = asyncio.current_task()
+        pending = [t for t in pending if t is not me]
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
     # ------------------------------------------------------------ prepare
 
@@ -410,24 +414,26 @@ class MemoryDispatchGate:
                     if endpoint is not None:
                         await endpoint.unbind(sid)
                     if gateway is not None:
-                        gateway.close_session(sid)
+                        await asyncio.shield(asyncio.to_thread(gateway.close_session, sid))
                 except BaseException as exc2:  # noqa: BLE001 — recorded, teardown continues
                     errors.append(f"fallback close {sid}: {_reason(exc2)}")
                 if isinstance(exc, asyncio.CancelledError):
                     errors.append("teardown cancelled")
         return in_flight, errors
 
-    def merge_config(
+    async def merge_config(
         self, job_id: str, dispatch_id: str, delivery: MemoryDelivery,
         existing_path: Path | str | None, dest_dir: Path | str,
     ) -> Path:
         """Write this dispatch's merged MCP config and remember it for ``teardown``."""
         digest = hashlib.sha256(f"{job_id}\x1f{dispatch_id}".encode()).hexdigest()[:16]
-        path = merge_mcp_config(
-            existing_path, delivery.mcp_entries, dest_dir, name=f".memory-mcp-{digest}.json",
+        # The write fsyncs, so it runs in a thread; the dict mutation below stays on the loop.
+        path = await asyncio.to_thread(
+            merge_mcp_config, existing_path, delivery.mcp_entries, dest_dir,
+            name=f".memory-mcp-{digest}.json",
         )
         entry = self._open.get((job_id, dispatch_id))
-        if entry is not None:
+        if entry is not None and not (self._closing or self._closed):
             entry.config_path = path
         else:  # no open dispatch to own it: do not leave a stray file
             with contextlib.suppress(OSError):
@@ -452,7 +458,9 @@ class MemoryDispatchGate:
         if delivery is None:
             return None
         try:
-            path = self.merge_config(job_id, dispatch_id, delivery, existing_mcp_config, workspace)
+            path = await self.merge_config(
+                job_id, dispatch_id, delivery, existing_mcp_config, workspace,
+            )
         except BaseException as exc:
             await asyncio.shield(self.teardown(job_id, dispatch_id))
             if isinstance(exc, Exception) and not isinstance(exc, MemoryGateError):
@@ -500,7 +508,14 @@ class MemoryDispatchGate:
         if entry is None or (only is not None and entry is not only):
             return TeardownReport()
         del self._open[(job_id, dispatch_id)]
-        in_flight, errors = await self._close_sessions(list(entry.session_ids))
+        me = asyncio.current_task()
+        if me is not None:
+            self._tearing.add(me)
+        try:
+            in_flight, errors = await self._close_sessions(list(entry.session_ids))
+        finally:
+            if me is not None:
+                self._tearing.discard(me)
         if entry.config_path is not None:
             try:
                 entry.config_path.unlink()

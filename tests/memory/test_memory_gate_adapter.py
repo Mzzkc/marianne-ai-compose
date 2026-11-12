@@ -99,6 +99,11 @@ async def _complete(adapter: BatonAdapter, job: str) -> None:
     run_task = asyncio.create_task(adapter.run())
     try:
         assert await asyncio.wait_for(adapter.wait_for_completion(job), timeout=10.0)
+        # The musician's cleanup (release, then teardown) finishes after the result is
+        # reported; wait for those tasks rather than racing them.
+        pending = list(adapter._active_tasks.values())
+        if pending:
+            await asyncio.wait_for(asyncio.gather(*pending, return_exceptions=True), 10.0)
     finally:
         await adapter.baton.inbox.put(ShutdownRequested(graceful=True))
         await asyncio.wait_for(run_task, timeout=10.0)
