@@ -401,3 +401,18 @@ def test_licence_boundary() -> None:
     text = (REPO / "pyproject.toml").read_text().lower()
     assert not re.search(r'["\'\s]cam\s*[<>=!~\[;"\']', text.replace("\n", " ") + " ")
     assert 'name = "cam"' not in text
+
+
+def test_backend_factory_lookup_by_system() -> None:
+    from marianne.memory.backends import BACKEND_SYSTEMS, backend_factory
+    from marianne.memory.backends.cam import cam_backend_factory as cam_f
+    from marianne.memory.backends.files import files_backend_factory as files_f
+
+    assert backend_factory("cam") is cam_f
+    assert backend_factory("files") is files_f
+    assert BACKEND_SYSTEMS == ("files", "cam")
+    with pytest.raises(SchemaViolation) as ei:
+        backend_factory("nope")
+    assert ei.value.subtype == "system_unknown" and "cam" in ei.value.detail
+    built = backend_factory("cam")({"base_url": "http://127.0.0.1:1", "api_key_env": "K"})
+    assert isinstance(built, CamBackend)
