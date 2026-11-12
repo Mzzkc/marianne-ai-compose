@@ -236,6 +236,7 @@ class MemoryDispatchGate:
         self._closing = False
         self._preparing: set[asyncio.Task[Any]] = set()
         self._tearing: set[asyncio.Task[Any]] = set()
+        self._writing: set[Path] = set()  # configs being written, not yet owned by an entry
 
     def now(self) -> float:
         return self._clock()
@@ -428,10 +429,15 @@ class MemoryDispatchGate:
         """Write this dispatch's merged MCP config and remember it for ``teardown``."""
         digest = hashlib.sha256(f"{job_id}\x1f{dispatch_id}".encode()).hexdigest()[:16]
         # The write fsyncs, so it runs in a thread; the dict mutation below stays on the loop.
-        path = await asyncio.to_thread(
-            merge_mcp_config, existing_path, delivery.mcp_entries, dest_dir,
-            name=f".memory-mcp-{digest}.json",
-        )
+        name = f".memory-mcp-{digest}.json"
+        planned = Path(dest_dir) / name
+        self._writing.add(planned)  # a sibling's sweep must not remove it mid-write
+        try:
+            path = await asyncio.to_thread(
+                merge_mcp_config, existing_path, delivery.mcp_entries, dest_dir, name=name,
+            )
+        finally:
+            self._writing.discard(planned)
         entry = self._open.get((job_id, dispatch_id))
         if entry is not None and not (self._closing or self._closed):
             entry.config_path = path
@@ -458,6 +464,11 @@ class MemoryDispatchGate:
         if delivery is None:
             return None
         try:
+            # A config file a dead process left in this workspace is ours to clear; one
+            # owned by a live dispatch of this process is not.
+            owned = {e.config_path for e in self._open.values() if e.config_path is not None}
+            owned |= self._writing
+            await asyncio.to_thread(self._sweep_foreign_configs, workspace, owned)
             path = await self.merge_config(
                 job_id, dispatch_id, delivery, existing_mcp_config, workspace,
             )
@@ -488,6 +499,92 @@ class MemoryDispatchGate:
                     "memory_gate.arm_deadline_refused",
                     extra={"job_id": job_id, "dispatch_id": dispatch_id, "reason": _reason(exc)},
                 )
+
+    # ------------------------------------------------------------ stale files (SIGKILL)
+
+    def sweep_stale(self, run_dir: Path | str | None = None) -> int:
+        """Unlink socket files left in ``<run_dir>/s`` by a dead process; returns how many.
+
+        Call once at conductor start. Works through a descriptor held on the ``s``
+        directory (opened ``O_NOFOLLOW``, owned by us), looks at each ``s_*.sock`` with
+        ``lstat`` semantics, and removes only a real socket we own that nothing accepts
+        connections on and this process does not hold. Symlinks, regular files and every
+        other name are left alone. A second conductor sharing the directory is not
+        supported: its idle sockets would look stale only if nothing listens, and a
+        listening socket is never removed.
+        """
+        import socket as _socket
+        import stat as _stat
+
+        base = Path(run_dir) if run_dir is not None else self._run_dir
+        mine = {p.name for p in self._bound_socket_paths()}
+        try:
+            fd = os.open(base / "s", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except OSError:
+            return 0
+        removed = 0
+        try:
+            st = os.fstat(fd)
+            if st.st_uid != os.getuid():
+                return 0
+            for name in os.listdir(fd):
+                if not (name.startswith("s_") and name.endswith(".sock")) or name in mine:
+                    continue
+                try:
+                    info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+                except OSError:
+                    continue
+                if not _stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid():
+                    continue
+                probe = _socket.socket(_socket.AF_UNIX)
+                probe.settimeout(1.0)
+                try:
+                    probe.connect(f"/proc/self/fd/{fd}/{name}")
+                    continue  # something is listening: not stale
+                except (ConnectionRefusedError, FileNotFoundError):
+                    pass
+                except OSError:
+                    continue
+                finally:
+                    probe.close()
+                try:
+                    os.unlink(name, dir_fd=fd)
+                    removed += 1
+                except OSError:
+                    _logger.warning("memory_gate.sweep_unlink_failed", extra={"name": name})
+        finally:
+            os.close(fd)
+        if removed:
+            _logger.info("memory_gate.stale_sockets_removed", extra={"count": removed})
+        return removed
+
+    def _bound_socket_paths(self) -> list[Path]:
+        endpoint = self._endpoint
+        return [b.path for b in endpoint._bound.values()] if endpoint is not None else []
+
+    def _sweep_foreign_configs(self, workspace: Path, keep: set[Path]) -> int:
+        """Remove ``.memory-mcp-*.json`` regular files in ``workspace`` we do not own."""
+        import stat as _stat
+
+        try:
+            names = os.listdir(workspace)
+        except OSError:
+            return 0
+        removed = 0
+        for name in names:
+            if not (name.startswith(".memory-mcp-") and name.endswith(".json")):
+                continue
+            path = workspace / name
+            if path in keep:
+                continue
+            try:
+                info = os.lstat(path)  # never follow a symlink
+                if _stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid():
+                    os.unlink(path)
+                    removed += 1
+            except OSError:
+                continue
+        return removed
 
     def schedule_teardown(self, job_id: str, dispatch_id: str) -> None:
         """Fire-and-forget ``teardown`` for a done-callback (needs a running loop)."""

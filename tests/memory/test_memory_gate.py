@@ -562,3 +562,75 @@ def test_fsync_never_runs_on_the_event_loop_thread(
     drive(short_tmp, body)
     assert seen, "expected audit and config fsyncs"
     assert not [s for s in seen if s[1]], "an fsync ran on the event loop thread"
+
+
+# ------------------------------------------------------------------ F8: stale files after SIGKILL
+
+
+def _stale_socket(path: Path) -> None:
+    import socket
+
+    s = socket.socket(socket.AF_UNIX)
+    s.bind(str(path))
+    s.close()  # leaves the socket file behind, bound by nobody
+
+
+def test_sweep_stale_removes_only_unbound_sockets_in_our_s_dir(short_tmp: Path) -> None:
+    async def body(gate: MemoryDispatchGate) -> None:
+        sdir = short_tmp / "run" / "s"
+        sdir.mkdir(mode=0o700)
+        _stale_socket(sdir / "s_dead0000000000a.sock")
+        (sdir / "notes.txt").write_text("keep me")
+        (sdir / "s_regular00000000b.sock").write_text("a regular file named like a socket")
+        outside = short_tmp / "outside.sock"
+        _stale_socket(outside)
+        (sdir / "s_link0000000000c.sock").symlink_to(outside)
+        gate.register_job("j", two())
+        live = await gate.prepare("j", SHEET, "d1", deadline())
+        assert live is not None
+        removed = gate.sweep_stale()
+        assert removed == 1
+        names = sorted(p.name for p in sdir.iterdir())
+        assert "s_dead0000000000a.sock" not in names
+        assert {"notes.txt", "s_regular00000000b.sock", "s_link0000000000c.sock"} <= set(names)
+        assert outside.exists()  # a symlink is never followed
+        assert all(s.socket_path.exists() for s in live.sessions)  # our own are untouched
+
+    drive(short_tmp, body)
+
+
+def test_sweep_stale_without_run_dir_or_s_dir_is_a_noop(short_tmp: Path) -> None:
+    async def body(gate: MemoryDispatchGate) -> None:
+        assert gate.sweep_stale() == 0
+
+    drive(short_tmp, body)
+
+
+def test_deliver_removes_foreign_memory_configs_but_not_own_or_others(short_tmp: Path) -> None:
+    async def body(gate: MemoryDispatchGate) -> None:
+        ws = short_tmp / "ws"
+        ws.mkdir()
+        stale = ws / ".memory-mcp-deadbeefdeadbeef.json"
+        stale.write_text("{}")
+        other = ws / "keep.json"
+        other.write_text("{}")
+        target = short_tmp / "elsewhere.json"
+        target.write_text("{}")
+        link = ws / ".memory-mcp-1111111111111111.json"
+        link.symlink_to(target)
+        gate.register_job("j", two())
+        first = await gate.deliver(
+            "j", SHEET, timeout_seconds=30, existing_mcp_config=None, workspace=ws,
+        )
+        assert first is not None
+        assert not stale.exists() and other.exists()
+        assert link.is_symlink() and target.exists()  # never followed, never deleted
+        # a sibling dispatch in the same workspace must not delete the first one's file
+        second = await gate.deliver(
+            "j", SheetIdentity(2, 1, "work"), timeout_seconds=30, existing_mcp_config=None,
+            workspace=ws,
+        )
+        assert second is not None
+        assert first.mcp_config_path.exists() and second.mcp_config_path.exists()
+
+    drive(short_tmp, body)
