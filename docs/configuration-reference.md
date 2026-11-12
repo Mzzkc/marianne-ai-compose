@@ -1456,15 +1456,22 @@ memory:
 
 ### The gateway socket endpoint (library only)
 
-`marianne.memory.gateway` also contains an in-process `Gateway` (six calls: `declare`, `recall`, `verify`, `bind`, `forget`, `fetch`; grants; hash-chained audit log) and, in `marianne.memory.gateway.endpoint`, a Unix-socket endpoint with a small synchronous client (`marianne.memory.gateway.client`). One listening socket exists per session, at `<run_dir>/s/s_<hash16>.sock` inside a `0700` directory, and the socket is the session: a request never names a session, principal or scope. **The conductor does not host this yet and the `memory:` key still has no runtime reader**, so no sheet can reach it today. Admission is same-UID via `SO_PEERCRED`: this stops other users, but it does not stop another process of the same user that learns the socket path. The protections against siblings are only the unguessable per-dispatch path, the `0700` directory and one session per socket.
+`marianne.memory.gateway` also contains an in-process `Gateway` (six calls: `declare`, `recall`, `verify`, `bind`, `forget`, `fetch`; grants; hash-chained audit log) and, in `marianne.memory.gateway.endpoint`, a Unix-socket endpoint with a small synchronous client (`marianne.memory.gateway.client`). One listening socket exists per session, at `<run_dir>/s/s_<hash16>.sock` inside a `0700` directory, and the socket is the session: a request never names a session, principal or scope. The conductor hosts it at dispatch (see "Delivery to a sheet" below). Admission is same-UID via `SO_PEERCRED`: this stops other users, but it does not stop another process of the same user that learns the socket path. The protections against siblings are only the unguessable per-dispatch path, the `0700` directory and one session per socket.
 
-Three more library pieces now sit between a sheet and the gateway, none of them called by the conductor:
+Three library pieces sit between a sheet and the gateway:
 
 - `marianne.memory.shim` is a stdio MCP server (`python -m marianne.memory.shim --socket <path> [--memory-budget-seconds 10.0]`) exposing exactly the six tools and forwarding each over the socket. It carries no identity, clamps every call to the budget, refuses an over-long input line, returns a gateway refusal as a tool result with `isError: true` (code, subtype, message, remedy), and exits non-zero with one stderr line when the socket is gone at startup.
 - `marianne.memory.resolve.resolve_memory(config, phase, user=..., run_dir=...)` is a pure function from the `memory:` key and a sheet's phase to frozen `ResolvedBinding` values (clamped caps, a stable UUIDv5 attachment id, the per-dispatch socket path). With `memory:` absent it returns nothing; with `memory: {}` it returns one `default` binding (`files`, `local:default`). It reuses the technique phase matcher.
 - `marianne.memory.manifest` renders the prompt block (six tools and attachment names only) and the MCP config entry (shim command, `--socket`, `--memory-budget-seconds`, nothing else).
 
-**The conductor still does not open sessions at dispatch.** Nothing calls the resolver, binds an endpoint, writes the MCP config or tears anything down, so a declared `memory:` still gives a sheet no tools.
+### Delivery to a sheet
+
+At dispatch the conductor reads the score's `memory:` key (`marianne.daemon.baton.memory_gate`). A score without the key runs exactly as before: no gateway, no socket, no session. For a score with the key, before a backend is acquired the conductor resolves the attachments active in the sheet's phase, opens one gateway session per attachment (principal `person:<user>`, never shown to the musician), binds one Unix socket per session and writes one per-dispatch MCP config containing the score's technique servers plus one `memory-<name>` server per attachment. The prompt gains a short block naming the six tools and the attachments. When the sheet ends, finishes, fails or is cancelled, the sockets and sessions close and the config file is removed.
+
+- Delivery is all-or-nothing: if any attachment cannot be opened, nothing stays open and the sheet's dispatch fails with a message that names the attachment and the backend's reason (`Memory setup failed before backend acquisition`).
+- Memory reaches an instrument only through an MCP config. An instrument whose profile has neither `mcp_config_flag` nor `mcp_config_workspace_path` (for example `cli`, which has no model), or whose backend cannot be handed a config, is refused at dispatch with `memory_delivery_unsupported: <instrument>: <reason>`; the backend is released and nothing is left open.
+- Only `access: inherit` and the `files` backend are available. Files live under `~/.marianne/memory/files`, the audit log under `~/.marianne/memory/audit`, and sockets under `~/.marianne/run/s`.
+- A memory server name that already exists in the technique MCP config is refused rather than overwritten.
 
 ## checkpoints
 

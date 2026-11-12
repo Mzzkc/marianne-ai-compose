@@ -252,7 +252,7 @@ def test_teardown_never_raises_and_reports(short_tmp: Path) -> None:
         endpoint.close_session = bad  # type: ignore[method-assign]
         report = await gate.teardown("j", "d1")
         assert not report.clean and "close failed" in report.errors[0]
-        endpoint.close_session = real  # type: ignore[method-assign]
+        endpoint.close_session = real  # type: ignore[method-assign,assignment]
         assert sockets(short_tmp) == []  # the fallback unbound them anyway
 
     drive(short_tmp, body)

@@ -3,8 +3,9 @@
 A score declares named memory attachments here. The models only fix the
 shape; value rules that have their own validator code (system, scope,
 access, phases, caps bounds) are checked by V340-V347 so an author gets one
-named message instead of a schema dump. The conductor does not read this key
-yet, so V327 reports it as reserved when a score sets it.
+named message instead of a schema dump. The conductor reads this key at dispatch
+(``marianne.daemon.baton.memory_gate``): each sheet gets a session per active
+attachment, delivered as an MCP server to instruments that accept an MCP config.
 
 ``core/`` stays free of ``marianne.memory``: scope and access grammars are
 checked in :mod:`marianne.validation.checks.memory`, which reuses the
@@ -43,13 +44,11 @@ class MemoryCaps(BaseModel):
 
     recall_cap_bytes: int = Field(
         default=32768,
-        description="Reserved: no runtime reader yet (V327 warns when set). "
-        "Per-recall page cap in bytes (1024 to 1048576; V345 checks the range).",
+        description="Per-recall page cap in bytes (1024 to 1048576; V345 checks the range).",
     )
     provenance: str = Field(
         default="required",
-        description="Reserved: no runtime reader yet (V327 warns when set). "
-        "`required` or `optional`; the deprecated `off` is read as `optional`.",
+        description="`required` or `optional`; the deprecated `off` is read as `optional`.",
     )
 
     @field_validator("provenance", mode="before")

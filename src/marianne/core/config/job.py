@@ -1162,10 +1162,11 @@ class JobConfig(BaseModel):
 
     memory: MemoryConfig | None = Field(
         default=None,
-        description="Reserved: no runtime reader yet (V327 warns when set). "
-        "Named memory attachments for this score (backends, scope, access, "
-        "trust, phases, caps). The conductor does not yet give a sheet access "
-        "to a declared memory.",
+        description="Named memory attachments for this score (backends, scope, access, "
+        "trust, phases, caps). The conductor gives each sheet a memory session for "
+        "the attachments active in its phase, delivered as an MCP server to "
+        "instruments that accept an MCP config; a dispatch to an instrument that "
+        "does not is refused (`memory_delivery_unsupported`).",
     )
 
     # Movement declarations (M4: movement-level instrument and voice config)

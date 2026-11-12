@@ -1,8 +1,9 @@
 """Memory score-key checks (V340, V342, V344-V347; GH #496, spec 03).
 
-The ``memory:`` key validates but the conductor does not read it yet; V327
-reports that. These checks catch values that could never work once it is
-read. Scope and access grammars come from :mod:`marianne.memory` so the
+The conductor reads the ``memory:`` key at dispatch: a sheet's attachments are
+delivered to instruments that accept an MCP config, and a dispatch to an
+instrument that does not is refused. These checks catch values that could never
+work. Scope and access grammars come from :mod:`marianne.memory` so the
 rules live in one place.
 
 Check IDs:

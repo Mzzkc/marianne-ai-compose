@@ -1,4 +1,4 @@
-"""V340/V342/V344-V347 and the not-yet-wired V327 report for ``memory:``."""
+"""V340/V342/V344-V347 for ``memory:`` (V327 no longer reports it: the conductor reads it)."""
 
 from __future__ import annotations
 
@@ -135,10 +135,10 @@ def test_v347_every_grant_ref(tmp_path: Path) -> None:
     assert _run(MemoryAccessInvalidCheck(), tmp_path, extra) == []
 
 
-def test_not_wired_reported_by_v327(tmp_path: Path) -> None:
-    (issue,) = _run(ReservedKeyUseCheck(), tmp_path, "memory: {}\n")
-    assert issue.check_id == "V327" and issue.severity is ValidationSeverity.WARNING
-    assert "`memory`" in issue.message and "no runtime code reads it" in issue.message
+def test_memory_is_read_at_dispatch_so_v327_is_silent(tmp_path: Path) -> None:
+    # The conductor now delivers `memory:` (marianne.daemon.baton.memory_gate), so the
+    # "no runtime code reads it" warning must not fire for it.
+    assert _run(ReservedKeyUseCheck(), tmp_path, "memory: {}\n") == []
     assert _run(ReservedKeyUseCheck(), tmp_path, "") == []
 
 
