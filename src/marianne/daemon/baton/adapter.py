@@ -1647,8 +1647,10 @@ class BatonAdapter:
         self._completion_results.pop(job_id, None)
         self._job_routers.pop(job_id, None)
         self._job_techniques.pop(job_id, None)
-        if self._job_memory.pop(job_id, None) is not None and self._memory_gate is not None:
-            self._memory_gate.deregister_job(job_id)
+        _memory_gate = getattr(self, "_memory_gate", None)
+        job_memory = getattr(self, "_job_memory", {})
+        if job_memory.pop(job_id, None) is not None and _memory_gate is not None:
+            _memory_gate.deregister_job(job_id)
         self._ensure_a2a_state()
         self._a2a_registry.deregister(job_id)
         self._a2a_inboxes.pop(job_id, None)
@@ -2860,7 +2862,7 @@ class BatonAdapter:
         # else lives in memory_gate.py; the sessions it opens are torn down by the
         # musician's cleanup, or by every early exit below (`_memory_teardown`).
         memory_dispatch: str | None = None
-        if job_id in self._job_memory:
+        if job_id in getattr(self, "_job_memory", {}):
             try:
                 (
                     technique_manifest, mcp_config_path, memory_dispatch,
@@ -3738,7 +3740,7 @@ class BatonAdapter:
         stays open on a raise. Returns the inputs unchanged when no attachment is
         active for this sheet.
         """
-        gate = self._memory_gate
+        gate = getattr(self, "_memory_gate", None)
         if gate is None:
             raise RuntimeError(
                 "the score declares `memory:` but this conductor has no memory gate"
@@ -3760,13 +3762,13 @@ class BatonAdapter:
         return prepared.manifest, prepared.mcp_config_path, prepared.dispatch_id
 
     def _memory_backstop(self, job_id: str, memory_dispatch: str) -> None:
-        gate = self._memory_gate
+        gate = getattr(self, "_memory_gate", None)
         if gate is not None and gate.is_open(job_id, memory_dispatch):
             gate.schedule_teardown(job_id, memory_dispatch)
 
     async def _memory_teardown(self, job_id: str, memory_dispatch: str | None) -> None:
         """End one dispatch's memory sessions. Never raises; a no-op without memory."""
-        gate = self._memory_gate
+        gate = getattr(self, "_memory_gate", None)
         if memory_dispatch is None or gate is None:
             return
         try:
