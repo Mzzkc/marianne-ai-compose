@@ -286,8 +286,20 @@ class MemoryDispatchGate:
             self._endpoint = MemoryEndpoint(self._gateway, run_dir=self._run_dir)
         return self._gateway, self._endpoint
 
+    @staticmethod
+    def _backend_key(b: ResolvedBinding) -> str:
+        """Registration key: attachment identity plus the policy the backend instance carries.
+
+        The files backend holds provenance, recall cap and lock timeout in its own config,
+        so two jobs that name the same attachment with different policy must not share an
+        instance (the first job's policy would otherwise bind every later one).
+        """
+        policy = f"{b.provenance}\x1f{b.recall_cap_bytes}\x1f{b.lock_timeout_seconds!r}"
+        return f"{b.attachment_id}~{hashlib.sha256(policy.encode()).hexdigest()[:12]}"
+
     def _register_backend(self, gateway: Gateway, b: ResolvedBinding) -> None:
-        if b.attachment_id in self._registered_backends:
+        key = self._backend_key(b)
+        if key in self._registered_backends:
             return
         if b.system != "files":
             raise MemoryGateError(b.name, f"memory system {b.system!r} is not available")
@@ -297,8 +309,8 @@ class MemoryDispatchGate:
             "recall_cap_bytes": b.recall_cap_bytes, "provenance": b.provenance,
             "lock_timeout_seconds": b.lock_timeout_seconds,
         })
-        gateway.register_backend(b.attachment_id, backend)
-        self._registered_backends.add(b.attachment_id)
+        gateway.register_backend(key, backend)
+        self._registered_backends.add(key)
 
     async def prepare(
         self, job_id: str, sheet: SheetIdentity, dispatch_id: str, deadline: float,
@@ -348,7 +360,7 @@ class MemoryDispatchGate:
                 self._register_backend(gateway, b)
                 access = parse_access(b.access)
                 session, path = await endpoint.open_session(
-                    principal=b.principal, attachment_id=b.attachment_id, scope=b.scope,
+                    principal=b.principal, attachment_id=self._backend_key(b), scope=b.scope,
                     permissions=b.permissions, dispatch_id=dispatch_id, deadline_at=deadline,
                     job_id=job_id, access=access if access.kind == "grant" else None,
                     caps=MemoryCaps(

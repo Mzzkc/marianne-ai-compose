@@ -489,3 +489,43 @@ def test_arm_deadline_on_unknown_or_closed_dispatch_never_raises(short_tmp: Path
         gate.arm_deadline("j", "d1", 10)
 
     drive(short_tmp, body)
+
+
+# ------------------------------------------------------------------ F5: policy is per session
+
+
+def _policy_cfg(provenance: str, cap: int) -> MemoryConfig:
+    # The resolver lets an attachment only tighten provenance; loosening is a score default.
+    return cfg(
+        backends={"notes": {
+            "system": "files", "scope": "project/shared", "caps": {"recall_cap_bytes": cap},
+        }},
+        defaults={"provenance": provenance},
+    )
+
+
+@pytest.mark.parametrize("order", [("required", "optional"), ("optional", "required")])
+def test_same_attachment_two_jobs_each_keep_their_own_policy(
+    short_tmp: Path, order: tuple[str, str],
+) -> None:
+    from marianne.memory.errors import MemoryBackendError
+
+    async def body(gate: MemoryDispatchGate) -> None:
+        caps = {"required": 2048, "optional": 8192}
+        sids: dict[str, str] = {}
+        for n, prov in enumerate(order):
+            job = f"job-{prov}"
+            gate.register_job(job, _policy_cfg(prov, caps[prov]))
+            d = await gate.prepare(job, SHEET, f"d{n}", deadline())
+            assert d is not None
+            sids[prov] = d.sessions[0].session_id
+        gw = gate._gateway
+        assert gw is not None
+        with pytest.raises(MemoryBackendError):  # required: a bare declare is refused
+            gw.declare(sids["required"], "no evidence")
+        gw.declare(sids["optional"], "no evidence is fine here")  # optional: accepted
+        backends = list(gw._backends.values())
+        assert sorted(b._cfg.recall_cap_bytes for b in backends) == [2048, 8192]
+        assert sorted(b._cfg.provenance for b in backends) == ["optional", "required"]
+
+    drive(short_tmp, body)
