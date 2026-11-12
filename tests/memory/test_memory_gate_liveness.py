@@ -275,3 +275,40 @@ def test_real_reaper_task_cleans_up_a_missed_teardown(short_tmp: Path) -> None:
             await gate.shutdown()
 
     run(main)
+
+
+def test_shutdown_stops_the_reaper_and_does_not_count_it_as_pending(short_tmp: Path) -> None:
+    async def main() -> None:
+        gate = make(short_tmp, reaper=True)
+        await deliver(gate, short_tmp)
+        reaper = gate._reaper
+        assert reaper is not None and not reaper.done()
+        report = await asyncio.wait_for(gate.shutdown(), 5)
+        assert reaper.done() and gate._reaper is None and report.clean
+
+    run(main)
+
+
+def test_a_slow_worker_job_is_logged_with_its_kind(
+    short_tmp: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import marianne.daemon.baton.memory_gate as mg
+
+    seen: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        mg._logger, "warning", lambda event, **kw: seen.append((event, kw.get("extra", {})))
+    )
+
+    async def main() -> None:
+        gate = make(short_tmp, slow_job_seconds=0.0)  # every job counts as slow
+        try:
+
+            def marker_job() -> int:
+                return 1
+
+            await gate._run(marker_job)
+        finally:
+            await gate.shutdown()
+
+    run(main)
+    assert any(e == "memory_gate.slow_job" and x.get("kind") == "marker_job" for e, x in seen)

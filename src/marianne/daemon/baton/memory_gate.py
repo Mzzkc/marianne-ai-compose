@@ -24,6 +24,15 @@ backend is acquired, ``teardown`` when the dispatch ends).
   teardown that a flagged dispatch missed, and ends ownerless dispatches after a grace on
   the monotonic clock); if it dies, flagged sessions are still refused and only socket and
   directory cleanup waits for deregister or shutdown.
+* All gate I/O (session open/close with its audit fsync, config write/delete, sweeps) runs
+  on ONE ordered daemon worker thread. One slow job therefore delays opens and cleanups for
+  every dispatch (head-of-line blocking), but it can no longer end a live session: a job that
+  runs longer than ``SLOW_JOB_SECONDS`` is logged (``memory_gate.slow_job``, with its kind).
+* Still on the event loop: endpoint bind/unbind (socket creation, ``start_unix_server``),
+  backend construction and close, the run-directory ``mkdir`` in ``_ensure``, the sweep of
+  stale sockets' bookkeeping, and all gate dictionaries. None blocks on a lock or an fsync.
+* A failed memory open fails the dispatch; it does not degrade to "no memory". That is
+  intended: the sheet's prompt names tools that must exist.
 * Same-UID limit (stated once): the socket path is passed in the shim's environment rather
   than argv, which hides it from other users but not from other processes of the same user
   (``/proc/<pid>/environ`` is readable too), and every job of one conductor shares one
@@ -63,6 +72,9 @@ _logger = get_logger("daemon.baton.memory_gate")
 
 #: A dispatch with no owner task this long after it opened (monotonic clock) is ended.
 OWNERLESS_GRACE_SECONDS = 300.0
+
+#: A worker job that runs longer than this is logged (kind = the job function's name).
+SLOW_JOB_SECONDS = 5.0
 
 #: Pause between hygiene passes of the reaper.
 REAP_INTERVAL_SECONDS = 30.0
@@ -146,7 +158,8 @@ class _Worker:
     """One ordered worker thread. A daemon thread, so a job stuck at interpreter exit cannot
     hold the process (a ``ThreadPoolExecutor`` thread is joined at exit)."""
 
-    def __init__(self) -> None:
+    def __init__(self, slow_job_seconds: float = SLOW_JOB_SECONDS) -> None:
+        self._slow = slow_job_seconds
         self._queue: queue.SimpleQueue[tuple[ConcurrentFuture[Any], Callable[..., Any], tuple[Any, ...]] | None] = queue.SimpleQueue()  # noqa: E501
         self._thread = threading.Thread(target=self._loop, name="memory-gate", daemon=True)
         self._thread.start()
@@ -168,10 +181,20 @@ class _Worker:
             fut, fn, args = item
             if not fut.set_running_or_notify_cancel():
                 continue
+            started = time.monotonic()
             try:
                 fut.set_result(fn(*args))
             except BaseException as exc:  # noqa: BLE001 — handed to the awaiter
                 fut.set_exception(exc)
+            took = time.monotonic() - started
+            if took > self._slow:
+                _logger.warning(
+                    "memory_gate.slow_job",
+                    extra={
+                        "kind": getattr(fn, "__name__", type(fn).__name__),
+                        "seconds": round(took, 3),
+                    },
+                )
 
 
 class _BackendRef:
@@ -462,11 +485,13 @@ class MemoryDispatchGate:
         monotonic: Callable[[], float] = time.monotonic,
         shutdown_bound_seconds: float = SHUTDOWN_BOUND_SECONDS, start_reaper: bool = True,
         ownerless_grace_seconds: float = OWNERLESS_GRACE_SECONDS,
+        slow_job_seconds: float = SLOW_JOB_SECONDS,
         reap_interval_seconds: float = REAP_INTERVAL_SECONDS,
     ) -> None:
         self._start_reaper = start_reaper
         self._monotonic = monotonic
         self._ownerless_grace = ownerless_grace_seconds
+        self._slow_job_seconds = slow_job_seconds
         self._reap_interval = reap_interval_seconds
         self._reaper: asyncio.Task[None] | None = None
         self._run_dir = Path(run_dir)
@@ -509,7 +534,7 @@ class MemoryDispatchGate:
             outer.set_exception(MemoryGateError("(gate)", "the memory gate is shut down"))
             return outer
         if self._worker is None:
-            self._worker = _Worker()
+            self._worker = _Worker(self._slow_job_seconds)
         self._pending.add(outer)
         outer.add_done_callback(self._pending.discard)
         inner = self._worker.submit(fn, *args)
@@ -1125,6 +1150,7 @@ class MemoryDispatchGate:
 
 __all__ = [
     "CONFIG_DIR_NAME", "FAR_FUTURE", "OWNERLESS_GRACE_SECONDS", "SHUTDOWN_BOUND_SECONDS",
+    "SLOW_JOB_SECONDS",
     "MemoryConfigCollision",
     "MemoryDelivery", "MemoryDispatchGate",
     "MemoryGateError", "OpenedSession", "PreparedMemory", "SheetIdentity", "TeardownReport",

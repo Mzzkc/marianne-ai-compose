@@ -864,3 +864,45 @@ def test_workspace_materialised_mcp_config_is_owner_only(tmp_path: Path) -> None
     os.chmod(target, 0o644)
     _write_private(target, b"{}")
     assert stat.S_IMODE(os.stat(target).st_mode) == 0o600 and target.read_bytes() == b"{}"
+
+
+@pytest.mark.parametrize("delay_turns", range(40))
+def test_cancel_at_every_await_of_deliver_leaves_nothing(
+    short_tmp: Path, monkeypatch: pytest.MonkeyPatch, delay_turns: int,
+) -> None:
+    """Cancel ``deliver`` after N loop turns, for N across its whole run: nothing may leak."""
+    from marianne.memory.gateway import audit as audit_module
+
+    original = audit_module.AuditLog.append
+
+    def slow(self: Any, *a: Any, **k: Any) -> Any:
+        time.sleep(0.002)  # worker jobs outlive several loop turns
+        return original(self, *a, **k)
+
+    monkeypatch.setattr(audit_module.AuditLog, "append", slow)
+
+    async def body(gate: MemoryDispatchGate) -> None:
+        gate.register_job("j", two())
+        task = asyncio.create_task(_deliver(gate, short_tmp))
+        for _ in range(delay_turns * 3):
+            await asyncio.sleep(0)
+        task.cancel()
+        try:
+            await task
+            finished = True
+        except asyncio.CancelledError:
+            finished = False
+        await asyncio.wait_for(gate.drain(), T)
+        if finished:  # the deliver completed before the cancel: tear it down as the adapter would
+            for job_id, dispatch_id in list(gate._open):
+                await gate.teardown(job_id, dispatch_id)
+        assert gate.open_dispatches == 0
+        assert gate._gateway is None or _live_gateway_sessions(gate) == 0
+        assert sockets(short_tmp) == []
+        assert gate._endpoint is None or gate._endpoint._bound == {}
+        ws = short_tmp / "ws"
+        assert not ws.exists() or [p for p in ws.rglob("*") if p.is_file()] == []
+        assert gate._gateway is None or gate._gateway._backends == {}
+        assert gate._backend_refs == {}
+
+    drive(short_tmp, body)
