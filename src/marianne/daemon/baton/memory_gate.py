@@ -15,11 +15,15 @@ backend is acquired, ``teardown`` when the dispatch ends).
   plus one shim entry per attachment. The file names a
   socket and nothing else: no principal, scope, grant or session id.
 * ``teardown`` never raises into the caller; it reports what it could not stop.
-* Session lifetime: a session is valid while its dispatch's task is alive, renewed in short
-  leases (``LEASE_SECONDS``) by one reaper task; the dispatch's own teardown remains the
-  normal end. A missed teardown (finished owner, or no owner for a whole lease) is reaped,
-  and costs at most one lease plus one tick. If the reaper or the loop stalls, leases just
-  expire and calls are refused: the failure is closed.
+* Session lifetime is the owner's liveness, read at call time. One ``threading.Event``
+  (the dispatch's "ended" flag) is shared by every session of a dispatch and checked first
+  on every call. It is set, instantly and from the loop, by ``teardown`` (before any I/O is
+  queued), ``deregister_job``, ``shutdown`` and a done-callback on the owner task. No clock,
+  lease or renewal is involved: a finished or cancelled sheet's sessions refuse the very next
+  call however busy the worker is. A reaper task exists for hygiene only (it enqueues the
+  teardown that a flagged dispatch missed, and ends ownerless dispatches after a grace on
+  the monotonic clock); if it dies, flagged sessions are still refused and only socket and
+  directory cleanup waits for deregister or shutdown.
 * Same-UID limit (stated once): the socket path is passed in the shim's environment rather
   than argv, which hides it from other users but not from other processes of the same user
   (``/proc/<pid>/environ`` is readable too), and every job of one conductor shares one
@@ -36,6 +40,7 @@ import os
 import shutil
 import stat
 import tempfile
+import threading
 import time
 import uuid
 from collections.abc import Callable, Mapping
@@ -56,9 +61,14 @@ from marianne.memory.resolve import ResolvedBinding, SheetPhase, resolve_memory
 
 _logger = get_logger("daemon.baton.memory_gate")
 
-#: A session is a short LEASE. It opens valid for this long and is renewed by the gate's
-#: reaper every ``LEASE_SECONDS / 5`` while the task that owns its dispatch is alive.
-LEASE_SECONDS = 300.0
+#: A dispatch with no owner task this long after it opened (monotonic clock) is ended.
+OWNERLESS_GRACE_SECONDS = 300.0
+
+#: Pause between hygiene passes of the reaper.
+REAP_INTERVAL_SECONDS = 30.0
+
+#: Sessions the gate opens carry this deadline: lifetime is the dispatch's flag (see S1).
+FAR_FUTURE = 1.0e15
 
 #: Total time ``shutdown`` waits for queued gate work before reporting what is pending.
 SHUTDOWN_BOUND_SECONDS = 30.0
@@ -139,7 +149,9 @@ class _Open:
     config_path: Path | None = None
     dir: Path | None = None  # this dispatch's own config directory
     owner: asyncio.Task[Any] | None = None
-    opened_at: float = 0.0
+    opened_at: float = 0.0  # monotonic
+    ended: threading.Event = field(default_factory=threading.Event)
+    cleanup_queued: bool = False  # a teardown for this dispatch has been enqueued
 
 
 def _reason(exc: BaseException) -> str:
@@ -292,9 +304,15 @@ class MemoryDispatchGate:
     def __init__(
         self, *, run_dir: Path | str, memory_root: Path | str, audit_dir: Path | str,
         user: str, clock: Callable[[], float] = time.time,
+        monotonic: Callable[[], float] = time.monotonic,
         shutdown_bound_seconds: float = SHUTDOWN_BOUND_SECONDS, start_reaper: bool = True,
+        ownerless_grace_seconds: float = OWNERLESS_GRACE_SECONDS,
+        reap_interval_seconds: float = REAP_INTERVAL_SECONDS,
     ) -> None:
         self._start_reaper = start_reaper
+        self._monotonic = monotonic
+        self._ownerless_grace = ownerless_grace_seconds
+        self._reap_interval = reap_interval_seconds
         self._reaper: asyncio.Task[None] | None = None
         self._run_dir = Path(run_dir)
         self._memory_root = Path(memory_root)
@@ -367,10 +385,17 @@ class MemoryDispatchGate:
             return
         self._jobs[job_id] = _Registration(memory_config, dict(movement_names or {}))
 
+    def _end(self, entry: _Open) -> None:
+        """Flag a dispatch's sessions as over. Instant, thread-safe, needs no I/O."""
+        entry.ended.set()
+
     def deregister_job(self, job_id: str) -> None:
         """Forget the job, tear down its open dispatches, then remove its dispatch dirs."""
         self._jobs.pop(job_id, None)
         stale = [key for key, entry in self._open.items() if entry.job_id == job_id]
+        for key in stale:
+            self._end(self._open[key])
+            self._open[key].cleanup_queued = True
         workspaces = self._workspaces.pop(job_id, set())
         if not stale and not workspaces:
             return
@@ -486,6 +511,7 @@ class MemoryDispatchGate:
                     principal=b.principal, attachment_id=backend_key, scope=b.scope,
                     permissions=b.permissions, dispatch_id=dispatch_id, deadline_at=deadline,
                     job_id=job_id, access=access if access.kind == "grant" else None,
+                    ended=entry.ended,
                     caps=MemoryCaps(
                         recall_cap_bytes=b.recall_cap_bytes,
                         provenance=cast("Literal['required', 'optional']", b.provenance),
@@ -544,7 +570,7 @@ class MemoryDispatchGate:
             raise MemoryGateError(bindings[0].name, f"dispatch {dispatch_id!r} is already open")
         if deadline <= self._clock():
             raise MemoryGateError(bindings[0].name, "the dispatch deadline has already passed")
-        entry = _Open(job_id, opened_at=self._clock())
+        entry = _Open(job_id, opened_at=self._monotonic())
         self._open[key] = entry
         self._ensure_reaper()
         opened: list[OpenedSession] = []
@@ -663,7 +689,7 @@ class MemoryDispatchGate:
         if job_id not in self._jobs:
             return None
         dispatch_id = f"s{sheet.num}-{uuid.uuid4().hex[:12]}"
-        deadline = self._clock() + LEASE_SECONDS
+        deadline = FAR_FUTURE  # lifetime is the dispatch's flag; see the module docstring
         delivery = await self.prepare(job_id, sheet, dispatch_id, deadline)
         if delivery is None:
             return None
@@ -678,13 +704,15 @@ class MemoryDispatchGate:
             raise
         return PreparedMemory(dispatch_id, delivery.manifest, path)
 
-    # ------------------------------------------------------------ the lease reaper
+    # ------------------------------------------------------------ owner and reaper
 
     def set_owner(self, job_id: str, dispatch_id: str, task: asyncio.Task[Any]) -> None:
-        """Record the task whose life keeps this dispatch's sessions leased."""
+        """Record the task whose life bounds this dispatch: when it ends, so do the sessions."""
         entry = self._open.get((job_id, dispatch_id))
-        if entry is not None:
-            entry.owner = task
+        if entry is None:
+            return
+        entry.owner = task
+        task.add_done_callback(lambda _t: self._end(entry))
 
     def _ensure_reaper(self) -> None:
         if not self._start_reaper or self._reaper is not None or self._closing or self._closed:
@@ -694,48 +722,35 @@ class MemoryDispatchGate:
     async def _reap_loop(self) -> None:
         try:
             while self._open and not (self._closing or self._closed):
-                await asyncio.sleep(LEASE_SECONDS / 5)
+                await asyncio.sleep(self._reap_interval)
                 await self.tick()
         finally:
             self._reaper = None
 
     async def tick(self) -> None:
-        """One reaper pass: renew live dispatches, reap dead or ownerless ones.
+        """One hygiene pass; public so a test can drive it with an injected clock.
 
-        Public so a test can drive it with an injected clock. Renewal and reaping go through
-        the worker like all other gate I/O, so they are ordered with opens and closes.
+        Enqueues the teardown of a dispatch whose flag is set but whose teardown was never
+        enqueued (a missed one), and ends a dispatch that still has no owner after the grace.
+        Correctness never depends on it: the flag alone refuses calls.
         """
-        gateway = self._gateway
-        now = self._clock()
-        renewals: list[asyncio.Future[Any]] = []
+        now = self._monotonic()
         for (job_id, dispatch_id), entry in list(self._open.items()):
-            owner = entry.owner
-            if owner is not None and not owner.done():
-                if gateway is not None and entry.session_ids:
-                    ids = list(entry.session_ids)
-                    renewals.append(self._submit(self._renew, ids, now + LEASE_SECONDS))
+            if entry.cleanup_queued:
                 continue
-            if owner is None and now - entry.opened_at <= LEASE_SECONDS:
-                continue  # between deliver and task creation: give it one lease
-            reason = "owner task finished" if owner is not None else "no owner within a lease"
+            if not entry.ended.is_set():
+                if entry.owner is not None or now - entry.opened_at <= self._ownerless_grace:
+                    continue
+                self._end(entry)
+                reason = "no owner within the grace"
+            else:
+                reason = "owner finished without teardown"
+            entry.cleanup_queued = True
             _logger.warning(
                 "memory_gate.reaped",
                 extra={"job_id": job_id, "dispatch_id": dispatch_id, "reason": reason},
             )
             self._spawn(self.teardown(job_id, dispatch_id))
-        if renewals:
-            await asyncio.gather(*(asyncio.shield(r) for r in renewals), return_exceptions=True)
-        if not self._open:
-            self._reaper = None  # nothing left to watch; the loop ends on its own
-
-    def _renew(self, session_ids: list[str], deadline: float) -> None:
-        """Worker job: extend each session; one already ended is simply skipped."""
-        gateway = self._gateway
-        if gateway is None:
-            return
-        for sid in session_ids:
-            with contextlib.suppress(MemoryBackendError):
-                gateway.sessions.set_deadline(sid, deadline)
 
     # ------------------------------------------------------------ stale files (SIGKILL)
 
@@ -823,6 +838,7 @@ class MemoryDispatchGate:
         entry = self._open.get((job_id, dispatch_id))
         if entry is None or (only is not None and entry is not only):
             return TeardownReport()
+        self._end(entry)  # first: the sessions refuse from this instant, before any I/O
         del self._open[(job_id, dispatch_id)]
         errors: list[str] = []
         try:
@@ -855,6 +871,9 @@ class MemoryDispatchGate:
         then stops the worker.
         """
         self._closing = True
+        for entry in self._open.values():
+            self._end(entry)
+            entry.cleanup_queued = True
         reaper, self._reaper = self._reaper, None
         if reaper is not None:
             reaper.cancel()  # the gate's own task; never counted as pending work
@@ -901,7 +920,7 @@ class MemoryDispatchGate:
 
 
 __all__ = [
-    "CONFIG_DIR_NAME", "LEASE_SECONDS", "SHUTDOWN_BOUND_SECONDS",
+    "CONFIG_DIR_NAME", "FAR_FUTURE", "OWNERLESS_GRACE_SECONDS", "SHUTDOWN_BOUND_SECONDS",
     "MemoryConfigCollision",
     "MemoryDelivery", "MemoryDispatchGate",
     "MemoryGateError", "OpenedSession", "PreparedMemory", "SheetIdentity", "TeardownReport",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from collections.abc import Callable
 from typing import Any, TypeVar
@@ -81,6 +82,7 @@ class Gateway:
         self, *, principal: str, attachment_id: str, scope: str, dispatch_id: str,
         deadline_at: float, permissions: tuple[str, ...] = (), job_id: str | None = None,
         caps: MemoryCaps | None = None, access: AccessRef | None = None,
+        ended: threading.Event | None = None,
     ) -> Session:
         """Admit a session. A ``grant:`` reference fixes the permission ceiling (BE3.3/3.4)."""
         if attachment_id not in self._backends:
@@ -107,7 +109,7 @@ class Gateway:
         session = self.sessions.open(
             principal=principal, attachment_id=attachment_id, scope=canonical,
             permissions=permissions, dispatch_id=dispatch_id, deadline_at=deadline_at,
-            job_id=job_id, caps=caps,
+            job_id=job_id, caps=caps, ended=ended,
         )
         session.grant_ref = access if access is not None and access.kind == "grant" else None
         if self._audit is not None:

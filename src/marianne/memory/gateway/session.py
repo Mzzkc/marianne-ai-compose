@@ -79,6 +79,8 @@ class Session:
     last_receipt: str | None = None
     receipts: dict[str, str] = field(default_factory=dict)
     grant_ref: AccessRef | None = None
+    #: Set by the owner of the session when it is over; checked first on every call.
+    ended: threading.Event | None = None
 
     @property
     def scope(self) -> str:
@@ -101,6 +103,7 @@ class SessionTable:
         self, *, principal: str, attachment_id: str, scope: str,
         permissions: tuple[str, ...], dispatch_id: str, deadline_at: float,
         job_id: str | None = None, caps: MemoryCaps | None = None,
+        ended: threading.Event | None = None,
     ) -> Session:
         validate_principal(principal)
         canonical = parse_scope(scope).canonical
@@ -117,7 +120,7 @@ class SessionTable:
             session_id=f"s-{uuid.uuid4().hex[:16]}", principal=principal,
             attachment=(attachment_id, canonical), permissions=tuple(permissions),
             caps=caps or MemoryCaps(), deadline_at=float(deadline_at),
-            dispatch_id=dispatch_id, job_id=job_id, opened_at=self._clock(),
+            dispatch_id=dispatch_id, job_id=job_id, opened_at=self._clock(), ended=ended,
         )
         with self._lock:
             self._sessions[session.session_id] = session
@@ -147,7 +150,7 @@ class SessionTable:
             return s
 
     def admit_call(self, session_id: str, permission: str) -> Session:
-        """Gate one call by state, deadline and permission; the first success activates.
+        """Gate one call by owner flag, state, deadline and permission; the first success activates.
 
         ``permission`` is the permission the tool needs. Every refusal leaves
         ``call_count`` and the state untouched, except that an expired session
@@ -159,6 +162,10 @@ class SessionTable:
             )
         with self._lock:
             s = self.get(session_id)
+            if s.ended is not None and s.ended.is_set():
+                raise Unauthenticated(
+                    "session is closed", subtype="session_closed", remedy="open a new session",
+                )
             if s.state is SessionState.REVOKED:
                 raise AuthorityRevoked(
                     "session authority was revoked", subtype="authority_revoked",
@@ -237,31 +244,6 @@ class SessionTable:
             s = self.get(session_id)
             if s.state not in TERMINAL:
                 s.state = SessionState.CLOSED
-            return s
-
-    def set_deadline(self, session_id: str, deadline_at: float) -> Session:
-        """Move a live session's deadline (a lease renewal), under the table lock.
-
-        Never revives: a closed or revoked session, or one already past its deadline, is
-        refused (an expired one is also made terminal, as ``admit_call`` would). Host-side
-        only; no wire tool reaches it.
-        """
-        if not isinstance(deadline_at, (int, float)) or not math.isfinite(deadline_at):
-            raise SchemaViolation("deadline_at must be finite", subtype="deadline_invalid")
-        with self._lock:
-            s = self.get(session_id)
-            if s.state in TERMINAL:
-                raise Unauthenticated(
-                    f"session is {s.state.value}; its deadline cannot be moved",
-                    subtype="session_closed", remedy="open a new session",
-                )
-            if self._clock() >= s.deadline_at:
-                s.state = SessionState.CLOSED
-                raise DeadlineExceeded(
-                    "the session had already expired", subtype="deadline_exceeded",
-                    remedy="open a new session",
-                )
-            s.deadline_at = float(deadline_at)
             return s
 
     def revoke(self, session_id: str) -> Session:

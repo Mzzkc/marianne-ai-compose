@@ -194,3 +194,29 @@ def test_unknown_permission_name_is_schema_violation() -> None:
     sid = open_one(t)
     with pytest.raises(SchemaViolation):
         t.admit_call(sid, "fly")
+
+
+def test_ended_flag_refuses_every_call_before_anything_else() -> None:
+    import threading
+
+    clk = Clock()
+    t = SessionTable(clock=clk)
+    ended = threading.Event()
+    sid = open_one(t, ended=ended, permissions=("read",), deadline_at=1e15)
+    t.admit_call(sid, "read")
+    ended.set()
+    for perm in ("read", "write"):  # refused as "closed", not as a permission problem
+        with pytest.raises(Unauthenticated) as info:
+            t.admit_call(sid, perm)
+        assert info.value.subtype == "session_closed"
+    assert t.get(sid).call_count == 1
+
+
+def test_session_without_a_flag_still_uses_its_deadline() -> None:
+    clk = Clock()
+    t = SessionTable(clock=clk)
+    sid = open_one(t, deadline_at=1010.0)
+    t.admit_call(sid, "read")
+    clk.now = 1010.0
+    with pytest.raises(DeadlineExceeded):
+        t.admit_call(sid, "read")
