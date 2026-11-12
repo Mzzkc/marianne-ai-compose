@@ -674,7 +674,7 @@ def test_two_closes_of_one_session_write_one_sealed_row(short_tmp: Path) -> None
             time.sleep(0.2)
             return real(s)
 
-        gw.sessions.close_if_live = slow  # type: ignore[method-assign]
+        gw.sessions.close_if_live = slow  # type: ignore[method-assign,assignment]
         threads = [threading.Thread(target=gw.close_session, args=(sid,)) for _ in range(2)]
         for t in threads:
             t.start()
