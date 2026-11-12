@@ -196,6 +196,7 @@ class RecallItem(TypedDict):
     asserted_at: float
     evidence_locator: str
     status: str
+    explaining_path: NotRequired[dict[str, object]]
 
 
 class RecallResult(TypedDict):
