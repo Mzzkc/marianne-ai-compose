@@ -996,7 +996,7 @@ class JobManager:
             user=_memory_user(),
         )
         self._baton_adapter.set_memory_gate(self._memory_gate)
-        self._memory_gate.sweep_stale()  # sockets a SIGKILLed conductor left behind
+        await self._memory_gate.sweep_stale()  # sockets a SIGKILLed conductor left behind
 
         # Populate per-model concurrency from instrument profiles. Boot and
         # reload share this exact mechanism (#408) so the caps lifecycle

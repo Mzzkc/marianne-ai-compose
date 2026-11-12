@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import stat
@@ -593,7 +594,7 @@ def test_sweep_stale_removes_only_unbound_sockets_in_our_s_dir(short_tmp: Path) 
         gate.register_job("j", two())
         live = await gate.prepare("j", SHEET, "d1", deadline())
         assert live is not None
-        removed = gate.sweep_stale()
+        removed = await gate.sweep_stale()
         assert removed == 1
         names = sorted(p.name for p in sdir.iterdir())
         assert "s_dead0000000000a.sock" not in names
@@ -606,7 +607,7 @@ def test_sweep_stale_removes_only_unbound_sockets_in_our_s_dir(short_tmp: Path) 
 
 def test_sweep_stale_without_run_dir_or_s_dir_is_a_noop(short_tmp: Path) -> None:
     async def body(gate: MemoryDispatchGate) -> None:
-        assert gate.sweep_stale() == 0
+        assert await gate.sweep_stale() == 0
 
     drive(short_tmp, body)
 
@@ -776,5 +777,104 @@ def test_deregister_removes_stale_dispatch_dirs_but_not_live_or_symlinks(short_t
         assert not stale.exists()
         assert (root / "linked").is_symlink() and (target / "keep.txt").exists()
         assert not again.mcp_config_path.exists()  # its own dispatch was torn down first
+
+    drive(short_tmp, body)
+
+
+# ------------------------------------------------------------------ D3: bounded shutdown
+
+
+def test_shutdown_does_not_wait_for_a_caller_task_that_outlives_prepare(short_tmp: Path) -> None:
+    async def main() -> None:
+        gate = make(short_tmp)
+        gate.register_job("j", two())
+        _slow_open(gate, 1, 0.2)
+
+        async def caller() -> None:
+            with contextlib.suppress(MemoryGateError):
+                await gate.prepare("j", SHEET, "d1", deadline())
+            await asyncio.sleep(30)  # the caller (the baton loop) lives on
+
+        task = asyncio.create_task(caller())
+        await asyncio.sleep(0.05)
+        t0 = time.monotonic()
+        await asyncio.wait_for(gate.shutdown(), 5)
+        assert time.monotonic() - t0 < 4
+        assert not task.done()  # shutdown never cancelled or awaited the caller
+        task.cancel()
+        assert _live_gateway_sessions(gate) == 0 and sockets(short_tmp) == []
+
+    asyncio.run(asyncio.wait_for(main(), T))
+
+
+def test_shutdown_does_not_wait_for_a_caller_that_tore_down_inline(short_tmp: Path) -> None:
+    async def main() -> None:
+        gate = make(short_tmp)
+        gate.register_job("j", two())
+        d = await gate.prepare("j", SHEET, "d1", deadline())
+        assert d is not None
+
+        async def caller() -> None:
+            await gate.teardown("j", "d1")
+            await asyncio.sleep(30)
+
+        task = asyncio.create_task(caller())
+        await asyncio.sleep(0.05)
+        t0 = time.monotonic()
+        await asyncio.wait_for(gate.shutdown(), 5)
+        assert time.monotonic() - t0 < 4 and not task.done()
+        task.cancel()
+
+    asyncio.run(asyncio.wait_for(main(), T))
+
+
+def test_shutdown_returns_within_its_bound_with_a_stuck_job_and_reports_it(
+    short_tmp: Path,
+) -> None:
+    import threading
+
+    async def main() -> None:
+        run = short_tmp / "run"
+        run.mkdir(mode=0o700)
+        gate = MemoryDispatchGate(
+            run_dir=run, memory_root=short_tmp / "files", audit_dir=short_tmp / "audit",
+            user="ada", shutdown_bound_seconds=0.5,
+        )
+        release = threading.Event()
+        try:
+            gate.register_job("j", two())
+            d = await gate.prepare("j", SHEET, "d1", deadline())
+            assert d is not None
+            gate._submit(release.wait, 10)  # a stuck worker job ahead of every close
+            t0 = time.monotonic()
+            report = await asyncio.wait_for(gate.shutdown(), 5)
+            assert time.monotonic() - t0 < 3
+            assert any("still pending" in e for e in report.errors)
+        finally:
+            release.set()
+
+    asyncio.run(asyncio.wait_for(main(), T))
+
+
+# ------------------------------------------------------------------ D4: listening sockets survive
+
+
+def test_sweep_stale_keeps_a_listening_socket_not_bound_by_this_gate(short_tmp: Path) -> None:
+    import socket
+
+    async def body(gate: MemoryDispatchGate) -> None:
+        sdir = short_tmp / "run" / "s"
+        sdir.mkdir(mode=0o700)
+        listening = socket.socket(socket.AF_UNIX)
+        listening.bind(str(sdir / "s_listening00000a.sock"))
+        listening.listen(1)
+        _stale_socket(sdir / "s_dead000000000b.sock")
+        try:
+            assert await gate.sweep_stale() == 1
+            names = {p.name for p in sdir.iterdir()}
+            assert "s_listening00000a.sock" in names  # alive: must survive
+            assert "s_dead000000000b.sock" not in names
+        finally:
+            listening.close()
 
     drive(short_tmp, body)

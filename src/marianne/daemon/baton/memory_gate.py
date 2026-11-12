@@ -673,11 +673,14 @@ class MemoryDispatchGate:
 
     # ------------------------------------------------------------ stale files (SIGKILL)
 
-    def sweep_stale(self, run_dir: Path | str | None = None) -> int:
+    async def sweep_stale(self, run_dir: Path | str | None = None) -> int:
+        """Run :meth:`_sweep_sockets` on the worker (never on the loop); returns how many."""
+        return int(await self._run(self._sweep_sockets, run_dir))
+
+    def _sweep_sockets(self, run_dir: Path | str | None = None) -> int:
         """Unlink socket files left in ``<run_dir>/s`` by a dead process; returns how many.
 
-        Call once at conductor start, before any dispatch. Runs inline (it is startup, and
-        nothing else can be on the worker yet) through a descriptor held on the ``s``
+        Call once at conductor start. Runs as a worker job, through a descriptor held on the ``s``
         directory (``O_NOFOLLOW``, owned by us). It considers only ``s_*.sock`` that are
         real sockets we own and that this process does not hold, and removes one only when
         a non-blocking connect is refused. The probe connect is closed at once; it never
@@ -803,9 +806,13 @@ class MemoryDispatchGate:
         self._closed = True
         if self._endpoint is not None:
             try:
-                for sid, left_calls in (await self._endpoint.close()).items():
+                remaining = max(deadline - asyncio.get_running_loop().time(), 0.1)
+                closed = await asyncio.wait_for(self._endpoint.close(), remaining)
+                for sid, left_calls in closed.items():
                     in_flight += left_calls
                     errors.append(f"session {sid}: {left_calls} call(s) still running")
+            except TimeoutError:
+                errors.append("endpoint close did not finish within the shutdown bound")
             except Exception as exc:  # noqa: BLE001 — shutdown reports, never raises
                 errors.append(f"endpoint close: {_reason(exc)}")
         if self._executor is not None:
