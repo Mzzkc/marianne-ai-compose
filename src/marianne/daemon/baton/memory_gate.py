@@ -225,6 +225,8 @@ class MemoryDispatchGate:
         self._open: dict[tuple[str, str], _Open] = {}
         self._background: set[asyncio.Task[Any]] = set()
         self._closed = False
+        self._closing = False
+        self._preparing: set[asyncio.Task[Any]] = set()
 
     def now(self) -> float:
         return self._clock()
@@ -267,7 +269,7 @@ class MemoryDispatchGate:
     # ------------------------------------------------------------ prepare
 
     def _ensure(self) -> tuple[Gateway, MemoryEndpoint]:
-        if self._closed:
+        if self._closed or self._closing:
             raise MemoryGateError("(gate)", "the memory gate is shut down")
         if self._gateway is None or self._endpoint is None:
             self._run_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
@@ -316,12 +318,25 @@ class MemoryDispatchGate:
             raise MemoryGateError(bindings[0].name, "the dispatch deadline has already passed")
         entry = _Open(job_id)
         self._open[key] = entry
+        task = asyncio.current_task()
+        if task is not None:
+            self._preparing.add(task)
         opened: list[OpenedSession] = []
         current = bindings[0].name
+
+        def still_ours() -> None:
+            # Every await below can let deregister_job or shutdown run; ownership is
+            # re-proved after each one, never assumed.
+            if self._closing or self._closed:
+                raise MemoryGateError(current, "the memory gate is shutting down")
+            if self._open.get(key) is not entry:
+                raise MemoryGateError(current, "the job was deregistered while memory opened")
+
         try:
             gateway, endpoint = self._ensure()
             for b in bindings:
                 current = b.name
+                still_ours()
                 self._register_backend(gateway, b)
                 access = parse_access(b.access)
                 session, path = await endpoint.open_session(
@@ -335,23 +350,52 @@ class MemoryDispatchGate:
                         lock_timeout_seconds=b.lock_timeout_seconds,
                     ),
                 )
-                entry.session_ids.append(session.session_id)
                 opened.append(OpenedSession(b.name, session.session_id, path))
+                entry.session_ids.append(session.session_id)
+                still_ours()
+            by_name = {s.attachment: s for s in opened}
+            entries: dict[str, dict[str, Any]] = {}
+            for b in bindings:
+                key_name, value = mcp_config_entry(
+                    b, by_name[b.name].socket_path, budget_seconds=b.lock_timeout_seconds,
+                )
+                entries[key_name] = value
+            return MemoryDelivery(render_manifest(bindings), entries, tuple(opened))
         except BaseException as exc:
-            await asyncio.shield(self.teardown(job_id, dispatch_id))
+            # Close what this call opened even when someone else already took the entry.
+            await asyncio.shield(self._close_sessions([s.session_id for s in opened]))
+            await asyncio.shield(self.teardown(job_id, dispatch_id, only=entry))
             if isinstance(exc, MemoryGateError):
                 raise
             if isinstance(exc, Exception):
                 raise MemoryGateError(current, _reason(exc)) from exc
             raise
-        by_name = {s.attachment: s for s in opened}
-        entries: dict[str, dict[str, Any]] = {}
-        for b in bindings:
-            key_name, value = mcp_config_entry(
-                b, by_name[b.name].socket_path, budget_seconds=b.lock_timeout_seconds,
-            )
-            entries[key_name] = value
-        return MemoryDelivery(render_manifest(bindings), entries, tuple(opened))
+        finally:
+            if task is not None:
+                self._preparing.discard(task)
+
+    async def _close_sessions(self, session_ids: list[str]) -> tuple[int, list[str]]:
+        """Close sessions idempotently; returns (calls still running, error texts)."""
+        in_flight = 0
+        errors: list[str] = []
+        endpoint, gateway = self._endpoint, self._gateway
+        for sid in session_ids:
+            try:
+                if endpoint is None:
+                    raise RuntimeError("endpoint missing")
+                in_flight += await endpoint.close_session(sid)
+            except BaseException as exc:  # noqa: BLE001 — teardown must not raise into the caller
+                errors.append(f"close_session {sid}: {_reason(exc)}")
+                try:
+                    if endpoint is not None:
+                        await endpoint.unbind(sid)
+                    if gateway is not None:
+                        gateway.close_session(sid)
+                except BaseException as exc2:  # noqa: BLE001 — recorded, teardown continues
+                    errors.append(f"fallback close {sid}: {_reason(exc2)}")
+                if isinstance(exc, asyncio.CancelledError):
+                    errors.append("teardown cancelled")
+        return in_flight, errors
 
     def merge_config(
         self, job_id: str, dispatch_id: str, delivery: MemoryDelivery,
@@ -411,30 +455,15 @@ class MemoryDispatchGate:
 
     # ------------------------------------------------------------ teardown
 
-    async def teardown(self, job_id: str, dispatch_id: str) -> TeardownReport:
+    async def teardown(
+        self, job_id: str, dispatch_id: str, *, only: _Open | None = None,
+    ) -> TeardownReport:
         """Close sockets and sessions and remove the config file. Idempotent; never raises."""
-        entry = self._open.pop((job_id, dispatch_id), None)
-        if entry is None:
+        entry = self._open.get((job_id, dispatch_id))
+        if entry is None or (only is not None and entry is not only):
             return TeardownReport()
-        in_flight = 0
-        errors: list[str] = []
-        endpoint, gateway = self._endpoint, self._gateway
-        for sid in entry.session_ids:
-            try:
-                if endpoint is None:
-                    raise RuntimeError("endpoint missing")
-                in_flight += await endpoint.close_session(sid)
-            except BaseException as exc:  # noqa: BLE001 — teardown must not raise into the caller
-                errors.append(f"close_session {sid}: {_reason(exc)}")
-                try:
-                    if endpoint is not None:
-                        await endpoint.unbind(sid)
-                    if gateway is not None:
-                        gateway.close_session(sid)
-                except BaseException as exc2:  # noqa: BLE001 — recorded, teardown continues
-                    errors.append(f"fallback close {sid}: {_reason(exc2)}")
-                if isinstance(exc, asyncio.CancelledError):
-                    errors.append("teardown cancelled")
+        del self._open[(job_id, dispatch_id)]
+        in_flight, errors = await self._close_sessions(list(entry.session_ids))
         if entry.config_path is not None:
             try:
                 entry.config_path.unlink()
@@ -455,7 +484,10 @@ class MemoryDispatchGate:
 
     async def shutdown(self) -> TeardownReport:
         """Close every dispatch and the endpoint. Called when the conductor stops."""
+        self._closing = True  # first: no new prepare starts, in-flight ones unwind
         await self.drain()
+        if self._preparing:
+            await asyncio.gather(*list(self._preparing), return_exceptions=True)
         in_flight = 0
         errors: list[str] = []
         for job_id, dispatch_id in list(self._open):

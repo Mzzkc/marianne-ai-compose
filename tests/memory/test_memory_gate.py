@@ -345,3 +345,86 @@ def test_can_deliver_refuses_cli_instrument() -> None:
 def test_can_deliver_refuses_backend_without_setter_and_missing_profile() -> None:
     assert "set_mcp_config" in (can_deliver(object(), profile("claude-code")) or "")
     assert can_deliver(_WithSetter(), None) is not None
+
+
+# ------------------------------------------------------------------ F1: orphaned sessions
+
+
+def _live_gateway_sessions(gate: MemoryDispatchGate) -> int:
+    assert gate._gateway is not None
+    return sum(
+        1 for s in gate._gateway.sessions._sessions.values()
+        if s.state.value.lower() not in ("closed", "revoked", "expired")
+    )
+
+
+async def _slow_second_open(gate: MemoryDispatchGate) -> None:
+    endpoint = gate._ensure()[1]
+    real = endpoint.open_session
+    calls = {"n": 0}
+
+    async def slow(**kw: Any) -> Any:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            await asyncio.sleep(0.3)
+        return await real(**kw)
+
+    endpoint.open_session = slow  # type: ignore[method-assign]
+
+
+async def _deliver(gate: MemoryDispatchGate, root: Path) -> Any:
+    return await gate.deliver(
+        "j", SHEET, timeout_seconds=30, existing_mcp_config=None, workspace=root / "ws",
+    )
+
+
+@pytest.mark.parametrize("how", ["deregister", "shutdown"])
+def test_deregister_or_shutdown_mid_open_leaves_nothing(short_tmp: Path, how: str) -> None:
+    async def body(gate: MemoryDispatchGate) -> None:
+        gate.register_job("j", two())
+        await _slow_second_open(gate)
+        task = asyncio.create_task(_deliver(gate, short_tmp))
+        await asyncio.sleep(0.15)  # the second open_session is in flight
+        if how == "deregister":
+            gate.deregister_job("j")
+        else:
+            await gate.shutdown()
+        with pytest.raises(MemoryGateError):
+            await asyncio.wait_for(task, T)
+        await gate.drain()
+        endpoint = gate._endpoint
+        assert endpoint is not None
+        assert endpoint._bound == {}
+        assert sockets(short_tmp) == []
+        assert _live_gateway_sessions(gate) == 0
+        assert gate.open_dispatches == 0
+
+    drive(short_tmp, body)
+
+
+def test_prepare_refused_once_shutdown_has_begun(short_tmp: Path) -> None:
+    async def body(gate: MemoryDispatchGate) -> None:
+        gate.register_job("j", two())
+        await gate.shutdown()
+        with pytest.raises(MemoryGateError):
+            await gate.prepare("j", SHEET, "dX", deadline())
+        assert sockets(short_tmp) == []
+
+    drive(short_tmp, body)
+
+
+def test_entry_build_failure_tears_down(short_tmp: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import marianne.daemon.baton.memory_gate as mg
+
+    def boom(*a: Any, **k: Any) -> Any:
+        raise _Boom("entry failed")
+
+    async def body(gate: MemoryDispatchGate) -> None:
+        gate.register_job("j", two())
+        monkeypatch.setattr(mg, "mcp_config_entry", boom)
+        with pytest.raises(MemoryGateError, match="entry failed"):
+            await gate.prepare("j", SHEET, "d1", deadline())
+        assert sockets(short_tmp) == [] and gate.open_dispatches == 0
+        assert _live_gateway_sessions(gate) == 0
+
+    drive(short_tmp, body)
