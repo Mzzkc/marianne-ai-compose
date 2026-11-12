@@ -2976,10 +2976,9 @@ class BatonAdapter:
         if not self._is_dispatch_registration_current(
             job_id, sheet_num, registration_token, registered_state
         ):
-            await asyncio.shield(
-                self._backend_pool.release(effective_instrument, backend)
+            await self._release_and_teardown(
+                effective_instrument, backend, job_id, memory_dispatch,
             )
-            await self._memory_teardown(job_id, memory_dispatch)
             return False
 
         if memory_dispatch is not None:
@@ -2987,10 +2986,9 @@ class BatonAdapter:
 
             refusal = can_deliver(backend, lookup_profile(self._backend_pool, effective_instrument))
             if refusal is not None:
-                await asyncio.shield(
-                    self._backend_pool.release(effective_instrument, backend)
+                await self._release_and_teardown(
+                    effective_instrument, backend, job_id, memory_dispatch,
                 )
-                await self._memory_teardown(job_id, memory_dispatch)
                 if not self._is_dispatch_registration_current(
                     job_id, sheet_num, registration_token, registered_state
                 ):
@@ -3030,10 +3028,9 @@ class BatonAdapter:
                         extra={"job_id": job_id, "sheet_num": sheet_num},
                         exc_info=True,
                     )
-            await asyncio.shield(
-                self._backend_pool.release(effective_instrument, backend)
+            await self._release_and_teardown(
+                effective_instrument, backend, job_id, memory_dispatch,
             )
-            await self._memory_teardown(job_id, memory_dispatch)
             if not self._is_dispatch_registration_current(
                 job_id, sheet_num, registration_token, registered_state
             ):
@@ -3772,6 +3769,25 @@ class BatonAdapter:
         if prepared is None:
             return None, mcp_config_path, None
         return prepared.manifest, prepared.mcp_config_path, prepared.dispatch_id
+
+    async def _release_and_teardown(
+        self, instrument: str, backend: Any, job_id: str, memory_dispatch: str | None,
+    ) -> None:
+        """Release the backend and end the memory sessions in ONE shielded task.
+
+        A cancel while this awaits cannot skip either step: the task runs to the end on
+        its own. Release goes first and is attempted even if teardown would fail.
+        """
+        pool = self._backend_pool
+
+        async def both() -> None:
+            try:
+                if pool is not None:
+                    await pool.release(instrument, backend)
+            finally:
+                await self._memory_teardown(job_id, memory_dispatch)
+
+        await asyncio.shield(asyncio.ensure_future(both()))
 
     def _memory_backstop(self, job_id: str, memory_dispatch: str) -> None:
         gate = getattr(self, "_memory_gate", None)

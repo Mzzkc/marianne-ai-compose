@@ -339,3 +339,47 @@ async def test_memory_block_reaches_prompt_without_a_renderer(short_tmp: Path) -
         assert backend.prompt.count("Memory Available This Phase") == 1
     finally:
         await gate.shutdown()
+
+
+# ------------------------------------------------------------------ F6: cancel at the release await
+
+
+class _BlockingReleasePool(_BackendPool):
+    def __init__(self, backend: Any, registry: Any) -> None:
+        super().__init__(backend, registry)
+        self.release_started = asyncio.Event()
+        self.release_gate = asyncio.Event()
+
+    async def release(self, *args: Any, **kwargs: Any) -> None:
+        self.release_started.set()
+        await self.release_gate.wait()
+        self.release_calls.append((args, kwargs))
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(30)
+async def test_cancel_at_release_await_still_releases_once_and_tears_down(
+    short_tmp: Path,
+) -> None:
+    gate = make(short_tmp)
+    backend = _Recording()
+    pool = _BlockingReleasePool(backend, _Registry(profile("cli")))  # cli: delivery refused
+    adapter = _adapter(pool, gate, short_tmp, memory=True)
+    state = adapter.baton._jobs["mem-job"].sheets[1]
+    try:
+        call = asyncio.create_task(adapter._dispatch_callback("mem-job", 1, state))
+        await asyncio.wait_for(pool.release_started.wait(), 10)
+        assert gate.open_dispatches == 1
+        call.cancel()
+        await asyncio.sleep(0)
+        pool.release_gate.set()  # the shielded release may now finish
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(call, 10)
+        for _ in range(200):  # the shielded task finishes on its own; bounded, event-driven
+            if gate.open_dispatches == 0 and pool.release_calls:
+                break
+            await asyncio.sleep(0.01)
+        assert len(pool.release_calls) == 1
+        assert gate.open_dispatches == 0 and _sockets(short_tmp) == []
+    finally:
+        await gate.shutdown()
