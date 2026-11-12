@@ -250,10 +250,10 @@ def test_teardown_never_raises_and_reports(short_tmp: Path) -> None:
             raise _Boom("close failed")
 
         real = endpoint.close_session
-        endpoint.close_session = bad  # type: ignore[method-assign]
+        endpoint.close_session = bad  # type: ignore[method-assign,assignment]
         report = await gate.teardown("j", "d1")
         assert not report.clean and "close failed" in report.errors[0]
-        endpoint.close_session = real  # type: ignore[method-assign,assignment]
+        endpoint.close_session = real  # type: ignore[method-assign]
         assert sockets(short_tmp) == []  # the fallback unbound them anyway
 
     drive(short_tmp, body)
@@ -524,7 +524,7 @@ def test_same_attachment_two_jobs_each_keep_their_own_policy(
         with pytest.raises(MemoryBackendError):  # required: a bare declare is refused
             gw.declare(sids["required"], "no evidence")
         gw.declare(sids["optional"], "no evidence is fine here")  # optional: accepted
-        backends = list(gw._backends.values())
+        backends: list[Any] = list(gw._backends.values())
         assert sorted(b._cfg.recall_cap_bytes for b in backends) == [2048, 8192]
         assert sorted(b._cfg.provenance for b in backends) == ["optional", "required"]
 

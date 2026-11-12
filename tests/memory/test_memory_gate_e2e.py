@@ -8,6 +8,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -76,7 +77,8 @@ def test_shim_from_generated_entry_declares_recalls_then_fails_after_teardown(
 
                 resp = await asyncio.wait_for(asyncio.to_thread(after), 30)
                 # A clean failure: a structured error, not a hang and not a crash.
-                failed = "error" in resp or resp["result"]["isError"] is True
+                result: Any = resp.get("result")
+                failed = "error" in resp or (result is not None and result["isError"] is True)
                 assert failed, resp
             finally:
                 await asyncio.to_thread(sp.close)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -27,6 +28,7 @@ from tests.test_mcp_conductor_dispatch import (
     _sheet,
 )
 
+SRC_ROOT = Path(__file__).resolve().parents[2]
 MEMORY = MemoryConfig.model_validate({"backends": {
     "notes": {"system": "files", "scope": "project/demo"}}})
 
@@ -63,16 +65,49 @@ class _Recording(_BackendWithMcpConfig):
 class _TrackedGate(MemoryDispatchGate):
     teardowns = 0
 
-    async def teardown(self, job_id: str, dispatch_id: str) -> Any:
+    async def teardown(
+        self, job_id: str, dispatch_id: str, *, only: Any = None,
+    ) -> Any:
         type(self).teardowns += 1
-        return await super().teardown(job_id, dispatch_id)
+        return await super().teardown(job_id, dispatch_id, only=only)
 
 
-class _ForbiddenGate:
-    """Any use at all fails the test."""
+class _RecordingGate(MemoryDispatchGate):
+    """A real gate that records every public call made to it."""
 
-    def __getattr__(self, name: str) -> Any:
-        raise AssertionError(f"gate touched: {name}")
+    def __init__(self, *a: Any, **k: Any) -> None:
+        super().__init__(*a, **k)
+        self.calls: list[str] = []
+
+    def register_job(self, *a: Any, **k: Any) -> None:
+        self.calls.append("register_job")
+        super().register_job(*a, **k)
+
+    def deregister_job(self, *a: Any, **k: Any) -> None:
+        self.calls.append("deregister_job")
+        super().deregister_job(*a, **k)
+
+    async def deliver(self, *a: Any, **k: Any) -> Any:
+        self.calls.append("deliver")
+        return await super().deliver(*a, **k)
+
+    async def prepare(self, *a: Any, **k: Any) -> Any:
+        self.calls.append("prepare")
+        return await super().prepare(*a, **k)
+
+    def arm_deadline(self, *a: Any, **k: Any) -> None:
+        self.calls.append("arm_deadline")
+        super().arm_deadline(*a, **k)
+
+    async def teardown(
+        self, job_id: str, dispatch_id: str, *, only: Any = None,
+    ) -> Any:
+        self.calls.append("teardown")
+        return await super().teardown(job_id, dispatch_id, only=only)
+
+    def schedule_teardown(self, *a: Any, **k: Any) -> None:
+        self.calls.append("schedule_teardown")
+        super().schedule_teardown(*a, **k)
 
 
 def _adapter(
@@ -112,14 +147,57 @@ async def _complete(adapter: BatonAdapter, job: str) -> None:
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
 async def test_job_without_memory_never_touches_the_gate(short_tmp: Path) -> None:
+    gate = _RecordingGate(
+        run_dir=short_tmp / "run", memory_root=short_tmp / "files",
+        audit_dir=short_tmp / "audit", user="ada",
+    )
     backend = _Recording()
     pool = _BackendPool(backend, _Registry(profile("claude-code")))
-    adapter = _adapter(pool, _ForbiddenGate(), short_tmp, memory=False)
-    adapter._memory_gate = _ForbiddenGate()  # type: ignore[assignment]
+    adapter = _adapter(pool, gate, short_tmp, memory=False)
     await _complete(adapter, "mem-job")
+    adapter.deregister_job("mem-job")
     assert backend.prompt is not None and "Memory Available" not in backend.prompt
     assert backend.set_calls == [None]  # only the existing cleanup detach; nothing attached
-    adapter.deregister_job("mem-job")  # also gate-free
+    assert gate.calls == []  # not one call, including register/deregister
+    assert gate._gateway is None and gate._endpoint is None and gate._audit is None
+    assert not (short_tmp / "audit").exists() and not (short_tmp / "run" / "s").exists()
+
+
+def test_no_memory_dispatch_imports_no_memory_module() -> None:
+    """In a fresh interpreter, a dispatch for a job without `memory:` imports no memory code."""
+    import subprocess
+    import sys
+    import textwrap
+
+    code = textwrap.dedent('''
+        import asyncio, sys, tempfile
+        from pathlib import Path
+        from unittest.mock import AsyncMock, MagicMock
+        from marianne.daemon.baton.adapter import BatonAdapter
+        from marianne.core.sheet import Sheet
+        before = {m for m in sys.modules if m.startswith("marianne.memory")
+                  or m == "marianne.daemon.baton.memory_gate"}
+        ws = Path(tempfile.mkdtemp())
+        pool = MagicMock(); pool.acquire = AsyncMock(side_effect=RuntimeError("stop"))
+        a = BatonAdapter(max_concurrent_sheets=1); a.set_backend_pool(pool)
+        sheet = Sheet(num=1, movement=1, voice=None, voice_count=1, instrument_name="x",
+                      instrument_config={}, workspace=ws, prompt_template="p", timeout_seconds=5)
+        a.register_job("j", [sheet], {1: []})
+        state = a.baton._jobs["j"].sheets[1]
+        asyncio.run(a._dispatch_callback("j", 1, state))
+        a.deregister_job("j")
+        after = {m for m in sys.modules if m.startswith("marianne.memory")
+                 or m == "marianne.daemon.baton.memory_gate"}
+        print(sorted(after - before))
+        assert "marianne.daemon.baton.memory_gate" not in sys.modules
+        assert "marianne.memory.gateway.endpoint" not in sys.modules
+    ''')
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join([str(SRC_ROOT / "src"), str(SRC_ROOT)])
+    done = subprocess.run(
+        [sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=60,
+    )
+    assert done.returncode == 0, done.stderr[-2000:]
 
 
 @pytest.mark.asyncio
@@ -160,7 +238,7 @@ async def test_prepare_failure_is_a_dispatch_failure_and_no_backend_is_acquired(
     try:
         await adapter._dispatch_callback("mem-job", 1, state)
         pool.acquire.assert_not_awaited()
-        failure = adapter.baton.inbox.get_nowait()
+        failure: Any = adapter.baton.inbox.get_nowait()
         assert failure.execution_success is False
         assert "Memory setup failed before backend acquisition" in failure.error_message
         assert "notes" in failure.error_message and "run_dir_unsafe" in failure.error_message
@@ -178,7 +256,7 @@ async def test_memory_job_without_a_gate_fails_the_dispatch(tmp_path: Path) -> N
     state = adapter.baton._jobs["mem-job"].sheets[1]
     await adapter._dispatch_callback("mem-job", 1, state)
     pool.acquire.assert_not_awaited()
-    failure = adapter.baton.inbox.get_nowait()
+    failure: Any = adapter.baton.inbox.get_nowait()
     assert "no memory gate" in failure.error_message
 
 
@@ -192,7 +270,7 @@ async def test_delivery_refusal_releases_backend_and_closes_sessions(short_tmp: 
     state = adapter.baton._jobs["mem-job"].sheets[1]
     try:
         await adapter._dispatch_callback("mem-job", 1, state)
-        failure = adapter.baton.inbox.get_nowait()
+        failure: Any = adapter.baton.inbox.get_nowait()
         assert failure.execution_success is False
         assert failure.error_message.startswith("memory_delivery_unsupported: ")
         assert len(pool.release_calls) == 1  # released exactly once
@@ -224,27 +302,64 @@ async def test_musician_finishing_tears_down_exactly_once(short_tmp: Path) -> No
         await gate.shutdown()
 
 
-@pytest.mark.asyncio
-@pytest.mark.timeout(30)
-async def test_musician_cancelled_still_tears_down(short_tmp: Path) -> None:
+async def _cancel_running_musician(
+    short_tmp: Path, *, finally_teardown: bool, backstop: bool,
+) -> tuple[MemoryDispatchGate, int]:
     gate = make(short_tmp)
     hold = asyncio.Event()
     backend = _Recording(hold)
     pool = _BackendPool(backend, _Registry(profile("claude-code")))
     adapter = _adapter(pool, gate, short_tmp, memory=True)
+    if not backstop:
+        adapter._memory_backstop = lambda *a, **k: None  # type: ignore[method-assign]
+    if not finally_teardown:
+        async def no_teardown(*a: Any, **k: Any) -> None:
+            return None
+
+        adapter._memory_teardown = no_teardown  # type: ignore[method-assign]
     state = adapter.baton._jobs["mem-job"].sheets[1]
+    assert await adapter._dispatch_callback("mem-job", 1, state) is True
+    task = adapter._active_tasks[("mem-job", 1)]
+    await asyncio.wait_for(backend.started.wait(), 10)
+    assert gate.open_dispatches == 1 and len(_sockets(short_tmp)) == 1
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, 10)
+    await gate.drain()
+    return gate, len(pool.release_calls)
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(30)
+async def test_cancelled_musician_finally_path_alone_tears_down(short_tmp: Path) -> None:
+    gate, releases = await _cancel_running_musician(
+        short_tmp, finally_teardown=True, backstop=False,
+    )
     try:
-        assert await adapter._dispatch_callback("mem-job", 1, state) is True
-        task = adapter._active_tasks[("mem-job", 1)]
-        await asyncio.wait_for(backend.started.wait(), 10)
-        assert gate.open_dispatches == 1 and len(_sockets(short_tmp)) == 1
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await asyncio.wait_for(task, 10)
+        assert gate.open_dispatches == 0 and _sockets(short_tmp) == []
+        assert releases == 1
+    finally:
+        await gate.shutdown()
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(30)
+async def test_cancelled_musician_backstop_alone_tears_down(short_tmp: Path) -> None:
+    gate, _ = await _cancel_running_musician(short_tmp, finally_teardown=False, backstop=True)
+    try:
         await gate.drain()
         assert gate.open_dispatches == 0 and _sockets(short_tmp) == []
-        assert len(pool.release_calls) == 1
-        assert backend.set_calls[-1] is None
+    finally:
+        await gate.shutdown()
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(30)
+async def test_cancelled_musician_with_neither_path_leaks(short_tmp: Path) -> None:
+    """Control: proves the two tests above can fail."""
+    gate, _ = await _cancel_running_musician(short_tmp, finally_teardown=False, backstop=False)
+    try:
+        assert gate.open_dispatches == 1
     finally:
         await gate.shutdown()
 
@@ -316,7 +431,7 @@ async def test_memory_block_reaches_prompt_with_techniques_template(short_tmp: P
     backend = _Recording()
     pool = _BackendPool(backend, _Registry(profile("claude-code")))
     adapter = BatonAdapter(max_concurrent_sheets=1)
-    adapter.set_backend_pool(pool)
+    adapter.set_backend_pool(pool)  # type: ignore[arg-type]
     adapter.set_memory_gate(gate)
     sheet = _sheet(short_tmp).model_copy(update={"prompt_template": "## Techniques Available\nx"})
     adapter.register_job(
@@ -386,5 +501,45 @@ async def test_cancel_at_release_await_still_releases_once_and_tears_down(
             await asyncio.sleep(0.01)
         assert len(pool.release_calls) == 1
         assert gate.open_dispatches == 0 and _sockets(short_tmp) == []
+    finally:
+        await gate.shutdown()
+
+
+# ------------------------------------------------------------------ techniques AND memory
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(30)
+async def test_job_with_technique_mcp_and_memory_gets_both_in_one_config(
+    short_tmp: Path,
+) -> None:
+    from marianne.core.config.techniques import TechniqueConfig, TechniqueKind
+    from tests.test_mcp_conductor_dispatch import _McpPool
+
+    gate = make(short_tmp)
+    backend = _Recording()
+    pool = _BackendPool(backend, _Registry(profile("claude-code")))
+    mcp_pool = _McpPool()
+    adapter = BatonAdapter(max_concurrent_sheets=1)
+    adapter.set_backend_pool(pool)  # type: ignore[arg-type]
+    adapter.set_mcp_pool(mcp_pool)  # type: ignore[arg-type]
+    adapter.set_memory_gate(gate)
+    ws = short_tmp / "ws"
+    ws.mkdir()
+    adapter.register_job(
+        "mem-job", [_sheet(ws)], {1: []}, prompt_config=PromptConfig(template="x"),
+        techniques={"filesystem": TechniqueConfig(
+            kind=TechniqueKind.MCP, phases=["all"], config={"server": "filesystem"},
+        )},
+        memory=MEMORY,
+    )
+    try:
+        await _complete(adapter, "mem-job")
+        assert backend.config_json is not None
+        assert set(backend.config_json["mcpServers"]) == {"filesystem", "memory-notes"}
+        assert mcp_pool.calls == [(ws, ["filesystem"])]  # the technique path still ran
+        assert backend.config_json["mcpServers"]["filesystem"]["command"] == "proxy"
+        assert (ws / ".mcp-pool-config.json").exists()  # the technique's own file is untouched
+        assert gate.open_dispatches == 0
     finally:
         await gate.shutdown()
