@@ -37,6 +37,7 @@ import contextlib
 import hashlib
 import json
 import os
+import queue
 import shutil
 import stat
 import tempfile
@@ -44,7 +45,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable, Mapping
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future as ConcurrentFuture
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -140,6 +141,38 @@ class PreparedMemory:
 class _Registration:
     config: MemoryConfig
     movement_names: dict[int, str]
+
+
+class _Worker:
+    """One ordered worker thread. A daemon thread, so a job stuck at interpreter exit cannot
+    hold the process (a ``ThreadPoolExecutor`` thread is joined at exit)."""
+
+    def __init__(self) -> None:
+        self._queue: queue.SimpleQueue[tuple[ConcurrentFuture[Any], Callable[..., Any], tuple[Any, ...]] | None] = queue.SimpleQueue()  # noqa: E501
+        self._thread = threading.Thread(target=self._loop, name="memory-gate", daemon=True)
+        self._thread.start()
+
+    def submit(self, fn: Callable[..., Any], *args: Any) -> ConcurrentFuture[Any]:
+        fut: ConcurrentFuture[Any] = ConcurrentFuture()
+        self._queue.put((fut, fn, args))
+        return fut
+
+    def stop(self) -> None:
+        """Let the thread end after the jobs already queued; never waits for it."""
+        self._queue.put(None)
+
+    def _loop(self) -> None:
+        while True:
+            item = self._queue.get()
+            if item is None:
+                return
+            fut, fn, args = item
+            if not fut.set_running_or_notify_cancel():
+                continue
+            try:
+                fut.set_result(fn(*args))
+            except BaseException as exc:  # noqa: BLE001 — handed to the awaiter
+                fut.set_exception(exc)
 
 
 class _BackendRef:
@@ -337,7 +370,7 @@ class MemoryDispatchGate:
         self._gateway: Gateway | None = None
         self._endpoint: MemoryEndpoint | None = None
         self._audit: AuditLog | None = None
-        self._executor: ThreadPoolExecutor | None = None
+        self._worker: _Worker | None = None
         self._backend_refs: dict[str, int] = {}  # backend key -> references held
         self._session_backend: dict[str, _BackendRef] = {}  # session id -> its backend reference
         self._jobs: dict[str, _Registration] = {}
@@ -357,19 +390,24 @@ class MemoryDispatchGate:
         """Queue ``fn`` on the single worker. The returned future is completed ON THE LOOP.
 
         Cancelling the future does not cancel the job; it runs to the end, and callbacks
-        added with ``_on_done`` still fire.
+        added with ``_on_done`` still fire. After shutdown it returns an already-failed
+        future and never raises. Its exception is always retrieved, so none goes unreported.
         """
         loop = asyncio.get_running_loop()
-        if self._executor is None:
-            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="memory-gate")
         outer: asyncio.Future[Any] = loop.create_future()
+        outer.add_done_callback(lambda f: f.cancelled() or f.exception())  # mark retrieved
+        if self._closed:  # checked BEFORE _pending is touched
+            outer.set_exception(MemoryGateError("(gate)", "the memory gate is shut down"))
+            return outer
+        if self._worker is None:
+            self._worker = _Worker()
         self._pending.add(outer)
         outer.add_done_callback(self._pending.discard)
-        inner = self._executor.submit(fn, *args)
+        inner = self._worker.submit(fn, *args)
 
         def finished(f: Any) -> None:
             def apply() -> None:
-                if outer.cancelled():
+                if outer.done():  # cancelled, or failed by shutdown
                     return
                 exc = f.exception()
                 if exc is not None:
@@ -383,9 +421,22 @@ class MemoryDispatchGate:
         inner.add_done_callback(finished)
         return outer
 
-    async def _run(self, fn: Callable[..., Any], *args: Any) -> Any:
-        """Await a worker job, shielded: cancelling the caller never cancels the job."""
-        return await asyncio.shield(self._submit(fn, *args))
+    def _remove_dir_now_or_queued(self, ddir: Path) -> asyncio.Future[Any] | None:
+        """Remove one dispatch dir via the worker, or inline (best effort) after shutdown."""
+        if not self._closed:
+            return self._submit(_remove_dispatch_dir, ddir)
+        with contextlib.suppress(Exception):
+            _remove_dispatch_dir(ddir)
+        return None
+
+    def _run(self, fn: Callable[..., Any], *args: Any) -> asyncio.Future[Any]:
+        """Await-able worker job, shielded: cancelling the caller never cancels the job.
+
+        A future, not a coroutine: no wrapper task exists whose failure could go unretrieved.
+        """
+        shielded = asyncio.shield(self._submit(fn, *args))
+        shielded.add_done_callback(lambda f: f.cancelled() or f.exception())  # mark retrieved
+        return shielded
 
     # ------------------------------------------------------------ registration
 
@@ -427,7 +478,10 @@ class MemoryDispatchGate:
             live = {e.dir for e in self._open.values() if e.dir is not None}
             for ws in workspaces:
                 with contextlib.suppress(Exception):
-                    await self._run(_remove_dispatch_dirs, ws, live)
+                    if self._closed:
+                        _remove_dispatch_dirs(ws, live)
+                    else:
+                        await self._run(_remove_dispatch_dirs, ws, live)
 
         task = loop.create_task(go())
         self._background.add(task)
@@ -698,7 +752,7 @@ class MemoryDispatchGate:
             if e is not None and e is entry and not (self._closing or self._closed):
                 e.config_path = path
             else:  # the dispatch is gone: nothing owns this file
-                self._spawn(self._run(_remove_dispatch_dir, ddir))
+                self._remove_dir_now_or_queued(ddir)
             if not result.done():
                 result.set_result(path)
 
@@ -876,9 +930,13 @@ class MemoryDispatchGate:
             errors.append("teardown cancelled")
         if entry.dir is not None:
             # Ordered after any write still on the worker; the job survives a cancel here.
-            removal = self._submit(_remove_dispatch_dir, entry.dir)
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await asyncio.shield(removal)
+            removal = self._remove_dir_now_or_queued(entry.dir)
+            if removal is not None:
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await asyncio.shield(removal)
+                if removal.done() and removal.exception() is not None:  # the gate shut down
+                    with contextlib.suppress(Exception):
+                        _remove_dispatch_dir(entry.dir)
         report = TeardownReport(in_flight, tuple(errors))
         if not report.clean:
             _logger.warning(
@@ -909,6 +967,7 @@ class MemoryDispatchGate:
                 await reaper
         in_flight = 0
         errors: list[str] = []
+        dirs = [e.dir for e in self._open.values() if e.dir is not None]
         for job_id, dispatch_id in list(self._open):
             self._spawn(self.teardown(job_id, dispatch_id))
         deadline = asyncio.get_running_loop().time() + self._shutdown_bound
@@ -921,7 +980,6 @@ class MemoryDispatchGate:
                 errors.append(f"{len(pending)} gate job(s) still pending at shutdown")
                 break
             await asyncio.wait(pending, timeout=left)
-        self._closed = True
         if self._endpoint is not None:
             try:
                 remaining = max(deadline - asyncio.get_running_loop().time(), 0.1)
@@ -933,8 +991,17 @@ class MemoryDispatchGate:
                 errors.append("endpoint close did not finish within the shutdown bound")
             except Exception as exc:  # noqa: BLE001 — shutdown reports, never raises
                 errors.append(f"endpoint close: {_reason(exc)}")
-        if self._executor is not None:
-            self._executor.shutdown(wait=False, cancel_futures=False)
+        # From here on nothing is queued: late jobs fail at once, and the cleanup that a stuck
+        # worker never reached is done inline, best effort.
+        self._closed = True
+        for fut in list(self._pending):
+            if not fut.done():
+                fut.set_exception(MemoryGateError("(gate)", "the memory gate is shut down"))
+        for ddir in dirs:
+            with contextlib.suppress(Exception):
+                _remove_dispatch_dir(ddir)
+        if self._worker is not None:
+            self._worker.stop()
         return TeardownReport(in_flight, tuple(errors))
 
     # ------------------------------------------------------------ introspection
