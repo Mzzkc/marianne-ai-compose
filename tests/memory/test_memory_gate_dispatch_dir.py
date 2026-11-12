@@ -112,3 +112,25 @@ def test_config_dir_and_file_are_owner_only_and_removed_by_teardown(short_tmp: P
             await gate.shutdown()
 
     run(main)
+
+
+def test_sweep_asks_who_is_live_when_it_reaches_a_directory_not_when_it_was_queued(
+    short_tmp: Path,
+) -> None:
+    from marianne.daemon.baton.memory_gate import CONFIG_DIR_NAME, _remove_dispatch_dirs
+
+    ws = short_tmp / "ws"
+    root = ws / CONFIG_DIR_NAME
+    root.mkdir(parents=True, mode=0o700)
+    late = root / "aaaaaaaaaaaaaaaa"
+    late.mkdir(mode=0o700)
+    stale = root / "bbbbbbbbbbbbbbbb"
+    stale.mkdir(mode=0o700)
+    asked: list[int] = []
+
+    def keep() -> set[Path]:
+        asked.append(1)
+        return {late}  # became live after the sweep was queued
+
+    assert _remove_dispatch_dirs(ws, keep) == 1
+    assert late.exists() and not stale.exists() and asked

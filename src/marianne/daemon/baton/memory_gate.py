@@ -422,11 +422,13 @@ def _remove_dispatch_dir(ddir: Path) -> None:
         os.close(ws_fd)
 
 
-def _remove_dispatch_dirs(workspace: Path, keep: set[Path]) -> int:
+def _remove_dispatch_dirs(workspace: Path, keep: Callable[[], set[Path]]) -> int:
     """Worker job: remove every dispatch directory under ``workspace`` not in ``keep``.
 
     Only real directories directly inside ``<workspace>/.marianne-memory`` that we own and
     whose name is 16 hex digits are touched; symlinks and everything else are left alone.
+    ``keep`` is called when the worker gets to each directory, not when the job was queued, so
+    a dispatch that began writing its directory in between is never swept.
     """
     try:
         ws_fd = _open_workspace(workspace, create=False)
@@ -439,11 +441,10 @@ def _remove_dispatch_dirs(workspace: Path, keep: set[Path]) -> int:
         except OSError:
             return 0
         try:
-            kept = {p.name for p in keep if p.parent.name == CONFIG_DIR_NAME}
             for name in os.listdir(config_fd):
                 if len(name) != 16 or any(c not in "0123456789abcdef" for c in name):
                     continue
-                if name in kept:
+                if any(p.name == name for p in keep()):
                     continue
                 try:
                     info = os.stat(name, dir_fd=config_fd, follow_symlinks=False)
@@ -583,6 +584,16 @@ class MemoryDispatchGate:
             return
         self._jobs[job_id] = _Registration(memory_config, dict(movement_names or {}))
 
+    def _live_dirs(self) -> set[Path]:
+        """Dispatch dirs of open dispatches. Called from the worker: a snapshot, retried if the
+        loop mutates ``_open`` while it is copied (``entry.dir`` is set on the loop before the
+        write that creates the directory is queued, so a queued sweep always sees it)."""
+        while True:
+            try:
+                return {e.dir for e in list(self._open.values()) if e.dir is not None}
+            except RuntimeError:
+                continue
+
     def _end(self, entry: _Open) -> None:
         """Flag a dispatch's sessions as over. Instant, thread-safe, needs no I/O."""
         entry.ended.set()
@@ -609,13 +620,12 @@ class MemoryDispatchGate:
         async def go() -> None:
             for key_job, key_dispatch in stale:
                 await self.teardown(key_job, key_dispatch)
-            live = {e.dir for e in self._open.values() if e.dir is not None}
             for ws in workspaces:
                 with contextlib.suppress(Exception):
                     if self._closed:
-                        _remove_dispatch_dirs(ws, live)
+                        _remove_dispatch_dirs(ws, self._live_dirs)
                     else:
-                        await self._run(_remove_dispatch_dirs, ws, live)
+                        await self._run(_remove_dispatch_dirs, ws, self._live_dirs)
 
         task = loop.create_task(go())
         self._background.add(task)
@@ -1032,7 +1042,7 @@ class MemoryDispatchGate:
 
     def sweep_stale_configs(self, workspace: Path | str) -> int:
         """Conductor-start sweep of a workspace's dispatch directories (never during deliver)."""
-        return _remove_dispatch_dirs(Path(workspace), set())
+        return _remove_dispatch_dirs(Path(workspace), set)
 
     def _bound_socket_paths(self) -> list[Path]:
         endpoint = self._endpoint
