@@ -539,3 +539,63 @@ async def test_job_with_technique_mcp_and_memory_gets_both_in_one_config(
         assert gate.open_dispatches == 0
     finally:
         await gate.shutdown()
+
+
+# ------------------------------------------------------------------ D5a
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(30)
+async def test_memory_teardown_reraises_cancellation_after_the_teardown_ran(
+    short_tmp: Path,
+) -> None:
+    gate = make(short_tmp)
+    pool = _BackendPool(_Recording(), _Registry(profile("claude-code")))
+    adapter = _adapter(pool, gate, short_tmp, memory=True)
+    gate.register_job("mem-job", MEMORY)
+    from marianne.daemon.baton.memory_gate import SheetIdentity
+
+    prepared = await gate.deliver(
+        "mem-job", SheetIdentity(1, 1, "work"), timeout_seconds=30,
+        existing_mcp_config=None, workspace=short_tmp / "ws",
+    )
+    assert prepared is not None
+    real = gate.teardown
+    started = asyncio.Event()
+
+    async def slow(*a: Any, **k: Any) -> Any:
+        started.set()
+        await asyncio.sleep(0.2)
+        return await real(*a, **k)
+
+    gate.teardown = slow  # type: ignore[method-assign]
+    try:
+        call = asyncio.create_task(adapter._memory_teardown("mem-job", prepared.dispatch_id))
+        await asyncio.wait_for(started.wait(), 5)
+        call.cancel()
+        with pytest.raises(asyncio.CancelledError):  # re-raised, not swallowed
+            await call
+        await gate.drain()
+        for _ in range(200):
+            if gate.open_dispatches == 0:
+                break
+            await asyncio.sleep(0.01)
+        assert gate.open_dispatches == 0  # and the teardown still ran to the end
+    finally:
+        await gate.shutdown()
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(30)
+async def test_release_and_teardown_holds_a_strong_reference_until_done(short_tmp: Path) -> None:
+    gate = make(short_tmp)
+    pool = _BlockingReleasePool(_Recording(), _Registry(profile("claude-code")))
+    adapter = _adapter(pool, gate, short_tmp, memory=False)
+    call = asyncio.create_task(adapter._release_and_teardown("claude-code", object(), "j", None))
+    await asyncio.wait_for(pool.release_started.wait(), 5)
+    assert len(adapter.__dict__["_release_tasks"]) == 1
+    pool.release_gate.set()
+    await asyncio.wait_for(call, 5)
+    await asyncio.sleep(0)
+    assert adapter.__dict__["_release_tasks"] == set()
+    await gate.shutdown()

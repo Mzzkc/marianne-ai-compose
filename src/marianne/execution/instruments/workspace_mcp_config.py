@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import os
 from contextlib import suppress
 from pathlib import Path
 
@@ -14,6 +16,19 @@ _logger = get_logger("execution.workspace_mcp_config")
 
 # Headless and interactive attempts must serialize writes to the same target.
 MCP_WORKSPACE_CONFIG_LOCKS: dict[Path, asyncio.Lock] = {}
+
+
+def _write_private(target: Path, data: bytes) -> None:
+    """Write ``data`` to ``target`` readable by the owner only (an MCP config can name sockets)."""
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+        raise
 
 
 class WorkspaceMcpConfigMixin:
@@ -83,7 +98,7 @@ class WorkspaceMcpConfigMixin:
         parent_existed = target.parent.exists()
         previous = target.read_bytes() if target.exists() else None
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(self._workspace_mcp_config_bytes(target))
+        _write_private(target, self._workspace_mcp_config_bytes(target))
 
         _logger.debug(
             "plugin_cli_workspace_mcp_config_materialized",
@@ -109,7 +124,7 @@ class WorkspaceMcpConfigMixin:
                         target.parent.rmdir()
             else:
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(previous)
+                _write_private(target, previous)
             _logger.debug(
                 "plugin_cli_workspace_mcp_config_restored",
                 instrument=self._profile.name,

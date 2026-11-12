@@ -878,3 +878,263 @@ def test_sweep_stale_keeps_a_listening_socket_not_bound_by_this_gate(short_tmp: 
             listening.close()
 
     drive(short_tmp, body)
+
+
+# ------------------------------------------------------------------ D5c / D5d
+
+
+def test_closed_sessions_are_forgotten_but_a_late_call_hears_closed(short_tmp: Path) -> None:
+    from marianne.memory.errors import NotFound, Unauthenticated
+
+    async def body(gate: MemoryDispatchGate) -> None:
+        gate.register_job("j", two())
+        d = await gate.prepare("j", SHEET, "d1", deadline())
+        assert d is not None and gate._gateway is not None
+        sid = d.sessions[0].session_id
+        await gate.teardown("j", "d1")
+        table = gate._gateway.sessions
+        assert sid not in table._sessions  # dropped after its audit close was sealed
+        with pytest.raises(Unauthenticated):  # "closed", not "not found"
+            table.get(sid)
+        with pytest.raises(NotFound):
+            table.get("s-never-existed")
+        assert gate._gateway.close_session(sid) is None  # a late close is a no-op
+
+    drive(short_tmp, body)
+
+
+def test_backend_is_closed_and_unregistered_when_its_last_session_closes(short_tmp: Path) -> None:
+    async def body(gate: MemoryDispatchGate) -> None:
+        gate.register_job("j", two())
+        a = await gate.prepare("j", SHEET, "d1", deadline())
+        b = await gate.prepare("j", SheetIdentity(2, 1, "work"), "d2", deadline())
+        assert a is not None and b is not None and gate._gateway is not None
+        assert len(gate._gateway._backends) == 2
+        await gate.teardown("j", "d1")
+        assert len(gate._gateway._backends) == 2  # d2 still uses both
+        await gate.teardown("j", "d2")
+        assert gate._gateway._backends == {} and gate._backend_refs == {}
+
+    drive(short_tmp, body)
+
+
+def test_workspace_materialised_mcp_config_is_owner_only(tmp_path: Path) -> None:
+    from marianne.execution.instruments.workspace_mcp_config import _write_private
+
+    target = tmp_path / "cfg.json"
+    target.write_bytes(b"old")
+    os.chmod(target, 0o644)
+    _write_private(target, b"{}")
+    assert stat.S_IMODE(os.stat(target).st_mode) == 0o600 and target.read_bytes() == b"{}"
+
+
+# ------------------------------------------------------------------ lease (replaces D2's 12 h)
+
+
+def _lease_gate(root: Path, clk: _Clock) -> MemoryDispatchGate:
+    run = root / "run"
+    run.mkdir(mode=0o700, exist_ok=True)
+    return MemoryDispatchGate(
+        run_dir=run, memory_root=root / "files", audit_dir=root / "audit", user="ada",
+        clock=clk, start_reaper=False,  # ticks are driven by hand: no real sleeps
+    )
+
+
+async def _owner(stop: asyncio.Event) -> None:
+    await stop.wait()
+
+
+def test_live_owner_keeps_its_session_for_hours_past_the_sheet_timeout(short_tmp: Path) -> None:
+    from marianne.daemon.baton.memory_gate import LEASE_SECONDS
+
+    async def main() -> None:
+        clk = _Clock()
+        gate = _lease_gate(short_tmp, clk)
+        stop = asyncio.Event()
+        try:
+            gate.register_job("j", two())
+            p = await gate.deliver(
+                "j", SHEET, timeout_seconds=100, existing_mcp_config=None,
+                workspace=short_tmp / "ws",
+            )
+            assert p is not None and gate._gateway is not None
+            owner = asyncio.create_task(_owner(stop))
+            gate.set_owner("j", p.dispatch_id, owner)
+            sid = gate._open[("j", p.dispatch_id)].session_ids[0]
+            sessions = gate._gateway.sessions
+            for waited in (400, 4000, 40000):  # behind a sibling's workspace lock, say
+                while clk.now < 1_000_000.0 + waited:
+                    clk.now += LEASE_SECONDS / 5
+                    await gate.tick()
+                sessions.admit_call(sid, "read")
+            assert gate.is_open("j", p.dispatch_id)
+        finally:
+            stop.set()
+            await gate.shutdown()
+
+    asyncio.run(asyncio.wait_for(main(), T))
+
+
+def test_finished_owner_with_skipped_teardown_is_reaped_within_a_lease(short_tmp: Path) -> None:
+    from marianne.daemon.baton.memory_gate import LEASE_SECONDS
+
+    async def main() -> None:
+        clk = _Clock()
+        gate = _lease_gate(short_tmp, clk)
+        try:
+            gate.register_job("j", two())
+            p = await gate.deliver(
+                "j", SHEET, timeout_seconds=100, existing_mcp_config=None,
+                workspace=short_tmp / "ws",
+            )
+            assert p is not None and gate._gateway is not None
+            owner = asyncio.create_task(asyncio.sleep(0))
+            gate.set_owner("j", p.dispatch_id, owner)
+            await owner  # the task finished; nobody called teardown
+            sid = gate._open[("j", p.dispatch_id)].session_ids[0]
+            sessions = gate._gateway.sessions
+            assert len(sockets(short_tmp)) == 2
+            clk.now += LEASE_SECONDS / 5
+            await gate.tick()
+            await gate.drain()
+            assert not gate.is_open("j", p.dispatch_id) and sockets(short_tmp) == []
+            with pytest.raises(MemoryBackendError) as info:
+                sessions.admit_call(sid, "read")
+            assert "the memory session for this sheet has ended" in _shim_message(info.value)
+        finally:
+            await gate.shutdown()
+
+    asyncio.run(asyncio.wait_for(main(), T))
+
+
+def _shim_message(exc: MemoryBackendError) -> str:
+    from marianne.memory.shim import _error_payload
+
+    return str(_error_payload(exc)["message"])
+
+
+def test_dispatch_without_an_owner_is_reaped_after_one_lease(short_tmp: Path) -> None:
+    from marianne.daemon.baton.memory_gate import LEASE_SECONDS
+
+    async def main() -> None:
+        clk = _Clock()
+        gate = _lease_gate(short_tmp, clk)
+        try:
+            gate.register_job("j", two())
+            p = await gate.deliver(
+                "j", SHEET, timeout_seconds=100, existing_mcp_config=None,
+                workspace=short_tmp / "ws",
+            )
+            assert p is not None
+            clk.now += LEASE_SECONDS - 1
+            await gate.tick()
+            assert gate.is_open("j", p.dispatch_id)  # not yet one lease old
+            clk.now += 2
+            await gate.tick()
+            await gate.drain()
+            assert not gate.is_open("j", p.dispatch_id) and sockets(short_tmp) == []
+        finally:
+            await gate.shutdown()
+
+    asyncio.run(asyncio.wait_for(main(), T))
+
+
+def test_renewal_cannot_revive_a_closed_session_and_is_not_over_the_socket() -> None:
+    from marianne.memory.errors import Unauthenticated
+    from marianne.memory.gateway import SessionTable
+    from marianne.memory.gateway.endpoint import FORBIDDEN_FIELDS
+    from marianne.memory.shim import TOOLS
+
+    clk = _Clock()
+    table = SessionTable(clock=clk)
+    sid = table.open(
+        principal="person:ada", attachment_id="a", scope="project/a", permissions=("read",),
+        dispatch_id="d", deadline_at=clk.now + 300,
+    ).session_id
+    table.set_deadline(sid, clk.now + 600)
+    assert table.get(sid).deadline_at == clk.now + 600
+    table.close(sid)
+    with pytest.raises(Unauthenticated):
+        table.set_deadline(sid, clk.now + 9999)
+    expired = table.open(
+        principal="person:ada", attachment_id="a", scope="project/a", permissions=("read",),
+        dispatch_id="d2", deadline_at=clk.now + 10,
+    ).session_id
+    clk.now += 11
+    with pytest.raises(MemoryBackendError):
+        table.set_deadline(expired, clk.now + 9999)
+    assert "set_deadline" not in TOOLS and "deadline" not in FORBIDDEN_FIELDS - {"deadline"}
+
+
+def test_session_not_renewed_for_a_lease_refuses_fail_closed(short_tmp: Path) -> None:
+    from marianne.daemon.baton.memory_gate import LEASE_SECONDS
+
+    async def main() -> None:
+        clk = _Clock()
+        gate = _lease_gate(short_tmp, clk)  # no reaper at all: it "died"
+        try:
+            gate.register_job("j", two())
+            p = await gate.deliver(
+                "j", SHEET, timeout_seconds=100, existing_mcp_config=None,
+                workspace=short_tmp / "ws",
+            )
+            assert p is not None and gate._gateway is not None
+            sid = gate._open[("j", p.dispatch_id)].session_ids[0]
+            gate._gateway.sessions.admit_call(sid, "read")
+            clk.now += LEASE_SECONDS + 1
+            with pytest.raises(MemoryBackendError):
+                gate._gateway.sessions.admit_call(sid, "read")
+        finally:
+            await gate.shutdown()
+
+    asyncio.run(asyncio.wait_for(main(), T))
+
+
+def test_shutdown_stops_the_reaper_and_does_not_count_it_as_pending(short_tmp: Path) -> None:
+    async def main() -> None:
+        run = short_tmp / "run"
+        run.mkdir(mode=0o700)
+        gate = MemoryDispatchGate(
+            run_dir=run, memory_root=short_tmp / "files", audit_dir=short_tmp / "audit",
+            user="ada",
+        )
+        gate.register_job("j", two())
+        p = await gate.deliver(
+            "j", SHEET, timeout_seconds=100, existing_mcp_config=None, workspace=short_tmp / "ws",
+        )
+        assert p is not None
+        reaper = gate._reaper
+        assert reaper is not None and not reaper.done()  # started lazily at the first open
+        report = await asyncio.wait_for(gate.shutdown(), 5)
+        assert reaper.done() and gate._reaper is None
+        assert report.clean  # the reaper was never "pending work"
+
+    asyncio.run(asyncio.wait_for(main(), T))
+
+
+def test_reaper_stops_by_itself_when_no_dispatch_is_open(short_tmp: Path) -> None:
+    async def main() -> None:
+        run = short_tmp / "run"
+        run.mkdir(mode=0o700)
+        gate = MemoryDispatchGate(
+            run_dir=run, memory_root=short_tmp / "files", audit_dir=short_tmp / "audit",
+            user="ada",
+        )
+        try:
+            gate.register_job("j", two())
+            p = await gate.deliver(
+                "j", SHEET, timeout_seconds=100, existing_mcp_config=None,
+                workspace=short_tmp / "ws",
+            )
+            assert p is not None
+            await gate.teardown("j", p.dispatch_id)
+            await gate.tick()  # nothing open: the loop ends
+            for _ in range(100):
+                if gate._reaper is None:
+                    break
+                await asyncio.sleep(0.01)
+            assert gate._reaper is None
+        finally:
+            await gate.shutdown()
+
+    asyncio.run(asyncio.wait_for(main(), T))

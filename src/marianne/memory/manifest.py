@@ -57,8 +57,8 @@ def mcp_config_entry(
     return mcp_entry_key(binding), {
         "command": sys.executable,
         "args": ["-m", SHIM_MODULE, "--memory-budget-seconds", str(float(budget_seconds))],
-        # The socket path travels in the environment, not argv: any local user can read a
-        # process's argv, but only the same user can read its environment.
+        # The socket path travels in the environment, not argv. This hides it from other
+        # users only; a process of the same user can read /proc/<pid>/environ as well.
         "env": {SOCKET_ENV: str(socket_path)},
     }
 

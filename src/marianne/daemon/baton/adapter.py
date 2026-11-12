@@ -3780,7 +3780,12 @@ class BatonAdapter:
             finally:
                 await self._memory_teardown(job_id, memory_dispatch)
 
-        await asyncio.shield(asyncio.ensure_future(both()))
+        inner = asyncio.ensure_future(both())
+        # The event loop keeps only a weak reference to a task: hold a strong one until done.
+        tasks = self.__dict__.setdefault("_release_tasks", set())
+        tasks.add(inner)
+        inner.add_done_callback(tasks.discard)
+        await asyncio.shield(inner)
 
     def _memory_backstop(self, job_id: str, memory_dispatch: str) -> None:
         gate = getattr(self, "_memory_gate", None)
@@ -3792,14 +3797,23 @@ class BatonAdapter:
         gate = getattr(self, "_memory_gate", None)
         if memory_dispatch is None or gate is None:
             return
+        cancelled = False
         try:
-            await asyncio.shield(gate.teardown(job_id, memory_dispatch))
-        except (Exception, asyncio.CancelledError):  # noqa: BLE001 — teardown must not mask the dispatch outcome
+            inner = asyncio.ensure_future(gate.teardown(job_id, memory_dispatch))
+            tasks = self.__dict__.setdefault("_release_tasks", set())
+            tasks.add(inner)
+            inner.add_done_callback(tasks.discard)
+            await asyncio.shield(inner)
+        except asyncio.CancelledError:
+            cancelled = True  # the shielded teardown keeps running; re-raised below
+        except Exception:  # noqa: BLE001 — teardown must not mask the dispatch outcome
             _logger.warning(
                 "adapter.memory_teardown_failed",
                 extra={"job_id": job_id, "dispatch_id": memory_dispatch},
                 exc_info=True,
             )
+        if cancelled:
+            raise asyncio.CancelledError
 
     def _on_musician_done(
         self,
