@@ -996,7 +996,10 @@ class JobManager:
             user=_memory_user(),
         )
         self._baton_adapter.set_memory_gate(self._memory_gate)
-        await self._memory_gate.sweep_stale()  # sockets a SIGKILLed conductor left behind
+        try:
+            await self._memory_gate.sweep_stale()  # sockets a SIGKILLed conductor left behind
+        except Exception:  # noqa: BLE001 — housekeeping: a sweep failure must not stop the conductor
+            _logger.warning("manager.memory_gate_sweep_failed", exc_info=True)
 
         # Populate per-model concurrency from instrument profiles. Boot and
         # reload share this exact mechanism (#408) so the caps lifecycle

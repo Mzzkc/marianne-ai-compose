@@ -1813,6 +1813,9 @@ class BatonAdapter:
             self._job_memory[job_id] = (memory, dict(memory_movement_names or {}))
             if self._memory_gate is not None:
                 self._memory_gate.register_job(job_id, memory, memory_movement_names)
+                # Dispatch directories the previous conductor process left behind in this
+                # job's workspaces are dead; nothing else would ever remove them.
+                self._memory_gate.schedule_config_sweep({s.workspace for s in sheets})
 
         # #209: restore opt-in code execution across resume so a resumed
         # job still classifies + runs code blocks (router ensured even

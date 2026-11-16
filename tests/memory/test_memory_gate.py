@@ -960,3 +960,59 @@ def test_phase_name_attachment_reaches_only_the_movement_named_that(short_tmp: P
         assert got == {1: False, 2: False, 3: False, 4: False, 5: True, 6: False}
 
     drive(short_tmp, body)
+
+
+def test_sweep_stale_without_memory_jobs_does_not_start_the_worker(short_tmp: Path) -> None:
+    """Review r4 #4: a conductor that never ran a memory job pays nothing at boot."""
+
+    async def body(gate: MemoryDispatchGate) -> None:
+        assert await gate.sweep_stale() == 0
+        assert gate._worker is None
+
+    drive(short_tmp, body)
+
+
+def test_sweep_stale_configs_removes_dead_dispatch_dirs_but_spares_live_ones(
+    short_tmp: Path,
+) -> None:
+    async def body(gate: MemoryDispatchGate) -> None:
+        ws = short_tmp / "ws"
+        dead = ws / ".marianne-memory" / ("ab" * 8)
+        dead.mkdir(parents=True, mode=0o700)
+        (dead / "mcp.json").write_text("{}")
+        gate.register_job("j", two())
+        live = await gate.prepare("j", SHEET, "d1", deadline())
+        assert live is not None
+        await gate.merge_config("j", "d1", live, None, ws)
+        live_dir = gate._dispatch_dir(ws, "j", "d1")
+        assert live_dir.exists()
+        assert await gate.sweep_stale_configs(ws) == 1
+        assert not dead.exists() and live_dir.exists()
+
+    drive(short_tmp, body)
+
+
+def test_recover_job_sweeps_the_recovered_workspaces(short_tmp: Path) -> None:
+    """Review r4 #4: sweep_stale_configs had no caller; recovery of a memory job is its call."""
+    from marianne.daemon.baton.adapter import BatonAdapter
+    from tests.test_baton_restart_recovery import _make_checkpoint, _make_sheet
+
+    async def body() -> None:
+        gate = make(short_tmp)
+        try:
+            adapter = BatonAdapter()
+            adapter.set_memory_gate(gate)
+            ws = short_tmp / "rws"
+            sheets = [_make_sheet(num=i, workspace=str(ws)) for i in (1, 2)]
+            dead = ws / ".marianne-memory" / ("cd" * 8)
+            dead.mkdir(parents=True, mode=0o700)
+            adapter.recover_job(
+                "rj", sheets, {1: [], 2: [1]}, _make_checkpoint(total_sheets=2),
+                memory=two(),
+            )
+            await gate.drain()
+            assert not dead.exists()
+        finally:
+            await gate.shutdown()
+
+    asyncio.run(asyncio.wait_for(body(), T))

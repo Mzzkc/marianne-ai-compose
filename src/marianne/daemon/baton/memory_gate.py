@@ -52,7 +52,7 @@ import tempfile
 import threading
 import time
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import Future as ConcurrentFuture
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -984,7 +984,14 @@ class MemoryDispatchGate:
     # ------------------------------------------------------------ stale files (SIGKILL)
 
     async def sweep_stale(self, run_dir: Path | str | None = None) -> int:
-        """Run :meth:`_sweep_sockets` on the worker (never on the loop); returns how many."""
+        """Run :meth:`_sweep_sockets` on the worker (never on the loop); returns how many.
+
+        With no ``<run_dir>/s`` directory there is nothing to sweep (no memory job has ever
+        run here): return 0 without starting the worker thread.
+        """
+        base = Path(run_dir) if run_dir is not None else self._run_dir
+        if not (base / "s").is_dir():
+            return 0
         return int(await self._run(self._sweep_sockets, run_dir))
 
     def _sweep_sockets(self, run_dir: Path | str | None = None) -> int:
@@ -1043,9 +1050,40 @@ class MemoryDispatchGate:
             _logger.info("memory_gate.stale_sockets_removed", extra={"count": removed})
         return removed
 
-    def sweep_stale_configs(self, workspace: Path | str) -> int:
-        """Conductor-start sweep of a workspace's dispatch directories (never during deliver)."""
-        return _remove_dispatch_dirs(Path(workspace), set)
+    async def sweep_stale_configs(self, workspace: Path | str) -> int:
+        """Remove dispatch directories a dead conductor left in ``workspace``; returns how many.
+
+        Runs on the worker, and spares every directory of a dispatch this gate has open (asked
+        when the worker reaches it), so it is safe while the recovered job is already running.
+        """
+        return int(await self._run(_remove_dispatch_dirs, Path(workspace), self._live_dirs))
+
+    def schedule_config_sweep(self, workspaces: Iterable[Path | str]) -> None:
+        """Fire-and-forget :meth:`sweep_stale_configs` for each workspace (needs a running loop).
+
+        Called when a job is recovered after a conductor restart: its sheets' dispatch
+        directories from the previous process are dead, and nothing else would remove them.
+        A failure is logged, never raised.
+        """
+        paths = list(dict.fromkeys(Path(w) for w in workspaces))
+        if not paths:
+            return
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return
+
+        async def go() -> None:
+            for ws in paths:
+                try:
+                    await self.sweep_stale_configs(ws)
+                except Exception:  # noqa: BLE001 — a failed sweep must not touch the job
+                    _logger.warning(
+                        "memory_gate.config_sweep_failed", extra={"workspace": str(ws)},
+                        exc_info=True,
+                    )
+
+        self._spawn(go())
 
     def _bound_socket_paths(self) -> list[Path]:
         endpoint = self._endpoint

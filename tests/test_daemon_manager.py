@@ -3459,3 +3459,24 @@ class TestMailboxTraffic:
         with structlog.testing.capture_logs() as logs:
             await manager._remove_scratch_root(job_id, meta)
         assert len([entry for entry in logs if entry["event"] == "mailbox.send"]) == 1
+
+
+class TestMemoryGateBootSweep:
+    """Review r4 #4: a failing stale-socket sweep must not stop the conductor from starting."""
+
+    @pytest.mark.asyncio
+    async def test_failed_memory_sweep_does_not_stop_start(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        from marianne.daemon.baton.memory_gate import MemoryDispatchGate
+
+        async def boom(self: object, run_dir: object = None) -> int:
+            raise OSError("disk on fire")
+
+        monkeypatch.setattr(MemoryDispatchGate, "sweep_stale", boom)
+        mgr = JobManager(DaemonConfig(max_concurrent_jobs=1, state_db_path=tmp_path / "reg.db"))
+        try:
+            await mgr.start()
+            assert mgr._memory_gate is not None
+        finally:
+            await mgr.shutdown(graceful=False)
