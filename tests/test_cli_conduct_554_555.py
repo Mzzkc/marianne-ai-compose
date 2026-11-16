@@ -329,3 +329,39 @@ def test_real_verdict_keys_cover_every_shim_verdict_fixture():
             shim_keys |= set(entry["out"])
     real = {"verdict", "raw", "source_path", "round", "findings", "accept", "result_path"}
     assert shim_keys <= real
+
+
+# Verdict lines real agent inspections wrote (16 Nov live SC1 dogfood and a survey
+# of cycle-state/*-inspection.md). Before this, the first read "unknown".
+import re as _re
+
+import pytest as _pytest
+
+
+@_pytest.mark.parametrize(
+    ("line", "want"),
+    [
+        ("VERDICT: **NOT READY — one P1 regression.** The ACCEPT gate is green", "REWORK"),
+        ("VERDICT: NOT_READY", "REWORK"),
+        ("VERDICT: PASS — bounded.", "PASS"),
+        ("VERDICT: REWORK.", "REWORK"),
+        ("VERDICT: PASS | REWORK | BLOCKED", None),
+        ("VERDICT: **SUITE ACCEPT_WITH_REPAIRS; PRODUCT FIRST RUN NOT", None),
+    ],
+)
+def test_real_inspection_verdict_lines(line: str, want: str | None) -> None:
+    from marianne.cli.commands.conduct import DEFAULT_VERDICT_PATTERN, _line_verdict
+
+    rx = _re.compile(DEFAULT_VERDICT_PATTERN, _re.IGNORECASE | _re.MULTILINE)
+    assert _line_verdict(line, rx) == want
+
+
+def test_bare_verdict_heading_reads_the_next_line(tmp_path: Path) -> None:
+    from marianne.cli.commands.conduct import find_verdict
+
+    (tmp_path / "inspection.md").write_text(
+        "# Inspection\n\nVERDICT:\n\n**REWORK, bounded to one P1 facade gap.** More prose.\n"
+    )
+    got = find_verdict(tmp_path)
+    assert got["verdict"] == "REWORK"
+    assert "REWORK" in got["raw"]

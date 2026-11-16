@@ -252,9 +252,25 @@ _VERDICT_MAP = {
     "ACCEPT": "PASS", "ACCEPTED": "PASS",
     "REWORK": "REWORK", "REJECT": "REWORK", "REJECTED": "REWORK",
     "HOLD": "BLOCKED", "BLOCK": "BLOCKED", "BLOCKED": "BLOCKED",
+    "READY": "PASS", "NOT_READY": "REWORK", "NOT_ACCEPTED": "REWORK",
+    "ACCEPT_WITH_REPAIRS": "REWORK",
 }
+# Multi-word verdicts agent inspections actually write (16 Nov survey of
+# cycle-state/*-inspection.md): folded to one token before the map lookup.
+_VERDICT_PHRASES = (
+    (re.compile(r"\bNOT[\s_-]+READY\b", re.IGNORECASE), "NOT_READY"),
+    (re.compile(r"\bNOT[\s_-]+ACCEPTED\b", re.IGNORECASE), "NOT_ACCEPTED"),
+    (re.compile(r"\bACCEPT[\s_-]+WITH[\s_-]+REPAIRS\b", re.IGNORECASE), "ACCEPT_WITH_REPAIRS"),
+)
+_BARE_VERDICT = re.compile(r"^[\s>#*_`\-]*VERDICT\s*[:=]?[\s*_`]*$", re.IGNORECASE)
+
+
+def _fold_phrases(line: str) -> str:
+    for phrase, token in _VERDICT_PHRASES:
+        line = phrase.sub(token, line)
+    return line
 DEFAULT_VERDICT_PATTERN = (
-    r"^[\s>#*_`\-]*VERDICT\s*[:=]\s*[*_`\[\s]*(?P<word>[A-Za-z]+)"
+    r"^[\s>#*_`\-]*VERDICT\s*[:=]\s*[*_`\[\s]*(?P<word>[A-Za-z]+(?:_[A-Za-z]+)*)"
 )
 _TEXT_SUFFIXES = {".md", ".markdown", ".txt"}
 _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", ".mypy_cache"}
@@ -268,6 +284,7 @@ def _line_verdict(line: str, regex: re.Pattern[str]) -> str | None:
     A template line that lists several verdict words ("VERDICT: PASS | REWORK")
     is an instruction, not a verdict, and is skipped.
     """
+    line = _fold_phrases(line)
     match = regex.search(line)
     if match is None:
         return None
@@ -279,7 +296,12 @@ def _line_verdict(line: str, regex: re.Pattern[str]) -> str | None:
         return None
     others = {
         _VERDICT_MAP[w.upper()]
-        for w in re.findall(r"[A-Za-z]+", line[match.end():])
+        # Only the verdict's own clause: "PASS | REWORK" is a template, but
+        # "NOT READY. The ACCEPT gate is green" is a verdict followed by prose.
+        for w in re.findall(
+            r"[A-Za-z]+(?:_[A-Za-z]+)*",
+            re.split(r"[.;:\u2014]", line[match.end():], maxsplit=1)[0],
+        )
         if w.upper() in _VERDICT_MAP
     }
     if others - {mapped}:
@@ -326,8 +348,15 @@ def _scan_verdict(
         except OSError:
             continue
         found: tuple[str, str, int] | None = None
-        for index, line in enumerate(text.splitlines()):
+        lines = text.splitlines()
+        for index, line in enumerate(lines):
             mapped = _line_verdict(line, regex)
+            if mapped is None and _BARE_VERDICT.match(line):
+                # "VERDICT:" alone, the word on the next non-blank line.
+                following = next((ln for ln in lines[index + 1:index + 4] if ln.strip()), "")
+                mapped = _line_verdict("VERDICT: " + following.lstrip(" >*_`#-"), regex)
+                if mapped is not None:
+                    line = line.strip() + " " + following.strip()
             if mapped is not None:
                 found = (mapped, line.strip()[:300], index)
         if found is not None:
