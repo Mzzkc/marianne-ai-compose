@@ -348,6 +348,28 @@ class TestRegisteredChecksRunOnRealScores:
         )
         assert TechniqueSkillPathCheck().check(config, path, raw) == []
 
+    def test_v301_expands_tilde_like_the_runtime(
+        self, tmp_path: Path, monkeypatch: object
+    ) -> None:
+        """A ``~/`` skill path is what portable agent scores emit; the runtime
+        expands it (daemon/baton/techniques.py), so validation must too."""
+        from marianne.validation.checks.techniques import TechniqueSkillPathCheck
+
+        home = tmp_path / "home"
+        (home / "techniques").mkdir(parents=True)
+        (home / "techniques" / "mates.md").write_text("# method\n", encoding="utf-8")
+        monkeypatch.setenv("HOME", str(home))  # type: ignore[attr-defined]
+        config, path, raw = self._score(
+            tmp_path,
+            "techniques:\n"
+            "  mateship:\n"
+            "    kind: skill\n"
+            "    phases: [work]\n"
+            "    config:\n"
+            "      path: ~/techniques/mates.md\n",
+        )
+        assert TechniqueSkillPathCheck().check(config, path, raw) == []
+
     def test_v302_registered_in_default_checks(self) -> None:
         from marianne.validation.checks.techniques import (
             TechniqueMcpInstrumentCheck,

@@ -69,7 +69,7 @@ class TechniqueSkillPathCheck:
             skill_path_str = tc.config.get("path")
             if skill_path_str is None:
                 continue
-            skill_path = Path(skill_path_str)
+            skill_path = Path(skill_path_str).expanduser()
             if not skill_path.is_absolute():
                 skill_path = config_path.parent / skill_path
             if not skill_path.exists():
