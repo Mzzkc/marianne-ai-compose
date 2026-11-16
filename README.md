@@ -377,6 +377,9 @@ mzt instruments list        # See available instruments
 |---------|---------|
 | `mzt status [id]` | Score progress (no args = overview of all) |
 | `mzt list` | List scores from the conductor |
+| `mzt wait JOB` | Block until a score is done or needs a decision (`--json`, exit codes 0/2/3/4) |
+| `mzt next` | What needs attention across scores: ESCALATE, UNSTICK, JUDGE, WAIT, DONE |
+| `mzt verdict JOB` | The review sheet's VERDICT as PASS, REWORK, BLOCKED or unknown |
 | `mzt top` | Real-time system monitor |
 | `mzt dashboard` | Web UI with log streaming |
 

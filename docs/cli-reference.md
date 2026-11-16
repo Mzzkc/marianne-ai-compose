@@ -546,6 +546,99 @@ mzt list --limit 10
 
 ---
 
+### `mzt wait`
+
+Block until a score is finished or needs a human decision (GH #547).
+
+```
+Usage: mzt wait [OPTIONS] JOB_ID
+```
+
+The conductor has no per-score subscription, so the command polls it inside the process (2 s, backing off to 10 s). Rate-limit waits, retries and fallbacks happen inside the conductor and do not end the wait. Three polls in a row that cannot reach the conductor end it as `conductor_down`.
+
+#### Options
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--max` | `-m` | 1800 | Seconds to wait before reporting `wait_expired` |
+| `--json` | `-j` | false | One JSON object, no ANSI |
+
+#### Result
+
+```json
+{"state": "needs_you", "job_id": "my-job", "status": "paused", "outcome": "paused",
+ "reason": "sheet 20 is at a fermata awaiting a decision: ...", "verdict": null}
+```
+
+| `state` | Exit | Meaning | `outcome` |
+|---------|------|---------|-----------|
+| `done` | 0 | The score finished | `completed` or `cancelled` |
+| `needs_you` | 2 | A person must decide: the score failed, is paused, or has a sheet at a fermata (`mzt resolve`) | `failed` or `paused` |
+| `conductor_down` | 3 | The conductor could not be reached | `null` |
+| `wait_expired` | 4 | `--max` ran out while the score was still moving | `null` |
+
+An unknown score is the usual error envelope (`{"success": false, "message", "hints"}`) with exit 1. `verdict` is always `null` here; read it with `mzt verdict`.
+
+---
+
+### `mzt next`
+
+List what needs attention across scores, most urgent first (GH #547).
+
+```
+Usage: mzt next [OPTIONS]
+```
+
+#### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--mine PREFIX` | | Only scores whose run id starts with PREFIX |
+| `--since HOURS` | 24 | Ignore finished scores that ended longer ago than this (0 = no limit) |
+| `--idle-after SECONDS` | score's stale-detection timeout, else its sheet timeout, else 1800 | Quiet time before a running score is `UNSTICK` |
+| `--json` | false | A JSON array, no ANSI |
+
+#### Result
+
+`[{"job_id", "action", "why"}]`, ordered ESCALATE, UNSTICK, JUDGE, WAIT, DONE (older submissions first within an action). An empty queue is one `DONE` row with `job_id: null`.
+
+| `action` | When |
+|----------|------|
+| `ESCALATE` | The score failed or was cancelled, is paused (including `paused_at_chain`: finished, holding its chain trigger until `mzt resume`), or has a sheet at a fermata: a person decides |
+| `UNSTICK` | Running, a sheet is playing, and nothing has been recorded for longer than the idle limit |
+| `JUDGE` | Completed and not yet judged: run `mzt verdict JOB`, then `mzt verdict JOB --accept` |
+| `WAIT` | Still running or queued, nothing to do (`mzt wait JOB`) |
+| `DONE` | Completed and judged |
+
+`CAST` and `SUBMIT` are not produced: they belong to the agent surface, not the conductor. Judged state is the `.mzt-judged.json` marker that `mzt verdict --accept` writes in the score's workspace, keyed to that run's submission time, so a fresh run under a reused id is judged again. Recurring-schedule anchors and pytest scratch runs are left out, as in `mzt list`.
+
+---
+
+### `mzt verdict`
+
+Read a score's review verdict as one word (GH #547).
+
+```
+Usage: mzt verdict [OPTIONS] JOB_ID
+```
+
+Finds the newest `.md`/`.txt` file in the score's workspace that has a mappable `VERDICT:` line (the last such line in it) and maps the word: `PASS`/`APPROVE`/`ACCEPT` to `PASS`, `REWORK`/`REJECT` to `REWORK`, `HOLD`/`BLOCK` to `BLOCKED`. Nothing else is interpreted. A line that lists several verdict words (a prompt template such as `VERDICT: PASS | REWORK`) is skipped.
+
+| Option | Description |
+|--------|-------------|
+| `--pattern REGEX` | Replace the default line pattern; group `word` (or group 1) is the verdict word |
+| `--workspace DIR` | Read this directory instead of asking the conductor for the score's workspace |
+| `--accept` (`--judged`) | Record the score as judged so `mzt next` stops saying `JUDGE`, whatever the verdict |
+| `--json` | One JSON object, no ANSI |
+
+```json
+{"verdict": "REWORK", "raw": "VERDICT: REWORK", "source_path": "/ws/cycle-state/x-inspection.md", "round": null}
+```
+
+`verdict` is `unknown` when no file has a mappable line (`raw` and `source_path` are then `null`). `round` is always `null`: Marianne does not track review rounds.
+
+---
+
 ### `mzt validate`
 
 Validate a score configuration file.
