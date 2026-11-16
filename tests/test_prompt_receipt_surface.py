@@ -42,7 +42,9 @@ def _job() -> CheckpointState:
 
 def test_status_json_carries_a_receipt_summary_per_sheet(capsys) -> None:
     _output_status_json(_job())
-    sheets = json.loads(capsys.readouterr().out)["sheets"]
+    out = capsys.readouterr().out
+    # structlog may share stdout under pytest; the document starts at the first "{" line
+    sheets = json.loads(out[out.index("\n{") + 1 if "\n{" in out else 0:])["sheets"]
     summary = sheets["1"]["prompt_receipt"]
     assert summary["total_bytes"] == 3000
     assert summary["source_count"] == 5
