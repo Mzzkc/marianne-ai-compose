@@ -778,7 +778,10 @@ class MemoryDispatchGate:
             bindings = resolve_memory(
                 reg.config,
                 SheetPhase(
-                    name=reg.movement_names.get(sheet.movement) or sheet.phase,
+                    # Only a movement name the author declared (V342 accepts `all`, a number,
+                    # or a declared name). The built-in lifecycle names of unnamed movements
+                    # (``sheet.phase``) must not match an attachment meant for a named one.
+                    name=reg.movement_names.get(sheet.movement, ""),
                     movement=sheet.movement,
                 ),
                 user=self._user, run_dir=self._run_dir,

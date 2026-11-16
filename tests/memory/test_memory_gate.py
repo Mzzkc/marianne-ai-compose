@@ -906,3 +906,23 @@ def test_cancel_at_every_await_of_deliver_leaves_nothing(
         assert gate._backend_refs == {}
 
     drive(short_tmp, body)
+
+
+def test_phase_name_attachment_reaches_only_the_movement_named_that(short_tmp: Path) -> None:
+    """Review r4 #1: ``phases: ["work"]`` means the movement the author NAMED ``work``; the
+    built-in lifecycle names of unnamed movements (recon, plan, work, ...) never match."""
+
+    async def body(gate: MemoryDispatchGate) -> None:
+        c = cfg(backends={"secret": {"system": "files", "scope": "project/demo",
+                                     "phases": ["work"]}})
+        gate.register_job("j", c, {5: "work"})
+        got = {}
+        for mv in range(1, 7):
+            sheet = SheetIdentity(num=mv, movement=mv, phase="work" if mv in (3, 5) else "recon")
+            d = await gate.prepare("j", sheet, f"d{mv}", deadline())
+            got[mv] = d is not None
+            if d is not None:
+                await gate.teardown("j", f"d{mv}")
+        assert got == {1: False, 2: False, 3: False, 4: False, 5: True, 6: False}
+
+    drive(short_tmp, body)
