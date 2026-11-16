@@ -38,6 +38,7 @@ from marianne.core.errors.codes import ErrorCode
 from marianne.core.flow_state import FlowState
 from marianne.core.logging import get_logger
 from marianne.daemon.baton.events import (
+    MEMORY_UNSUPPORTED,
     BatonEvent,
     CancelJob,
     CircuitBreakerRecovery,
@@ -2154,7 +2155,8 @@ class BatonCore:
             # retry/fallback for the WORK's failure; it predates #418 and
             # capability classes.)
             and not (
-                event.error_classification in ("INSTRUMENT_UNAVAILABLE", "AUTH_FAILURE")
+                event.error_classification
+                in ("INSTRUMENT_UNAVAILABLE", "AUTH_FAILURE", MEMORY_UNSUPPORTED)
                 and sheet.has_fallback_available
             )
         ):
@@ -2241,6 +2243,40 @@ class BatonCore:
                 await self._handle_exhaustion(event.job_id, event.sheet_num, sheet)
                 if not self.is_job_registration_current(event.job_id, registration_token):
                     return
+            self._check_job_cost_limit(event.job_id)
+            return
+
+        if not event.execution_success and event.error_classification == MEMORY_UNSUPPORTED:
+            # The score asks for memory this instrument cannot deliver. That is a fact about
+            # the (score, instrument) pair: retrying the same instrument cannot change it, and
+            # it says nothing about the instrument's health for other jobs. Another instrument
+            # in the chain may deliver; with none left the sheet fails now.
+            if sheet.has_fallback_available:
+                from_instrument = sheet.instrument_name or ""
+                to_instrument = sheet.advance_fallback("unavailable")
+                if to_instrument is not None:
+                    self._ensure_instrument_registered(to_instrument)
+                    sheet.normal_attempts = max(0, sheet.normal_attempts - 1)
+                    sheet.status = BatonSheetStatus.PENDING
+                    self._state_dirty = True
+                    self._fallback_events.append(
+                        InstrumentFallback(
+                            job_id=event.job_id,
+                            sheet_num=event.sheet_num,
+                            from_instrument=from_instrument,
+                            to_instrument=to_instrument,
+                            reason="unavailable",
+                        )
+                    )
+                    self._check_job_cost_limit(event.job_id)
+                    return
+            self._fail_sheet(
+                event.job_id,
+                sheet,
+                ErrorCode.BACKEND_NOT_FOUND.value,
+                event.error_message or "memory delivery unsupported",
+            )
+            self._state_dirty = True
             self._check_job_cost_limit(event.job_id)
             return
 

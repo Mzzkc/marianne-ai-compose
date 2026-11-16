@@ -67,6 +67,7 @@ from marianne.daemon.a2a.registry import AgentCardRegistry
 from marianne.daemon.baton.backend_pool import InstrumentNotRegisteredError
 from marianne.daemon.baton.core import BatonCore, CronHandler
 from marianne.daemon.baton.events import (
+    MEMORY_UNSUPPORTED,
     A2ATaskRouted,
     A2ATaskSubmitted,
     CronTick,
@@ -2615,6 +2616,7 @@ class BatonAdapter:
         error_msg: str,
         state: SheetExecutionState | None = None,
         unavailable: bool = False,
+        memory_unsupported: bool = False,
     ) -> None:
         """Send a SheetAttemptResult failure event when dispatch cannot proceed.
 
@@ -2644,8 +2646,11 @@ class BatonAdapter:
             event_generation=self._baton.get_job_generation(job_id),
             dispatch_epoch=state.dispatch_epoch if state is not None else None,
             execution_success=False,
-            error_classification=("INSTRUMENT_UNAVAILABLE" if unavailable else "E505"),
-            error_code="E505" if unavailable else None,
+            error_classification=(
+                MEMORY_UNSUPPORTED if memory_unsupported
+                else "INSTRUMENT_UNAVAILABLE" if unavailable else "E505"
+            ),
+            error_code="E505" if unavailable or memory_unsupported else None,
             error_message=error_msg,
         )
         self._baton.inbox.put_nowait(failure)
@@ -3000,6 +3005,7 @@ class BatonAdapter:
                     job_id, sheet_num, effective_instrument,
                     f"memory_delivery_unsupported: {effective_instrument}: {refusal}",
                     state=state,
+                    memory_unsupported=True,
                 )
                 return True
 

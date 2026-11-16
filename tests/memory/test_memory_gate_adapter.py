@@ -599,3 +599,54 @@ async def test_release_and_teardown_holds_a_strong_reference_until_done(short_tm
     await asyncio.sleep(0)
     assert adapter.__dict__["_release_tasks"] == set()
     await gate.shutdown()
+
+
+def _core_for_memory_refusal(tmp_path: Path, fallbacks: list[str]) -> Any:
+    from marianne.daemon.baton.core import BatonCore
+    from marianne.core.sheet import Sheet
+    from marianne.daemon.baton.adapter import sheets_to_execution_states
+
+    sheet = Sheet(
+        num=1, movement=1, voice_count=1, workspace=tmp_path, instrument_name="primary",
+        instrument_fallbacks=fallbacks, instrument_fallback_configs=[{} for _ in fallbacks],
+    )
+    core = BatonCore()
+    core.register_job("j", sheets_to_execution_states([sheet], max_retries=5), {})
+    return core
+
+
+def _refusal(attempt: int) -> Any:
+    from marianne.daemon.baton.events import SheetAttemptResult
+
+    return SheetAttemptResult(
+        job_id="j", sheet_num=1, instrument_name="primary", attempt=attempt,
+        execution_success=False, error_classification="MEMORY_DELIVERY_UNSUPPORTED",
+        error_code="E505", error_message="memory_delivery_unsupported: primary: no MCP",
+    )
+
+
+@pytest.mark.asyncio
+async def test_memory_refusal_is_not_retried_on_the_same_instrument(tmp_path: Path) -> None:
+    """Review r4 #5: it was retried up to max_retries; now one attempt, then terminal."""
+    from marianne.daemon.baton.state import BatonSheetStatus
+
+    core = _core_for_memory_refusal(tmp_path, [])
+    st = core._jobs["j"].sheets[1]
+    await core.handle_event(_refusal(1))
+    assert st.status is BatonSheetStatus.FAILED
+    assert st.instrument_name == "primary" and st.normal_attempts <= 1
+
+
+@pytest.mark.asyncio
+async def test_memory_refusal_still_falls_back_to_another_instrument(tmp_path: Path) -> None:
+    from marianne.daemon.baton.state import BatonSheetStatus
+
+    core = _core_for_memory_refusal(tmp_path, ["secondary"])
+    st = core._jobs["j"].sheets[1]
+    await core.handle_event(_refusal(1))
+    assert st.instrument_name == "secondary"
+    assert st.status is BatonSheetStatus.PENDING
+    assert st.normal_attempts == 0
+    # the next refusal (on the fallback) with the chain spent ends the sheet
+    await core.handle_event(_refusal(1))
+    assert st.status is BatonSheetStatus.FAILED

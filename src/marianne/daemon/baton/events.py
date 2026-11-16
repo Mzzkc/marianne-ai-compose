@@ -45,6 +45,12 @@ if TYPE_CHECKING:
 # =============================================================================
 
 
+#: ``SheetAttemptResult.error_classification`` for a sheet whose score declares ``memory:`` on an
+#: instrument that cannot deliver it. Not retried on that instrument; the fallback chain may
+#: still move the sheet to one that can. It is not an instrument-health signal.
+MEMORY_UNSUPPORTED = "MEMORY_DELIVERY_UNSUPPORTED"
+
+
 @dataclass(frozen=True)
 class SheetAttemptResult:
     """A musician reports the result of a single sheet attempt.
