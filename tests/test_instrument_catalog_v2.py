@@ -301,7 +301,8 @@ def test_every_v1_field_survives_in_a_v2_field_or_legacy(tmp_path: Path) -> None
 @needs_catalog
 def test_committed_catalog_directory_loads_and_covers_v1() -> None:
     catalog = load_catalog(V2_DIR)
-    assert {m.id for m in catalog.models()} == set(_v1()["musicians"])
+    # MC1b refreshes add models v1 never had; nothing v1 had may be lost.
+    assert set(_v1()["musicians"]) <= {m.id for m in catalog.models()}
     assert catalog.index.model_count == len(catalog.models())
     provisional = [m for m in catalog.models() if m.tier_status.provisional]
     assert provisional and all(m.tier_by_effort for m in provisional)
