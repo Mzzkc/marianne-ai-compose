@@ -602,9 +602,9 @@ async def test_release_and_teardown_holds_a_strong_reference_until_done(short_tm
 
 
 def _core_for_memory_refusal(tmp_path: Path, fallbacks: list[str]) -> Any:
-    from marianne.daemon.baton.core import BatonCore
     from marianne.core.sheet import Sheet
     from marianne.daemon.baton.adapter import sheets_to_execution_states
+    from marianne.daemon.baton.core import BatonCore
 
     sheet = Sheet(
         num=1, movement=1, voice_count=1, workspace=tmp_path, instrument_name="primary",

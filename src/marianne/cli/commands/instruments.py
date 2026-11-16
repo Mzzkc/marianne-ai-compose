@@ -207,8 +207,8 @@ def show_tier_classes(
     if json_output:
         output_json(report)
         return
-    for tier, rows in report.items():
-        console.print(f"{tier}:")
+    for tier_name, rows in report.items():
+        console.print(f"{tier_name}:")
         if not rows:
             console.print("  (no non-provisional, non-metered entry reaches this tier here)")
         for row in rows:

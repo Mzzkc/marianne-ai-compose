@@ -51,7 +51,9 @@ DEFAULT_ALLOW_ACCESS = frozenset({"subscription", "free", "local"})
 _ACCESS_ORDER = ("subscription", "free", "local", "metered")
 SKIPPED_STATUSES = frozenset({"superseded", "deprecated", "retired", "sunset"})
 
-BEGIN_MARKER = "# --- BEGIN generated tier classes (python -m marianne.instruments.tier_classes) ---"
+BEGIN_MARKER = (
+    "# --- BEGIN generated tier classes (python -m marianne.instruments.tier_classes) ---"
+)
 END_MARKER = "# --- END generated tier classes ---"
 
 
@@ -116,7 +118,11 @@ def _lowest_effort_entry(
             # `minimal` is "the least this seat offers"; where the seat maps it to the
             # same native word as `low` (claude-code, codex-cli, opencode), `low` is the
             # same run under its plain name, so the class says `low`.
-            if level == "minimal" and mapped.get("low") == mapped[level] and tiers.get("low") == tier:
+            if (
+                level == "minimal"
+                and mapped.get("low") == mapped[level]
+                and tiers.get("low") == tier
+            ):
                 continue
             return level, route.model_id
     if tiers.get("default") == tier:

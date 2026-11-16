@@ -130,7 +130,8 @@ class WorkspaceMcpConfigMixin:
                         target.parent.rmdir()
             else:
                 target.parent.mkdir(parents=True, exist_ok=True)
-                _write_private(target, previous, previous_mode if previous_mode is not None else 0o600)
+                mode = previous_mode if previous_mode is not None else 0o600
+                _write_private(target, previous, mode)
             _logger.debug(
                 "plugin_cli_workspace_mcp_config_restored",
                 instrument=self._profile.name,

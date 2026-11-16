@@ -229,7 +229,7 @@ def test_packaged_default_parses_and_defines_the_tier_classes() -> None:
     assert parsed.classes["strong"] == parse_classes_file(
         "version: 1\nclasses:\n  strong: [claude-code, codex-cli, antigravity, opencode]\n"
     ).classes["strong"]
-    assert [n for n in parsed.classes][:11] == [
+    assert list(parsed.classes)[:11] == [
         "strong", "workhorse", "fast", "cheap", "writing", "review", "vision", "local",
         "high-context", "image", "video",
     ]
