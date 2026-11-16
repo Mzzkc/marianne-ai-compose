@@ -459,6 +459,10 @@ All `--json` output shares these guarantees (issue #495):
 - **ASCII-only serialization.** Output is written with `ensure_ascii=True`; non-ASCII characters in values appear as `\uXXXX` escapes.
 - **Verbatim emission.** The serialized text is written directly to stdout (bypassing Rich's emoji substitution), so the payload a consumer parses is the payload `json.dumps` produced.
 
+#### Prompt receipt per sheet (GH #546)
+
+`mzt status <job> --json` gives every sheet that has assembled a prompt a `prompt_receipt` summary: `total_bytes`, `estimated_tokens` (a character-heuristic estimate, not a tokenizer count), `source_count`, `dropped_count` and `prompt_sha256`. The full receipt is the sheet's `prompt_receipt` in the checkpoint: ordered `sources` (`kind` prelude/cadenza/technique/memory/template, `path` as declared, `resolved_path`, `sha256`, `bytes`, `truncated`, `dropped_reason`), `template_bytes`, `total_bytes`, `estimated_tokens` and `prompt_sha256`. It holds hashes and sizes, never prompt text. An optional item over its `max_bytes`, or one that is missing or unreadable, appears with its `dropped_reason` and 0 bytes. Each `attempt_history` entry carries that attempt's `model_used`, `prompt_sha256` and `prompt_bytes`. `mzt diagnose` lists each sheet's three heaviest sources and every dropped one.
+
 The guarantees are enforced by regression tests (`tests/test_json_utf8_contract.py`) that plant hostile bytes (raw `0x97`, lone surrogates) in attempt output and assert the emitted JSON parses strictly.
 
 ### `mzt watch`
