@@ -7,7 +7,9 @@ hold the loop:
 
 - ``mzt wait JOB``    blocks until the job needs a decision or is finished.
 - ``mzt next``        says which job needs attention and what to do about it.
-- ``mzt verdict JOB`` reads the review sheet's VERDICT line as PASS/REWORK/BLOCKED.
+- ``mzt verdict JOB`` reads the review sheet's VERDICT line as PASS/REWORK/BLOCKED
+                      and adds the findings, the validation counts, the report
+                      path and the round (GH #554).
 
 All conductor access goes through :func:`_route`, so tests replace one
 function and never touch a real conductor.
@@ -283,12 +285,10 @@ def _line_verdict(line: str, regex: re.Pattern[str]) -> str | None:
     return mapped
 
 
-def find_verdict(workspace: Path, pattern: str = DEFAULT_VERDICT_PATTERN) -> dict[str, Any]:
-    """Newest artifact in ``workspace`` carrying a mappable VERDICT line.
-
-    Within that file the last such line wins. No prose interpretation beyond
-    the word mapping; ``round`` is not tracked and is always ``None``.
-    """
+def _scan_verdict(
+    workspace: Path, pattern: str = DEFAULT_VERDICT_PATTERN,
+) -> tuple[dict[str, Any], str, int]:
+    """:func:`find_verdict` plus the winning file's text and its verdict line index."""
     unknown: dict[str, Any] = {
         "verdict": "unknown", "raw": None, "source_path": None, "round": None,
     }
@@ -297,7 +297,7 @@ def find_verdict(workspace: Path, pattern: str = DEFAULT_VERDICT_PATTERN) -> dic
     except re.error as exc:
         raise typer.BadParameter(f"Invalid --pattern: {exc}") from exc
     if not workspace.is_dir():
-        return unknown
+        return unknown, "", -1
 
     candidates: list[tuple[float, Path]] = []
     scanned = 0
@@ -323,17 +323,270 @@ def find_verdict(workspace: Path, pattern: str = DEFAULT_VERDICT_PATTERN) -> dic
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        found: tuple[str, str] | None = None
-        for line in text.splitlines():
+        found: tuple[str, str, int] | None = None
+        for index, line in enumerate(text.splitlines()):
             mapped = _line_verdict(line, regex)
             if mapped is not None:
-                found = (mapped, line.strip()[:300])
+                found = (mapped, line.strip()[:300], index)
         if found is not None:
             return {
                 "verdict": found[0], "raw": found[1],
                 "source_path": str(path), "round": None,
-            }
-    return unknown
+            }, text, found[2]
+    return unknown, "", -1
+
+
+def find_verdict(workspace: Path, pattern: str = DEFAULT_VERDICT_PATTERN) -> dict[str, Any]:
+    """Newest artifact in ``workspace`` carrying a mappable VERDICT line.
+
+    Within that file the last such line wins. No prose interpretation beyond
+    the word mapping; ``round`` is ``None`` here (``mzt verdict`` fills it from
+    the task file, see :func:`task_round`).
+    """
+    return _scan_verdict(workspace, pattern)[0]
+
+
+# ---------------------------------------------------------------------------
+# verdict extras (GH #554): findings, accept counts, task file, result path, round
+# ---------------------------------------------------------------------------
+
+_MAX_FINDINGS = 20
+_MAX_FINDING_CHARS = 500
+_BULLET = re.compile(r"^\s*(?:[-*+\u2022]|\d{1,3}[.)])\s+(?P<text>\S.*)$")
+_NOISE = re.compile(r"^[\s*_`>#.\-]*$")
+_EMPTY_ITEM = re.compile(r"^(?:none|n/?a|nil|no\s+\w+(?:\s+\w+){0,4}|nothing)[\s.*_`]*$", re.I)
+#: A line that opens a new section: a markdown heading, or an UPPER-CASE label with a colon
+#: (the review sheet's exact labels are VERDICT, EVIDENCE, FAILURES, RISKS, REQUIRED FIXES).
+_SECTION_BREAK = re.compile(r"^\s*(?:#{1,6}\s+\S|[>*_`\s]*[A-Z][A-Z _/-]{2,}[*_`]*\s*:)")
+_PRIMARY_SECTIONS = ("FINDINGS",)
+_SECONDARY_SECTIONS = ("REQUIRED FIXES", "FAILURES")
+
+
+def _section_open(line: str, name: str) -> re.Match[str] | None:
+    """Match a line that opens section ``name``: ``## Name``, ``NAME:`` or ``**NAME:** text``."""
+    label = re.escape(name).replace(r"\ ", r"[ _-]")
+    heading = re.match(
+        rf"^\s*#{{1,6}}\s+[*_`]*{label}[*_`]*\s*:?\s*(?P<rest>.*)$", line, re.I,
+    )
+    if heading:
+        return heading
+    return re.match(rf"^[\s>*_`-]*{label}[*_`]*\s*:[*_`]*\s*(?P<rest>.*)$", line, re.I)
+
+
+def _clean_item(text: str) -> str:
+    return text.strip()[:_MAX_FINDING_CHARS]
+
+
+def _section_items(lines: list[str], names: tuple[str, ...]) -> list[str] | None:
+    """Items of the first section named in ``names``, or None when there is none.
+
+    A section starts at its heading/label line (text after the label on that
+    line is the first item) and ends at the next heading or UPPER-CASE label.
+    Bullets (``-``, ``*``, ``+``, ``1.``) are items, indented lines continue
+    the previous item; a section with no bullets yields its non-blank lines.
+    Placeholder items such as "none" are dropped.
+    """
+    for name in names:
+        for start, line in enumerate(lines):
+            opened = _section_open(line, name)
+            if opened is None:
+                continue
+            body: list[str] = []
+            rest = opened.group("rest").strip()
+            if rest and not _NOISE.match(rest):
+                body.append(rest)
+            for follow in lines[start + 1:]:
+                if _SECTION_BREAK.match(follow):
+                    break
+                body.append(follow)
+            return _items_from(body)
+    return None
+
+
+def _items_from(body: list[str]) -> list[str]:
+    items: list[str] = []
+    prose: list[str] = []
+    for line in body:
+        if not line.strip() or _NOISE.match(line):
+            continue
+        bullet = _BULLET.match(line)
+        if bullet:
+            items.append(bullet.group("text"))
+        elif items and line[:1] in " \t":
+            items[-1] = items[-1] + " " + line.strip()
+        else:
+            prose.append(line.strip())
+    chosen = items or prose
+    return [
+        _clean_item(i) for i in chosen if i.strip() and not _EMPTY_ITEM.match(i.strip())
+    ][:_MAX_FINDINGS]
+
+
+def extract_findings(text: str, verdict_index: int, verdict_word: str) -> list[str]:
+    """The reviewer's findings, verbatim, from the report that carries the verdict.
+
+    Rule, first match wins:
+
+    1. a section headed ``FINDINGS`` (``FINDINGS:`` or ``## Findings``): its bullets;
+    2. else the sheets' own review labels ``REQUIRED FIXES`` then ``FAILURES``;
+    3. else, when the verdict is not PASS, the bullet lines after the VERDICT line
+       up to the next heading or label (non-blank lines when it has no bullets).
+
+    Bullet markers are stripped, the text is not edited. At most 20 items of
+    500 characters. A PASS with no FINDINGS section has none.
+    """
+    if not text:
+        return []
+    lines = text.splitlines()
+    for names in (_PRIMARY_SECTIONS, _SECONDARY_SECTIONS):
+        found = _section_items(lines, names)
+        if found:
+            return found
+    if verdict_word == "PASS" or verdict_index < 0:
+        return []
+    after: list[str] = []
+    for line in lines[verdict_index + 1:]:
+        if _SECTION_BREAK.match(line):
+            break
+        after.append(line)
+    return _items_from(after)
+
+
+def accept_counts(state: dict[str, Any] | None) -> dict[str, int]:
+    """``{ran, passed}`` over the validations the job's sheets recorded.
+
+    Reads the checkpoint (``job.status``): each sheet's ``validation_details``
+    (latest attempt), or its ``passed_validations``/``failed_validations`` name
+    lists when the details were not kept. ``{0, 0}`` means no validation result
+    is available, not that all passed.
+    """
+    ran = passed = 0
+    for sheet in ((state or {}).get("sheets") or {}).values():
+        if not isinstance(sheet, dict):
+            continue
+        details = sheet.get("validation_details")
+        if isinstance(details, list) and details:
+            rows = [d for d in details if isinstance(d, dict)]
+            ran += len(rows)
+            passed += sum(1 for d in rows if d.get("passed"))
+        else:
+            ok = sheet.get("passed_validations") or []
+            bad = sheet.get("failed_validations") or []
+            ran += len(ok) + len(bad)
+            passed += len(ok)
+    return {"ran": ran, "passed": passed}
+
+
+_TASK_FIELD_NAMES = ("GOAL", "FILES", "KIND", "ACCEPT", "DO_NOT_TOUCH", "REPORT", "FINDINGS")
+_TASK_FIELD_START = re.compile(
+    rf"^[ \t>*#-]*({'|'.join(_TASK_FIELD_NAMES)})[ \t]*:[ \t]*(.*)$"
+)
+
+
+def parse_task_fields(text: str) -> dict[str, str]:
+    """Field name -> value of the conducting card's TASK.md (first occurrence wins).
+
+    Same grammar as ``mzt agents run``: a field is ``NAME: value`` (list, quote
+    and heading marks tolerated); following lines up to the next field line
+    continue the value.
+    """
+    fields: dict[str, str] = {}
+    current: str | None = None
+    for line in text.splitlines():
+        match = _TASK_FIELD_START.match(line)
+        if match:
+            name = str(match.group(1))
+            if name in fields:
+                current = None
+                continue
+            current = name
+            fields[name] = str(match.group(2)).strip()
+        elif current is not None and line.strip():
+            fields[current] = (fields[current] + " " + line.strip()).strip()
+    return fields
+
+
+def _bound_task_copy_name(score_path: Path) -> str | None:
+    """``marianne_agent.task.copy`` from a bound score, when it names one."""
+    try:
+        import yaml
+
+        data = yaml.safe_load(score_path.read_text(encoding="utf-8"))
+        name = data["prompt"]["variables"]["marianne_agent"]["task"]["copy"]
+    except Exception:  # noqa: BLE001 - unreadable or non-contract score: fall back to the glob
+        return None
+    return name if isinstance(name, str) and name and "/" not in name else None
+
+
+def find_task_file(workspace: Path, config_path: str | None) -> Path | None:
+    """The task file ``mzt agents run`` copied for this job, or None.
+
+    ``agents run`` binds the engagement in a run dir (the bound score and the
+    read-only copy ``task-<source name>``) and, by default, uses that same
+    directory as the workspace. Looked for beside the bound score first
+    (``config_path``; its ``marianne_agent.task.copy`` names the copy), then in
+    the workspace as ``task-*`` carrying the card's REPORT field.
+    """
+    dirs: list[Path] = []
+    score = Path(config_path) if config_path else None
+    if score is not None:
+        dirs.append(score.parent)
+    if workspace not in dirs:
+        dirs.append(workspace)
+    if score is not None:
+        copy = _bound_task_copy_name(score)
+        if copy and (score.parent / copy).is_file():
+            return score.parent / copy
+    for directory in dirs:
+        try:
+            matches = sorted(
+                (p for p in directory.glob("task-*") if p.is_file()),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+        except OSError:
+            continue
+        for path in matches:
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if "REPORT" in parse_task_fields(text):
+                return path
+    return None
+
+
+def task_extras(task_path: Path | None, workspace: Path) -> tuple[int | None, str | None]:
+    """``(round, result_path)`` from the task file; ``(None, None)`` without one.
+
+    ``round`` is 2 when the task carries a ``FINDINGS:`` line (the rework
+    task), else 1. ``result_path`` is the REPORT field's file name resolved in
+    the workspace, the path ``mzt agents run`` printed.
+    """
+    if task_path is None:
+        return None, None
+    try:
+        fields = parse_task_fields(task_path.read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return None, None
+    report = Path(fields.get("REPORT", "")).name
+    return (2 if "FINDINGS" in fields else 1), str(workspace / (report or "REPORT.md"))
+
+
+def build_verdict(
+    workspace: Path,
+    pattern: str,
+    state: dict[str, Any] | None,
+    config_path: str | None = None,
+) -> dict[str, Any]:
+    """The full ``mzt verdict`` object: the four #547 keys plus the #554 extras."""
+    result, text, index = _scan_verdict(workspace, pattern)
+    round_no, result_path = task_extras(find_task_file(workspace, config_path), workspace)
+    result["round"] = round_no
+    result["findings"] = extract_findings(text, index, result["verdict"])
+    result["accept"] = accept_counts(state)
+    result["result_path"] = result_path
+    return result
 
 
 async def _job_row(job_id: str) -> dict[str, Any]:
@@ -411,7 +664,12 @@ def verdict(
     Finds the newest review/inspect artifact in the score's workspace that has
     a 'VERDICT:' line and maps its word: PASS/APPROVE/ACCEPT -> PASS,
     REWORK/REJECT -> REWORK, HOLD/BLOCK -> BLOCKED. Anything else, or no
-    such line, is unknown. Nothing else is interpreted.
+    such line, is unknown. The JSON also carries `findings` (the report's
+    FINDINGS bullets, else REQUIRED FIXES/FAILURES, else the bullets after a
+    non-PASS VERDICT line), `accept` ({ran, passed} over the sheets'
+    validation results), `result_path` (the task's REPORT file in the
+    workspace) and `round` (2 when the task file has a FINDINGS: line, else
+    1; null when the job has no `mzt agents run` task file).
 
     Examples:
         mzt verdict my-job --json
@@ -419,6 +677,8 @@ def verdict(
     """
     job_id = validate_job_id(job_id)
     submitted_at: float | None = None
+    state: dict[str, Any] | None = None
+    config_path: str | None = None
     if workspace is None:
         try:
             row = asyncio.run(_job_row(job_id))
@@ -442,8 +702,10 @@ def verdict(
             raise typer.Exit(1)
         workspace = Path(str(raw_ws))
         submitted_at = row.get("submitted_at")
+        config_path = str(row["config_path"]) if row.get("config_path") else None
+        state = asyncio.run(_safe_status(_route, job_id))
 
-    result = find_verdict(workspace, pattern)
+    result = build_verdict(workspace, pattern, state, config_path)
     if accept:
         try:
             _write_marker(workspace, job_id, submitted_at, result["verdict"])
@@ -459,6 +721,8 @@ def verdict(
         output_json(result)
     else:
         typer.echo(f"{result['verdict']}: {result['source_path'] or 'no verdict line found'}")
+        for finding in result["findings"]:
+            typer.echo(f"  - {finding}")
 
 
 # ---------------------------------------------------------------------------

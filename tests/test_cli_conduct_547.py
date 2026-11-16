@@ -48,6 +48,8 @@ class FakeConductor:
         self.calls.append((method, params))
         if method == "job.list":
             return self.rows
+        if params["job_id"] not in self.statuses:
+            raise JobNotFound(params["job_id"])
         entry = self.statuses[params["job_id"]]
         if isinstance(entry, list):
             entry = entry.pop(0) if len(entry) > 1 else entry[0]

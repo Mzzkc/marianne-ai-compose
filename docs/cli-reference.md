@@ -626,7 +626,7 @@ Read a score's review verdict as one word (GH #547).
 Usage: mzt verdict [OPTIONS] JOB_ID
 ```
 
-Finds the newest `.md`/`.txt` file in the score's workspace that has a mappable `VERDICT:` line (the last such line in it) and maps the word: `PASS`/`APPROVE`/`ACCEPT` to `PASS`, `REWORK`/`REJECT` to `REWORK`, `HOLD`/`BLOCK` to `BLOCKED`. Nothing else is interpreted. A line that lists several verdict words (a prompt template such as `VERDICT: PASS | REWORK`) is skipped.
+Finds the newest `.md`/`.txt` file in the score's workspace that has a mappable `VERDICT:` line (the last such line in it) and maps the word: `PASS`/`APPROVE`/`ACCEPT` to `PASS`, `REWORK`/`REJECT` to `REWORK`, `HOLD`/`BLOCK` to `BLOCKED`. The verdict word is the only interpretation; the extra keys below are read, not judged. A line that lists several verdict words (a prompt template such as `VERDICT: PASS | REWORK`) is skipped.
 
 | Option | Description |
 |--------|-------------|
@@ -636,10 +636,25 @@ Finds the newest `.md`/`.txt` file in the score's workspace that has a mappable 
 | `--json` | One JSON object, no ANSI |
 
 ```json
-{"verdict": "REWORK", "raw": "VERDICT: REWORK", "source_path": "/ws/cycle-state/x-inspection.md", "round": null}
+{
+  "verdict": "REWORK",
+  "raw": "VERDICT: REWORK",
+  "source_path": "/ws/cycle-state/x-inspection.md",
+  "round": 1,
+  "findings": ["Email validation accepts a@b with no dot in the domain (validate.py line 41)."],
+  "accept": {"ran": 4, "passed": 3},
+  "result_path": "/ws/result.md"
+}
 ```
 
-`verdict` is `unknown` when no file has a mappable line (`raw` and `source_path` are then `null`). `round` is always `null`: Marianne does not track review rounds.
+`verdict` is `unknown` when no file has a mappable line (`raw` and `source_path` are then `null`; the other keys are still filled in). Added in GH #554, so a conductor can brief a rework and quote the checks without reading files:
+
+- **`findings`**: the reviewer's items, verbatim (bullet markers stripped, nothing edited; at most 20 items of 500 characters). Read from the file that carries the verdict, first rule that yields items wins: (1) a section headed `FINDINGS` (`FINDINGS:` or `## Findings`), its bullets; (2) else the review sheet's own labels, `REQUIRED FIXES` then `FAILURES`; (3) else, when the verdict is not `PASS`, the bullets after the `VERDICT:` line up to the next heading or UPPER-CASE label (its non-blank lines when it has no bullets). A section ends at the next heading or UPPER-CASE `LABEL:` line; items such as `none` or `no issues` are dropped. A `PASS` without a `FINDINGS` section has an empty list.
+- **`accept`**: `{ran, passed}` counted over the validation results the score's sheets recorded in the checkpoint (`validation_details` per sheet, or its passed/failed name lists). These are the score's validations, the checks `mzt status` shows as the validation column. `{"ran": 0, "passed": 0}` means no validation result was recorded or the conductor could not give the state; it does not mean every check passed.
+- **`result_path`**: the file named by the task's `REPORT` field, resolved in the workspace (its basename, as `mzt agents run` prints it). `null` when the job has no `mzt agents run` task file.
+- **`round`**: `2` when the task file carries a `FINDINGS:` line (the rework task), else `1`; `null` when the job has no task file. The task file is the read-only `task-*` copy `mzt agents run` leaves beside the bound score in the run dir (found through the job's `config_path`, which names it as `marianne_agent.task.copy`, else any `task-*` file with the six task fields in the workspace).
+
+---
 
 ---
 
