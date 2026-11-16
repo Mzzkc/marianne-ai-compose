@@ -1604,6 +1604,19 @@ mzt instruments prices --snapshot ./models.dev.api.json --json
 
 ---
 
+### `mzt instruments catalog`
+
+Convert and check the instrument model catalog (schema v2).
+
+```
+Usage: mzt instruments catalog convert SOURCE OUT_DIR
+       mzt instruments catalog check DIRECTORY
+```
+
+`convert` reads a v1 `instrument-catalog.yaml` and writes one YAML per model family plus `index.yaml` into `OUT_DIR`, then validates what it wrote. Every v1 model and every route (`runs_models`, `available_via`) is kept; v1 fields with no v2 home go under `legacy`. `tier_by_effort` (frontier = Opus-class, balanced = Sonnet-class, light = Haiku-class) is derived from v1 price-band tags and marked `provisional`: it is a guess, not evidence. `check` validates a v2 directory and prints the model, family and provisional-tier counts; it exits `1` on any schema or index disagreement. Nothing at run time reads the catalog yet.
+
+---
+
 ### `mzt instruments check`
 
 Check readiness and configuration of a specific instrument.
