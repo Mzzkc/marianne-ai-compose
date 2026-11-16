@@ -1460,9 +1460,9 @@ learning:
 
 *Source: `src/marianne/core/config/memory.py` — `MemoryConfig`, `MemoryBackendDecl`, `MemoryCaps`, `MemoryDefaults`*
 
-Declares named memory attachments for the score. **Reserved: not yet wired.** The memory protocol and the `files` backend exist as a library (`marianne.memory`); the conductor does not yet give a sheet access to a declared memory. The key validates (V340-V347) and `mzt validate` reports it with V327 as a key no runtime code reads. A score without `memory:` loads and runs exactly as before. `memory: {}` is legal.
+Declares named memory attachments for the score. At dispatch the conductor opens a gateway session per attachment active in the sheet's phase and hands the musician six memory tools through an MCP shim (see *Delivery to a sheet* below). The key validates with V340-V347. A score without `memory:` loads and runs exactly as before. `memory: {}` is legal and attaches one `default` files-backed memory.
 
-This example is reserved syntax; it does nothing yet.
+Only the `files` backend and `access: inherit` are available today.
 
 ```yaml
 memory:
@@ -1495,7 +1495,7 @@ memory:
 | `memory.defaults.provenance` | enum | `required` | `required` or `optional`; the deprecated `off` is read as `optional` (V349 INFO note) |
 | `memory.defaults.lock_timeout_seconds` | float | `10.0` | Outer timeout for one memory call |
 
-### The gateway socket endpoint (library only)
+### The gateway socket endpoint
 
 `marianne.memory.gateway` also contains an in-process `Gateway` (six calls: `declare`, `recall`, `verify`, `bind`, `forget`, `fetch`; grants; hash-chained audit log) and, in `marianne.memory.gateway.endpoint`, a Unix-socket endpoint with a small synchronous client (`marianne.memory.gateway.client`). One listening socket exists per session, at `<run_dir>/s/s_<hash16>.sock` inside a `0700` directory, and the socket is the session: a request never names a session, principal or scope. The conductor hosts it at dispatch (see "Delivery to a sheet" below). Admission is same-UID via `SO_PEERCRED`: this stops other users, but it does not stop another process of the same user that learns the socket path. The protections against siblings are only the unguessable per-dispatch path, the `0700` directory and one session per socket.
 
