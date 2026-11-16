@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from marianne.core.constants import VALIDATION_PASS_RATE_KEY
+from marianne.core.prompt_receipt import PromptReceipt
 from marianne.daemon.types import ObserverEvent
 
 if TYPE_CHECKING:
@@ -133,6 +134,9 @@ class SheetAttemptResult:
     # (the estimate is a heuristic; a wrong over-estimate must not false-reject
     # a runnable sheet). The baton folds these into SheetState.preflight_warnings.
     preflight_warnings: list[str] = field(default_factory=list)
+    # GH #546: hashes and sizes of what the assembled prompt was made of (never
+    # its text). None when the attempt failed before a prompt was assembled.
+    prompt_receipt: PromptReceipt | None = None
 
     # Model that actually executed (may differ from config default)
     model_used: str | None = None

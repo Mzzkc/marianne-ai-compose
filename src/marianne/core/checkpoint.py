@@ -19,6 +19,7 @@ from marianne.core.config.instruments import InstrumentRouteBinding
 from marianne.core.errors.codes import ErrorCategory, ExitReason
 from marianne.core.flow_state import FlowState
 from marianne.core.logging import get_logger
+from marianne.core.prompt_receipt import PromptReceipt
 from marianne.utils.time import utc_now
 
 # Literal variant to avoid shadowing the IsolationMode enum in core.config.workspace.
@@ -514,6 +515,18 @@ class SheetState(BaseModel):
         default=None,
         description="Prompt analysis metrics (character_count, estimated_tokens, etc.)",
     )
+    prompt_receipt: PromptReceipt | None = Field(
+        default=None,
+        description=(
+            "What the latest attempt that assembled a prompt delivered, by source: "
+            "ordered prelude/cadenza/technique/memory/template sources with declared "
+            "and resolved path, sha256, bytes, and the reason a declared source was "
+            "dropped; plus total_bytes, an ESTIMATED token count and the prompt's "
+            "sha256. Hashes and sizes only, never prompt text. None on checkpoints "
+            "written before GH #546 and on attempts that failed before assembly. "
+            "prompt_metrics keeps its older text-count shape; the receipt is separate."
+        ),
+    )
     preflight_warnings: list[str] = Field(
         default_factory=list,
         description="Warnings from preflight checks (large prompts, missing files, etc.)",
@@ -543,8 +556,9 @@ class SheetState(BaseModel):
     attempt_history: list[dict[str, Any]] = Field(
         default_factory=list,
         description="One record per attempt: {attempt, instrument, model, "
-        "duration_seconds, success, exit_reason, error_classification, "
-        "error_code, error_message, exit_code, timestamp}. Persisted (max 50) "
+        "model_used, prompt_sha256, prompt_bytes, duration_seconds, success, "
+        "exit_reason, error_classification, error_code, error_message, "
+        "exit_code, timestamp}. Persisted (max 50) "
         "for status, diagnose and `mzt history`; error_message is the "
         "musician's redacted cause text.",
     )
@@ -936,6 +950,13 @@ class SheetState(BaseModel):
         # accumulated cost is a $0-placeholder mix and stays cost-uncertain.
         if getattr(result, "cost_uncertain", False):
             self.cost_uncertain = True
+        # GH #546: the receipt of what this attempt's prompt was made of. An
+        # attempt that failed before assembly has none and must not erase the
+        # last real one; ``attempt_history`` carries the per-attempt hash.
+        receipt = getattr(result, "prompt_receipt", None)
+        if isinstance(receipt, PromptReceipt):
+            self.prompt_receipt = receipt
+            self.prompt_metrics = {"estimated_tokens": receipt.estimated_tokens}
         # #202: fold in warn-only preflight notes (deduped) for status/diagnose.
         for warning in getattr(result, "preflight_warnings", None) or []:
             if warning not in self.preflight_warnings:
@@ -952,6 +973,11 @@ class SheetState(BaseModel):
             "attempt": self.attempt_count or len(self.attempt_results),
             "instrument": getattr(result, "instrument_name", None) or self.instrument_name,
             "model": self.instrument_model,
+            # GH #546: the model that answered (the echo, when the backend gives
+            # one) and the sha256 and size of the prompt this attempt sent.
+            "model_used": getattr(result, "model_used", None),
+            "prompt_sha256": receipt.prompt_sha256 if isinstance(receipt, PromptReceipt) else None,
+            "prompt_bytes": receipt.total_bytes if isinstance(receipt, PromptReceipt) else None,
             "duration_seconds": round(float(result.duration_seconds), 3),
             "success": bool(getattr(result, "execution_success", False)),
             "exit_reason": getattr(result, "exit_reason", None),
