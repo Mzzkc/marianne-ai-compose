@@ -116,6 +116,115 @@ def check_classes(
     console.print(f"Checked {len(report['classes'])} capability classes")
 
 
+def _default_catalog_dir() -> Path | None:
+    """The catalog v2 directory of a source checkout (plugins submodule), when present."""
+    import marianne
+
+    for root in Path(marianne.__file__).resolve().parents:
+        candidate = root / "plugins" / "marianne" / "docs" / "ref" / "catalog"
+        if (candidate / "index.yaml").is_file():
+            return candidate
+    return None
+
+
+@classes_app.command(name="tiers")
+def show_tier_classes(
+    catalog_dir: Path | None = typer.Option(
+        None, "--catalog", help="Catalog v2 directory (default: the checkout's plugins submodule)."
+    ),
+    write_proposal: Path | None = typer.Option(
+        None,
+        "--write-proposal",
+        help="Write a classes-file fragment you can merge by hand. Never the user layer.",
+    ),
+    force: bool = typer.Option(False, "--force", help="Replace an existing proposal file."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Print the frontier/balanced/light chains this machine resolves from the catalog.
+
+    Read-only: this never writes ``~/.marianne/classes.yaml`` (your ordering is
+    yours). ``--write-proposal PATH`` writes a fragment for you to merge.
+    """
+    from marianne.core.config.catalog import CatalogError, load_catalog
+    from marianne.instruments.classes import class_source_paths
+    from marianne.instruments.tier_classes import (
+        TIER_CLASSES,
+        render_proposal,
+        tier_chains,
+    )
+
+    directory = catalog_dir or _default_catalog_dir()
+    if directory is None:
+        output_error("No catalog v2 found; pass --catalog DIR (plugins/marianne/docs/ref/catalog)")
+        raise typer.Exit(1)
+    try:
+        catalog = load_catalog(directory)
+    except CatalogError as exc:
+        output_error(str(exc))
+        raise typer.Exit(1) from exc
+
+    profiles = _load_all_profiles()
+    registry = InstrumentRegistry()
+    for profile in profiles.values():
+        registry.register(profile)
+    chains = tier_chains(catalog, profiles_available=profiles)
+
+    if write_proposal is not None:
+        layers = class_source_paths()
+        if write_proposal.expanduser().resolve() in {layers[1], layers[2]}:
+            output_error(
+                f"{write_proposal} is a class layer file; the proposal is for you to merge, "
+                "so write it elsewhere"
+            )
+            raise typer.Exit(1)
+        if write_proposal.exists() and not force:
+            output_error(f"{write_proposal} exists; use --force to replace it")
+            raise typer.Exit(1)
+        note = (
+            f"catalog {directory} (generated_at {catalog.index.generated_at}); "
+            f"{len(profiles)} registered profiles; non-provisional tiers, no metered routes."
+        )
+        write_proposal.parent.mkdir(parents=True, exist_ok=True)
+        write_proposal.write_text(render_proposal(chains, machine_note=note), encoding="utf-8")
+
+    report: dict[str, list[dict[str, Any]]] = {}
+    for tier in TIER_CLASSES:
+        rows = []
+        for entry in chains[tier]:
+            available, reason = check_instrument_available(entry.profile, registry)
+            rows.append(
+                {
+                    "profile": entry.profile,
+                    "model": entry.model,
+                    "effort": entry.effort,
+                    "family": entry.family,
+                    "access": entry.access,
+                    "availability": available,
+                    "reason": reason,
+                }
+            )
+        report[tier] = rows
+    if json_output:
+        output_json(report)
+        return
+    for tier, rows in report.items():
+        console.print(f"{tier}:")
+        if not rows:
+            console.print("  (no non-provisional, non-metered entry reaches this tier here)")
+        for row in rows:
+            effort = f" effort={row['effort']}" if row["effort"] else ""
+            mark = "ok " if row["availability"] else "n/a"
+            console.print(
+                f"  [{mark}] {row['profile']} {row['model']}{effort}  "
+                f"({row['family']}, {row['access']})",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
+    if write_proposal is not None:
+        console.print(f"Proposal written to {write_proposal} (not installed; merge by hand)")
+
+
 @classes_app.command(name="write")
 def write_classes(
     dry_run: bool = typer.Option(False, "--dry-run"),
