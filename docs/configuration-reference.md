@@ -1460,9 +1460,9 @@ memory:
 
 Three library pieces sit between a sheet and the gateway:
 
-- `marianne.memory.shim` is a stdio MCP server (`python -m marianne.memory.shim --socket <path> [--memory-budget-seconds 10.0]`) exposing exactly the six tools and forwarding each over the socket. It carries no identity, clamps every call to the budget, refuses an over-long input line, returns a gateway refusal as a tool result with `isError: true` (code, subtype, message, remedy), and exits non-zero with one stderr line when the socket is gone at startup.
+- `marianne.memory.shim` is a stdio MCP server (`python -m marianne.memory.shim [--memory-budget-seconds 10.0]`, with the socket path in the `MARIANNE_MEMORY_SOCKET` environment variable; `--socket <path>` is accepted for manual use but the conductor never passes it) exposing exactly the six tools and forwarding each over the socket. It carries no identity, clamps every call to the budget, refuses an over-long input line, returns a gateway refusal as a tool result with `isError: true` (code, subtype, message, remedy), and exits non-zero with one stderr line when the socket is gone at startup.
 - `marianne.memory.resolve.resolve_memory(config, phase, user=..., run_dir=...)` is a pure function from the `memory:` key and a sheet's phase to frozen `ResolvedBinding` values (clamped caps, a stable UUIDv5 attachment id, the per-dispatch socket path). With `memory:` absent it returns nothing; with `memory: {}` it returns one `default` binding (`files`, `local:default`). It reuses the technique phase matcher.
-- `marianne.memory.manifest` renders the prompt block (six tools and attachment names only) and the MCP config entry (shim command, `--socket`, `--memory-budget-seconds`, nothing else).
+- `marianne.memory.manifest` renders the prompt block (six tools and attachment names only) and the MCP config entry (shim command, `--memory-budget-seconds`, and an `env` block holding `MARIANNE_MEMORY_SOCKET`, nothing else).
 
 ### Delivery to a sheet
 
