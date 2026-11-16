@@ -1080,6 +1080,17 @@ def _output_status_json(
             sheet_data["instrument_resolution"] = sheet.instrument_resolution.model_dump(
                 mode="json"
             )
+        # GH #546: a summary of what the latest prompt was made of; the full
+        # per-source receipt is in the checkpoint (hashes and sizes, no text).
+        if sheet.prompt_receipt is not None:
+            rcpt = sheet.prompt_receipt
+            sheet_data["prompt_receipt"] = {
+                "total_bytes": rcpt.total_bytes,
+                "estimated_tokens": rcpt.estimated_tokens,
+                "source_count": len(rcpt.sources) + rcpt.sources_omitted,
+                "dropped_count": sum(1 for s in rcpt.sources if s.dropped_reason),
+                "prompt_sha256": rcpt.prompt_sha256,
+            }
         # GH #489: a response_format sheet's validated object, whole.
         if sheet.structured_output is not None:
             sheet_data["structured_output"] = sheet.structured_output

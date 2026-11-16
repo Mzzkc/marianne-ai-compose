@@ -51,6 +51,7 @@ from marianne.core.log_sources import (
     read_registry_job_metadata,
 )
 from marianne.core.logging import find_log_files, get_default_log_path
+from marianne.core.prompt_receipt import PromptReceipt
 from marianne.daemon.clone import active_registry_db_path
 
 from ..helpers import (
@@ -1190,6 +1191,53 @@ def _top_syscalls(
     ]
 
 
+def _receipt_digest(sheet_num: int, receipt: PromptReceipt) -> dict[str, Any]:
+    """Top three delivered sources by bytes, and every dropped one (GH #546)."""
+    delivered = [s for s in receipt.sources if not s.dropped_reason]
+    top = sorted(delivered, key=lambda s: s.bytes, reverse=True)[:3]
+    return {
+        SHEET_NUM_KEY: sheet_num,
+        "total_bytes": receipt.total_bytes,
+        "estimated_tokens": receipt.estimated_tokens,
+        "prompt_sha256": receipt.prompt_sha256,
+        "top_sources": [
+            {"kind": s.kind, "path": s.path, "bytes": s.bytes, "sha256": s.sha256}
+            for s in top
+        ],
+        "dropped": [
+            {"kind": s.kind, "path": s.path, "dropped_reason": s.dropped_reason}
+            for s in receipt.sources
+            if s.dropped_reason
+        ],
+    }
+
+
+def _print_prompt_receipts(out: Any, report: dict[str, Any]) -> None:
+    """Human view of the receipts: the three heaviest sources per sheet."""
+    receipts = report.get("prompt_receipts") or []
+    if not receipts:
+        return
+    out.print("\n[bold cyan]Prompt Sources[/bold cyan] [dim](token counts are estimates)[/dim]")
+    for entry in receipts[:20]:
+        out.print(
+            f"  Sheet {entry[SHEET_NUM_KEY]}: {entry['total_bytes']:,} bytes, "
+            f"~{entry['estimated_tokens']:,} tokens (estimate)",
+            markup=False,
+        )
+        for src in entry["top_sources"]:
+            out.print(
+                f"    {src['bytes']:>9,}  {src['kind']}  {src['path']}",
+                markup=False, highlight=False,
+            )
+        for src in entry["dropped"]:
+            out.print(
+                f"    dropped  {src['kind']}  {src['path']}: {src['dropped_reason']}",
+                markup=False, highlight=False,
+            )
+    if len(receipts) > 20:
+        out.print(f"  [dim]... and {len(receipts) - 20} more sheets[/dim]")
+
+
 def _build_diagnostic_report(
     job: CheckpointState,
     *,
@@ -1287,6 +1335,13 @@ def _build_diagnostic_report(
                 **sheet.prompt_metrics,
             })
     report["prompt_metrics"] = prompt_metrics
+
+    # GH #546: what each sheet's prompt was made of, largest sources first.
+    report["prompt_receipts"] = [
+        _receipt_digest(sheet_num, sheet.prompt_receipt)
+        for sheet_num, sheet in sorted(job.sheets.items())
+        if sheet.prompt_receipt is not None
+    ]
 
     # Token statistics
     if prompt_metrics:
@@ -1539,6 +1594,8 @@ def _display_diagnostic_report(job: CheckpointState, report: dict[str, Any]) -> 
             f"avg={token_stats['avg']:,.0f}"
         )
         console.print(f"  Total tokens processed: {token_stats['total']:,}")
+
+    _print_prompt_receipts(console, report)
 
     # Execution timeline summary
     timeline = report.get("execution_timeline", [])
