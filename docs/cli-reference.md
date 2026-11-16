@@ -643,6 +643,50 @@ Finds the newest `.md`/`.txt` file in the score's workspace that has a mappable 
 
 ---
 
+### `mzt agents list` and `mzt agents run`
+
+Cast a persistent agent on a task and start it (SC1c; **interim** until the one-episode score replaces it). Two commands and a closed vocabulary, so a small model can conduct with `mzt wait`, `mzt verdict` and `mzt next`.
+
+```
+Usage: mzt agents list [OPTIONS]
+Usage: mzt agents run [OPTIONS] NAME
+```
+
+The agents root is read, never written; `run` writes only under the runs directory.
+
+| Option | Applies to | Default | Description |
+|--------|------------|---------|-------------|
+| `--for TASK.md` | list | | Rank by the task's GOAL and FILES words (see below); without it the order is by name |
+| `--free` | list | false | Only agents with no running, queued, pending or paused conductor job whose id contains `-NAME-` |
+| `--task TASK.md` | run | required | Six fields: `GOAL FILES KIND ACCEPT DO_NOT_TOUCH REPORT`; `ACCEPT` must not be empty |
+| `--class PHASE=CLASS` | run | | Repeatable; passed to `marianne-agents engage --class` |
+| `--inventory FILE` | run | `$MZT_AGENTS_INVENTORY` | Live-verified capability inventory. No default: `run` is refused with a hint when neither is set. The inventory is not invented |
+| `--runs-dir DIR` | both | `$MZT_AGENTS_RUNS_DIR`, else `~/Projects/SCORES/agent-runs` | One directory per run; `list` reads it for `last_outcome` |
+| `--agents-dir DIR` | both | `$MZT_AGENTS_DIR`, else `~/.marianne/agents` | Agents root |
+| `--json` | both | false | One JSON value, no ANSI |
+
+`list` prints `[{"name", "role", "owns", "free", "open_debt", "last_outcome"}]`. An agent is listed when it has `profile.yaml` and an installed `scores/targeted-work.yaml`. `owns` is the profile's `owns` list (empty when it has none, which is every profile today). `open_debt` is the pending-lifecycle-debt count that `marianne-agents engage` refuses on at 3. `last_outcome` is `"PASS 2026-11-12"` read from the agent's newest `<runs-dir>/NAME-*` directory with the `mzt verdict` finder, or `null`.
+
+`--for` ranking is deterministic: `score = |task words & agent words| + 3 for each owned path that is a prefix of a FILES path`, highest first, ties by lower `open_debt`, then by name. Task words are the GOAL and FILES words; agent words are role, group, focus, `owns` and a fixed role-hint table (`builder` brings `implement`, `fix`, `build`...). Words are lowercase alphanumerics of three or more characters without a short stoplist; there is no stemming, no synonym handling beyond that table and no model. Limits: it ranks overlap of words, not skill; with empty `owns` (all current profiles) it is only role and focus words; it never excludes anyone, so combine it with `--free`.
+
+`run` prints `{"ok": true, "job_id", "workspace", "result_path"}` and exits 0, or `{"ok": false, "code", "hint"}` and exits 1:
+
+| `code` | Meaning |
+|--------|---------|
+| `TASK_FIELD_MISSING` | A field is absent or empty, or the task file cannot be read; `hint` names them |
+| `AGENT_UNKNOWN` | No such agent with an installed targeted-work score |
+| `AGENT_BUSY` | The agent has a running, queued, pending or paused job |
+| `DEBT_REFUSED` | The agent has 3 or more pending lifecycle debts |
+| `SUBMIT_REFUSED` | No or unreadable inventory, binder refusal (stale evidence, no route), the conductor refused or is down, or the run already exists |
+
+`list` can also print `CONDUCTOR_DOWN` and `COMPILER_MISSING`.
+
+`run` calls the compiler's engage path in process (`bind_engagement`: shape `targeted-work` with `--defer-lifecycle`, the task copied read-only and injected into every sheet, `--class` passed through) and then submits through the function `mzt run` uses, with `--escalation` on, so a sheet that exhausts its retries stops at a fermata that `mzt next` reports and `mzt resolve` answers. Nothing shells out. If the conductor refuses, the bound files are removed so the same task can be run again. The job id is `targeted-work-NAME-task-<8 hex of the task file>-<date>`; `result_path` is the REPORT name inside the workspace.
+
+**Interim.** `targeted-work` defers consolidate, reflect, maturity and resurrect: each run adds pending lifecycle debt, which `engage` refuses at 3. Pay it with a `lifecycle-integration` engagement.
+
+---
+
 ### `mzt validate`
 
 Validate a score configuration file.
@@ -2582,6 +2626,9 @@ execution time.
 | `MARIANNE_MAILBOX` | Job mailbox root exported to every CLI and interactive instrument in a job; `mzt mail` resolves it, or derives it from `MARIANNE_SCRATCH/mailbox` | set by the job |
 | `MARIANNE_SCRATCH` | Scratch root for the running sheet; also supplies the mailbox root when `MARIANNE_MAILBOX` is absent | set by the job |
 | `MARIANNE_SHEET` | This sheet's number; identifies the inbox owner for `mzt mail`. Set in every sheet, so a user-level hook or wrapper can detect a musician and exit early (GH #536) | set by the job |
+| `MZT_AGENTS_INVENTORY` | Capability inventory YAML for `mzt agents run`; no default | |
+| `MZT_AGENTS_RUNS_DIR` | Runs directory for `mzt agents list` and `run` | `~/Projects/SCORES/agent-runs` |
+| `MZT_AGENTS_DIR` | Agents root for `mzt agents list` and `run` | `~/.marianne/agents` |
 | `ANTHROPIC_API_KEY` | API key for Anthropic API backend | |
 
 

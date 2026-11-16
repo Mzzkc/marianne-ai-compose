@@ -96,6 +96,7 @@ from .commands import (
     # watch.py
     watch,
 )
+from .commands.agents_cmd import agents_app
 from .commands.conductor import (
     conductor_app,
     conductor_status,
@@ -344,6 +345,9 @@ app.add_typer(mail_app, name="mail", rich_help_panel="Score Runs")
 
 # Instrument management
 app.add_typer(instruments_app)
+
+# SC1c (interim): `mzt agents list|run`, the conducting surface for small models
+app.add_typer(agents_app, name="agents", rich_help_panel="Score Runs")
 
 # =============================================================================
 # Learning system commands

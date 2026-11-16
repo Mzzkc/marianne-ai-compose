@@ -380,6 +380,7 @@ mzt instruments list        # See available instruments
 | `mzt wait JOB` | Block until a score is done or needs a decision (`--json`, exit codes 0/2/3/4) |
 | `mzt next` | What needs attention across scores: ESCALATE, UNSTICK, JUDGE, WAIT, DONE |
 | `mzt verdict JOB` | The review sheet's VERDICT as PASS, REWORK, BLOCKED or unknown |
+| `mzt agents list` / `run NAME` | Cast and start a persistent agent on a TASK.md (interim; `--json`) |
 | `mzt top` | Real-time system monitor |
 | `mzt dashboard` | Web UI with log streaming |
 
