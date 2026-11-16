@@ -126,6 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   templates) now count as activity; the liveness probe and backstop are unchanged.
 
 ### Changed
+- **Catalog v2 refreshed for reachable families (MC1b).** Claude, GPT, GLM, Gemini (via antigravity), Qwen, Nemotron and Gemma: current models added, superseded ones marked with successors (none deleted), `tier_by_effort` set from Artificial Analysis Intelligence Index and Terminal-Bench 4.0 with dated sources (frontier: index >= 48 and TB4 >= 50%; balanced: >= 30 and >= 25%). 71 of 146 models are now evidence-backed; the rest stay `provisional` with a reason. OpenRouter Qwen routes corrected to `metered`; gemini-cli routes marked retired.
 - **`codebase-rewrite`'s behaviour gate widens a reopened unit's acceptance instead of flipping
   its status.** Proof 4 iteration 3 (clamonacc, 2026-11-10) exposed the spin: round 1 reopened seven
   units for 40 differential failures, pass 1 of the unit loop reconciled all seven green at HEAD on
