@@ -3140,12 +3140,12 @@ class BatonAdapter:
         effective_instrument: str,
         technique_manifest: str | None,
         technique_skill_docs: dict[str, str],
-        memory_manifest: str | None,
         mcp_config_path: Path | None,
         output_router_active: bool,
         mcp_code_bridge_active: bool,
         mcp_bind_mounts: list[Path],
         event_generation: int,
+        memory_manifest: str | None = None,
         memory_dispatch: str | None = None,
     ) -> tuple[asyncio.Task[None], AttemptMode]:
         """Finish all fallible setup while the caller still owns the lease."""
