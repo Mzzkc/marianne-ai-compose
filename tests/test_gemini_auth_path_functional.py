@@ -13,6 +13,7 @@ from marianne.instruments import loader
 from marianne.instruments.availability import probe_profile
 from marianne.instruments.class_policy import CLASS_POLICIES
 from marianne.instruments.classes import CLASS_VOCABULARY, write_user_classes
+from marianne.instruments.tier_classes import TIER_CLASSES
 
 AUTH_SIGNALS = (
     "GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS",
@@ -52,7 +53,8 @@ def test_missing_auth_reports_primary_key_and_does_not_demote_other_cli(
 def test_gemini_policy_priorities_match_packaged_vocabulary(class_name: str) -> None:
     packaged = Path(loader.__file__).parent / "classes" / "default.yaml"
     defaults = yaml.safe_load(packaged.read_text())["classes"]
-    assert set(CLASS_POLICIES) == CLASS_VOCABULARY
+    # The tier classes (MC1c) are generated from the catalog, not from CLASS_POLICIES.
+    assert set(CLASS_POLICIES) == CLASS_VOCABULARY - set(TIER_CLASSES)
     assert list(CLASS_POLICIES[class_name].order) == defaults[class_name]
 
 
