@@ -866,6 +866,40 @@ def test_workspace_materialised_mcp_config_is_owner_only(tmp_path: Path) -> None
     assert stat.S_IMODE(os.stat(target).st_mode) == 0o600 and target.read_bytes() == b"{}"
 
 
+def test_restore_keeps_the_mode_of_a_users_workspace_mcp_file(tmp_path: Path) -> None:
+    """Review r4 #2: a user's 0644 .gemini/settings.json comes back 0644; a file Marianne
+    created is owner-only while it exists and is removed afterwards."""
+    from marianne.execution.instruments.workspace_mcp_config import WorkspaceMcpConfigMixin
+
+    class Probe(WorkspaceMcpConfigMixin):
+        def __init__(self, source: Path) -> None:
+            self._mcp_config_path = source
+            self._profile = type("P", (), {"name": "p"})()  # type: ignore[assignment]
+            self._cli = type("C", (), {"command": type("K", (), {
+                "mcp_config_workspace_merge_key": None})()})()  # type: ignore[assignment]
+
+    source = tmp_path / "generated.json"
+    source.write_text('{"mcpServers":{}}')
+    probe = Probe(source)
+
+    theirs = tmp_path / "ws" / ".gemini" / "settings.json"
+    theirs.parent.mkdir(parents=True)
+    theirs.write_text('{"ui":1}')
+    os.chmod(theirs, 0o644)
+    restore = probe._materialize_workspace_mcp_config(theirs)
+    assert restore is not None
+    assert stat.S_IMODE(os.stat(theirs).st_mode) == 0o600  # owner-only while it names sockets
+    probe._restore_workspace_mcp_config(restore)
+    assert theirs.read_text() == '{"ui":1}'
+    assert stat.S_IMODE(os.stat(theirs).st_mode) == 0o644
+
+    ours = tmp_path / "ws2" / ".agents" / "mcp_config.json"
+    restore = probe._materialize_workspace_mcp_config(ours)
+    assert stat.S_IMODE(os.stat(ours).st_mode) == 0o600
+    probe._restore_workspace_mcp_config(restore)  # type: ignore[arg-type]
+    assert not ours.exists()
+
+
 @pytest.mark.parametrize("delay_turns", range(40))
 def test_cancel_at_every_await_of_deliver_leaves_nothing(
     short_tmp: Path, monkeypatch: pytest.MonkeyPatch, delay_turns: int,

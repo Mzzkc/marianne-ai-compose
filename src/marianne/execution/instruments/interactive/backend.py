@@ -546,7 +546,7 @@ class InteractiveCliBackend(WorkspaceMcpConfigMixin, Backend):
         target = self._workspace_mcp_config_target()
         workspace_lock: asyncio.Lock | None = None
         lock_acquired = False
-        restore: tuple[Path, bytes | None, bool] | None = None
+        restore: tuple[Path, bytes | None, bool, int | None] | None = None
         try:
             if target is not None:
                 workspace_lock = MCP_WORKSPACE_CONFIG_LOCKS.setdefault(

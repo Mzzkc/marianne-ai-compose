@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import json
 import os
+import stat
 from contextlib import suppress
 from pathlib import Path
 
@@ -18,11 +19,14 @@ _logger = get_logger("execution.workspace_mcp_config")
 MCP_WORKSPACE_CONFIG_LOCKS: dict[Path, asyncio.Lock] = {}
 
 
-def _write_private(target: Path, data: bytes) -> None:
-    """Write ``data`` to ``target`` readable by the owner only (an MCP config can name sockets)."""
-    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+def _write_private(target: Path, data: bytes, mode: int = 0o600) -> None:
+    """Write ``data`` to ``target``, owner-only by default (an MCP config can name sockets).
+
+    ``mode`` is for restoring a file the user owned: it gets back the mode it had.
+    """
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
     try:
-        os.fchmod(fd, 0o600)
+        os.fchmod(fd, mode)
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
     except BaseException:
@@ -81,12 +85,13 @@ class WorkspaceMcpConfigMixin:
     def _materialize_workspace_mcp_config(
         self,
         target: Path,
-    ) -> tuple[Path, bytes | None, bool] | None:
+    ) -> tuple[Path, bytes | None, bool, int | None] | None:
         """Materialize generated MCP config to a CLI-discovered workspace path.
 
-        Returns a restore tuple of ``(target, previous_bytes, parent_existed)``.
-        ``previous_bytes`` is ``None`` when no file existed and the file should
-        be deleted after execution.
+        Returns a restore tuple of ``(target, previous_bytes, parent_existed,
+        previous_mode)``. ``previous_bytes`` is ``None`` when no file existed and
+        the file should be deleted after execution; ``previous_mode`` is the
+        permission bits the user's file had, put back on restore.
         """
         if self._mcp_config_path is None:
             return None
@@ -97,6 +102,7 @@ class WorkspaceMcpConfigMixin:
 
         parent_existed = target.parent.exists()
         previous = target.read_bytes() if target.exists() else None
+        previous_mode = stat.S_IMODE(target.stat().st_mode) if previous is not None else None
         target.parent.mkdir(parents=True, exist_ok=True)
         _write_private(target, self._workspace_mcp_config_bytes(target))
 
@@ -108,14 +114,14 @@ class WorkspaceMcpConfigMixin:
             merge_key=self._cli.command.mcp_config_workspace_merge_key,
             restored_existing=previous is not None,
         )
-        return target, previous, parent_existed
+        return target, previous, parent_existed, previous_mode
 
     def _restore_workspace_mcp_config(
         self,
-        restore: tuple[Path, bytes | None, bool],
+        restore: tuple[Path, bytes | None, bool, int | None],
     ) -> None:
         """Restore or remove a temporary workspace MCP config file."""
-        target, previous, parent_existed = restore
+        target, previous, parent_existed, previous_mode = restore
         try:
             if previous is None:
                 target.unlink(missing_ok=True)
@@ -124,7 +130,7 @@ class WorkspaceMcpConfigMixin:
                         target.parent.rmdir()
             else:
                 target.parent.mkdir(parents=True, exist_ok=True)
-                _write_private(target, previous)
+                _write_private(target, previous, previous_mode if previous_mode is not None else 0o600)
             _logger.debug(
                 "plugin_cli_workspace_mcp_config_restored",
                 instrument=self._profile.name,

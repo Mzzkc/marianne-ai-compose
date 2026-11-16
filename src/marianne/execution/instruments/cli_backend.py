@@ -1699,7 +1699,7 @@ class PluginCliBackend(WorkspaceMcpConfigMixin, Backend):
         workspace_mcp_target = self._workspace_mcp_config_target()
         workspace_mcp_lock: asyncio.Lock | None = None
         workspace_mcp_lock_acquired = False
-        workspace_mcp_restore: tuple[Path, bytes | None, bool] | None = None
+        workspace_mcp_restore: tuple[Path, bytes | None, bool, int | None] | None = None
 
         # Process Lifecycle Phase 1: presence of the group-aware callback is
         # our signal that we are on the baton path. When set, force
