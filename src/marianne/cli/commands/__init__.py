@@ -5,6 +5,7 @@
 from .cancel import cancel
 from .compile import compile_scores
 from .compose import compose
+from .conduct import next_actions, verdict, wait
 from .diagnose import diagnose, errors, history, logs
 from .doctor import doctor
 from .init_cmd import init
@@ -19,6 +20,10 @@ from .validate import validate
 from .watch import watch
 
 __all__ = [
+    # conduct.py
+    "next_actions",
+    "verdict",
+    "wait",
     # cancel.py
     "cancel",
     # compile.py

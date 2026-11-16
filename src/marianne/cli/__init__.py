@@ -77,6 +77,8 @@ from .commands import (
     logs,
     # pause.py
     modify,
+    # conduct.py
+    next_actions,
     pause,
     # recover.py
     recover,
@@ -89,6 +91,8 @@ from .commands import (
     status,
     # validate.py
     validate,
+    verdict,
+    wait,
     # watch.py
     watch,
 )
@@ -303,6 +307,9 @@ app.command(rich_help_panel="Monitoring")(status)
 app.command(rich_help_panel="Monitoring")(watch)  # #352: live output tail
 app.command(name="list", rich_help_panel="Monitoring")(list_jobs)
 app.command(rich_help_panel="Monitoring")(top)
+app.command(rich_help_panel="Monitoring")(wait)  # #547: block until done or needs a decision
+app.command(name="next", rich_help_panel="Monitoring")(next_actions)  # #547: attention queue
+app.command(rich_help_panel="Monitoring")(verdict)  # #547: review verdict as an enum
 app.command(rich_help_panel="Monitoring")(clear)
 
 # Diagnostic commands
