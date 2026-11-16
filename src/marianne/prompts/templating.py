@@ -120,6 +120,8 @@ class SheetContext:
     """Resolved content from 'tool' category injections."""
     delivery_manifest: list[dict[str, Any]] = field(default_factory=list)
     """Hash-only provenance for bytes assembled into this sheet's prompt."""
+    receipt_sources: list[Any] = field(default_factory=list)
+    """Ordered ``PromptReceiptSource`` records, delivered and dropped (GH #546)."""
     native_execution: dict[str, str | float | None] | None = None
     """Conductor execution facts, not authorization or an authenticated credential."""
 

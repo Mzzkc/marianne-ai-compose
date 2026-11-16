@@ -38,6 +38,12 @@ import jinja2
 import yaml
 
 from marianne.core.config.job import InjectionCategory, InjectionItem, PromptConfig
+from marianne.core.prompt_receipt import (
+    PromptReceipt,
+    PromptReceiptSource,
+    SourceKind,
+    build_receipt,
+)
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.state import AttemptContext
 from marianne.prompts.preamble import build_preamble
@@ -97,6 +103,9 @@ class RenderedPrompt:
 
     context_manifest: tuple[dict[str, object], ...] = ()
     """Hash-only manifest of context and technique bytes in ``prompt``."""
+
+    prompt_receipt: PromptReceipt | None = None
+    """Per-source sizes, hashes and drop reasons for this prompt (GH #546)."""
 
 
 class PromptRenderer:
@@ -216,6 +225,11 @@ class PromptRenderer:
                         delivered_content=doc,
                         delivery_kind="inline-technique",
                     )
+            if technique_manifest and self._template_contains_technique_manifest(sheet):
+                self._note_dropped(
+                    context, "technique", "technique-manifest",
+                    "template_already_lists_techniques",
+                )
             if technique_manifest and not self._template_contains_technique_manifest(
                 sheet
             ):
@@ -248,7 +262,10 @@ class PromptRenderer:
             # No completion suffix, no preamble — the instrument receives
             # the rendered template verbatim. Empty preamble is the
             # "no preamble" sentinel.
-            return RenderedPrompt(prompt=prompt, preamble="", context_manifest=())
+            return RenderedPrompt(
+                prompt=prompt, preamble="", context_manifest=(),
+                prompt_receipt=self._receipt(sheet, context, prompt, "", raw_prompt=True),
+            )
 
         # Layer 9: Completion mode suffix
         if attempt_context.completion_prompt_suffix:
@@ -270,7 +287,71 @@ class PromptRenderer:
             preamble=preamble,
             prompt_extensions=tuple(sheet.prompt_extensions),
             context_manifest=tuple(context.delivery_manifest),
+            prompt_receipt=self._receipt(sheet, context, prompt, preamble),
         )
+
+    @staticmethod
+    def _note_dropped(
+        context: SheetContext,
+        kind: SourceKind,
+        path: str,
+        reason: str,
+        *,
+        resolved_path: Path | None = None,
+    ) -> None:
+        """Record a declared source that did not reach the prompt, and why."""
+        context.receipt_sources.append(
+            PromptReceiptSource(
+                kind=kind,
+                path=path,
+                resolved_path=str(resolved_path.resolve()) if resolved_path else None,
+                dropped_reason=reason,
+            )
+        )
+
+    @staticmethod
+    def _receipt(
+        sheet: Sheet,
+        context: SheetContext,
+        prompt: str,
+        preamble: str,
+        *,
+        raw_prompt: bool = False,
+    ) -> PromptReceipt:
+        """Assemble the receipt: injected sources in order, then the template."""
+        sources: list[PromptReceiptSource] = []
+        for src in context.receipt_sources:
+            if raw_prompt and not src.dropped_reason:
+                # Resolved (so ``required`` was enforced) but never delivered.
+                src = src.model_copy(
+                    update={"bytes": 0, "sha256": None, "dropped_reason": "raw_prompt"}
+                )
+            sources.append(src)
+        template_text: str | None = sheet.prompt_template
+        template_path = "<inline prompt.template>"
+        if not template_text and sheet.template_file and sheet.template_file.exists():
+            try:
+                template_text = sheet.template_file.read_text(encoding="utf-8")
+                template_path = str(sheet.template_file)
+            except OSError:
+                template_text = None
+        if template_text:
+            template_bytes = template_text.encode("utf-8")
+            sources.append(
+                PromptReceiptSource(
+                    kind="template",
+                    path=template_path,
+                    resolved_path=(
+                        str(sheet.template_file.resolve())
+                        if template_path != "<inline prompt.template>"
+                        and sheet.template_file is not None
+                        else None
+                    ),
+                    sha256=_sha256(template_bytes),
+                    bytes=len(template_bytes),
+                )
+            )
+        return build_receipt(prompt=prompt, preamble=preamble, sources=sources)
 
     def _build_context(
         self,
@@ -455,11 +536,15 @@ class PromptRenderer:
                 "prompt_renderer.path_expansion_error",
                 extra={"directory": item.directory, "error": str(e)},
             )
+            self._note_dropped(
+                context, _kind(source), item.directory, "path_expansion_error"
+            )
             return
 
         if not expanded_path.strip():
             if item.required:
                 raise ValueError("required injection directory resolved to an empty path")
+            self._note_dropped(context, _kind(source), item.directory, "empty_path")
             return
 
         dir_path = resolve_injection_path(expanded_path, sheet.workspace)
@@ -479,6 +564,9 @@ class PromptRenderer:
                     "prompt_renderer.required_directory_not_found",
                     extra={"directory": str(dir_path), "category": item.as_.value},
                 )
+            self._note_dropped(
+                context, _kind(source), item.directory, "not_found", resolved_path=dir_path
+            )
             return
 
         files = sorted(f for f in dir_path.glob("*") if f.is_file())
@@ -491,9 +579,17 @@ class PromptRenderer:
                 "prompt_renderer.directory_empty",
                 extra={"directory": str(dir_path)},
             )
+            self._note_dropped(
+                context, _kind(source), item.directory, "empty_directory",
+                resolved_path=dir_path,
+            )
             return
 
         if injection_over_max_bytes(item, files, dir_path):
+            self._note_dropped(
+                context, _kind(source), item.directory,
+                _over_cap_reason(item, files), resolved_path=dir_path,
+            )
             return
 
         for file_path in files:
@@ -530,11 +626,13 @@ class PromptRenderer:
                 "prompt_renderer.path_expansion_error",
                 extra={"file": item.file, "error": str(e)},
             )
+            self._note_dropped(context, _kind(source), item.file, "path_expansion_error")
             return
 
         if not expanded_path.strip():
             if item.required:
                 raise ValueError("required injection file resolved to an empty path")
+            self._note_dropped(context, _kind(source), item.file, "empty_path")
             return
 
         path = resolve_injection_path(expanded_path, sheet.workspace)
@@ -552,9 +650,16 @@ class PromptRenderer:
                     "prompt_renderer.file_not_found",
                     extra={"file": str(path), "category": item.as_.value},
                 )
+            self._note_dropped(
+                context, _kind(source), item.file, "not_found", resolved_path=path
+            )
             return
 
         if injection_over_max_bytes(item, [path], path):
+            self._note_dropped(
+                context, _kind(source), item.file,
+                _over_cap_reason(item, [path]), resolved_path=path,
+            )
             return
 
         self._inject_single_file(
@@ -597,6 +702,10 @@ class PromptRenderer:
             _logger.warning(
                 "prompt_renderer.file_read_error",
                 extra={"file": str(path), "error": str(e)},
+            )
+            self._note_dropped(
+                context, _kind(source), declared_path or str(path), "unreadable",
+                resolved_path=path,
             )
             return
 
@@ -653,6 +762,16 @@ class PromptRenderer:
             entry["source_sha256"] = _sha256(source_bytes)
             entry["source_bytes"] = len(source_bytes)
         context.delivery_manifest.append(entry)
+        label = declared_path or source
+        context.receipt_sources.append(
+            PromptReceiptSource(
+                kind=_receipt_kind(source),
+                path=label,
+                resolved_path=entry.get("resolved_path") if resolved_path else None,  # type: ignore[arg-type]
+                sha256=entry["delivered_sha256"],  # type: ignore[arg-type]
+                bytes=len(delivered_bytes),
+            )
+        )
 
     def _build_prompt(
         self,
@@ -749,6 +868,26 @@ def write_context_delivery_receipt(
     }
     _atomic_write_yaml(receipt_path, document)
     return receipt_path
+
+
+def _kind(source: str) -> SourceKind:
+    return "prelude" if source == "prelude" else "cadenza"
+
+
+def _receipt_kind(source: str) -> SourceKind:
+    """Map a delivery ``source`` label to a receipt kind."""
+    if source == "prelude":
+        return "prelude"
+    if source == "cadenza":
+        return "cadenza"
+    if source.startswith("memory"):
+        return "memory"
+    return "technique"
+
+
+def _over_cap_reason(item: InjectionItem, files: list[Path]) -> str:
+    measured = sum(f.stat().st_size for f in files)
+    return f"over_max_bytes: measured {measured} > max_bytes {item.max_bytes}"
 
 
 def resolve_injection_path(expanded_path: str, workspace: Path) -> Path:
