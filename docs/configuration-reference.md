@@ -66,7 +66,7 @@ and constraints are extracted directly from the Pydantic v2 config models in
 | `name` | `str` | **required** | Unique score name |
 | `description` | `str \| None` | `None` | Human-readable description |
 | `workspace` | `Path` | `./workspace` | Output directory. Resolved to absolute path at construction time. |
-| `instrument` | `str \| None` | `None` | Profile, score alias, or capability class. The packaged classes are `strong`, `workhorse`, `fast`, `cheap`, `writing`, `review`, `vision`, `local`, `high-context`, `image`, `video`; the vocabulary is the packaged `classes/default.yaml` itself, and a user (`~/.marianne/classes.yaml`) or venue (`.marianne/classes.yaml`) layer may define ANY further class name or tombstone a packaged one with `null` (GH #433). Run `mzt instruments classes show` to see resolved chains. If unset, defaults to `claude-code`. |
+| `instrument` | `str \| None` | `None` | Profile, score alias, or capability class. The packaged classes are `strong`, `workhorse`, `fast`, `cheap`, `writing`, `review`, `vision`, `local`, `high-context`, `image`, `video`, and the family-neutral tier classes `frontier`, `balanced`, `light`; the vocabulary is the packaged `classes/default.yaml` itself, and a user (`~/.marianne/classes.yaml`) or venue (`.marianne/classes.yaml`) layer may define ANY further class name or tombstone a packaged one with `null` (GH #433). Run `mzt instruments classes show` to see resolved chains. If unset, defaults to `claude-code`. |
 | `instrument_config` | `InstrumentSettings` | `{}` | Typed per-score overrides. Keys: `timeout_seconds` (sheet execution timeout), `model`, `provider`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`, `interactive_nudge_policy`, `interactive_nudge_instrument`, `interactive_nudge_timeout_seconds`, `max_tokens`, `temperature`, `response_format`, `effort` (reasoning effort in Marianne's vocabulary `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, mapped by the resolved profile's `effort:` block; see below), `tools` (the harness tools this sheet may use, by the harness's own names; see below), `first_output_timeout_seconds` (CLI first-output silence bound, GH #502; omit to inherit the profile, a finite positive number to override, `null` to disable — see the [CLI timeout section](instrument-guide.md) for the full semantics). Unknown keys warn as V010/V011; executor support still varies. |
 | `instruments` | `dict[str, InstrumentDef]` | `{}` | Named instrument definitions local to this score. Declares reusable aliases referencing registered instrument profiles with optional overrides. Referenced by name in per-sheet or per-movement `instrument:` fields. See [instruments](#instruments). |
 | `movements` | `dict[int, MovementDef]` | `{}` | Movement declarations. Map of movement number to MovementDef. Each movement can specify a name, instrument, instrument config, and voice count. See [movements](#movements). |
@@ -378,6 +378,47 @@ classes:
     - {profile: claude-code, config: {model: claude-sonnet-5-5, effort: medium}}
     - antigravity            # no effort: the harness default
 ```
+
+### Tier classes: `frontier`, `balanced`, `light`
+
+Three packaged classes name a capability tier instead of a job or a family, the
+way "Opus class, Sonnet class, Haiku class" does. Any family's model may sit in
+one, at the reasoning effort that makes it that tier:
+
+| class | meaning | use for |
+|---|---|---|
+| `frontier` | Opus class | open or undefined work, design, adversarial review |
+| `balanced` | Sonnet class | defined work, most builds |
+| `light` | Haiku class | quick, mechanical, summaries, recon |
+
+Each entry pins a model and, where the profile maps one, an effort
+(`{profile: claude-code, config: {model: claude-opus-5-5, effort: medium}}`).
+For antigravity the effort is part of the model slug
+(`gemini-4-hydrogen-high`), so the entry names the full slug and carries no
+`effort`. A task may raise or lower effort within its class
+(`instrument_config.effort`), but that is the author's choice, never a silent
+change of class.
+
+The chains are generated, not hand-written. `marianne.instruments.tier_classes.tier_chains`
+reads the instrument catalog v2 (`plugins/marianne/docs/ref/catalog/`) and
+applies these rules: only non-provisional tier claims count; only subscription,
+free and local routes (never metered); superseded, deprecated, retired and
+sunset models are skipped; each entry pins the lowest effort at which the model
+reaches the tier and only an effort the profile maps (V335 would refuse the
+rest); subscription routes come before free ones; and entries alternate
+families so a fallback leaves the family that just failed. The packaged block in
+`classes/default.yaml` (between the `BEGIN`/`END generated` markers) is the
+output against the builtin profiles; regenerate it with
+`python -m marianne.instruments.tier_classes --catalog plugins/marianne/docs/ref/catalog --write-default`
+and never edit it by hand.
+
+Your own layer is yours. `mzt instruments classes tiers` prints the three
+chains as this machine resolves them from its registered profiles, with
+availability; `--write-proposal PATH` writes a classes-file fragment you can
+merge by hand into `~/.marianne/classes.yaml`. It never writes a class layer
+(it refuses a path that is one). A class you define in your layer replaces the
+packaged chain whole; `mzt instruments classes write` does not emit tier
+classes.
 
 On the primary entry, a score, movement or sheet `instrument_config.effort`
 wins over the class (`null` there restores the profile default); each fallback

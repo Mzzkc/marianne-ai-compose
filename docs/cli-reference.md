@@ -1559,7 +1559,7 @@ mzt config check --config /path/to/custom.yaml
 
 ## Instrument Commands
 
-### `mzt instruments classes show|check|write`
+### `mzt instruments classes show|check|write|tiers`
 
 `show --json` reports the effective class chains, each layer path and SHA256,
 and entry availability. `check` exits 1 for a broken layer or a user configured
@@ -1575,6 +1575,16 @@ additional user or venue profile joins a chain only where its own `class_hints`
 put it (see the instrument guide). It preserves an existing file with
 `--if-absent`, prints a proposal with `--dry-run`, and requires `--force` to
 replace hand edits. Replacements are backed up and written atomically.
+
+`tiers [--catalog DIR] [--write-proposal PATH] [--force] [--json]` prints the
+family-neutral `frontier`, `balanced` and `light` chains this machine resolves
+from catalog v2 and its registered profiles (non-provisional tiers, no metered
+routes, lowest effort that reaches the tier), each entry with its family,
+access and local availability. `--write-proposal` writes a classes-file
+fragment for you to merge by hand; it refuses an existing file without
+`--force` and refuses the user or venue class layer itself. The command never
+writes `~/.marianne/classes.yaml`. The packaged default already carries the
+same three classes, generated against the builtin profiles.
 
 These commands manage and inspect available instruments — the AI tools Marianne can use to execute scores. Instruments include CLI tools (Claude Code, Gemini CLI, Codex CLI, Aider, Goose) and HTTP APIs (Anthropic API, Ollama).
 
