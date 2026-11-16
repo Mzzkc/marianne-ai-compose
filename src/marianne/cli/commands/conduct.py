@@ -515,7 +515,8 @@ def _bound_task_copy_name(score_path: Path) -> str | None:
 
         data = yaml.safe_load(score_path.read_text(encoding="utf-8"))
         name = data["prompt"]["variables"]["marianne_agent"]["task"]["copy"]
-    except Exception:  # noqa: BLE001 - unreadable or non-contract score: fall back to the glob
+    except (OSError, UnicodeError, yaml.YAMLError, KeyError, TypeError):
+        # Unreadable or non-contract score: the caller falls back to the glob.
         return None
     return name if isinstance(name, str) and name and "/" not in name else None
 
