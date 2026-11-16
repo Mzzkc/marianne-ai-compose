@@ -115,7 +115,12 @@ class AuditLog:
                 os.fsync(fd)
             finally:
                 os.close(fd)
-            self._tails[path] = (seq + 1, record["record_hash"])
+            if seal:
+                # A sealed segment is finished: keep no per-session state for it. A stray later
+                # append re-reads the tail from the file, so correctness never rested on the cache.
+                self._tails.pop(path, None)
+            else:
+                self._tails[path] = (seq + 1, record["record_hash"])
             return record
 
 

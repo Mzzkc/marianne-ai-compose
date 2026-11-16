@@ -191,3 +191,18 @@ def test_unknown_session_probe_is_audited_hashed(tmp_path: Path) -> None:
     assert rec["tool"] == "recall" and rec["error_code"] == "E11"
     assert "s-probe-me" not in path.read_text()
     assert verify_audit_file(path).ok
+
+
+def test_sealed_segments_leave_no_tail_cache_entry(tmp_path: Path) -> None:
+    """Review r4 #3: the tail cache must not grow one entry per session forever."""
+    g, _sid, _path = setup(tmp_path)
+    audit = g._audit
+    assert audit is not None
+    for i in range(50):
+        s = g.open_session(
+            principal=P, attachment_id="att-1", scope=SCOPE, permissions=("read",),
+            dispatch_id=f"d{i + 10}", deadline_at=time.time() + 60,
+        )
+        g.close_session(s.session_id)
+    # only the one still-open session from setup() remains cached
+    assert len(audit._tails) <= 1
