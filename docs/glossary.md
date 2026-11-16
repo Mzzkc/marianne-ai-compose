@@ -27,7 +27,7 @@ do not consume that conductor budget.
 ## Choose who plays
 
 - **Instrument** (`instrument`): the registered profile, score alias or capability class selected to execute a sheet ([reference](configuration-reference.md#top-level-fields)).
-- **Capability class** (`mzt instruments classes show`): a portable name such as strong or review that resolves to an ordered chain of instrument profiles ([reference](cli-reference.md#mzt-instruments-classes-showcheckwrite)).
+- **Capability class** (`mzt instruments classes show`): a portable name such as strong or review that resolves to an ordered chain of instrument profiles ([reference](cli-reference.md#mzt-instruments-classes-showcheckwritetiers)).
 - **Score alias** (`instruments`): a name local to one score that reuses an existing instrument profile with optional settings ([reference](configuration-reference.md#instruments)).
 - **Fallback** (`instrument_fallbacks`): the ordered instrument chain used after the primary route cannot continue, with settings available at score, movement and sheet scope ([reference](configuration-reference.md#instrument-fallbacks)).
 - **Musician** (concept): the execution agent that plays a sheet and reports its result to the conductor ([reference](marianne-reference.md#the-execution-flow-what-actually-happens)).
