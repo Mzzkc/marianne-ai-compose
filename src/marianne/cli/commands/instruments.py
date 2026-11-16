@@ -43,6 +43,8 @@ instruments_app = typer.Typer(
 )
 classes_app = typer.Typer(name="classes", help="Inspect and generate capability classes.")
 instruments_app.add_typer(classes_app)
+catalog_app = typer.Typer(name="catalog", help="Convert and check the instrument model catalog.")
+instruments_app.add_typer(catalog_app)
 
 
 def _class_report() -> tuple[dict[str, Any], bool]:
@@ -137,6 +139,47 @@ def write_classes(
         for line in content.splitlines():
             if line.startswith("# not seated: "):
                 console.print(line[len("# "):])
+
+
+@catalog_app.command(name="convert")
+def convert_catalog(
+    source: Path = typer.Argument(..., help="v1 instrument-catalog.yaml to read."),
+    out_dir: Path = typer.Argument(
+        ..., help="Directory to write the v2 family files and index.yaml."
+    ),
+) -> None:
+    """Convert a v1 instrument catalog to the v2 directory (one YAML per family)."""
+    from marianne.core.config.catalog import load_catalog
+    from marianne.instruments.catalog_v1 import write_catalog
+
+    try:
+        index = write_catalog(source, out_dir)
+        load_catalog(out_dir)
+    except (OSError, ValueError, KeyError) as exc:
+        output_error(f"catalog conversion failed: {exc}")
+        raise typer.Exit(1) from exc
+    console.print(
+        f"{index.model_count} models in {len(index.families)} families written to {out_dir}"
+    )
+
+
+@catalog_app.command(name="check")
+def check_catalog(
+    directory: Path = typer.Argument(..., help="v2 catalog directory (holds index.yaml)."),
+) -> None:
+    """Validate a v2 catalog directory against the schema."""
+    from marianne.core.config.catalog import CatalogError, load_catalog
+
+    try:
+        catalog = load_catalog(directory)
+    except CatalogError as exc:
+        output_error(str(exc))
+        raise typer.Exit(1) from exc
+    provisional = sum(1 for m in catalog.models() if m.tier_status.provisional)
+    console.print(
+        f"{len(catalog.models())} models in {len(catalog.files)} families; "
+        f"{provisional} with provisional tiers"
+    )
 
 
 # ---------------------------------------------------------------------------
