@@ -25,8 +25,9 @@ from marianne.cli.commands.conduct import (
     extract_findings,
     find_task_file,
     parse_task_fields,
+    unbound_tasks,
 )
-from tests.test_cli_conduct_547 import FakeConductor
+from tests.test_cli_conduct_547 import FakeConductor, _row
 
 TASK = (
     "GOAL: Add input validation to the signup form.\n"
@@ -247,6 +248,72 @@ def test_find_task_file_falls_back_to_the_workspace_glob(tmp_path):
     (tmp_path / "task-notes.md").write_text("no fields here\n")
     assert find_task_file(tmp_path, None) == tmp_path / "task-TASK.md"
     assert find_task_file(tmp_path / "nowhere", None) is None
+
+
+# -- next --tasks (#555) -------------------------------------------------------------------------
+
+
+def _next(monkeypatch, rows: list[dict[str, Any]], *args: str):
+    monkeypatch.setattr(conduct, "_route", FakeConductor(rows=rows))
+    result = CliRunner().invoke(app, ["next", "--json", *args])
+    assert result.exit_code == 0, result.output
+    return json.loads(result.output)
+
+
+def test_fresh_task_yields_cast_then_wait_after_agents_run(monkeypatch, tmp_path):
+    task = tmp_path / "TASK.md"
+    task.write_text(TASK)
+    out = _next(monkeypatch, [], "--tasks", str(tmp_path))
+    assert out == [{
+        "job_id": None, "action": "CAST", "why": "TASK.md has no agent yet", "task": str(task),
+    }]
+    # `mzt agents run` binds it: the job id carries the task hash.
+    job = f"targeted-work-ines-task-{_task_hash(TASK)}-20261116"
+    out = _next(monkeypatch, [_row(job, "running")], "--tasks", str(tmp_path))
+    assert [(r["action"], r["job_id"]) for r in out] == [("WAIT", job)]
+
+
+def test_binding_is_by_hash_only_any_agent_any_date_any_status(monkeypatch, tmp_path):
+    (tmp_path / "TASK.md").write_text(TASK)
+    job = f"targeted-work-marek-task-{_task_hash(TASK)}-20250101"
+    out = _next(monkeypatch, [_row(job, "completed")], "--tasks", str(tmp_path), "--since", "0")
+    assert "CAST" not in {r["action"] for r in out}
+
+
+def test_edited_task_is_a_new_task(monkeypatch, tmp_path):
+    (tmp_path / "TASK.md").write_text(TASK)
+    (tmp_path / "TASK-2.md").write_text(TASK + "FINDINGS: x\n")
+    job = f"targeted-work-ines-task-{_task_hash(TASK)}-20261116"
+    out = _next(monkeypatch, [_row(job, "completed")], "--tasks", str(tmp_path))
+    casts = [r for r in out if r["action"] == "CAST"]
+    assert [Path(r["task"]).name for r in casts] == ["TASK-2.md"]
+
+
+def test_only_task_md_files_and_deterministic_order(monkeypatch, tmp_path):
+    for name in ("TASK-2.md", "TASK.md", "notes.md", "TASKS.txt"):
+        (tmp_path / name).write_text(name)
+    out = _next(monkeypatch, [], "--tasks", str(tmp_path))
+    assert [Path(r["task"]).name for r in out] == ["TASK-2.md", "TASK.md"]
+
+
+def test_cast_sorts_after_judge_and_before_wait(monkeypatch, tmp_path):
+    (tmp_path / "TASK.md").write_text(TASK)
+    rows = [_row("w", "running"), _row("j", "completed")]
+    out = _next(monkeypatch, rows, "--tasks", str(tmp_path))
+    assert [r["action"] for r in out] == ["JUDGE", "CAST", "WAIT"]
+
+
+def test_no_tasks_option_means_no_cast_and_empty_dir_is_done(monkeypatch, tmp_path):
+    (tmp_path / "TASK.md").write_text(TASK)
+    assert _next(monkeypatch, [])[0]["action"] == "DONE"
+    assert _next(monkeypatch, [], "--tasks", str(tmp_path / "missing"))[0]["action"] == "DONE"
+
+
+def test_unbound_tasks_ignores_mine_prefix_for_binding(tmp_path):
+    (tmp_path / "TASK.md").write_text(TASK)
+    ids = [f"targeted-work-ines-task-{_task_hash(TASK)}-20261116"]
+    assert unbound_tasks(tmp_path, ids) == []
+    assert len(unbound_tasks(tmp_path, ["targeted-work-ines-task-deadbeef-20261116"])) == 1
 
 
 # -- the shim's own scenario files, when this machine has them -----------------------------------

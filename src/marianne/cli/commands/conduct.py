@@ -6,7 +6,8 @@ with a closed enum and one small JSON object each, so a small model can
 hold the loop:
 
 - ``mzt wait JOB``    blocks until the job needs a decision or is finished.
-- ``mzt next``        says which job needs attention and what to do about it.
+- ``mzt next``        says which job needs attention and what to do about it
+                      (``--tasks DIR`` also lists TASK files nobody has started).
 - ``mzt verdict JOB`` reads the review sheet's VERDICT line as PASS/REWORK/BLOCKED
                       and adds the findings, the validation counts, the report
                       path and the round (GH #554).
@@ -18,6 +19,7 @@ function and never touch a real conductor.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -729,7 +731,7 @@ def verdict(
 # next
 # ---------------------------------------------------------------------------
 
-_ACTION_ORDER = ["ESCALATE", "UNSTICK", "JUDGE", "WAIT", "DONE"]
+_ACTION_ORDER = ["ESCALATE", "UNSTICK", "JUDGE", "CAST", "WAIT", "DONE"]
 _DEFAULT_SINCE_HOURS = 24.0
 _DEFAULT_IDLE_SECONDS = 1800.0  # sheet_timeout_seconds default; see _idle_threshold
 
@@ -818,6 +820,49 @@ def _job_end(row: dict[str, Any]) -> float | None:
     return float(started) + (float(running) if isinstance(running, (int, float)) else 0.0)
 
 
+#: ``mzt agents run`` names its job ``targeted-work-NAME-task-<8 hex sha256 of the task
+#: file>-<date>``; a task file is bound when a job id carries its ``-task-<hex8>-``.
+_TASK_JOB_PART = re.compile(r"-task-([0-9a-f]{8})-")
+_TASK_GLOB = "TASK*.md"
+
+
+def task_hash8(path: Path) -> str:
+    """The 8 hex digits ``mzt agents run`` puts in the job id for this task file."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:8]
+
+
+def unbound_tasks(tasks_dir: Path, job_ids: list[str]) -> list[dict[str, Any]]:
+    """CAST entries for ``TASK*.md`` files in ``tasks_dir`` that no job is bound to.
+
+    Bound means some job id (any age, any status) contains ``-task-<hex8>-`` with
+    the file's hash, so editing a task (a rework adds ``FINDINGS:``) makes it new
+    again. Only the hash is compared, not the agent name or the date. Unreadable
+    files are skipped. Sorted by file name.
+    """
+    bound = {m.group(1) for job_id in job_ids for m in _TASK_JOB_PART.finditer(job_id)}
+    base = tasks_dir.expanduser()
+    out: list[dict[str, Any]] = []
+    try:
+        files = sorted(p for p in base.glob(_TASK_GLOB) if p.is_file())
+    except OSError:
+        return out
+    for path in files:
+        try:
+            digest = task_hash8(path)
+        except OSError:
+            continue
+        if digest in bound:
+            continue
+        absolute = os.path.abspath(path)
+        out.append({
+            "job_id": None,
+            "action": "CAST",
+            "why": f"{path.name} has no agent yet",
+            "task": absolute,
+        })
+    return out
+
+
 async def compute_next(
     *,
     mine: str | None,
@@ -825,11 +870,24 @@ async def compute_next(
     idle_seconds: float | None,
     route: Callable[[str, dict[str, Any]], Awaitable[Any]] | None = None,
     now: float | None = None,
+    tasks_dir: Path | None = None,
 ) -> list[dict[str, Any]]:
-    """The ordered attention queue: ``[{job_id, action, why}]``."""
+    """The ordered attention queue: ``[{job_id, action, why}]``.
+
+    With ``tasks_dir``, unbound ``TASK*.md`` files there add ``CAST`` rows that
+    also carry ``task`` (the file's absolute path).
+    """
     call = route or _route
     clock_now = time.time() if now is None else now
     rows = await call("job.list", {})
+    cast_rows: list[dict[str, Any]] = []
+    if tasks_dir is not None:
+        known = [
+            str(r.get("job_id", ""))
+            for r in (rows if isinstance(rows, list) else [])
+            if isinstance(r, dict)
+        ]
+        cast_rows = unbound_tasks(tasks_dir, known)
     ranked: list[tuple[int, float, dict[str, Any]]] = []
     for row in rows if isinstance(rows, list) else []:
         if not isinstance(row, dict):
@@ -877,6 +935,8 @@ async def compute_next(
             float(row.get("submitted_at") or 0.0),
             {"job_id": job_id, "action": action, "why": why},
         ))
+    for row_ in cast_rows:
+        ranked.append((_ACTION_ORDER.index("CAST"), 0.0, row_))
     ranked.sort(key=lambda item: (item[0], item[1]))
     queue = [item[2] for item in ranked]
     if not queue:
@@ -912,6 +972,12 @@ def next_actions(
         help="Seconds without activity before a running job is UNSTICK "
         "(default: the score's stale_detection timeout, else its sheet timeout)",
     ),
+    tasks: Path | None = typer.Option(
+        None,
+        "--tasks",
+        help="Also list TASK*.md files in this directory that no job is bound to "
+        "(by the task hash in the job id `mzt agents run` makes) as CAST rows",
+    ),
     json_output: bool = typer.Option(
         False, "--json", "-j", help="Output a JSON array (no ANSI)",
     ),
@@ -920,17 +986,21 @@ def next_actions(
 
     Actions: ESCALATE (a human must decide: failed, cancelled, paused at a
     fermata), UNSTICK (a running sheet has gone quiet), JUDGE (completed, not
-    yet judged), WAIT (still running), DONE (completed and judged). An empty
-    queue is one DONE row with a null job_id. Judged state is the marker that
-    `mzt verdict --accept` writes in the job's workspace.
+    yet judged), CAST (with --tasks: a TASK*.md file has no job yet; the row
+    carries `task`), WAIT (still running), DONE (completed and judged). An
+    empty queue is one DONE row with a null job_id. Judged state is the marker
+    that `mzt verdict --accept` writes in the job's workspace.
 
     Examples:
         mzt next --json
         mzt next --mine legion- --json
+        mzt next --tasks . --json
     """
     try:
         queue = asyncio.run(
-            compute_next(mine=mine, since_hours=since, idle_seconds=idle_after),
+            compute_next(
+                mine=mine, since_hours=since, idle_seconds=idle_after, tasks_dir=tasks,
+            ),
         )
     except ConductorUnreachable as exc:
         _report_unreachable(exc, json_output=json_output)
@@ -939,4 +1009,5 @@ def next_actions(
         output_json(queue)
         return
     for item in queue:
-        typer.echo(f"{item['action']}  {item['job_id'] or '-'}  {item['why']}")
+        extra = f"  {item['task']}" if item.get("task") else ""
+        typer.echo(f"{item['action']}  {item['job_id'] or '-'}  {item['why']}{extra}")

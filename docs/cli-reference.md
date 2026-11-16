@@ -600,21 +600,23 @@ Usage: mzt next [OPTIONS]
 | `--mine PREFIX` | | Only scores whose run id starts with PREFIX |
 | `--since HOURS` | 24 | Ignore finished scores that ended longer ago than this (0 = no limit) |
 | `--idle-after SECONDS` | score's stale-detection timeout, else its sheet timeout, else 1800 | Quiet time before a running score is `UNSTICK` |
+| `--tasks DIR` | | Also list `TASK*.md` files in DIR that no score is bound to as `CAST` rows (GH #555) |
 | `--json` | false | A JSON array, no ANSI |
 
 #### Result
 
-`[{"job_id", "action", "why"}]`, ordered ESCALATE, UNSTICK, JUDGE, WAIT, DONE (older submissions first within an action). An empty queue is one `DONE` row with `job_id: null`.
+`[{"job_id", "action", "why"}]`, ordered ESCALATE, UNSTICK, JUDGE, CAST, WAIT, DONE (older submissions first within an action). An empty queue is one `DONE` row with `job_id: null`.
 
 | `action` | When |
 |----------|------|
 | `ESCALATE` | The score failed or was cancelled, is paused (including `paused_at_chain`: finished, holding its chain trigger until `mzt resume`), or has a sheet at a fermata: a person decides |
 | `UNSTICK` | Running, a sheet is playing, and nothing has been recorded for longer than the idle limit |
 | `JUDGE` | Completed and not yet judged: run `mzt verdict JOB`, then `mzt verdict JOB --accept` |
+| `CAST` | Only with `--tasks DIR`: a `TASK*.md` file has no score bound to it. `job_id` is `null` and the row adds `task`, the file's absolute path; start it with `mzt agents run NAME --task PATH` |
 | `WAIT` | Still running or queued, nothing to do (`mzt wait JOB`) |
 | `DONE` | Completed and judged |
 
-`CAST` and `SUBMIT` are not produced: they belong to the agent surface, not the conductor. Judged state is the `.mzt-judged.json` marker that `mzt verdict --accept` writes in the score's workspace, keyed to that run's submission time, so a fresh run under a reused id is judged again. Recurring-schedule anchors and pytest scratch runs are left out, as in `mzt list`.
+`SUBMIT` is not produced. `CAST` appears only with `--tasks`: a task file is bound when any score's id (any age or status) contains `-task-<8 hex>-` with the first 8 hex digits of the file's sha256, which is how `mzt agents run` names its score (`targeted-work-NAME-task-<hex8>-<date>`); only the hash is compared, so editing a task (a rework adds `FINDINGS:`) makes it unbound again. Rows are sorted by file name. Judged state is the `.mzt-judged.json` marker that `mzt verdict --accept` writes in the score's workspace, keyed to that run's submission time, so a fresh run under a reused id is judged again. Recurring-schedule anchors and pytest scratch runs are left out, as in `mzt list`.
 
 ---
 
