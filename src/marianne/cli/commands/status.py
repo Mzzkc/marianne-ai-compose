@@ -1126,11 +1126,7 @@ def _output_status_json(
             "total_cache_read_tokens": _job_token_totals(job)["cache_read"],
             "total_cache_write_tokens": _job_token_totals(job)["cache_write"],
             "cost_limit_reached": job.cost_limit_reached,
-            "cost_confidence": min(
-                (s.cost_confidence for s in job.sheets.values()
-                 if s.estimated_cost is not None and s.estimated_cost > 0),
-                default=1.0,
-            ),
+            "cost_confidence": _measured_cost_confidence(job),
         },
         "loops": _loop_rows(job),
         "circuit_breaker": cb_state,
@@ -1896,6 +1892,26 @@ def _job_token_totals(job: CheckpointState) -> dict[str, int]:
     return totals
 
 
+_COST_UNKNOWN_TEXT = "cost unknown (no sheet reported a measured cost)"
+
+
+def _measured_cost_confidence(job: CheckpointState) -> float | None:
+    """Lowest cost confidence among sheets that reported a measured cost.
+
+    Returns ``None`` when no sheet has a measured (> 0) ``estimated_cost``.
+    ``SheetState.cost_confidence`` defaults to 1.0, so defaulting the min to
+    1.0 reported certainty about a cost nobody measured (#527).
+    """
+    return min(
+        (
+            s.cost_confidence
+            for s in job.sheets.values()
+            if s.estimated_cost is not None and s.estimated_cost > 0
+        ),
+        default=None,
+    )
+
+
 def _render_cost_summary(job: CheckpointState) -> None:
     """Render cost tracking summary — always shown for visibility.
 
@@ -1934,15 +1950,10 @@ def _render_cost_summary(job: CheckpointState) -> None:
     # Compute aggregate cost confidence from sheets.
     # If any sheet has low confidence (< 0.9), the overall cost is an estimate.
     # D-024: Users must know when costs are character-estimated vs API-reported.
-    sheets_with_cost = [
-        s for s in job.sheets.values()
-        if s.estimated_cost is not None and s.estimated_cost > 0
-    ]
-    min_confidence = min(
-        (s.cost_confidence for s in sheets_with_cost),
-        default=1.0,
-    )
-    is_estimated = min_confidence < 0.9
+    # #527: with no measured sheet the confidence is unknown, so any total
+    # shown is an estimate, never a confident figure.
+    min_confidence = _measured_cost_confidence(job)
+    is_estimated = min_confidence is None or min_confidence < 0.9
 
     console.print("\n[bold]Cost Summary[/bold]")
     if has_job_cost:
@@ -1982,7 +1993,11 @@ def _render_cost_summary(job: CheckpointState) -> None:
             cost_display = f"${total:.2f}"
         console.print(f"  Cost: [yellow]{cost_display}[/yellow] {limit_str} (from sheets)")
     else:
-        console.print(f"  Cost: $0.00 {limit_str}")
+        # #527: nothing was measured, so the cost is unknown, not $0.00.
+        # The phrase is long; the limit goes on its own line so it is not
+        # wrapped mid-word on an 80-column terminal.
+        console.print(f"  Cost: {_COST_UNKNOWN_TEXT}")
+        console.print(f"  Limit: {limit_str}")
 
     _render_loop_state(job)
 
