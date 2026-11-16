@@ -52,6 +52,7 @@ from marianne.core.constants import (
 from marianne.core.errors.classifier import ErrorClassifier
 from marianne.core.errors.codes import ErrorCategory, ErrorCode
 from marianne.core.logging import get_logger
+from marianne.core.prompt_receipt import PromptReceipt, build_receipt
 from marianne.core.sheet import Sheet
 from marianne.core.tokens import estimate_tokens, get_effective_window_size
 from marianne.daemon.baton.events import SheetAttemptResult
@@ -143,6 +144,8 @@ async def sheet_task(
     effective_instrument = instrument_override or sheet.instrument_name
     # #202: warn-only preflight notes, computed once the prompt is rendered.
     preflight_warnings: list[str] = []
+    # GH #546: what the assembled prompt was made of (hashes and sizes only).
+    prompt_receipt: PromptReceipt | None = None
 
     try:
         # This is the first executable line inside ``sheet_task``.  A receipt
@@ -185,6 +188,19 @@ async def sheet_task(
                 total_movements=total_movements,
                 memory_manifest=memory_manifest,
             )
+
+        # GH #546: the receipt travels on every result from here on, success or
+        # failure. The renderer built it with per-source detail; the inline
+        # fallback has only the finished prompt, so its receipt lists no sources.
+        prompt_receipt = (
+            context_delivery.prompt_receipt
+            if context_delivery is not None and context_delivery.prompt_receipt is not None
+            else build_receipt(
+                prompt=prompt,
+                preamble=preamble or "",
+                sources=[],
+            )
+        )
 
         # #202: warn-only token preflight on the rendered prompt (advisory —
         # never blocks). Computed before execution so it reflects what will run.
@@ -398,6 +414,7 @@ async def sheet_task(
             tool_calls=tool_call_payloads,
             a2a_requests=a2a_request_payloads,
             preflight_warnings=preflight_warnings,
+            prompt_receipt=prompt_receipt,
         )
 
     except Exception as exc:
@@ -435,6 +452,7 @@ async def sheet_task(
             exit_reason="error",
             rate_limited=False,
             preflight_warnings=preflight_warnings,
+            prompt_receipt=prompt_receipt,
         )
 
     # Always report — the baton must know what happened
