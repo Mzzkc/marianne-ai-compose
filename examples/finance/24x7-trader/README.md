@@ -47,7 +47,9 @@ examples/finance/24x7-trader/
 ├── _scripts/                          ← reference implementations (paper-safe defaults)
 │   ├── broker_paper.sh                ← Alpaca paper, hard-locked to paper mode
 │   ├── broker_mock.py                 ← file-backed mock broker, offline (see "Running offline")
-│   ├── news_perplexity.sh             ← Perplexity Sonar
+│   ├── news_harness.sh                ← live web research on a Codex/Claude subscription (default)
+│   ├── news_perplexity.sh             ← Perplexity Sonar (alternative, needs a paid API key)
+│   ├── news_offline.sh                ← test seam, canned/no news (never for trading)
 │   ├── notify_stdout.sh               ← stdout (default safe)
 │   ├── benchmark_spy.sh               ← portfolio + SPY math
 │   └── check_envelope.sh              ← deterministic envelope enforcement
@@ -105,7 +107,7 @@ bugs that come from `$PWD`-relative paths under cron.
 
 # Required: absolute paths to the technique-implementing scripts
 export BROKER_CMD=/abs/path/to/marianne-ai-compose/examples/finance/24x7-trader/_scripts/broker_paper.sh
-export NEWS_CMD=/abs/path/to/marianne-ai-compose/examples/finance/24x7-trader/_scripts/news_perplexity.sh
+export NEWS_CMD=/abs/path/to/marianne-ai-compose/examples/finance/24x7-trader/_scripts/news_harness.sh
 export NOTIFY_CMD=/abs/path/to/marianne-ai-compose/examples/finance/24x7-trader/_scripts/notify_stdout.sh
 export BENCHMARK_CMD=/abs/path/to/marianne-ai-compose/examples/finance/24x7-trader/_scripts/benchmark_spy.sh
 export CHECK_ENVELOPE_CMD=/abs/path/to/marianne-ai-compose/examples/finance/24x7-trader/_scripts/check_envelope.sh
@@ -115,12 +117,43 @@ export EXECUTE_SLATE_CMD=/abs/path/to/marianne-ai-compose/examples/finance/24x7-
 export ALPACA_KEY=...
 export ALPACA_SECRET=...
 
-# Required for the reference news/research (Perplexity)
-export PERPLEXITY_KEY=...
+# Live research needs no key. news_harness.sh uses the login of the `codex`
+# CLI (default) or the `claude` CLI on your subscription:
+#   export NEWS_HARNESS=claude        # default: codex
+#   export NEWS_HARNESS_MODEL=...     # optional --model
+# Only if you point NEWS_CMD at news_perplexity.sh instead:
+# export PERPLEXITY_KEY=...
 
 # Optional: respected by notify_stdout.sh (no notifications during quiet hours unless 'urgent')
 # export OPERATOR_QUIET_HOURS="22-07"
 ```
+
+### Live research (the default)
+
+Online sources and search are the point of the suite, so live mode is the
+default and needs nothing beyond a logged-in `codex` or `claude`. No search
+API, no key.
+
+- **The pre-market research frames search the web themselves.** Stage 2 of
+  `pre-market.yaml` runs on the `researcher` instrument alias, whose
+  per-sheet toolset (`tools:`, GH #534) names `WebSearch` and `WebFetch`, so
+  the macro, sector and technical frames have Claude Code's own web tools on
+  your Claude subscription and cite URLs from what they read. `NEWS_CMD` is
+  optional extra context for those frames.
+- **`NEWS_CMD` is `_scripts/news_harness.sh`.** It implements the news
+  contract by calling a harness headless: `NEWS_HARNESS=codex` (default) runs
+  `codex --search exec`, `NEWS_HARNESS=claude` runs `claude -p --tools
+  WebSearch,WebFetch`. Output is markdown with source URLs; an answer with no
+  URL, or a failed harness, exits non-zero with one stderr line. Each call spends
+  subscription quota; `NEWS_HARNESS_TIMEOUT` (seconds, default 600) bounds its
+  time.
+- **Alternatives.** `news_perplexity.sh` still works if you have a Perplexity
+  key. `news_offline.sh` is a test seam for plumbing tests only (see "Running
+  offline"); it returns canned text marked offline and is not for trading.
+
+Search results are untrusted web content read by agents that can influence
+orders. The envelope check and the adversarial review in market-open are the
+guard, not the research layer.
 
 To swap implementations: write your own script implementing the relevant
 contract (`_techniques/<name>.md`), then point the corresponding
@@ -162,7 +195,8 @@ export BENCHMARK_CMD=$PWD/_scripts/benchmark_spy.sh      # reads SPY via the moc
 export CHECK_ENVELOPE_CMD=$PWD/_scripts/check_envelope.sh
 export EXECUTE_SLATE_CMD=$PWD/_scripts/execute_slate.sh
 export MOCK_BROKER_PRICES=/abs/path/to/prices.json       # optional, see below
-# no ALPACA_*, no PERPLEXITY_KEY
+# no ALPACA_*, no PERPLEXITY_KEY; NEWS_CMD is optional (pre-market's frames
+# search the web themselves; news_offline.sh is the plumbing-test seam)
 ```
 
 | Variable | Default | Meaning |
@@ -187,7 +221,7 @@ What else the suite needs, and whether it has an offline default:
 |---|---|
 | `NOTIFY_CMD` | Yes: `_scripts/notify_stdout.sh` prints to stdout. Required by market-close and weekly-review; optional in pre-market, market-open and midday. |
 | `BENCHMARK_CMD`, `CHECK_ENVELOPE_CMD`, `EXECUTE_SLATE_CMD` | Yes: local scripts (`jq`, `python3` with PyYAML). |
-| `NEWS_CMD` | Yes: `_scripts/news_offline.sh` makes no network call and opens every answer with the contract's `**[OFFLINE — training data only]**` marker. Optional `NEWS_FIXTURES` (absolute dir of `<verb>.md` or `<verb>-<ARG>.md`) supplies canned news; without it each verb says there is no new information. A test seam, not a research source. |
+| `NEWS_CMD` | Optional for pre-market (its frames search the web themselves). For plumbing tests, `_scripts/news_offline.sh` makes no network call and opens every answer with the contract's `**[OFFLINE — training data only]**` marker. Optional `NEWS_FIXTURES` (absolute dir of `<verb>.md` or `<verb>-<ARG>.md`) supplies canned news; without it each verb says there is no new information. A test seam for plumbing tests only, not a research source and not for trading. |
 
 This makes the scripts and the broker calls testable without an account. It
 does not make the scores run offline: every sheet that reasons still needs the
@@ -252,9 +286,10 @@ is a file-backed one for offline testing; read it as a second reference.
 
 ### Different news/research source
 
-Implement `_techniques/news_research.md` and set `NEWS_CMD`. The reference
-uses Perplexity but the contract makes no assumption about the underlying
-provider; Tavily, Exa, Brave, or Claude Code's WebSearch all fit.
+Implement `_techniques/news_research.md` and set `NEWS_CMD`. The default,
+`news_harness.sh`, uses your Codex or Claude subscription; `news_perplexity.sh`
+uses Perplexity. The contract makes no assumption about the underlying
+provider; Tavily, Exa or Brave all fit.
 
 ### Different notify channel
 
@@ -305,7 +340,13 @@ Read these before you trust the family with capital, paper or otherwise:
   margin or market hours. Results from it say the plumbing works, nothing
   about the strategy. See [Running offline](#running-offline-no-brokerage-account).
 - **Offline news is canned.** `news_offline.sh` returns fixtures or "no new information", marked offline;
-  the pre-market agents see no real news in an offline run.
+  the pre-market agents see no real news from it. It is for plumbing tests, never for trading.
+- **Only pre-market's frames and `NEWS_CMD` search.** Other phases (market-open,
+  midday, market-close, weekly-review) have no web tool of their own and do not
+  call `NEWS_CMD`; they reason over the research the workspace already holds.
+- **Live research is model-mediated.** Search results are read and summarised by
+  an LLM; the cited URLs are the audit trail, and nothing checks them
+  mechanically.
 - **Trust assumption: agents don't tamper with the envelope.** The score
   family verifies `risk-envelope.yaml` hash at every gate to detect
   mid-run modification, but the agent retains write tools. If you

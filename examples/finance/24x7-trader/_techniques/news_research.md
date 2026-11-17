@@ -1,8 +1,10 @@
 # News & Research Technique Contract
 
-The agent's eyes on the world. Reference implementation uses Perplexity;
-substitutes include Tavily, Exa, Brave Search, or Claude Code's native
-WebSearch/WebFetch.
+The agent's eyes on the world. The default implementation, `news_harness.sh`,
+calls Codex (`--search`) or Claude Code (WebSearch/WebFetch) headless on the
+operator's subscription: no API key. `news_perplexity.sh` is the paid-API
+alternative; Tavily, Exa or Brave Search also fit. `news_offline.sh` is a test
+seam for plumbing tests, not a research source.
 
 ## Contract
 
@@ -34,12 +36,13 @@ so the agent downstream knows not to treat it as fresh.
 
 ```
 NEWS_CMD       — absolute path to the news script
-PERPLEXITY_KEY — credential for the reference implementation
+NEWS_HARNESS   — news_harness.sh only: codex (default) | claude; uses the harness's own login
+PERPLEXITY_KEY — news_perplexity.sh only
 ```
 
 ## Replacing the implementation
 
 Provide a script satisfying the contract above. The reference
-`_scripts/news_perplexity.sh` is intentionally simple — it makes one
-API call per verb and returns markdown. A more sophisticated
+`_scripts/news_harness.sh` is intentionally simple — it makes one
+headless harness call per verb and returns markdown. A more sophisticated
 implementation could cache, batch, or fall back across providers.

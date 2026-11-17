@@ -28,8 +28,9 @@ By running this score family, you acknowledge:
 
 1. **You bear all risk of financial loss.** The score family can place
    real-money trades when configured to do so. Bugs in this software, in
-   the third-party brokerage APIs it depends on, in the news/research APIs
-   it queries, or in the AI models it invokes can cause incorrect orders
+   the third-party brokerage APIs it depends on, in the news/research sources
+   it queries (live web search by the AI models, or a search API), or in the AI
+   models it invokes, which can misread, miscite or be misled by web content, can cause incorrect orders
    to be placed, missed, mis-sized, mis-timed, or otherwise defective.
    No representation is made that the deterministic risk-envelope check,
    the multi-frame review, the adversarial pre-trade pass, or any other
