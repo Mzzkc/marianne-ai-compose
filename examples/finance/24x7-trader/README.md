@@ -187,7 +187,7 @@ What else the suite needs, and whether it has an offline default:
 |---|---|
 | `NOTIFY_CMD` | Yes: `_scripts/notify_stdout.sh` prints to stdout. Required by market-close and weekly-review; optional in pre-market, market-open and midday. |
 | `BENCHMARK_CMD`, `CHECK_ENVELOPE_CMD`, `EXECUTE_SLATE_CMD` | Yes: local scripts (`jq`, `python3` with PyYAML). |
-| `NEWS_CMD` | **No offline default, a gap.** Pre-market requires it and the only shipped implementation is `news_perplexity.sh`. Point it at your own script satisfying `_techniques/news_research.md` (markdown on stdout, starting with `**[OFFLINE — training data only]**` when no web call was made). |
+| `NEWS_CMD` | Yes: `_scripts/news_offline.sh` makes no network call and opens every answer with the contract's `**[OFFLINE — training data only]**` marker. Optional `NEWS_FIXTURES` (absolute dir of `<verb>.md` or `<verb>-<ARG>.md`) supplies canned news; without it each verb says there is no new information. A test seam, not a research source. |
 
 This makes the scripts and the broker calls testable without an account. It
 does not make the scores run offline: every sheet that reasons still needs the
@@ -304,8 +304,8 @@ Read these before you trust the family with capital, paper or otherwise:
   fills at the prices you give it, with no spread, slippage, partial fills,
   margin or market hours. Results from it say the plumbing works, nothing
   about the strategy. See [Running offline](#running-offline-no-brokerage-account).
-- **No offline news source.** `NEWS_CMD` has only the Perplexity
-  implementation; offline runs must supply their own.
+- **Offline news is canned.** `news_offline.sh` returns fixtures or "no new information", marked offline;
+  the pre-market agents see no real news in an offline run.
 - **Trust assumption: agents don't tamper with the envelope.** The score
   family verifies `risk-envelope.yaml` hash at every gate to detect
   mid-run modification, but the agent retains write tools. If you

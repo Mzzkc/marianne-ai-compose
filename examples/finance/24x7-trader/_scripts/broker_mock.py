@@ -38,7 +38,7 @@ import fcntl
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 PROG = "broker_mock"
@@ -68,7 +68,7 @@ class BrokerError(Exception):
     """A refusal. Message goes to stderr, exit status is 1 (as the reference)."""
 
 
-def die(msg: str) -> "BrokerError":
+def die(msg: str) -> BrokerError:
     return BrokerError(msg)
 
 
@@ -97,7 +97,7 @@ def now_iso() -> str:
     pinned = os.environ.get("MOCK_BROKER_NOW")
     if pinned:
         return pinned
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 # ---- configuration --------------------------------------------------------
@@ -151,7 +151,7 @@ class Book:
     """state.json under an exclusive lock for the life of one invocation."""
 
     def __init__(self, directory: Path):
-        directory.mkdir(parents=True, exist_ok=True)
+        self._lock = open(directory / "state.lock", "w")  # noqa: SIM115 - held for the process lifetime; flock releases at exit
         self.path = directory / "state.json"
         self._lock = open(directory / "state.lock", "w")
         fcntl.flock(self._lock, fcntl.LOCK_EX)

@@ -11,6 +11,7 @@ No network, no credentials.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -131,7 +132,7 @@ def test_default_fixture_when_no_prices_given(tmp_path: Path) -> None:
 
 def test_market_buy_fills_deterministically_and_updates_book(broker: Mock) -> None:
     order = broker.ok("place_order", "AAPL", "BUY", "10", "market", "--client-order-id", "c1")
-    assert ORDER_KEYS <= set(order)
+    assert set(order) >= ORDER_KEYS
     assert order["status"] == "filled" and order["id"]
     assert (order["ticker"], order["side"], order["qty"], order["type"]) == (
         "AAPL", "buy", 10, "market")
@@ -296,3 +297,36 @@ def test_suite_scripts_run_against_the_mock(broker: Mock, tmp_path: Path) -> Non
     pv = subprocess.run([str(bench), "portfolio_value", "--workspace", str(ws)], env=env,
                         capture_output=True, text=True, timeout=60, check=False)
     assert json.loads(pv.stdout)["equity"] == 100000
+
+
+# ------------------------------------------------------------- offline news
+
+
+NEWS = SUITE / "_scripts" / "news_offline.sh"
+NEWS_VERBS = ("macro_today", "sector_news", "catalysts", "peer_compare", "regulatory")
+
+
+def _news(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(NEWS), *args], capture_output=True, text=True, env={**os.environ, **(env or {})},
+        check=False,
+    )
+
+
+def test_news_offline_covers_the_contract_verbs_and_marks_every_answer() -> None:
+    contract = (SUITE / "_techniques" / "news_research.md").read_text(encoding="utf-8")
+    for verb in NEWS_VERBS:
+        assert f"`{verb}`" in contract
+        args = ("--date", "2026-11-17") if verb == "macro_today" else ("NVDA",)
+        result = _news(verb, *args)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.startswith("**[OFFLINE — training data only]**")
+
+
+def test_news_offline_reads_fixtures_and_refuses_bad_input(tmp_path: Path) -> None:
+    (tmp_path / "catalysts-NVDA.md").write_text("- earnings on Thursday\n", encoding="utf-8")
+    out = _news("catalysts", "NVDA", env={"NEWS_FIXTURES": str(tmp_path)})
+    assert "earnings on Thursday" in out.stdout
+    for bad in (("bogus",), ("catalysts",), ("catalysts", "../etc"), ()):
+        result = _news(*bad)
+        assert result.returncode != 0 and result.stdout == ""
