@@ -833,7 +833,10 @@ class TestCostSummaryAlwaysVisible:
         _render_cost_summary(job)
         captured = capsys.readouterr()
         assert "Cost Summary" in captured.out
-        assert "$0.00" in captured.out
+        # #527: nothing was measured, so the summary says so instead of a
+        # confident "$0.00".
+        assert "cost unknown" in captured.out
+        assert "$0.00" not in captured.out
 
     def test_no_cost_limits_shows_tip(self, capsys: pytest.CaptureFixture[str]) -> None:
         """When cost limits are not configured, a tip is shown."""
