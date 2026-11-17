@@ -151,9 +151,10 @@ class Book:
     """state.json under an exclusive lock for the life of one invocation."""
 
     def __init__(self, directory: Path):
-        self._lock = open(directory / "state.lock", "w")  # noqa: SIM115 - held for the process lifetime; flock releases at exit
+        directory.mkdir(parents=True, exist_ok=True)
         self.path = directory / "state.json"
-        self._lock = open(directory / "state.lock", "w")
+        # Held for the process lifetime; the flock is released when the process exits.
+        self._lock = open(directory / "state.lock", "w")  # noqa: SIM115
         fcntl.flock(self._lock, fcntl.LOCK_EX)
         if self.path.exists():
             try:
