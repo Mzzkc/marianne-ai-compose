@@ -46,6 +46,7 @@ examples/finance/24x7-trader/
 ├── _techniques/                       ← pluggable contracts (broker, news, notify, benchmark)
 ├── _scripts/                          ← reference implementations (paper-safe defaults)
 │   ├── broker_paper.sh                ← Alpaca paper, hard-locked to paper mode
+│   ├── broker_mock.py                 ← file-backed mock broker, offline (see "Running offline")
 │   ├── news_perplexity.sh             ← Perplexity Sonar
 │   ├── notify_stdout.sh               ← stdout (default safe)
 │   ├── benchmark_spy.sh               ← portfolio + SPY math
@@ -147,6 +148,52 @@ Re-run only when you change your charter substantially.
 **Today's fallback:** install `_scheduler/crontab.example` after
 substituting your absolute paths, or write a systemd-timer set.
 
+### Running offline (no brokerage account)
+
+`_scripts/broker_mock.py` implements the whole broker contract with no network
+and no credentials. Cash, positions and orders live in a JSON file; market
+orders fill at a price from a fixtures file, so a run is reproducible.
+
+```bash
+cd examples/finance/24x7-trader          # the paths below are absolute
+export BROKER_CMD=$PWD/_scripts/broker_mock.py
+export NOTIFY_CMD=$PWD/_scripts/notify_stdout.sh
+export BENCHMARK_CMD=$PWD/_scripts/benchmark_spy.sh      # reads SPY via the mock's get_quote
+export CHECK_ENVELOPE_CMD=$PWD/_scripts/check_envelope.sh
+export EXECUTE_SLATE_CMD=$PWD/_scripts/execute_slate.sh
+export MOCK_BROKER_PRICES=/abs/path/to/prices.json       # optional, see below
+# no ALPACA_*, no PERPLEXITY_KEY
+```
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `MOCK_BROKER_STATE` | `<repo>/workspaces/24x7-trader/mock-broker` (the score workspace) | Absolute path of the directory holding `state.json`. Delete it to reset the account. |
+| `MOCK_BROKER_PRICES` | built-in table (SPY 500, AAPL 200, MSFT 420, NVDA 130, GOOGL 170, AMZN 190, META 520, TSLA 250, JPM 210, XOM 115, JNJ 160, KO 62) | JSON file, ticker to price: `{"AAPL": 201.5, "SPY": {"last": 502, "bid": 501.9, "ask": 502.1, "volume": 1000}}`. A ticker not in the fixture is refused (`get_quote`, `place_order`). |
+| `MOCK_BROKER_CASH` | `100000` | Starting cash, read when `state.json` is first created. |
+| `MOCK_BROKER_NOW` | wall clock (UTC) | Pins the `ts` fields for reproducible output. |
+
+Behaviour worth knowing: a market order, and a limit order the fixture price
+already satisfies, fills in the call that places it. Resting limit orders and
+stops are re-checked against the fixture at the start of every call, so
+editing the prices file between phases moves the market. The mock is
+paper-only (`BROKER_LIVE` is ignored), long-only, has no margin, and refuses
+duplicate `--client-order-id`s. Its prices are illustrative round numbers, not
+market data; a fixed SPY price makes the daily benchmark change zero unless
+you edit the fixture.
+
+What else the suite needs, and whether it has an offline default:
+
+| Variable | Offline? |
+|---|---|
+| `NOTIFY_CMD` | Yes: `_scripts/notify_stdout.sh` prints to stdout. Required by market-close and weekly-review; optional in pre-market, market-open and midday. |
+| `BENCHMARK_CMD`, `CHECK_ENVELOPE_CMD`, `EXECUTE_SLATE_CMD` | Yes: local scripts (`jq`, `python3` with PyYAML). |
+| `NEWS_CMD` | **No offline default, a gap.** Pre-market requires it and the only shipped implementation is `news_perplexity.sh`. Point it at your own script satisfying `_techniques/news_research.md` (markdown on stdout, starting with `**[OFFLINE — training data only]**` when no web call was made). |
+
+This makes the scripts and the broker calls testable without an account. It
+does not make the scores run offline: every sheet that reasons still needs the
+model instruments the scores name (`claude-code`, Gemini, GLM).
+`mzt validate` needs none of the above.
+
 ## Safety architecture
 
 ### Paper-by-default
@@ -200,8 +247,8 @@ spots.
 ### Different brokerage
 
 Implement `_techniques/broker.md` and set `BROKER_CMD`. The contract is
-intentionally minimal — eight verbs, JSON in/out. A mocked file-based
-broker for offline testing is straightforward to write.
+intentionally minimal — eight verbs, JSON in/out. `_scripts/broker_mock.py`
+is a file-backed one for offline testing; read it as a second reference.
 
 ### Different news/research source
 
@@ -253,10 +300,12 @@ Read these before you trust the family with capital, paper or otherwise:
   re-run may regenerate frame files with different content than the
   previous attempt. The structural artifacts (slate JSON) cross-check
   during re-runs but the prose evidence may diverge.
-- **No mock broker shipped.** The reference broker requires Alpaca paper
-  credentials. Operators wanting offline testing must implement a
-  file-backed broker satisfying `_techniques/broker.md` (this is on the
-  roadmap; contributions welcome).
+- **The mock broker is a fixture, not a market.** `_scripts/broker_mock.py`
+  fills at the prices you give it, with no spread, slippage, partial fills,
+  margin or market hours. Results from it say the plumbing works, nothing
+  about the strategy. See [Running offline](#running-offline-no-brokerage-account).
+- **No offline news source.** `NEWS_CMD` has only the Perplexity
+  implementation; offline runs must supply their own.
 - **Trust assumption: agents don't tamper with the envelope.** The score
   family verifies `risk-envelope.yaml` hash at every gate to detect
   mid-run modification, but the agent retains write tools. If you

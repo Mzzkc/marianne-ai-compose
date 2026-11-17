@@ -60,7 +60,13 @@ By running this score family, you acknowledge:
    risk envelope incorrectly can cause unintended live trades. Read
    every script before pointing real capital at it.
 
-6. **Holiday handling, network outages, broker outages, market
+6. **The mock broker is not a market simulation.** `_scripts/broker_mock.py`
+   fills orders at fixture prices you supply, with no spread, slippage,
+   liquidity limits or market hours. A run against it shows that the
+   scripts and scores work together; it is no evidence that a strategy
+   would have made or lost money, and must not be used as a backtest.
+
+7. **Holiday handling, network outages, broker outages, market
    disruptions, regulatory changes, account restrictions, margin calls,
    pattern-day-trader rules, wash-sale considerations, tax
    implications, and other operational and legal concerns are entirely
