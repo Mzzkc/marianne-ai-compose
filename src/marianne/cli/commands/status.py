@@ -1915,8 +1915,7 @@ def _measured_cost_confidence(job: CheckpointState) -> float | None:
 def _sheet_cost_is_measured(sheet: SheetState) -> bool:
     if sheet.estimated_cost is not None and sheet.estimated_cost > 0:
         return True
-    priced = (getattr(sheet, "total_cost_usd", 0.0) or 0.0) > 0
-    return priced and not getattr(sheet, "cost_uncertain", False)
+    return sheet.total_cost_usd > 0 and not sheet.cost_uncertain
 
 
 def _render_cost_summary(job: CheckpointState) -> None:

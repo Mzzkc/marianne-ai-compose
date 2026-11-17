@@ -3145,8 +3145,8 @@ class BatonAdapter:
         mcp_code_bridge_active: bool,
         mcp_bind_mounts: list[Path],
         event_generation: int,
-        memory_manifest: str | None = None,
-        memory_dispatch: str | None = None,
+        memory_manifest: str | None,
+        memory_dispatch: str | None,
     ) -> tuple[asyncio.Task[None], AttemptMode]:
         """Finish all fallible setup while the caller still owns the lease."""
         prior_failure = self._build_healing_context(state, job_id, sheet_num)

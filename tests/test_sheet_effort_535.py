@@ -592,6 +592,7 @@ async def _dispatch(
         effective_instrument=state.instrument_name, technique_manifest=None,
         technique_skill_docs={}, mcp_config_path=None, output_router_active=False,
         mcp_code_bridge_active=False, mcp_bind_mounts=[], event_generation=0,
+        memory_manifest=None, memory_dispatch=None,
     )
     await task
     return captured[0]
