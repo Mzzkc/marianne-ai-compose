@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-SUITE = Path(__file__).resolve().parents[1] / "examples" / "finance" / "24x7-trader"
+SUITE = Path(__file__).resolve().parents[2]
 SCRIPT = SUITE / "_scripts" / "news_harness.sh"
 PRE_MARKET = SUITE / "pre-market.yaml"
 

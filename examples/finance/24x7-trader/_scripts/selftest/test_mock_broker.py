@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 
-SUITE = Path(__file__).resolve().parents[1] / "examples" / "finance" / "24x7-trader"
+SUITE = Path(__file__).resolve().parents[2]
 MOCK = SUITE / "_scripts" / "broker_mock.py"
 CONTRACT = SUITE / "_techniques" / "broker.md"
 

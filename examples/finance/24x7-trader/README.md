@@ -52,7 +52,8 @@ examples/finance/24x7-trader/
 │   ├── news_offline.sh                ← test seam, canned/no news (never for trading)
 │   ├── notify_stdout.sh               ← stdout (default safe)
 │   ├── benchmark_spy.sh               ← portfolio + SPY math
-│   └── check_envelope.sh              ← deterministic envelope enforcement
+│   ├── check_envelope.sh              ← deterministic envelope enforcement
+│   └── selftest/                      ← the scripts' own self-test (not Marianne's suite)
 ├── _scheduler/
 │   ├── conductor-snippet.yaml         ← Feature-19 scheduler block (canonical)
 │   └── crontab.example                ← external cron fallback
@@ -67,6 +68,19 @@ examples/finance/24x7-trader/
 
 The `workspaces/24x7-trader/` directory (created on first run) is the agent's
 persistent memory. It lives outside the score family and is gitignored.
+
+
+## Self-test (the suite's own scripts)
+
+The broker mock, the offline and harness news scripts are checked by a self-test that ships with the
+example, not by Marianne's test suite:
+
+```bash
+cd examples/finance/24x7-trader
+python -m pytest -q -o addopts= -c /dev/null _scripts/selftest
+```
+
+It stubs `codex` and `claude` on PATH and makes no network call.
 
 ## Setup
 
