@@ -52,7 +52,7 @@ class TestDiscoverInstruments:
         expected_names = {
             "claude-code",
             "claude-code-ollama",
-            "claude-code-polystrata",
+            "polystrata",
             "gemini-cli",
             "qwen-code",
             "openclaw",
@@ -493,3 +493,18 @@ class TestTemplateVariableAliases:
         assert variables["voice"] is None
         assert variables["instance"] is None
         assert variables["voice_count"] == 1
+
+
+def test_polystrata_is_a_plain_endpoint_like_ollama() -> None:
+    """Emzi, 17 Nov: a new model server ships as a profile like ollama, not bound to
+    one harness. The builtin is an HTTP endpoint; harnesses reach it by base URL."""
+    from marianne.instruments.loader import InstrumentProfileLoader, profile_source_dirs
+
+    profiles = InstrumentProfileLoader.load_directories([profile_source_dirs()[0]])
+    ps, ol = profiles["polystrata"], profiles["ollama"]
+    assert ps.kind == ol.kind == "http"
+    assert ps.http is not None and ps.http.schema_family == "openai"
+    assert ps.http.base_url == "http://127.0.0.1:8080/v1"
+    assert ps.effort is not None and ps.effort.key == "reasoning_effort"
+    assert all(m.cost_per_1k_input == 0.0 and m.max_concurrent == 1 for m in ps.models)
+    assert "claude-code-polystrata" not in profiles

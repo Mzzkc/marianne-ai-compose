@@ -971,7 +971,7 @@ def test_builtins_without_a_verified_control_declare_none(name: str) -> None:
 def test_every_builtin_is_accounted_for() -> None:
     declared = {n for n, p in _builtins().items() if p.effort is not None}
     assert declared == {
-        "claude-code", "claude-code-polystrata", "antigravity", "codex-cli", "opencode", "crush",
+        "claude-code", "antigravity", "codex-cli", "opencode", "crush", "polystrata",
     }
 
 

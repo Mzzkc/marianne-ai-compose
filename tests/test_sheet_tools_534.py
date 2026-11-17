@@ -453,7 +453,7 @@ def test_v336_judges_the_per_sheet_scope(tmp_path: Path) -> None:
 # ── Builtins ─────────────────────────────────────────────────────────────
 
 BUILTINS = Path(__file__).resolve().parents[1] / "src/marianne/instruments/builtins"
-DECLARED = {"claude-code", "claude-code-ollama", "claude-code-polystrata"}
+DECLARED = {"claude-code", "claude-code-ollama"}
 
 
 def _builtin(name: str) -> InstrumentProfile:

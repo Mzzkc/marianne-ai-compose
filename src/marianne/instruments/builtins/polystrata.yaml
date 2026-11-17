@@ -1,0 +1,66 @@
+# PolyStrata (github.com/VecSzn/PolyStrata, MIT): a local server that runs large
+# sparse MoE models on one consumer GPU by keeping hot experts in VRAM and the rest
+# in RAM. Shipped the way Ollama is: a plain endpoint profile, not tied to any
+# harness. PolyStrata serves OpenAI (/v1/chat/completions), Anthropic (/v1/messages)
+# and Responses (/v1/responses) on 127.0.0.1:8080, so any harness that takes a base
+# URL can also be pointed at it (see docs/local-server-quickstart.md).
+#
+# You install and start PolyStrata yourself; Marianne downloads nothing. One model is
+# loaded at a time and it answers one request at a time unless started with
+# --parallel N. Another port or an API key: a user-layer file that `extends:
+# polystrata` and changes `http.base_url` / sets `http.auth_env_var`.
+# Never expose PolyStrata beyond this machine without an API key.
+#
+# Verified: 2026-11-17 against the documented API (PolyStrata docs/AI_SETUP.md);
+# not yet against a live server. `mzt instruments check polystrata` probes the
+# server and lists the ids it serves; name one of those in default_model.
+#
+# Effort: PolyStrata reads `reasoning_effort` (none, low, medium, high; default high)
+# in the request body.
+name: polystrata
+display_name: "PolyStrata"
+description: "Local PolyStrata server (sparse MoE models on one GPU) through its OpenAI-compatible endpoint"
+kind: http
+execution_status: warning
+execution_status_detail: "Shaped from PolyStrata's documented API; not yet run against a live server. Start PolyStrata, run `mzt instruments check polystrata`, then a one-sheet score, and set execution_status: ready in a user-layer copy."
+capabilities: [structured_output]
+default_model: qwen3.8-flash-next
+default_timeout_seconds: 1800
+effort:
+  delivery: body_field
+  key: reasoning_effort
+models:
+  - name: qwen3.8-flash-next
+    context_window: 32768
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_concurrent: 1
+    effort_levels: &levels {minimal: none, low: low, medium: medium, high: high}
+  - name: qwen3.6-35b-a3b
+    context_window: 32768
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_concurrent: 1
+    effort_levels: *levels
+  - name: glm-5.3-flash
+    context_window: 32768
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_concurrent: 1
+    effort_levels: *levels
+  - name: gemma-4-26b-a4b
+    context_window: 32768
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_concurrent: 1
+    effort_levels: *levels
+  - name: tiel-coder-35b-a3b
+    context_window: 32768
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_concurrent: 1
+    effort_levels: *levels
+http:
+  base_url: http://127.0.0.1:8080/v1
+  endpoint: /chat/completions
+  schema_family: openai
