@@ -11,9 +11,12 @@
 # polystrata` and changes `http.base_url` / sets `http.auth_env_var`.
 # Never expose PolyStrata beyond this machine without an API key.
 #
-# Verified: 2026-11-17 against the documented API (PolyStrata docs/AI_SETUP.md);
-# not yet against a live server. `mzt instruments check polystrata` probes the
-# server and lists the ids it serves; name one of those in default_model.
+# Verified live 2026-11-17: PolyStrata 7a6c098 on Windows (RTX 5090 Laptop, 24 GB),
+# Qwen3.6-35B-A3B UD-Q4_K_M. `mzt instruments check` read /v1/models and /props
+# (32,768 ctx) and reported ready; a two-sheet score on the conductor completed with
+# both validations passing (6.5 s and 5.8 s per sheet), reasoning_effort sent.
+# The server lists the id of the loaded file (e.g. qwen3.6-35b-a3b-ud-q4_k_m), not a
+# family name: put that id in default_model in your user-layer file.
 #
 # Effort: PolyStrata reads `reasoning_effort` (none, low, medium, high; default high)
 # in the request body.
@@ -22,7 +25,7 @@ display_name: "PolyStrata"
 description: "Local PolyStrata server (sparse MoE models on one GPU) through its OpenAI-compatible endpoint"
 kind: http
 execution_status: warning
-execution_status_detail: "Shaped from PolyStrata's documented API; not yet run against a live server. Start PolyStrata, run `mzt instruments check polystrata`, then a one-sheet score, and set execution_status: ready in a user-layer copy."
+execution_status_detail: "Run live once (Qwen3.6-35B-A3B on Windows, 2026-11-17). The server serves the id of its loaded file: `mzt instruments check polystrata` lists it; set default_model to that id in a user-layer file that extends polystrata, then set execution_status: ready there."
 capabilities: [structured_output]
 default_model: qwen3.8-flash-next
 default_timeout_seconds: 1800
