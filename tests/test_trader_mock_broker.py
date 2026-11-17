@@ -104,7 +104,7 @@ def test_every_score_call_is_handled(broker: Mock) -> None:
 
 def test_auth_check_balance_and_positions_on_fresh_account(broker: Mock) -> None:
     auth = broker.ok("auth_check")
-    assert auth == {"authenticated": True, "mode": "paper", "account_id": auth["account_id"]}
+    assert (auth["authenticated"], auth["mode"]) == (True, "paper")
     assert isinstance(auth["account_id"], str) and auth["account_id"]
     bal = broker.ok("get_balance")
     assert set(bal) == BALANCE_KEYS

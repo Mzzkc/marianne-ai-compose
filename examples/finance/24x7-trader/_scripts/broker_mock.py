@@ -87,7 +87,7 @@ def parse_positive(text: str, what: str) -> float:
     try:
         value = float(text)
     except (TypeError, ValueError):
-        raise die(f"{what} must be a number (got: {text!r})")
+        raise die(f"{what} must be a number (got: {text!r})") from None
     if not value > 0 or value != value or value == float("inf"):
         raise die(f"{what} must be > 0 (got: {text})")
     return value
@@ -121,9 +121,9 @@ def load_prices() -> dict:
     try:
         data = json.loads(Path(raw).read_text())
     except OSError as exc:
-        raise die(f"MOCK_BROKER_PRICES unreadable: {exc}")
+        raise die(f"MOCK_BROKER_PRICES unreadable: {exc}") from None
     except ValueError as exc:
-        raise die(f"MOCK_BROKER_PRICES is not valid JSON: {exc}")
+        raise die(f"MOCK_BROKER_PRICES is not valid JSON: {exc}") from None
     if not isinstance(data, dict):
         raise die("MOCK_BROKER_PRICES must be a JSON object, ticker -> price")
     prices = {}
@@ -159,12 +159,12 @@ class Book:
             try:
                 self.data = json.loads(self.path.read_text())
             except ValueError as exc:
-                raise die(f"{self.path} is not valid JSON: {exc}")
+                raise die(f"{self.path} is not valid JSON: {exc}") from None
         else:
             try:
                 cash = float(os.environ.get("MOCK_BROKER_CASH", DEFAULT_CASH))
             except ValueError:
-                raise die("MOCK_BROKER_CASH must be a number")
+                raise die("MOCK_BROKER_CASH must be a number") from None
             self.data = {"cash": cash, "positions": {}, "orders": [], "next_id": 1}
         self.dirty = not self.path.exists()
 
