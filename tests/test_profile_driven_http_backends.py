@@ -93,6 +93,9 @@ def test_local_claude_and_raw_ollama_dispatch_to_distinct_backends() -> None:
     builtins = Path(__file__).resolve().parents[1] / "src/marianne/instruments/builtins"
     profiles = InstrumentProfileLoader.load_directory(builtins)
     http_profiles = {name: profile for name, profile in profiles.items() if profile.kind == "http"}
-    assert set(http_profiles) == {"ollama"}
-    assert isinstance(_create_backend_for_profile(profiles["ollama"]), OpenAICompatibleBackend)
+    # Local model servers ship as plain endpoints (ollama, polystrata); each one
+    # dispatches to the OpenAI-compatible backend, never to a harness.
+    assert set(http_profiles) == {"ollama", "polystrata"}
+    for name in http_profiles:
+        assert isinstance(_create_backend_for_profile(profiles[name]), OpenAICompatibleBackend)
     assert isinstance(_create_backend_for_profile(profiles["claude-code-ollama"]), PluginCliBackend)
