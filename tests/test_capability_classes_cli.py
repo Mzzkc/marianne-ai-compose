@@ -306,6 +306,23 @@ def test_classes_write_explains_why_a_hinted_http_profile_is_not_seated() -> Non
     assert not any(line.startswith("quiet:") for line in lines)
 
 
+def test_a_hint_into_a_tier_class_is_explained_not_called_unshipped() -> None:
+    """frontier/balanced/light are packaged (MC1c) but generated from the catalog,
+    so a class hint cannot seat a profile there. Say so; "not a shipped class" was false."""
+    from marianne.instruments.class_policy import explain_hinted_exclusions
+
+    probe = {
+        "openrouter_api_key": False,
+        "profiles": {"mine": _probe_row(class_hints={"frontier": ("first", None),
+                                                     "nonsense": ("first", None)})},
+    }
+    lines = explain_hinted_exclusions(probe)
+    frontier = [line for line in lines if "'frontier'" in line]
+    assert len(frontier) == 1 and "catalog" in frontier[0]
+    assert "not a shipped class" not in frontier[0]
+    assert any("'nonsense'" in line and "not a shipped class" in line for line in lines)
+
+
 def test_unhinted_user_profile_is_never_seated_and_hints_are_parsed() -> None:
     from marianne.core.config.instruments import InstrumentProfile
     from marianne.instruments.class_policy import parse_class_hint, probe_builtin_profiles

@@ -55,6 +55,11 @@ CLASS_POLICIES: dict[str, ClassPolicy] = {
 }
 
 
+# Packaged classes that `classes write` does not generate: their entries pin a model and
+# an effort from the catalog (marianne.instruments.tier_classes), which a profile-order
+# policy cannot express. Kept out of CLASS_POLICIES on purpose (MC1c decision).
+_CATALOG_GENERATED: frozenset[str] = frozenset({"frontier", "balanced", "light"})
+
 _HINT_RE = re.compile(r"^(first|last|(?:after|before)\s+(\S+))$")
 
 
@@ -170,7 +175,14 @@ def explain_hinted_exclusions(probe: dict[str, object]) -> list[str]:
         for class_name in sorted(hints):
             policy = CLASS_POLICIES.get(class_name)
             if policy is None:
-                lines.append(f"{name}: class '{class_name}' is not a shipped class")
+                if class_name in _CATALOG_GENERATED:
+                    lines.append(
+                        f"{name}: class '{class_name}' is generated from the instrument catalog "
+                        "(model and effort per entry), not seated by hints; see "
+                        "`mzt instruments classes tiers`"
+                    )
+                else:
+                    lines.append(f"{name}: class '{class_name}' is not a shipped class")
                 continue
             reason: str | None = None
             if not row["available"]:
