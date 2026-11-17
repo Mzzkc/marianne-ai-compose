@@ -18,6 +18,7 @@ import pytest
 from marianne.cli.commands.status import _output_status_json, _render_cost_summary
 from marianne.core.checkpoint import CheckpointState, SheetState
 from marianne.core.checkpoint import JobStatus as CPJobStatus
+from marianne.daemon.baton.events import SheetAttemptResult
 
 UNKNOWN_PHRASE = "cost unknown (no sheet reported a measured cost)"
 
@@ -109,15 +110,74 @@ class TestNoMeasuredCost:
         line = _cost_line(_human(job, capsys))
         assert "~$2.00 (est.)" in line
 
-    def test_accumulated_sheet_total_without_measured_sheet_is_not_confident(
+
+def _baton_sheet(sheet_num: int, cost_usd: float, *, cost_uncertain: bool = False) -> SheetState:
+    """A sheet priced the way the baton prices it.
+
+    The only writer of ``total_cost_usd`` / ``cost_uncertain`` in src is
+    ``SheetState.record_attempt`` (fed by ``BatonCore`` with a
+    ``SheetAttemptResult``); nothing in src writes ``estimated_cost``. Drive
+    the real writer so the fixture cannot drift from production state.
+    """
+    sheet = SheetState(sheet_num=sheet_num)
+    sheet.record_attempt(
+        SheetAttemptResult(
+            job_id="j527",
+            sheet_num=sheet_num,
+            instrument_name="demo",
+            attempt=1,
+            cost_usd=cost_usd,
+            cost_uncertain=cost_uncertain,
+        )
+    )
+    assert sheet.estimated_cost is None
+    return sheet
+
+
+class TestBatonPricedCost:
+    """The follow-up to #527: a baton-priced sheet IS a measured cost."""
+
+    def test_priced_baton_sheet_is_exact_and_confident(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        sheet = SheetState(sheet_num=1, estimated_cost=None, cost_confidence=1.0)
-        sheet.total_cost_usd = 3.0
-        job = _job({1: sheet})
+        job = _job({1: _baton_sheet(1, 3.0)})
+        assert _json(job, capsys)["cost"]["cost_confidence"] == pytest.approx(1.0)
+        out = _human(job, capsys)
+        line = _cost_line(out)
+        assert "$3.00" in line
+        assert "(est.)" not in line
+        assert UNKNOWN_PHRASE not in out
+
+    def test_uncertain_baton_sheet_is_estimate_and_null(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        job = _job({1: _baton_sheet(1, 3.0, cost_uncertain=True)})
         assert _json(job, capsys)["cost"]["cost_confidence"] is None
-        line = _cost_line(_human(job, capsys))
+        out = _human(job, capsys)
+        line = _cost_line(out)
         assert "~$3.00 (est.)" in line
+        assert "1 sheet(s) ran on an instrument with no pricing" in out
+        # Never "unknown" beside a dollar figure.
+        assert UNKNOWN_PHRASE not in out
+
+    def test_mixed_priced_and_uncertain_shows_total_and_caveat(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        job = _job({1: _baton_sheet(1, 2.0), 2: _baton_sheet(2, 0.0, cost_uncertain=True)})
+        assert _json(job, capsys)["cost"]["cost_confidence"] == pytest.approx(1.0)
+        out = _human(job, capsys)
+        assert "$2.00" in _cost_line(out)
+        assert "1 sheet(s) ran on an instrument with no pricing" in out
+        assert UNKNOWN_PHRASE not in out
+
+    def test_priced_sheet_with_job_level_total_is_exact(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        job = _job({1: _baton_sheet(1, 2.0)}, total_estimated_cost=2.0)
+        assert _json(job, capsys)["cost"]["cost_confidence"] == pytest.approx(1.0)
+        line = _cost_line(_human(job, capsys))
+        assert "$2.00" in line
+        assert "(est.)" not in line
 
 
 class TestMeasuredCostUnchanged:

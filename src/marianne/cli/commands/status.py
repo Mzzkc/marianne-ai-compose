@@ -1898,18 +1898,25 @@ _COST_UNKNOWN_TEXT = "cost unknown (no sheet reported a measured cost)"
 def _measured_cost_confidence(job: CheckpointState) -> float | None:
     """Lowest cost confidence among sheets that reported a measured cost.
 
-    Returns ``None`` when no sheet has a measured (> 0) ``estimated_cost``.
-    ``SheetState.cost_confidence`` defaults to 1.0, so defaulting the min to
-    1.0 reported certainty about a cost nobody measured (#527).
+    A sheet is measured when it carries a positive ``estimated_cost``, or
+    when the baton priced it: ``total_cost_usd > 0`` and not
+    ``cost_uncertain`` (``SheetState.record_attempt`` is the only writer of
+    both, and nothing in src writes ``estimated_cost``). Returns ``None``
+    when no sheet is measured. ``SheetState.cost_confidence`` defaults to
+    1.0, so defaulting the min to 1.0 reported certainty about a cost nobody
+    measured (#527).
     """
     return min(
-        (
-            s.cost_confidence
-            for s in job.sheets.values()
-            if s.estimated_cost is not None and s.estimated_cost > 0
-        ),
+        (s.cost_confidence for s in job.sheets.values() if _sheet_cost_is_measured(s)),
         default=None,
     )
+
+
+def _sheet_cost_is_measured(sheet: SheetState) -> bool:
+    if sheet.estimated_cost is not None and sheet.estimated_cost > 0:
+        return True
+    priced = (getattr(sheet, "total_cost_usd", 0.0) or 0.0) > 0
+    return priced and not getattr(sheet, "cost_uncertain", False)
 
 
 def _render_cost_summary(job: CheckpointState) -> None:
@@ -1950,8 +1957,9 @@ def _render_cost_summary(job: CheckpointState) -> None:
     # Compute aggregate cost confidence from sheets.
     # If any sheet has low confidence (< 0.9), the overall cost is an estimate.
     # D-024: Users must know when costs are character-estimated vs API-reported.
-    # #527: with no measured sheet the confidence is unknown, so any total
-    # shown is an estimate, never a confident figure.
+    # #527: with no measured sheet (no positive ``estimated_cost`` and no
+    # baton-priced, not cost-uncertain ``total_cost_usd``) the confidence is
+    # unknown, so any total shown is an estimate, never a confident figure.
     min_confidence = _measured_cost_confidence(job)
     is_estimated = min_confidence is None or min_confidence < 0.9
 
