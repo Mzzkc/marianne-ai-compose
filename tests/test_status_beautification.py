@@ -146,6 +146,8 @@ class TestBeautifiedStatusHeader:
             s.error_code = None
             s.execution_duration_seconds = 120.0 if i <= completed else None
             s.estimated_cost = None
+            s.total_cost_usd = 0.0
+            s.cost_uncertain = False
             s.cost_confidence = 1.0
             s.started_at = None
             s.last_activity_at = None
