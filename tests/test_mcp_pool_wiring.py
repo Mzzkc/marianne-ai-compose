@@ -323,7 +323,8 @@ async def test_on_failure_waits_for_the_exit_code_before_restarting_553() -> Non
             self.returncode: int | None = None
 
         async def wait(self) -> int:
-            await asyncio.sleep(0.05)  # the reaper lands a moment after EOF
+            # The reaper lands a moment after EOF: yield once, then record it.
+            await asyncio.sleep(0)
             self.returncode = 0
             return 0
 
@@ -336,7 +337,7 @@ async def test_on_failure_waits_for_the_exit_code_before_restarting_553() -> Non
         returncode = None
 
         async def wait(self) -> int:
-            await asyncio.sleep(10)
+            await asyncio.Event().wait()  # never exits
             return 0
 
     class _HungHandle:
