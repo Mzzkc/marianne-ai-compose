@@ -252,7 +252,7 @@ _VERDICT_MAP = {
     "ACCEPT": "PASS", "ACCEPTED": "PASS",
     "REWORK": "REWORK", "REJECT": "REWORK", "REJECTED": "REWORK",
     "HOLD": "BLOCKED", "BLOCK": "BLOCKED", "BLOCKED": "BLOCKED",
-    "READY": "PASS", "NOT_READY": "REWORK", "NOT_ACCEPTED": "REWORK",
+    "NOT_READY": "REWORK", "NOT_ACCEPTED": "REWORK",
     "ACCEPT_WITH_REPAIRS": "REWORK",
 }
 # Multi-word verdicts agent inspections actually write (16 Nov survey of
