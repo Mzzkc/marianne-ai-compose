@@ -127,6 +127,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setenv("MZT_AGENTS_DIR", str(agents))
     monkeypatch.setenv("MZT_AGENTS_RUNS_DIR", str(runs))
     monkeypatch.setenv("MZT_AGENTS_INVENTORY", str(inventory))
+    monkeypatch.setenv("MZT_AGENTS_RESERVATIONS", str(tmp_path / "reserved.yaml"))
     state: dict[str, Any] = {"rows": [], "submits": []}
 
     async def route(method: str, params: dict[str, Any]) -> Any:
@@ -448,3 +449,29 @@ def test_parse_task_matches_the_shim_rules() -> None:
     )
     assert fields["GOAL"] == "a" and fields["KIND"] == "internal"
     assert fields["ACCEPT"] == "run it" and "DO_NOT_TOUCH" not in fields
+
+
+# ---------------------------------------------------------------- reservations
+
+
+def test_reserved_agent_is_busy_for_list_and_refused_by_run(world: dict[str, Any]) -> None:
+    """A peer seat's reservation keeps a person out of small-model casting."""
+    (world["tmp"] / "reserved.yaml").write_text(
+        yaml.safe_dump({"reserved": {"Ines": "CA queue: care then contract round 2"}})
+    )
+    rows = _json(runner.invoke(app, ["agents", "list", "--free", "--json"]))
+    assert "ines" not in {r["name"] for r in rows}
+    assert "quill" in {r["name"] for r in rows}
+    listed = {r["name"]: r for r in _json(runner.invoke(app, ["agents", "list", "--json"]))}
+    assert listed["ines"]["free"] is False
+    result = _run(world)
+    body = _json(result)
+    assert result.exit_code == 1 and body["code"] == "AGENT_BUSY"
+    assert "reserved" in body["hint"] and "CA queue" in body["hint"]
+    assert world["state"]["submits"] == []
+    assert _run(world, name="quill").exit_code == 0
+
+
+def test_unreadable_reservations_reserve_nobody(world: dict[str, Any]) -> None:
+    (world["tmp"] / "reserved.yaml").write_text("reserved: [unclosed\n")
+    assert _run(world).exit_code == 0

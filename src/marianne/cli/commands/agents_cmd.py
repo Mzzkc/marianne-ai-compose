@@ -54,6 +54,8 @@ ENV_RUNS_DIR = "MZT_AGENTS_RUNS_DIR"
 ENV_AGENTS_DIR = "MZT_AGENTS_DIR"
 DEFAULT_RUNS_DIR = "~/Projects/SCORES/agent-runs"
 DEFAULT_AGENTS_DIR = "~/.marianne/agents"
+ENV_RESERVATIONS = "MZT_AGENTS_RESERVATIONS"
+DEFAULT_RESERVATIONS = "~/.marianne/agents-reserved.yaml"
 
 #: The closed ``code`` vocabulary. ``run`` uses the first five; ``list`` adds
 #: CONDUCTOR_DOWN and COMPILER_MISSING (and TASK_FIELD_MISSING for ``--for``).
@@ -268,6 +270,31 @@ def _last_outcome(runs_dir: Path, name: str) -> str | None:
     return f"{found['verdict']} {stamp}"
 
 
+def reserved_names(path: Path | None = None) -> dict[str, str]:
+    """``{agent: reason}`` from the reservations file; empty when it is absent.
+
+    A conductor seat that has queued work for a person writes
+    ``reserved: {NAME: "why, until when"}`` there (env ``MZT_AGENTS_RESERVATIONS``,
+    default ``~/.marianne/agents-reserved.yaml``). A reserved agent counts as
+    busy for ``agents list --free`` and is refused by ``agents run`` with
+    ``AGENT_BUSY``, so a second seat cannot add a writer or a debt to a person
+    the first seat is carrying. An unreadable file reserves nobody and says so
+    on stderr.
+    """
+    target = path or Path(os.environ.get(ENV_RESERVATIONS) or DEFAULT_RESERVATIONS).expanduser()
+    if not target.is_file():
+        return {}
+    try:
+        data = yaml.safe_load(target.read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        typer.echo(f"warning: reservations file {target} unreadable: {exc}", err=True)
+        return {}
+    entries = data.get("reserved") if isinstance(data, dict) else None
+    if not isinstance(entries, dict):
+        return {}
+    return {str(k).strip().lower(): str(v or "") for k, v in entries.items() if str(k).strip()}
+
+
 async def _busy_names(names: list[str]) -> set[str]:
     rows = await conduct._route("job.list", {})
     busy: set[str] = set()
@@ -278,6 +305,8 @@ async def _busy_names(names: list[str]) -> set[str]:
         if str(row.get("status", "")).lower() not in _BUSY_STATUSES:
             continue
         busy.update(n for n in names if f"-{n}-" in job)
+    reserved = reserved_names()
+    busy.update(n for n in names if n.lower() in reserved)
     return busy
 
 
@@ -370,7 +399,8 @@ def agents_list(
         False,
         "--free",
         help="Only agents with no running, queued, pending or paused "
-        "conductor job whose id contains -NAME-",
+        "conductor job whose id contains -NAME-, and not reserved in "
+        f"{DEFAULT_RESERVATIONS} (env {ENV_RESERVATIONS})",
     ),
     agents_dir: Path | None = typer.Option(
         None,
@@ -628,8 +658,13 @@ def _run(
     if agent in busy:
         raise fail(
             "AGENT_BUSY",
-            f"{agent} has a running, queued, pending or paused job; "
-            "pick another agent or wait for it",
+            (
+                f"{agent} is reserved by another conductor seat "
+                f"({reserved_names()[agent.lower()] or 'no reason given'}); pick another agent"
+                if agent.lower() in reserved_names()
+                else f"{agent} has a running, queued, pending or paused job; "
+                "pick another agent or wait for it"
+            ),
         )
 
     inventory_path = _inventory(inventory)

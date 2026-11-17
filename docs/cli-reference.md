@@ -682,6 +682,8 @@ The agents root is read, never written; `run` writes only under the runs directo
 | `--agents-dir DIR` | both | `$MZT_AGENTS_DIR`, else `~/.marianne/agents` | Agents root |
 | `--json` | both | false | One JSON value, no ANSI |
 
+**Reservations.** A conductor seat that has queued work for a person writes `reserved: {NAME: "why, until when"}` to `~/.marianne/agents-reserved.yaml` (or `$MZT_AGENTS_RESERVATIONS`). A reserved agent shows `free: false`, is left out by `--free`, and `run` refuses it with `AGENT_BUSY` naming the reason, so a second seat cannot add a writer or a lifecycle debt to that person. Remove the line to release them. An unreadable file reserves nobody and warns on stderr.
+
 `list` prints `[{"name", "role", "owns", "free", "open_debt", "last_outcome"}]`. An agent is listed when it has `profile.yaml` and an installed `scores/targeted-work.yaml`. `owns` is the profile's `owns` list (empty when it has none, which is every profile today). `open_debt` is the pending-lifecycle-debt count that `marianne-agents engage` refuses on at 3. `last_outcome` is `"PASS 2026-11-12"` read from the agent's newest `<runs-dir>/NAME-*` directory with the `mzt verdict` finder, or `null`.
 
 `--for` ranking is deterministic: `score = |task words & agent words| + 3 for each owned path that is a prefix of a FILES path`, highest first, ties by lower `open_debt`, then by name. Task words are the GOAL and FILES words; agent words are role, group, focus, `owns` and a fixed role-hint table (`builder` brings `implement`, `fix`, `build`...). Words are lowercase alphanumerics of three or more characters without a short stoplist; there is no stemming, no synonym handling beyond that table and no model. Limits: it ranks overlap of words, not skill; with empty `owns` (all current profiles) it is only role and focus words; it never excludes anyone, so combine it with `--free`.
@@ -2644,6 +2646,7 @@ execution time.
 | `MARIANNE_SCRATCH` | Scratch root for the running sheet; also supplies the mailbox root when `MARIANNE_MAILBOX` is absent | set by the job |
 | `MARIANNE_SHEET` | This sheet's number; identifies the inbox owner for `mzt mail`. Set in every sheet, so a user-level hook or wrapper can detect a musician and exit early (GH #536) | set by the job |
 | `MZT_AGENTS_INVENTORY` | Capability inventory YAML for `mzt agents run`; no default | |
+| `MZT_AGENTS_RESERVATIONS` | Reservations file for `mzt agents list/run` | `~/.marianne/agents-reserved.yaml` |
 | `MZT_AGENTS_RUNS_DIR` | Runs directory for `mzt agents list` and `run` | `~/Projects/SCORES/agent-runs` |
 | `MZT_AGENTS_DIR` | Agents root for `mzt agents list` and `run` | `~/.marianne/agents` |
 | `ANTHROPIC_API_KEY` | API key for Anthropic API backend | |
