@@ -73,7 +73,7 @@ instruments:
   reviewer-glm:
     profile: opencode
     config:
-      model: zai-coding-plan/glm-5.2
+      model: zai-coding-plan/glm-5.3
       timeout_seconds: 1500
 
 movements:

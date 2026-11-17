@@ -231,7 +231,7 @@ instruments:
   seat-claude-glm:   {profile: claude-code}                                        # GLM via the gateway default
   seat-opencode-glm: {profile: opencode}                                           # zai glm-5.3 default
   seat-glm-flash:    {profile: opencode,    config: {model: "zai-coding-plan/glm-5.3-flash"}}
-  seat-glm-turbo:    {profile: opencode,    config: {model: "zai-coding-plan/glm-5-turbo"}}
+  seat-glm-turbo:    {profile: opencode,    config: {model: "zai-coding-plan/glm-5.3-highspeed"}}
   seat-glm-53-b:     {profile: opencode,    config: {model: "zai-coding-plan/glm-5.3"}}
   seat-glm-53-c:     {profile: opencode,    config: {model: "zai-coding-plan/glm-5.3"}}
   seat-gpt:          {profile: codex-cli,   config: {model: "gpt-5.6-terra"}}
