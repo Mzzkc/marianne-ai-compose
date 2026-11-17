@@ -388,3 +388,31 @@ def test_load_class_map_exposes_the_tier_classes(tmp_path: Path) -> None:
     )
     assert {"frontier", "balanced", "light"} <= set(class_map.classes)
     assert all(e.source_layer == "default" for e in class_map.classes.values())
+
+
+def test_free_never_jumps_a_subscription_entry_through_family_alternation() -> None:
+    """Two subscription families and one free family: the free model is last,
+    though round robin alone would have put it third or earlier."""
+    catalog = _catalog(
+        _model("a1", "a", {"low": "light"}),
+        _model("a2", "a", {"low": "light"}),
+        _model("b1", "b", {"low": "light"}),
+        _model("f1", "f", {"low": "light"},
+               routes=[{"profile": "p", "model_id": "f1", "access": "free"}]),
+    )
+    chain = tier_chains(catalog, profiles_available=PROFILES)["light"]
+    assert [e.model for e in chain][-1] == "f1"
+    assert [e.access for e in chain] == ["subscription"] * 3 + ["free"]
+
+
+def test_agentic_floor_drops_a_model_too_weak_to_drive_an_agent() -> None:
+    bench = [{"name": "aa_terminal_bench_4_0", "value": 0.005}]
+    ok = [{"name": "aa_terminal_bench_4_0", "value": 0.33}]
+    catalog = _catalog(
+        _model("weak", "w", {"low": "light"}, benchmarks=bench),
+        _model("fine", "f", {"low": "light"}, benchmarks=ok),
+        _model("unmeasured", "u", {"low": "light"}),
+    )
+    names = [e.model for e in tier_chains(catalog, profiles_available=PROFILES)["light"]]
+    assert "weak" not in names
+    assert {"fine", "unmeasured"} <= set(names)

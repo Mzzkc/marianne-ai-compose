@@ -44,10 +44,7 @@ classes:
     - {profile: claude-code, config: {model: claude-haiku-5-5, effort: low}}  # claude, subscription
     - {profile: codex-cli, config: {model: gpt-6.1-terra, effort: low}}  # gpt, subscription
     - {profile: antigravity, config: {model: gemini-4-hydrogen-low}}  # gemini, subscription
-    - {profile: opencode, config: {model: opencode/nemotron-3.5-lightning-free}}  # nemotron, free
     - {profile: claude-code, config: {model: claude-sonnet-5-5, effort: low}}  # claude, subscription
     - {profile: codex-cli, config: {model: gpt-6-luna, effort: low}}  # gpt, subscription
-    - {profile: opencode, config: {model: openrouter/nvidia/nemotron-3.5-lightning:free}}  # nemotron, free
     - {profile: antigravity, config: {model: claude-sonnet-5-5-low}}  # claude, subscription
-    - {profile: opencode, config: {model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free}}  # nemotron, free
 # --- END generated tier classes ---

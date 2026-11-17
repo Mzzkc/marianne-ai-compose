@@ -24,12 +24,17 @@ Rules (each has a test):
   model; a route whose profile maps none of the qualifying efforts is skipped;
 * where the effort is part of the model slug (antigravity: ``...-high``) the
   entry names the full slug and carries no ``effort``;
-* entries alternate families (round robin) so a fallback leaves the family
-  that just failed. Order before alternation: subscription routes, then free,
-  then local (a flat-rate plan is the dependable seat; a free tier is shared
-  quota); a model in its own tier (the tier it reaches at its default effort)
-  before one borrowed by raising or lowering its effort; then the cheaper
-  effort first.
+* access order is strict: every subscription entry before any free one, every
+  free before any local (a flat-rate plan is the dependable seat; a free tier
+  is shared quota). Within one access group entries alternate families (round
+  robin) so a fallback leaves the family that just failed; before alternation
+  a model in its own tier (the tier it reaches at its default effort) comes
+  before one borrowed by raising or lowering its effort, then the cheaper
+  effort first;
+* a model whose recorded Terminal-Bench 4.0 score is below
+  ``AGENTIC_FLOOR`` is left out of every tier: a light worker still has to
+  drive a coding agent (Nemotron 3.5 Lightning, TB4 0.5%, was fourth in
+  ``light`` before this rule). A model with no TB4 record is not judged by it.
 """
 
 from __future__ import annotations
@@ -176,6 +181,15 @@ def _effort_rank(effort: EffortLevel | None, model: str, model_obj: CatalogModel
     return -1  # no effort control: the cheapest there is
 
 
+AGENTIC_FLOOR = 0.10
+_AGENTIC_BENCHMARK = "aa_terminal_bench_4_0"
+
+
+def _below_agentic_floor(model: CatalogModel) -> bool:
+    scores = [b.value for b in model.benchmarks if b.name == _AGENTIC_BENCHMARK]
+    return bool(scores) and max(scores) < AGENTIC_FLOOR
+
+
 def tier_chains(
     catalog: Catalog,
     *,
@@ -200,6 +214,8 @@ def tier_chains(
         for position, model in enumerate(catalog.models()):
             if model.status in SKIPPED_STATUSES or model.tier_status.provisional:
                 continue
+            if _below_agentic_floor(model):
+                continue
             if tier not in model.tier_by_effort.values():
                 continue
             borrowed = 0 if _home_tier(model) == tier else 1
@@ -213,7 +229,11 @@ def tier_chains(
                 )
                 ranked.append((key, entry))
         ranked.sort(key=lambda pair: pair[0])
-        result[tier] = _alternate_families([entry for _, entry in ranked])
+        chain: list[TierEntry] = []
+        for access_rank in sorted({key[0] for key, _ in ranked}):
+            group = [entry for key, entry in ranked if key[0] == access_rank]
+            chain.extend(_alternate_families(group))
+        result[tier] = chain
     return result
 
 
