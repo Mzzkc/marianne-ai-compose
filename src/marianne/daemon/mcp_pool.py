@@ -34,6 +34,7 @@ _logger = get_logger("daemon.mcp_pool")
 # Timeout for waiting on process termination during shutdown
 _STOP_TIMEOUT_SECONDS = 10.0
 _MONITOR_INTERVAL_SECONDS = 1.0
+_EXIT_SETTLE_SECONDS = 0.5
 _RESTART_BACKOFF_SECONDS = 1.0
 _MAX_RESTART_ATTEMPTS = 3
 # A short-lived successful spawn does not reset a crash loop's retry budget.
@@ -248,7 +249,7 @@ class McpPoolManager:
                 if handle.state != McpServerState.FAILED:
                     continue
                 policy = self._config.servers[name].restart_policy
-                exit_code = handle.process.returncode if handle.process is not None else None
+                exit_code = await self._settled_exit_code(handle)
                 if policy == "never" or (policy == "on-failure" and exit_code == 0):
                     continue
                 if handle.restart_attempts >= _MAX_RESTART_ATTEMPTS or now < handle.next_restart_at:
@@ -262,6 +263,27 @@ class McpPoolManager:
                     asyncio.get_running_loop().time()
                     + _RESTART_BACKOFF_SECONDS * 2 ** (handle.restart_attempts - 1)
                 )
+
+    @staticmethod
+    async def _settled_exit_code(handle: _ServerHandle) -> int | None:
+        """The process's exit code, waiting briefly for it to be recorded.
+
+        A stdio bridge reports not running as soon as its stdout reader sees
+        EOF, which can be before asyncio has reaped the child and set
+        ``returncode``. Reading ``None`` there made ``on-failure`` restart a
+        server that exited 0 (GH #553). A process that is really still alive
+        (a dead reader, a closed socket) keeps ``None`` and is treated as a
+        failure, as before.
+        """
+        process = handle.process
+        if process is None:
+            return None
+        if process.returncode is None:
+            try:
+                await asyncio.wait_for(process.wait(), _EXIT_SETTLE_SECONDS)
+            except TimeoutError:
+                return None
+        return process.returncode
 
     async def stop_all(self) -> None:
         """Cancel and join supervision before stopping any server."""

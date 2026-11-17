@@ -310,3 +310,37 @@ async def test_restart_lifecycle_serializes_startup(
                 if process.returncode is None:
                     process.terminate()
                     await process.wait()
+
+
+async def test_on_failure_waits_for_the_exit_code_before_restarting_553() -> None:
+    """GH #553: a bridge reports not running at stdout EOF, before asyncio has
+    recorded ``returncode``. ``on-failure`` must read the settled code (0, a
+    clean exit) and not restart; it used to read ``None`` and restart."""
+    from marianne.daemon.mcp_pool import McpPoolManager
+
+    class _Proc:
+        def __init__(self) -> None:
+            self.returncode: int | None = None
+
+        async def wait(self) -> int:
+            await asyncio.sleep(0.05)  # the reaper lands a moment after EOF
+            self.returncode = 0
+            return 0
+
+    class _Handle:
+        process = _Proc()
+
+    assert await McpPoolManager._settled_exit_code(_Handle()) == 0  # type: ignore[arg-type]
+
+    class _Hung:
+        returncode = None
+
+        async def wait(self) -> int:
+            await asyncio.sleep(10)
+            return 0
+
+    class _HungHandle:
+        process = _Hung()
+
+    # A process that is really still alive stays "unknown" (treated as failure).
+    assert await McpPoolManager._settled_exit_code(_HungHandle()) is None  # type: ignore[arg-type]
