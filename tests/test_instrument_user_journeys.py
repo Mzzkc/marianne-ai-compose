@@ -52,6 +52,7 @@ class TestDiscoverInstruments:
         expected_names = {
             "claude-code",
             "claude-code-ollama",
+            "claude-code-polystrata",
             "gemini-cli",
             "qwen-code",
             "openclaw",
