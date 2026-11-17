@@ -53,6 +53,7 @@ An **instrument** is any CLI tool wrapped in a YAML profile. Marianne treats ins
 |---------------|---------------|
 | `claude-code` | Claude Code CLI — full Musician profile |
 | `claude-code-ollama` | Claude Code CLI routed at a local Ollama server — zero-cost agent harness (needs `claude` on PATH, `ollama serve`, a pulled model) |
+| `claude-code-polystrata` | Claude Code CLI routed at a local [PolyStrata](https://github.com/VecSzn/PolyStrata) server — sparse MoE models (Qwen3.8-Flash-Next, GLM 5.3 Flash, ...) on one consumer GPU; see [instrument guide](docs/instrument-guide.md#claude-code-over-local-polystrata) |
 | `gemini-cli`  | Google Gemini CLI — ships unsupported (individual-tier OAuth); enable locally via the [API-key readiness path](docs/instrument-guide.md#gemini-cli-authentication-and-readiness) (GH #469) |
 | `codex-cli`   | OpenAI Codex CLI |
 | `aider`       | Aider — AI pair programming |

@@ -40,6 +40,7 @@ The maintained built-ins include:
 | `claude-code` | Claude Code CLI (`claude`) | `claude login` |
 | `ollama` | Local OpenAI-compatible server | Optional local auth |
 | `claude-code-ollama` | Claude Code CLI over local Ollama | Profile-pinned local token |
+| `claude-code-polystrata` | Claude Code CLI over local PolyStrata | Profile-pinned local token (or your PolyStrata key, by overlay) |
 
 ### Agent Profiles
 
@@ -508,6 +509,7 @@ model call in this change):
 |---------|---------|----------|--------------------------|
 | `claude-code` | yes | `flag --tools`, comma-joined, no `known` list | `claude --help`, 2.1.322 (the help shows example names, not the full set) |
 | `claude-code-ollama` | yes | same block | same binary and flag; not exercised against a local model |
+| `claude-code-polystrata` | yes | same block | same binary and flag; observed on the wire against a mock Anthropic-compatible server (the request's tools list holds only the named tools plus Claude Code's own `DeferredToolPlaceholder`) |
 | `antigravity` | none found | none | `agy --help`, 1.5.5: only `--dangerously-skip-permissions` (permissions) and `--disable-slash-commands` |
 | `codex-cli` | none found | none | `codex exec --help`, 0.166.0: no tool-list option |
 | `opencode` | none found | none | `opencode run --help`, 1.19.4: only `--auto` (permissions) |
@@ -579,6 +581,7 @@ other than `claude-code`'s was exercised with a model call):
 | `aider` | no | none | none | `aider --help`, 0.86.2 has `--reasoning-effort` but it passes values through to the configured model and provider; what they accept is unverified |
 | `goose` | no | none | none | `goose run --help`, 1.30.0 lists no reasoning option |
 | `claude-code-ollama` | no | none | none | the flag exists in Claude Code, but this profile's seam was verified without it |
+| `claude-code-polystrata` | yes | `flag --effort`: `minimal`/`low` -> `low`, `medium`, `high` | `xhigh` and `max` are refused | `claude --help` 2.1.326 lists the flag; against a mock Anthropic-compatible server the request carried `output_config.effort` equal to the flag; PolyStrata's DETAILS.md documents `output_config.effort: low\|medium\|high` on `/v1/messages`. No real PolyStrata was run |
 | `cline-cli`, `qwen-code`, `openclaw` | no | none | none | not installed where surveyed, so no flag could be verified |
 | `cli` | no | none | none | runs a shell command, not a model |
 | `ollama` (HTTP) | no | none | none | the default `llama3.1:8b` has no reasoning control and Ollama was not installed to check. The `body_field` shape is implemented and tested with a made-up profile only |
@@ -784,7 +787,7 @@ several lines; the last per key counts once), `model_path` and `ignore_models` (
 model; lines of an ignored model carry no usage), and `input_tokens_path`,
 `output_tokens_path`, `cache_read_tokens_path`, `cache_write_tokens_path` (paths on a record
 line). Subagent lines are counted when they are in the same file; a subagent record in a
-separate file is not read. Only `claude-code` declares the block (`claude-code-ollama` has no interactive mode). A
+separate file is not read. Only `claude-code` declares the block (`claude-code-ollama` and `claude-code-polystrata` have no interactive mode). A
 profile without it, or a missing, unreadable or empty record, yields an unmeasured sheet:
 `cost_uncertain` is set (the same flag as missing pricing), the token counts stay absent
 rather than 0, and `mzt status` warns that cost is unknown, not free. A user-layer
@@ -1003,6 +1006,86 @@ http:
 HTTP results record `model_requested`, `model_observed` and `model_echo_status`
 (see "HTTP model-echo evidence" below), so a provider that silently serves a
 different model is visible in `mzt status` and the checkpoint.
+
+
+---
+
+#### Claude Code over local PolyStrata
+
+[PolyStrata](https://github.com/VecSzn/PolyStrata) (MIT) is a local server that
+runs large sparse mixture-of-experts models (Qwen3.8-Flash-Next, GLM 5.3 Flash,
+Qwen3.6-35B-A3B, Gemma 4 26B-A4B, Tiel Coder, ...) on one consumer GPU by
+keeping the hot experts in VRAM and the rest in system RAM. It serves
+Anthropic `/v1/messages`, OpenAI `/v1/chat/completions` and Responses APIs.
+`instrument: claude-code-polystrata` runs the Claude Code agent harness (file
+edits, shell, tool use) against it, so a small local model can do the work of a
+sheet. It ships as `execution_status: warning`: verified against a mock
+Anthropic-compatible server and the real `claude` binary, never against a real
+PolyStrata (no GPU on the authoring host).
+
+What you do, and what Marianne does not:
+
+1. **Install PolyStrata yourself** (Marianne installs, starts and downloads
+   nothing): `git clone https://github.com/VecSzn/PolyStrata`, then
+   `./setup.sh --family qwen --model IQ2_XS --no-start` (or `--family glm`,
+   `qwen36`, `gemma4`, `tiel`; `./setup.sh --list-models`). The download is
+   tens of GB; read PolyStrata's `docs/INSTALL.md` for RAM and VRAM needs.
+2. **Set `"fit_max_tokens": true`** in that model's `strata-<model>.json`.
+   Claude Code asks for 32,000 output tokens on every request, and PolyStrata
+   refuses a request whose prompt plus `max_tokens` runs past the context
+   unless it may shorten the answer. Without it every sheet fails with a 400.
+3. **Start it** with the `run-<model>.sh` script setup printed, and wait for
+   `curl -s http://127.0.0.1:8080/health` to say `"loaded": true`. The profile
+   pins `http://127.0.0.1:8080` (PolyStrata's default port) and the local token
+   `local`.
+4. **Run a score** with `instrument: claude-code-polystrata`. The model names
+   in the profile are labels: PolyStrata answers with the model it has loaded.
+
+Things to know:
+
+- **One model is loaded at a time, one request at a time** (`max_concurrent: 1`
+  per model). Do not fan out sheets expecting parallel decoding unless you set
+  `"parallel": N` on the server and raise `max_concurrent` in an overlay.
+  Switching models (`POST /api/models/load {"model": "<name>"}`, 8 to 16 s)
+  waits for the running request; use one model per score.
+- **Context is set at PolyStrata setup** (8K to 262K), not by the profile. The
+  profile declares 32768, the smallest default. Claude Code's own prefix is
+  15 to 30K tokens, so 64K or more is the practical floor; at 32K narrow the
+  toolset with `instrument_config.tools: [Read, Grep, Edit, Write]`. `mzt
+  instruments check` does not read the server's context for a CLI-kind profile.
+- **Effort**: `instrument_config.effort` accepts `minimal`/`low`, `medium` and
+  `high`, which Claude Code sends as `output_config.effort`; PolyStrata maps
+  that to its reasoning level. `xhigh` and `max` are refused.
+- **Another port or an API key.** Never expose PolyStrata beyond this machine
+  without a key. A profile cannot read the port or key from the environment on
+  its own (`expandvars` has no shell-default syntax and leaves an unset
+  `${VAR}` literal), so put an overlay in `~/.marianne/instruments/` (profile
+  `extends`, GH #543):
+
+  ```yaml
+  extends: claude-code-polystrata
+  name: polystrata-keyed
+  cli:
+    command:
+      required_env: [POLYSTRATA_API_KEY]
+      env:
+        ANTHROPIC_BASE_URL: http://127.0.0.1:8081
+        ANTHROPIC_AUTH_TOKEN: ${POLYSTRATA_API_KEY}
+  ```
+
+  `ANTHROPIC_API_KEY` stays cleared, so no paid-provider credential reaches
+  the local server. For the model ids PolyStrata lists (they carry the
+  quantisation, for example `qwen3.6-35b-a3b-ud-q3_k_m`), run
+  `curl http://127.0.0.1:8080/v1/models` and add `models:` rows to the overlay;
+  that matters only with `"switch_on_request": true`.
+- **Readiness is not probed.** `mzt instruments check claude-code-polystrata`
+  finds the `claude` binary and is green with PolyStrata stopped; the CLI-kind
+  probe cannot call `/health`. Check the server yourself first. A stopped
+  server fails the first sheet with `API Error: Connection refused` (typed
+  `api_error`, E301, which does not advance the fallback chain), after at most
+  three reconnects (`CLAUDE_CODE_MAX_RETRIES`).
+- For raw text sheets over the same server without a harness, use the HTTP
+  route in [local-server-quickstart.md](local-server-quickstart.md).
 
 ## How the Instrument System Works
 

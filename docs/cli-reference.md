@@ -2532,6 +2532,7 @@ Run `mzt instruments list` to see all available instruments. Built-in instrument
 | `goose` | CLI | Block's Goose agent |
 | `ollama` | HTTP | Local models through Ollama's OpenAI-compatible endpoint |
 | `claude-code-ollama` | CLI | Claude Code harness routed at a local Ollama server |
+| `claude-code-polystrata` | CLI | Claude Code harness routed at a local PolyStrata server |
 
 Retired backend-era names do not resolve. Update old scores to a current CLI
 profile, or use `ollama` when a local OpenAI-compatible text endpoint is the
