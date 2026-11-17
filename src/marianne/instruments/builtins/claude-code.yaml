@@ -40,14 +40,44 @@ default_timeout_seconds: 1800
 # a version has a much larger context window that changes cost profile).
 # Tier rationale: Haiku (cheap, fast) → 8, Sonnet (mid) → 6, Opus (expensive) → 4.
 models:
-  # ── Claude 5.5 generation (added 2026-09-26 model-profile refresh) ──
-  # Opus 5.5: current Opus-line release — 1M context, 128K output.
+  # ── Claude 5.5 generation (catalog v2, refreshed 2026-11-16; GH #552) ──
+  # All four 5.5-generation models carry a 1M context window and 128K output.
+  # List prices are per the catalog (per 1M tokens: Opus 4/20, Sonnet 2/10,
+  # Haiku 0.1/0.5, Fable 8/40). Cache rates are set only where this profile
+  # already had them: the catalog records none for Sonnet 5.5, Haiku 5.5 or
+  # Fable 5.2, and an invented rate is worse than a missing one.
+  # Opus 5.5: current Opus-line release.
   - name: claude-opus-5-5
     context_window: 1000000
     cost_per_1k_input: 0.004
     cost_per_1k_output: 0.02
     cost_per_1k_cache_read: 0.0002
     cost_per_1k_cache_write: 0.005
+    max_output_tokens: 128000
+    max_concurrent: 4
+  # Sonnet 5.5: current balanced tier. Adaptive thinking cannot be disabled.
+  - name: claude-sonnet-5-5
+    context_window: 1000000
+    cost_per_1k_input: 0.002
+    cost_per_1k_output: 0.01
+    max_output_tokens: 128000
+    max_concurrent: 6
+  # Haiku 5.5: current light tier. Same 1M window; prompts over 100K tokens
+  # bill at higher rates ($0.50/$2.50 per MTok), not modelled here.
+  - name: claude-haiku-5-5
+    context_window: 1000000
+    cost_per_1k_input: 0.0001
+    cost_per_1k_output: 0.0005
+    max_output_tokens: 128000
+    max_concurrent: 8
+  # Fable 5.2 (released 2026-11-09): flagship tier, adaptive always-on
+  # thinking (default effort high). Listing it here is a profile fact, not a
+  # casting decision: whether a subagent or an Anthropic score seat may use
+  # Fable is the owner's casting rule, enforced where seats are cast.
+  - name: claude-fable-5-2
+    context_window: 1000000
+    cost_per_1k_input: 0.008
+    cost_per_1k_output: 0.04
     max_output_tokens: 128000
     max_concurrent: 4
 
@@ -71,8 +101,8 @@ models:
     max_output_tokens: 65536
     max_concurrent: 8
 
-  # ── Claude 5 family (current generation, checked 2026-09-20) ──
-  # Fable 5.1: flagship tier — adaptive always-on thinking (default effort
+  # ── Claude 5 family (superseded by 5.5; still served, so kept) ──
+  # Fable 5.1 (superseded by Fable 5.2): flagship tier — adaptive always-on thinking (default effort
   # high), 1M context, 128K output. Selectable via the fable alias.
   - name: claude-fable-5-1
     context_window: 1000000

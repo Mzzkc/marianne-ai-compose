@@ -25,13 +25,35 @@ capabilities:
 default_timeout_seconds: 1800
 
 models:
-  # ── GPT-6 family (current flagship, checked 2026-09-20; Sol/Luna added
-  #    by the 2026-09-26 model-profile refresh) ───────────────────────────
+  # ── GPT-6.1 family (codex 0.166.0 models_cache.json; catalog v2 2026-11-16;
+  #    GH #552) ───────────────────────────────────────────────────────────
+  # Codex's own catalog serves 6.1 Sol and Terra with a 500000-token
+  # client-facing context_window (max_context_window 872000). Both default to
+  # reasoning effort `low` in codex, so a sheet that sets no effort runs them
+  # at low (balanced-class for Sol, light-class for Terra); pin effort for
+  # build work. API list prices from the catalog (per 1M: Sol 2/10, Terra
+  # 1/5). The catalog carries no cache rates for them, so none are set.
+  # `ultra` effort exists in codex and is not mapped (see effort: below).
+  - name: gpt-6.1-sol
+    context_window: 500000
+    cost_per_1k_input: 0.002
+    cost_per_1k_output: 0.01
+    max_output_tokens: 128000
+    max_concurrent: 6
+  - name: gpt-6.1-terra
+    context_window: 500000
+    cost_per_1k_input: 0.001
+    cost_per_1k_output: 0.005
+    max_output_tokens: 128000
+    max_concurrent: 6
+
+  # ── GPT-6 family (still served by codex 0.166.0; checked 2026-09-20,
+  #    Sol/Luna added by the 2026-09-26 model-profile refresh) ────────────
   # OpenAI recommends Astra, Sol, and Luna for hard, balanced, and
   # high-volume work respectively. API context is 1,050,000 tokens; the
   # non-[1m] rows follow the 272000 client-facing convention below
   # (prompts over 272K input bill at higher rates).
-  # Sol: balanced reasoning tier ($2 / $10 per 1M).
+  # Sol: previous-generation workhorse, superseded by gpt-6.1-sol ($2 / $10 per 1M).
   - name: gpt-6-sol
     context_window: 272000
     cost_per_1k_input: 0.002
@@ -140,7 +162,7 @@ models:
 # --help` (codex-cli 0.166.0, checked 2026-11-11) documents `-c key=value`
 # config overrides, and the config key is `model_reasoning_effort`. Levels are
 # the ones codex's own model catalog lists as supported_reasoning_levels for
-# the gpt-6 and gpt-5.6 rows (low, medium, high, xhigh, max; `ultra` also adds
+# the gpt-6.1, gpt-6 and gpt-5.6 rows (low, medium, high, xhigh, max; `ultra` also adds
 # task delegation and is not mapped). Nothing below low: minimal runs at low.
 # Unset adds no override (codex's configured default).
 effort:

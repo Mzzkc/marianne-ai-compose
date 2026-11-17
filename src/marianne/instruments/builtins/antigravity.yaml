@@ -20,17 +20,21 @@
 #   agy models                         lists configured models
 #   workspace .agents/mcp_config.json  initializes configured MCP servers
 #
-# Model set refreshed 2026-09-04 against `agy models` on agy 1.1.26. The
-# Gemini slugs span four model families; the AGY effort suffix (-high /
-# -medium / -low) is a selection tier over each family:
-#   gemini-3.8-flash  (high / medium / low)   <- current default family
-#   gemini-3.7-flash  (high / medium / low)
-#   gemini-3.6-flash  (high / medium / low)
-#   gemini-3.5-flash  (high / medium / low)
-#   gemini-3.1-pro    (high / low)
-# agy 1.1.26 also brokers cross-vendor models (claude-sonnet-4-6,
-# claude-opus-4-6-thinking, gpt-oss-120b-medium) through the same CLI; they
-# are listed below as selectable models.
+# Model set refreshed 2026-11-17 against `agy models` on agy 1.5.10 (GH #552;
+# earlier refresh 2026-09-04, agy 1.1.26). The AGY effort suffix (-low /
+# -medium / -high, plus -xhigh on Hydrogen) is a selection tier over each
+# family:
+#   gemini-4-hydrogen (low / medium / high / xhigh)   <- current Gemini 4
+#   gemini-4-argon    (low / medium / high)           <- current Gemini 4
+#   gemini-3.8-flash  (high / medium / low)   <- default family (kept: still served)
+# Removed 2026-11-17: gemini-3.7-flash, gemini-3.6-flash, gemini-3.5-flash and
+# gemini-3.1-pro slugs, which `agy models` (1.5.10) no longer serves.
+# agy also brokers cross-vendor models (claude-opus-5-5-*, claude-sonnet-5-5-*,
+# gpt-oss-120b-medium on agy 1.5.10) through the same CLI; they are listed
+# below as selectable models. claude-sonnet-4-6 and claude-opus-4-6-thinking
+# are no longer in `agy models` (1.5.10) and were removed. `agy models` also
+# lists gemini-pro-orchestrator-g1-pro ("Orchestrator (Argon)"), an agent
+# orchestration wrapper, not a plain model slug; it is not listed here.
 #
 # This profile defaults to interactive tmux mode. Print mode re-verified
 # 2026-09-04 on agy 1.1.26: `agy -p` from a non-TTY context returns output
@@ -82,7 +86,55 @@ default_timeout_seconds: 1800
 # so each tier has its own baton limit; score- and daemon-level ceilings remain
 # the outer aggregate guard. Flash tiers use 6 and Pro tiers use 4.
 models:
-  # ── gemini-3.8-flash tier (current default family, September 2026) ──
+  # ── Gemini 4 (agy 1.5.10; catalog gemini-4-hydrogen / gemini-4-argon) ──
+  # Hydrogen: 1,048,576 context / 65,536 output, effort slugs low..xhigh.
+  # Argon: 1,048,576 context / 32,768 output (catalog), effort slugs low..high.
+  # Concurrency follows the existing split: Pro-class (Argon) 4, Flash-class
+  # (Hydrogen, cheaper per the catalog) 6.
+  - name: gemini-4-hydrogen-xhigh
+    context_window: 1048576
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: gemini-4-hydrogen-high
+    context_window: 1048576
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: gemini-4-hydrogen-medium
+    context_window: 1048576
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: gemini-4-hydrogen-low
+    context_window: 1048576
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: gemini-4-argon-high
+    context_window: 1048576
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 32768
+    max_concurrent: 4
+  - name: gemini-4-argon-medium
+    context_window: 1048576
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 32768
+    max_concurrent: 4
+  - name: gemini-4-argon-low
+    context_window: 1048576
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 32768
+    max_concurrent: 4
+
+  # ── gemini-3.8-flash tier (profile default family; still served) ──
   - name: gemini-3.8-flash-high
     context_window: 1048576
     cost_per_1k_input: 0.0
@@ -102,103 +154,53 @@ models:
     max_output_tokens: 65536
     max_concurrent: 6
 
-  # ── agy-brokered cross-vendor models (agy 1.1.26 `agy models`) ──
-  # Selectable through the same Google subscription seat; metadata mirrors
-  # the direct-vendor profiles where they exist. Conservative where not
-  # officially documented through agy.
-  - name: claude-sonnet-4-6
-    context_window: 200000
+  # ── agy-brokered cross-vendor models (agy 1.5.10 `agy models`) ──
+  # Selectable through the same Google subscription seat; the effort tier is
+  # part of the slug. Context/output follow the catalog (1M / 128K for the
+  # Claude 5.5 pair). The agy 1.1.26-era claude-sonnet-4-6 and
+  # claude-opus-4-6-thinking slugs are gone from `agy models` and removed.
+  - name: claude-opus-5-5-high
+    context_window: 1000000
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
-    max_output_tokens: 64000
-    max_concurrent: 6
-  - name: claude-opus-4-6-thinking
-    context_window: 200000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 32000
+    max_output_tokens: 128000
     max_concurrent: 4
+  - name: claude-opus-5-5-medium
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 128000
+    max_concurrent: 4
+  - name: claude-opus-5-5-low
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 128000
+    max_concurrent: 4
+  - name: claude-sonnet-5-5-high
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 128000
+    max_concurrent: 6
+  - name: claude-sonnet-5-5-medium
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 128000
+    max_concurrent: 6
+  - name: claude-sonnet-5-5-low
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 128000
+    max_concurrent: 6
   - name: gpt-oss-120b-medium
     context_window: 131072
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
     max_output_tokens: 32768
     max_concurrent: 6
-
-  # ── gemini-3.7-flash tier (previous stable family) ──
-  - name: gemini-3.7-flash-high
-    context_window: 1048576
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 6
-  - name: gemini-3.7-flash-medium
-    context_window: 1048576
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 6
-  - name: gemini-3.7-flash-low
-    context_window: 1048576
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 6
-
-  # Older families remain available as explicit fallbacks/history.
-  # ── gemini-3.6-flash tier (fast family) ──
-  - name: gemini-3.6-flash-high
-    context_window: 1000000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 6
-  - name: gemini-3.6-flash-medium
-    context_window: 1000000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 6
-  - name: gemini-3.6-flash-low
-    context_window: 1000000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 6
-
-  # ── gemini-3.5-flash tier (previous/historical family) ──
-  - name: gemini-3.5-flash-high
-    context_window: 1000000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 6
-  - name: gemini-3.5-flash-medium
-    context_window: 1000000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 6
-  - name: gemini-3.5-flash-low
-    context_window: 1000000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 6
-
-  # ── gemini-3.1-pro tier (deep reasoning family) ──
-  - name: gemini-3.1-pro-high
-    context_window: 1000000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 4
-  - name: gemini-3.1-pro-low
-    context_window: 1000000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 4
 
 # Per-sheet reasoning effort (GH #535). `agy --help` on agy 1.5.5 (checked
 # 2026-11-11) lists `--effort` "Reasoning effort for the current CLI session

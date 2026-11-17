@@ -54,22 +54,17 @@ def test_antigravity_defaults_to_current_3_8_effort_family() -> None:
         assert model.max_output_tokens == 65_536
 
 
-def test_antigravity_retains_3_7_family_as_fallback() -> None:
-    profile = load_builtin("antigravity")
+def test_antigravity_no_longer_lists_retired_3_x_families() -> None:
+    """agy 1.5.10 stopped serving 3.7/3.6/3.5 Flash and 3.1 Pro (GH #552)."""
+    names = {model.name for model in load_builtin("antigravity").models}
 
-    family = {
-        model.name: model
-        for model in profile.models
-        if model.name.startswith("gemini-3.7-flash-")
+    assert not {
+        name
+        for name in names
+        if name.startswith(
+            ("gemini-3.7-flash-", "gemini-3.6-flash-", "gemini-3.5-flash-", "gemini-3.1-pro-")
+        )
     }
-    assert set(family) == {
-        "gemini-3.7-flash-high",
-        "gemini-3.7-flash-medium",
-        "gemini-3.7-flash-low",
-    }
-    for model in family.values():
-        assert model.context_window == 1_048_576
-        assert model.max_output_tokens == 65_536
 
 
 def test_gemini_3_7_profiles_expose_supported_schema_capabilities() -> None:
@@ -90,9 +85,9 @@ def test_older_gemini_families_remain_available_as_history_and_fallbacks() -> No
         "gemini-2.5-flash",
     } <= gemini_cli_names
     assert {
-        "gemini-3.6-flash-medium",
-        "gemini-3.5-flash-medium",
-        "gemini-3.1-pro-high",
+        "gemini-4-hydrogen-high",
+        "gemini-4-argon-high",
+        "gemini-3.8-flash-medium",
     } <= antigravity_names
 
 

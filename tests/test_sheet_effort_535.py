@@ -934,8 +934,13 @@ def test_opencode_levels_are_per_model_and_headless_only() -> None:
     assert profile.accepted_effort_levels(model=glm, schema_mode=False) == [
         "minimal", "low", "high", "max",
     ]
-    assert profile.accepted_effort_levels(model="zai-coding-plan/glm-4.7", schema_mode=False) == []
-    assert profile.accepted_effort_levels(model=None, schema_mode=False) == []
+    assert profile.accepted_effort_levels(model="opencode/glm-5.3-flash-free", schema_mode=False) == [
+        "minimal", "low", "high", "max",
+    ]
+    # A row without effort_levels refuses the key (no variants in `opencode models`).
+    assert profile.accepted_effort_levels(
+        model="opencode/nemotron-3.5-lightning-free", schema_mode=False,
+    ) == []
     backend = PluginCliBackend(profile)
     backend.apply_overrides({"model": glm})
     assert backend._build_command("p", timeout_seconds=None, effort="max")[-2:] == [

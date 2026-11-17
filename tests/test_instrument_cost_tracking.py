@@ -343,11 +343,16 @@ def test_none_tokens_are_treated_as_zero() -> None:
 
 
 @pytest.mark.parametrize("instrument,model_name,input_rate,output_rate", [
+    ("claude-code", "claude-fable-5-2", 0.008, 0.04),
     ("claude-code", "claude-fable-5-1", 0.01, 0.05),
+    ("claude-code", "claude-sonnet-5-5", 0.002, 0.01),
+    ("claude-code", "claude-haiku-5-5", 0.0001, 0.0005),
     ("claude-code", "claude-opus-5", 0.005, 0.025),
     ("claude-code", "claude-sonnet-5", 0.002, 0.01),
     ("claude-code", "claude-haiku-4-5-20251001", 0.001, 0.005),
     ("codex-cli", "gpt-6-astra", 0.01, 0.05),
+    ("codex-cli", "gpt-6.1-sol", 0.002, 0.01),
+    ("codex-cli", "gpt-6.1-terra", 0.001, 0.005),
     ("codex-cli", "o3", 0.002, 0.008),
 ])
 def test_current_model_standard_api_rates_reach_cost_estimator(

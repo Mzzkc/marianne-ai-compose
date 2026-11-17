@@ -124,6 +124,57 @@ class TestProfileDetails:
         assert profile.cli is not None
         assert profile.cli.command.extra_flags[-2:] == ["--effort", "max"]
 
+    def test_claude_code_lists_the_5_5_generation_and_fable_5_2(self) -> None:
+        """GH #552: Sonnet 5.5, Haiku 5.5 and Fable 5.2 are listed beside Opus 5.5.
+
+        Listing Fable is a profile fact; "no Fable for subagents and Anthropic
+        score seats" is a casting rule, enforced where seats are cast.
+        """
+        path = BUILTINS_DIR / "claude-code.yaml"
+        with open(path) as fh:
+            profile = InstrumentProfile.model_validate(yaml.safe_load(fh))
+        models = {model.name: model for model in profile.models}
+        for name in (
+            "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-2",
+        ):
+            assert name in models, f"{name} missing from claude-code"
+            assert models[name].context_window == 1_000_000
+            assert models[name].max_output_tokens == 128_000
+        # Superseded-but-served models stay so existing scores keep resolving.
+        for name in ("claude-opus-5", "claude-sonnet-5", "claude-fable-5-1"):
+            assert name in models
+
+    def test_codex_lists_gpt_6_1_sol_and_terra(self) -> None:
+        """GH #552: codex 0.166.0's models_cache lists 6.1 Sol/Terra at 500000 context."""
+        path = BUILTINS_DIR / "codex-cli.yaml"
+        with open(path) as fh:
+            profile = InstrumentProfile.model_validate(yaml.safe_load(fh))
+        models = {model.name: model for model in profile.models}
+        assert profile.default_model is None
+        for name in ("gpt-6.1-sol", "gpt-6.1-terra"):
+            assert models[name].context_window == 500_000
+            assert models[name].max_output_tokens == 128_000
+        # gpt-reserve and codex-auto-review are `hide` rows in codex's cache and
+        # the catalog does not call them coding models: not listed.
+        assert "gpt-reserve" not in models and "codex-auto-review" not in models
+        for name in ("gpt-6-sol", "gpt-6-astra", "gpt-6-luna", "gpt-5.6-sol"):
+            assert name in models
+
+    def test_opencode_default_is_a_listed_live_free_model(self) -> None:
+        """GH #552: the default is a free model the profile lists, not a dead OpenRouter id."""
+        path = BUILTINS_DIR / "opencode.yaml"
+        with open(path) as fh:
+            profile = InstrumentProfile.model_validate(yaml.safe_load(fh))
+        names = {model.name for model in profile.models}
+        assert profile.default_model == "opencode/glm-5.3-flash-free"
+        assert profile.default_model in names
+        dead = {"qwen/qwen3-coder:free", "z-ai/glm-4.5-air:free"}
+        assert not (names & dead)
+        # opencode's own ids: a bare OpenRouter id (no provider prefix) is
+        # rejected by opencode ("Unexpected server error").
+        for name in names:
+            assert name.startswith(("opencode/", "openrouter/", "zai-coding-plan/")), name
+
     def test_gemini_has_models(self) -> None:
         """Gemini CLI profile has model definitions and direct MCP settings merge."""
         path = BUILTINS_DIR / "gemini-cli.yaml"
@@ -299,14 +350,43 @@ class TestProfileDetails:
 # =============================================================================
 
 
-# The fourteen Gemini slugs reported by `agy models` on AGY 1.1.26
-# (2026-09-04). Four model families; the -high/-medium/-low suffix is an AGY
-# effort tier over each family, not a distinct model.
+# The Gemini slugs reported by `agy models` on agy 1.5.10 (2026-11-17, GH
+# #552). The -low/-medium/-high (Hydrogen also -xhigh) suffix is an AGY effort
+# tier over each family, not a distinct model. gemini-pro-orchestrator-g1-pro
+# is an orchestration wrapper, deliberately not listed. The 3.7/3.6/3.5/3.1-pro
+# slugs were removed because agy no longer serves them.
 ANTIGRAVITY_EXPECTED_SLUGS: frozenset[str] = frozenset(
     {
+        "gemini-4-hydrogen-xhigh",
+        "gemini-4-hydrogen-high",
+        "gemini-4-hydrogen-medium",
+        "gemini-4-hydrogen-low",
+        "gemini-4-argon-high",
+        "gemini-4-argon-medium",
+        "gemini-4-argon-low",
         "gemini-3.8-flash-high",
         "gemini-3.8-flash-medium",
         "gemini-3.8-flash-low",
+    }
+)
+
+# agy also brokers cross-vendor models through the same Google subscription
+# seat (`agy models`, agy 1.5.10, 2026-11-17).
+ANTIGRAVITY_CROSS_VENDOR_SLUGS: frozenset[str] = frozenset(
+    {
+        "claude-opus-5-5-high",
+        "claude-opus-5-5-medium",
+        "claude-opus-5-5-low",
+        "claude-sonnet-5-5-high",
+        "claude-sonnet-5-5-medium",
+        "claude-sonnet-5-5-low",
+        "gpt-oss-120b-medium",
+    }
+)
+
+# Slugs agy 1.5.10 no longer lists; they must not come back.
+ANTIGRAVITY_REMOVED_SLUGS: frozenset[str] = frozenset(
+    {
         "gemini-3.7-flash-high",
         "gemini-3.7-flash-medium",
         "gemini-3.7-flash-low",
@@ -318,17 +398,8 @@ ANTIGRAVITY_EXPECTED_SLUGS: frozenset[str] = frozenset(
         "gemini-3.5-flash-low",
         "gemini-3.1-pro-high",
         "gemini-3.1-pro-low",
-    }
-)
-
-# AGY 1.1.26 also brokers cross-vendor models through the same Google
-# subscription seat (verified via `agy models` 2026-09-04; full catalog fold
-# deferred to the next refresh).
-ANTIGRAVITY_CROSS_VENDOR_SLUGS: frozenset[str] = frozenset(
-    {
         "claude-sonnet-4-6",
         "claude-opus-4-6-thinking",
-        "gpt-oss-120b-medium",
     }
 )
 
@@ -359,12 +430,12 @@ class TestAntigravityModelSet:
     """
 
     def test_exact_model_slug_set(self) -> None:
-        """The profile exposes exactly the AGY 1.1.26 slugs (Gemini + brokers)."""
+        """The profile exposes exactly the agy 1.5.10 slugs (Gemini + brokers)."""
         profile = _load_antigravity_profile()
         model_names = {m.name for m in profile.models}
         expected = ANTIGRAVITY_EXPECTED_SLUGS | ANTIGRAVITY_CROSS_VENDOR_SLUGS
         assert model_names == expected, (
-            f"Antigravity model set drifted from `agy models` (AGY 1.1.26).\n"
+            f"Antigravity model set drifted from `agy models` (agy 1.5.10).\n"
             f"  expected: {sorted(ANTIGRAVITY_EXPECTED_SLUGS)}\n"
             f"  actual:   {sorted(model_names)}\n"
             f"  missing:  {sorted(ANTIGRAVITY_EXPECTED_SLUGS - model_names)}\n"
@@ -396,6 +467,25 @@ class TestAntigravityModelSet:
             f"`agy models` (AGY 1.1.13)."
         )
 
+    def test_slugs_agy_no_longer_serves_are_gone(self) -> None:
+        """Slugs absent from `agy models` (agy 1.5.10) are not advertised."""
+        profile = _load_antigravity_profile()
+        model_names = {m.name for m in profile.models}
+        assert not (model_names & ANTIGRAVITY_REMOVED_SLUGS), sorted(
+            model_names & ANTIGRAVITY_REMOVED_SLUGS
+        )
+
+    def test_gemini_4_family_is_listed(self) -> None:
+        """Gemini 4 Argon and Hydrogen carry the catalog's capacity figures."""
+        profile = _load_antigravity_profile()
+        by_name = {m.name: m for m in profile.models}
+        for name, model in by_name.items():
+            if name.startswith("gemini-4-hydrogen-"):
+                assert (model.context_window, model.max_output_tokens) == (1_048_576, 65_536)
+            if name.startswith("gemini-4-argon-"):
+                assert (model.context_window, model.max_output_tokens) == (1_048_576, 32_768)
+        assert "gemini-4-hydrogen-xhigh" in by_name
+
     def test_costs_are_zero_subscription_backed(self) -> None:
         """Per-token costs are zero: subscription-backed CLI, not API billing."""
         profile = _load_antigravity_profile()
@@ -412,33 +502,26 @@ class TestAntigravityModelSet:
             )
 
     def test_capacity_metadata_matches_current_and_historical_contracts(self) -> None:
-        """3.8/3.7 use official capacity; retained families keep prior metadata."""
+        """Gemini 4 and 3.8 carry catalog capacity; cross-vendor rows follow their direct-vendor contract."""
         profile = _load_antigravity_profile()
-        cross_vendor_output = {
-            "claude-sonnet-4-6": 64_000,
-            "claude-opus-4-6-thinking": 32_000,
-            "gpt-oss-120b-medium": 32_768,
+        cross_vendor = {
+            "claude-opus-5-5-high": (1_000_000, 128_000),
+            "claude-opus-5-5-medium": (1_000_000, 128_000),
+            "claude-opus-5-5-low": (1_000_000, 128_000),
+            "claude-sonnet-5-5-high": (1_000_000, 128_000),
+            "claude-sonnet-5-5-medium": (1_000_000, 128_000),
+            "claude-sonnet-5-5-low": (1_000_000, 128_000),
+            "gpt-oss-120b-medium": (131_072, 32_768),
         }
         for model in profile.models:
             if model.name in ANTIGRAVITY_CROSS_VENDOR_SLUGS:
-                assert model.context_window == 200_000 or model.name == "gpt-oss-120b-medium", (
-                    f"{model.name} context_window={model.context_window}, "
-                    f"expected the direct-vendor contract."
-                )
-                assert model.max_output_tokens == cross_vendor_output[model.name], (
-                    f"{model.name} max_output_tokens={model.max_output_tokens}, "
-                    f"expected {cross_vendor_output[model.name]} (direct-vendor profile)."
-                )
+                assert (model.context_window, model.max_output_tokens) == cross_vendor[
+                    model.name
+                ], f"{model.name} capacity drifted from the catalog contract."
                 continue
-            expected_context = (
-                1_048_576
-                if model.name.startswith(("gemini-3.8-flash-", "gemini-3.7-flash-"))
-                else 1_000_000
-            )
-            assert model.context_window == expected_context, (
-                f"{model.name} context_window={model.context_window}, "
-                f"expected {expected_context}."
-            )
+            if model.name.startswith("gemini-4-argon-"):
+                continue  # pinned in test_gemini_4_family_is_listed
+            assert model.context_window == 1_048_576, model.name
             assert model.max_output_tokens == 65_536, (
                 f"{model.name} max_output_tokens={model.max_output_tokens}, "
                 f"expected the conservative 65,536."

@@ -11,7 +11,7 @@
 # Auth: Configured via `opencode providers login`. Supports OpenRouter,
 #       Z.AI, and other providers. Free-tier models available without credits.
 #
-# Default provider: OpenRouter (free-tier models)
+# Default provider: OpenCode-hosted free tier (opencode/glm-5.3-flash-free)
 # Headless mode: -p flag for non-interactive, -f json for structured output
 #
 # Z.AI Coding Plan route: this machine's paid coding-plan seat serves the
@@ -19,6 +19,19 @@
 # on the live credential store). Per-token cost is zero — the plan is a
 # flat subscription, not API billing. Scores that want the subscription
 # route pin these explicitly; the default stays a free-tier model.
+#
+# Model ids are opencode's own `provider/model` ids, exactly as `opencode
+# models` prints them. OpenRouter ids therefore carry the `openrouter/`
+# prefix (openrouter/google/gemma-4-31b-it:free); the bare OpenRouter form
+# (google/gemma-4-31b-it:free) names a provider opencode does not have and
+# fails with a server error (probed 2026-11-17, opencode 1.19.4).
+#
+# Refreshed 2026-11-17 against `opencode models --verbose` (opencode 1.19.4,
+# GH #552). Removed because the live list no longer serves them: the Z.AI
+# glm-5.2, glm-5.2-highspeed, glm-5-turbo and glm-4.7 rows, and every
+# OpenRouter :free row except the two Gemma 4 ones (qwen3-coder, gpt-oss-120b/
+# 20b, hermes-3, nemotron-3-super/nano/nano-9b, qwen3-next/qwen3-4b,
+# llama-3.3, minimax-m2.5, glm-4.5-air, trinity-large, gemma-3n, lfm-2.5).
 
 name: opencode
 display_name: "OpenCode"
@@ -32,8 +45,15 @@ capabilities:
   - mcp
   - structured_output
 
-# Free-tier OpenRouter models — all $0 input/output
-default_model: "qwen/qwen3-coder:free"
+# Free-tier model — $0 input/output. opencode/glm-5.3-flash-free is OpenCode's
+# own hosted GLM-5.3-Flash route: listed by the live `opencode models`, tool
+# calling and reasoning on, no OpenRouter key needed, and a headless
+# `opencode run --model opencode/glm-5.3-flash-free` answered on this machine
+# 2026-11-17. The previous default qwen/qwen3-coder:free is gone from
+# OpenRouter. The free OpenRouter Gemma 4 rows rate-limited upstream during
+# the same probe, so they are a worse default; Nemotron 3.5 Lightning scores
+# 0.5% on Terminal-Bench 4.0 (catalog), too weak to drive a coding agent.
+default_model: "opencode/glm-5.3-flash-free"
 default_timeout_seconds: 1800
 
 models:
@@ -64,155 +84,75 @@ models:
     cost_per_1k_output: 0.0
     max_output_tokens: 65536
     max_concurrent: 6
-  - name: "zai-coding-plan/glm-5.2"
-    context_window: 200000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 4
-  - name: "zai-coding-plan/glm-5.2-highspeed"
-    context_window: 200000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 6
-  - name: "zai-coding-plan/glm-5-turbo"
-    context_window: 1000000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 6
-  - name: "zai-coding-plan/glm-4.7"
-    context_window: 200000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 8
 
   # ═══════════════════════════════════════════════════════════════════
-  # Coding — models optimized for code generation, TDD, refactoring
+  # Free tier — $0 per token. No SLA; shared upstream quota. Limits and
+  # variants are what `opencode models --verbose` reports (2026-11-17).
   # ═══════════════════════════════════════════════════════════════════
-  - name: "qwen/qwen3-coder:free"
-    context_window: 262000
+  # OpenCode-hosted (opencode/*): no OpenRouter key.
+  - name: "opencode/glm-5.3-flash-free"
+    effort_levels: {minimal: low, low: low, high: high, max: max}
+    context_window: 200000
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
-    max_output_tokens: 262000
-    max_concurrent: 8
-  - name: "openai/gpt-oss-120b:free"
-    context_window: 131072
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 131072
-    max_concurrent: 8
-  - name: "openai/gpt-oss-20b:free"
-    context_window: 131072
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 8192
-    max_concurrent: 8
-
-  # ═══════════════════════════════════════════════════════════════════
-  # Reasoning — deep thinking, architecture, complex multi-step work
-  # ═══════════════════════════════════════════════════════════════════
-  - name: "nousresearch/hermes-3-llama-3.1-405b:free"
-    context_window: 131072
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 131072
-    max_concurrent: 8
-  - name: "nvidia/nemotron-3-super-120b-a12b:free"
+    max_output_tokens: 32000
+    max_concurrent: 6
+  - name: "opencode/nemotron-3.5-lightning-free"
     context_window: 262144
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
     max_output_tokens: 262144
     max_concurrent: 8
-  - name: "qwen/qwen3-next-80b-a3b-instruct:free"
-    context_window: 131072
+  - name: "opencode/nemotron-3.5-super-vl-free"
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 131072
+    max_concurrent: 8
+  # OpenRouter :free routes (need the OpenRouter credential).
+  - name: "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+    effort_levels: {medium: medium, high: high}
+    context_window: 1000000
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
     max_output_tokens: 65536
     max_concurrent: 8
-
-  # ═══════════════════════════════════════════════════════════════════
-  # General-purpose — balanced capability for building, research, writing
-  # ═══════════════════════════════════════════════════════════════════
-  - name: "google/gemma-4-31b-it:free"
+  - name: "openrouter/nvidia/nemotron-3.5-lightning:free"
+    effort_levels: {minimal: low, low: low, medium: medium, high: high}
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 8
+  - name: "openrouter/nvidia/nemotron-3.5-super-vl:free"
+    effort_levels: {minimal: low, low: low, medium: medium, high: high}
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 131072
+    max_concurrent: 8
+  - name: "openrouter/google/gemma-4-31b-it:free"
+    effort_levels: {minimal: low, low: low, medium: medium, high: high}
     context_window: 262144
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
     max_output_tokens: 32768
     max_concurrent: 8
-  - name: "google/gemma-4-26b-a4b-it:free"
+  - name: "openrouter/google/gemma-4-26b-a4b-it:free"
+    effort_levels: {minimal: low, low: low, medium: medium, high: high}
     context_window: 262144
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
     max_output_tokens: 32768
-    max_concurrent: 8
-  - name: "meta-llama/llama-3.3-70b-instruct:free"
-    context_window: 65536
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 8
-  - name: "minimax/minimax-m2.5:free"
-    context_window: 196608
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 8192
-    max_concurrent: 8
-  - name: "z-ai/glm-4.5-air:free"
-    context_window: 131072
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 96000
-    max_concurrent: 8
-  - name: "arcee-ai/trinity-large-preview:free"
-    context_window: 131000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 131000
-    max_concurrent: 8
-
-  # ═══════════════════════════════════════════════════════════════════
-  # Fast & light — quick tasks, validation checks, simple transforms
-  # ═══════════════════════════════════════════════════════════════════
-  - name: "nvidia/nemotron-3-nano-30b-a3b:free"
-    context_window: 256000
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 256000
-    max_concurrent: 8
-  - name: "nvidia/nemotron-nano-9b-v2:free"
-    context_window: 131072
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 32768
-    max_concurrent: 8
-  - name: "google/gemma-3n-e4b-it:free"
-    context_window: 32768
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 8192
-    max_concurrent: 8
-  - name: "qwen/qwen3-4b:free"
-    context_window: 131072
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 32768
-    max_concurrent: 8
-  - name: "liquid/lfm-2.5-1.2b-thinking:free"
-    context_window: 32768
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 8192
     max_concurrent: 8
 
 # Per-sheet reasoning effort (GH #535). `opencode run --help` (1.19.4, checked
 # 2026-11-11): `--variant` "model variant (provider-specific reasoning effort)".
 # Variants differ per model, so the profile maps nothing itself and each model
 # row lists the variants `opencode models --verbose` reports for it (the
-# zai-coding-plan glm-5.3 family: low, high, max; glm-5.2, glm-5-turbo and
-# glm-4.7: none). Rows without effort_levels refuse the key. The TUI launch
+# zai-coding-plan glm-5.3 family and opencode/glm-5.3-flash-free: low, high,
+# max; the OpenRouter Nemotron and Gemma rows: low/medium/high, `none` unmapped).
+# Rows without effort_levels refuse the key. The TUI launch
 # (`opencode [project]`) has no --variant, so interactive sheets refuse it.
 effort:
   delivery: flag
