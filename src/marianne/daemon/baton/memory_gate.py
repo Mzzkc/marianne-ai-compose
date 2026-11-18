@@ -61,7 +61,8 @@ from typing import Any, Literal, cast
 from marianne.core.config.memory import MemoryConfig
 from marianne.core.logging import get_logger
 from marianne.memory.access import parse_access
-from marianne.memory.backends.files import files_backend_factory, resolve_files_location
+from marianne.memory.backends import backend_factory
+from marianne.memory.backends.files import resolve_files_location
 from marianne.memory.errors import MemoryBackendError
 from marianne.memory.gateway import AuditLog, Gateway, MemoryCaps
 from marianne.memory.gateway.endpoint import MemoryEndpoint
@@ -661,19 +662,34 @@ class MemoryDispatchGate:
         so two jobs that name the same attachment with different policy must not share an
         instance (the first job's policy would otherwise bind every later one).
         """
-        policy = f"{b.provenance}\x1f{b.recall_cap_bytes}\x1f{b.lock_timeout_seconds!r}"
+        policy = (
+            f"{b.system}\x1f{b.provenance}\x1f{b.recall_cap_bytes}\x1f"
+            f"{b.lock_timeout_seconds!r}\x1f{b.settings!r}"
+        )
         return f"{b.attachment_id}~{hashlib.sha256(policy.encode()).hexdigest()[:12]}"
 
     def _build_backend(self, b: ResolvedBinding) -> Any:
-        """The one place a backend is constructed; selecting by ``b.system`` goes here."""
-        if b.system != "files":
-            raise MemoryGateError(b.name, f"memory system {b.system!r} is not available")
-        location = resolve_files_location(b.scope, self._memory_root)
-        return files_backend_factory({
-            "attachment_id": b.attachment_id, "scope": b.scope, **location.as_config(),
-            "recall_cap_bytes": b.recall_cap_bytes, "provenance": b.provenance,
-            "lock_timeout_seconds": b.lock_timeout_seconds,
-        })
+        """The one place a backend is constructed: ``backend_factory(b.system)``.
+
+        ``files`` is given the resolved location and the attachment's policy; every other
+        system (``cam``) is given the attachment's ``settings:`` verbatim and validates them.
+        An unknown system, or settings the backend refuses, becomes a typed
+        :class:`MemoryGateError` naming the attachment.
+        """
+        try:
+            factory = backend_factory(b.system)
+            if b.system == "files":
+                location = resolve_files_location(b.scope, self._memory_root)
+                return factory({
+                    "attachment_id": b.attachment_id, "scope": b.scope, **location.as_config(),
+                    "recall_cap_bytes": b.recall_cap_bytes, "provenance": b.provenance,
+                    "lock_timeout_seconds": b.lock_timeout_seconds,
+                })
+            return factory(b.settings_dict())
+        except MemoryGateError:
+            raise
+        except Exception as exc:
+            raise MemoryGateError(b.name, _reason(exc)) from exc
 
     def _register_backend(self, gateway: Gateway, b: ResolvedBinding) -> _BackendRef:
         """Take a reference on this binding's backend, synchronously, on the loop.

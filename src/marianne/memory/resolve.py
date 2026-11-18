@@ -20,6 +20,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from marianne.core.config.memory import MemoryBackendDecl, MemoryConfig
 from marianne.core.config.techniques import TechniqueConfig, TechniqueKind
@@ -57,6 +58,12 @@ class ResolvedBinding:
     lock_timeout_seconds: float
     trust: str
     run_dir: Path
+    #: The attachment's ``settings:`` as sorted ``(key, value)`` pairs (hashable, frozen).
+    #: Forwarded verbatim to the backend factory; the backend validates them.
+    settings: tuple[tuple[str, Any], ...] = ()
+
+    def settings_dict(self) -> dict[str, Any]:
+        return dict(self.settings)
 
     def socket_path(self, job_id: str | None, dispatch_id: str) -> Path:
         """The per-dispatch socket path (pure computation, nothing is created)."""
@@ -111,6 +118,7 @@ def resolve_memory(
             lock_timeout_seconds=defaults.lock_timeout_seconds,
             trust=d.trust,
             run_dir=Path(run_dir),
+            settings=tuple(sorted(d.settings.items())),
         ))
     return out
 

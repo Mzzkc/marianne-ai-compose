@@ -3,7 +3,7 @@
 ``backend_factory(system)`` is the one lookup from a score's ``system:`` name
 to the callable that builds that backend from an attachment's configuration.
 The files factory takes the resolved location mapping; the cam factory takes
-the attachment's ``settings:``. Nothing here is wired into the conductor yet.
+the attachment's ``settings:``. The conductor's memory gate selects the backend through it.
 """
 
 from __future__ import annotations
