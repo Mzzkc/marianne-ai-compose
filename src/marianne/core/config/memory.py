@@ -23,6 +23,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 BACKEND_NAME_PATTERN = r"^[a-z][a-z0-9-]{0,31}$"
 _BACKEND_NAME_RE = re.compile(BACKEND_NAME_PATTERN)
 
+#: ``system: cam`` settings a score may carry: it names an operator-configured endpoint (default
+#: ``default``) and may tighten the request timeout. Nothing else about the connection.
+DEFAULT_CAM_ENDPOINT = "default"
+CAM_SCORE_SETTINGS: tuple[str, ...] = ("endpoint", "timeout_seconds")
+#: Connection settings only the operator may set (conductor config ``memory_backends.cam``): a
+#: score that chose them could aim a conductor-held credential at a server of its choosing.
+CAM_OPERATOR_ONLY: tuple[str, ...] = ("base_url", "api_key_env", "api_key_file", "allow_remote")
+
 #: Deprecated provenance spelling normalised to ``optional`` (V349 INFO note).
 PROVENANCE_ALIASES = {"off": "optional"}
 
@@ -122,9 +130,10 @@ class MemoryBackendDecl(BaseModel):
     settings: dict[str, Any] = Field(
         default_factory=dict,
         description="Backend-specific settings forwarded verbatim; validated by the backend. "
-        "For `cam`: `base_url`, exactly one of `api_key_env` (an environment variable NAME) "
-        "or `api_key_file` (a path), `timeout_seconds`, `allow_remote`; V350 checks them. "
-        "Never write a key itself here.",
+        "For `cam`: only `endpoint` (the name of a server the operator configured under "
+        "`memory_backends.cam` in the conductor config; default `default`) and "
+        "`timeout_seconds`. The address and key source are never set in a score; V350 "
+        "refuses them.",
     )
 
     @field_validator("phases", mode="before")

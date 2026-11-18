@@ -58,7 +58,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from marianne.core.config.memory import MemoryConfig
+from marianne.core.config.memory import CAM_OPERATOR_ONLY, DEFAULT_CAM_ENDPOINT, MemoryConfig
 from marianne.core.logging import get_logger
 from marianne.memory.access import parse_access
 from marianne.memory.backends import backend_factory
@@ -483,7 +483,8 @@ class MemoryDispatchGate:
 
     def __init__(
         self, *, run_dir: Path | str, memory_root: Path | str, audit_dir: Path | str,
-        user: str, clock: Callable[[], float] = time.time,
+        user: str, cam_endpoints: Mapping[str, Mapping[str, Any]] | None = None,
+        clock: Callable[[], float] = time.time,
         monotonic: Callable[[], float] = time.monotonic,
         shutdown_bound_seconds: float = SHUTDOWN_BOUND_SECONDS, start_reaper: bool = True,
         ownerless_grace_seconds: float = OWNERLESS_GRACE_SECONDS,
@@ -500,6 +501,9 @@ class MemoryDispatchGate:
         self._memory_root = Path(memory_root)
         self._audit_dir = Path(audit_dir)
         self._user = user
+        self._cam_endpoints: dict[str, dict[str, Any]] = {
+            name: dict(cfg) for name, cfg in (cam_endpoints or {}).items()
+        }
         self._clock = clock
         self._shutdown_bound = shutdown_bound_seconds
         # Heavy members: created on the first dispatch that needs memory.
@@ -685,11 +689,58 @@ class MemoryDispatchGate:
                     "recall_cap_bytes": b.recall_cap_bytes, "provenance": b.provenance,
                     "lock_timeout_seconds": b.lock_timeout_seconds,
                 })
+            if b.system == "cam":
+                return factory(self._cam_settings(b))
             return factory(b.settings_dict())
         except MemoryGateError:
             raise
         except Exception as exc:
             raise MemoryGateError(b.name, _reason(exc)) from exc
+
+    def _cam_settings(self, b: ResolvedBinding) -> dict[str, Any]:
+        """The settings for one cam attachment: the operator's named endpoint, nothing else.
+
+        A score may name an endpoint (and a timeout); the address, the key source and
+        ``allow_remote`` come only from the conductor's ``memory_backends.cam`` config. A
+        score that supplies any of them is refused here (V350 refuses it at validate), so a
+        score can never aim a credential of the conductor at a server of its choosing.
+        """
+        given = b.settings_dict()
+        forbidden = sorted(set(given) & set(CAM_OPERATOR_ONLY))
+        if forbidden:
+            raise MemoryGateError(
+                b.name,
+                f"memory_delivery_unsupported: a score may not set {', '.join(forbidden)} for "
+                "a cam attachment; these are the operator's, set under `memory_backends.cam` "
+                "in the conductor configuration, and a score names an endpoint with "
+                "`settings: {endpoint: <name>}`",
+            )
+        unknown = sorted(set(given) - {"endpoint", "timeout_seconds"})
+        if unknown:
+            raise MemoryGateError(
+                b.name,
+                f"memory_delivery_unsupported: unknown cam setting(s) {', '.join(unknown)}; "
+                "a score may set only `endpoint` and `timeout_seconds`",
+            )
+        endpoint = given.get("endpoint", DEFAULT_CAM_ENDPOINT)
+        if not isinstance(endpoint, str):
+            raise MemoryGateError(
+                b.name, "memory_delivery_unsupported: cam `endpoint` must be a name (a string)",
+            )
+        cfg = self._cam_endpoints.get(endpoint)
+        if cfg is None:
+            known = ", ".join(sorted(self._cam_endpoints)) or "none configured"
+            raise MemoryGateError(
+                b.name,
+                f"memory_delivery_unsupported: cam endpoint {endpoint!r} is not configured on "
+                f"this conductor (configured: {known}); set `memory_backends.cam.{endpoint}` "
+                "(base_url and api_key_env or api_key_file) in ~/.marianne/conductor.yaml "
+                "and restart the conductor",
+            )
+        merged = dict(cfg)
+        if "timeout_seconds" in given:
+            merged["timeout_seconds"] = given["timeout_seconds"]
+        return merged
 
     def _register_backend(self, gateway: Gateway, b: ResolvedBinding) -> _BackendRef:
         """Take a reference on this binding's backend, synchronously, on the loop.

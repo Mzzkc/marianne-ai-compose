@@ -1499,6 +1499,24 @@ memory:
 
 `system: cam` attaches CAM, a separate program with its own licence, as a second memory backend. Marianne reaches it only across a process boundary over CAM's HTTP API, using the standard library; it does not import, copy or depend on CAM, and a test enforces that.
 
+The address of a CAM server and the source of its key belong to the **operator**, not to a score. They are set once in the conductor configuration, under a name:
+
+```yaml
+# ~/.marianne/conductor.yaml  (the operator's file; read when the conductor starts)
+memory_backends:
+  cam:
+    default:                              # endpoint name; a score that names none gets `default`
+      base_url: http://127.0.0.1:8321     # loopback http, or https with allow_remote: true
+      api_key_env: CAM_API_KEY            # the NAME of an environment variable, never the key
+      timeout_seconds: 10
+    lab:
+      base_url: https://cam.lab.example
+      api_key_file: ~/.secrets/cam-lab    # or the path of a file that holds the key
+      allow_remote: true
+```
+
+A score only names the endpoint:
+
 ```yaml
 memory:
   backends:
@@ -1506,21 +1524,22 @@ memory:
       system: cam
       scope: project/demo
       settings:
-        base_url: http://127.0.0.1:8321   # loopback http, or https with allow_remote: true
-        api_key_env: CAM_API_KEY          # the NAME of an environment variable, never the key
-        timeout_seconds: 10
+        endpoint: lab                     # optional; default `default`
+        timeout_seconds: 5                # optional; may tighten the endpoint's timeout
 ```
 
-| Setting | Description |
+| Conductor setting (`memory_backends.cam.<name>`) | Description |
 |---------|-------------|
-| `base_url` | Required. `http://127.0.0.1` or `http://localhost` only; any other host needs `allow_remote: true` and `https://` |
-| `api_key_env` / `api_key_file` | Exactly one: an environment variable name, or a file path holding the key. A literal key is refused (V350) and is never logged or put in an error |
-| `timeout_seconds` | Per-request ceiling; each request also stops at the call deadline |
+| `base_url` | Required. `http://127.0.0.1` or `http://localhost` only; any other host needs `allow_remote: true` and `https://`. Checked when the conductor config loads |
+| `api_key_env` / `api_key_file` | Exactly one: an environment variable name, or a file path holding the key. Names and paths only; the key is never in a config file, a log or an error |
+| `timeout_seconds` | Per-request ceiling (default 10); each request also stops at the call deadline |
 | `allow_remote` | Permit a non-loopback host (https only). Default `false` |
+
+A score's `settings` for `system: cam` may hold only `endpoint` and `timeout_seconds`. A score that sets `base_url`, `api_key_env`, `api_key_file` or `allow_remote` is refused: V350 reports it at `mzt validate`, and the dispatch refuses it again with `memory_delivery_unsupported` (the score file is not trusted with the conductor's environment variables or files, so it cannot send a credential to a server it names). A `endpoint` the conductor does not define is refused the same way, naming the endpoint and the `memory_backends.cam.<name>` key to set. `memory_backends` is read at conductor start; a hot reload that changes it reports `restart required`.
 
 What it can do today: `declare`, `recall` and `health` (a CAM running without an embedding model reports `degraded`, since recall is then lexical). `verify`, `bind`, `forget`, `fetch`, `stream_facts` and `migration_ingest` are refused with E7 `capability_unsupported` naming the operation, because CAM has no such operation yet. CAM recall has no cursor, so a recall is trimmed to the call's byte cap at a fact boundary on Marianne's side and the omitted facts are only counted. Every Marianne principal appears to CAM as the one key's principal until CAM ships stamped principals; the scope is passed through as CAM's scope.
 
-The conductor builds the backend with `backend_factory("cam")` from the attachment's `settings:`; a CAM that is down fails the dispatch of that sheet with the attachment's name, the same all-or-nothing rule as any attachment.
+The conductor builds the backend with `backend_factory("cam")` from the named endpoint; a CAM that is down fails the dispatch of that sheet with the attachment's name, the same all-or-nothing rule as any attachment.
 
 The test `tests/memory/test_cam_backend_live.py` starts CAM's own server from a local CAM checkout and runs a real declare, recall, health and wrong-key round trip. It is marked `cam_live` and skips itself unless a CAM checkout with its own virtual environment exists (default `~/Projects/cam`, or the directory in `MARIANNE_CAM_DIR`); CI has no CAM, so it skips there.
 ### The gateway socket endpoint
@@ -1838,6 +1857,7 @@ Available but rarely need changing:
 | `orchestra` | `OrchestraConfig` | *(see sub-config)* | | Orchestra view: a public-safe fleet timeline, live over IPC and appended daily to `~/.marianne/orchestra/<day>.jsonl` for replay. Keys: `enabled` (true), `persist` (true), `directory`, `ring_size` (2000, `>= 100`), `keep_ended_seconds` (1800). The projection carries score name, sheet, instrument, outcome, time and a short note (fallback transition, retry attempt, or the verbatim chain-refusal reason, which can name the child score's path) |
 | `profiler` | `ProfilerConfig` | *(see sub-config)* | | System profiler (strace off by default, GPU probing off by default) |
 | `preflight` | `PreflightConfig` | *(see sub-config)* | | Preflight prompt analysis thresholds. Controls when prompts are warned or rejected based on estimated token count. |
+| `memory_backends` | `MemoryBackendsConfig` | `{}` | | Operator-side memory endpoints: `cam.<name>: {base_url, api_key_env \| api_key_file, allow_remote, timeout_seconds}`. Scores name an endpoint; they cannot set an address or key source (see [the `cam` backend](#the-cam-backend)). Restart to change |
 | `hot_reload` | `HotReloadConfig` | *(see [Hot Reload](#hot-reload))* | | Opt-in watcher that hot-applies config and instrument profile changes without a restart |
 | `config_file` | `Path \| None` | `None` | | Path to the YAML config file. Set automatically on startup; used by reload to re-read config from disk. |
 

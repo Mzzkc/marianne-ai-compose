@@ -6,8 +6,9 @@ resource limits, concurrency controls, and state backend selection.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -16,6 +17,8 @@ from marianne.core.constants import DAEMON_STATE_DB_PATH
 from marianne.core.logging import resolve_daemon_log_path, resolve_daemon_log_root
 from marianne.daemon.keyring_config import KeyringConfig
 from marianne.daemon.profiler.models import ProfilerConfig
+from marianne.memory.backends.cam import CamBackendConfig
+from marianne.memory.errors import MemoryBackendError
 
 
 class McpServerEntry(BaseModel):
@@ -451,6 +454,94 @@ class HotReloadConfig(BaseModel):
     )
 
 
+#: A named memory endpoint: lowercase, digits and hyphens (same grammar as an attachment name).
+MEMORY_ENDPOINT_NAME = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
+DEFAULT_MEMORY_ENDPOINT = "default"
+
+
+class CamEndpointConfig(BaseModel):
+    """One CAM server the operator lets scores reach, by name.
+
+    Scores never carry an address or a credential: a ``system: cam`` attachment names one of
+    these endpoints (``settings: {endpoint: <name>}``, default ``default``) and nothing else
+    about the connection. The address and the key source live only here, in the operator's
+    conductor configuration. ``api_key_env`` and ``api_key_file`` hold a NAME or a PATH, never
+    the key.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    base_url: str = Field(
+        description="CAM's HTTP address. `http://127.0.0.1:<port>` or `http://localhost:<port>`; "
+        "any other host needs `allow_remote: true` and `https://`.",
+    )
+    api_key_env: str | None = Field(
+        default=None,
+        description="NAME of an environment variable in the conductor's environment that holds "
+        "the CAM API key. Exactly one of `api_key_env` and `api_key_file`.",
+    )
+    api_key_file: Path | None = Field(
+        default=None,
+        description="Path of a file readable by the conductor that holds the CAM API key. "
+        "Exactly one of `api_key_env` and `api_key_file`.",
+    )
+    allow_remote: bool = Field(
+        default=False,
+        description="Permit a non-loopback host (https only).",
+    )
+    timeout_seconds: float = Field(
+        default=10.0, gt=0, le=3600,
+        description="Per-request ceiling; each request also stops at the call deadline.",
+    )
+
+    @model_validator(mode="after")
+    def _build_client_config(self) -> CamEndpointConfig:
+        # Reuse the backend's own checks (loopback rule, https, one key source, no URL
+        # credentials). Does no I/O and reads neither the variable nor the file.
+        try:
+            CamBackendConfig(**self.as_settings())
+        except MemoryBackendError as exc:
+            raise ValueError(f"{exc.detail} ({exc.remedy})" if exc.remedy else exc.detail) from None
+        return self
+
+    def as_settings(self) -> dict[str, Any]:
+        """The mapping ``cam_backend_factory`` takes (names and paths only)."""
+        out: dict[str, Any] = {
+            "base_url": self.base_url,
+            "allow_remote": self.allow_remote,
+            "timeout_seconds": self.timeout_seconds,
+        }
+        if self.api_key_env:
+            out["api_key_env"] = self.api_key_env
+        if self.api_key_file:
+            out["api_key_file"] = str(self.api_key_file.expanduser())
+        return out
+
+
+class MemoryBackendsConfig(BaseModel):
+    """Operator-side memory backend endpoints, keyed by the name a score uses."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cam: dict[str, CamEndpointConfig] = Field(
+        default_factory=dict,
+        description="Named CAM endpoints. A score's `system: cam` attachment picks one with "
+        "`settings: {endpoint: <name>}` (default name `default`); it cannot supply an address "
+        "or a credential itself.",
+    )
+
+    @field_validator("cam")
+    @classmethod
+    def _endpoint_names(cls, v: dict[str, CamEndpointConfig]) -> dict[str, CamEndpointConfig]:
+        for name in v:
+            if not MEMORY_ENDPOINT_NAME.match(name):
+                raise ValueError(
+                    f"memory_backends.cam endpoint name {name!r} must match "
+                    f"{MEMORY_ENDPOINT_NAME.pattern}"
+                )
+        return v
+
+
 class DaemonConfig(BaseModel):
     """Top-level configuration for the Marianne conductor.
 
@@ -609,6 +700,12 @@ class DaemonConfig(BaseModel):
         "Per-instrument key management with least-recently-rate-limited "
         "or round-robin rotation policies. Keys are paths to files in "
         "$SECRETS_DIR/, never stored in config.",
+    )
+    memory_backends: MemoryBackendsConfig = Field(
+        default_factory=MemoryBackendsConfig,
+        description="Operator-side memory backend endpoints (CAM servers by name). Scores "
+        "name an endpoint; the address and key source are only ever set here. Read at "
+        "conductor start.",
     )
     hot_reload: HotReloadConfig = Field(
         default_factory=HotReloadConfig,

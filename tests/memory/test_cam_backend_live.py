@@ -19,6 +19,9 @@ from pathlib import Path
 
 import pytest
 
+from marianne.core.config.memory import MemoryConfig
+from marianne.daemon.baton.memory_gate import MemoryDispatchGate, SheetIdentity
+from marianne.daemon.config import DaemonConfig
 from marianne.memory import Permission, RequestContext, Unauthenticated
 from marianne.memory.backends.cam import CamBackend, CamBackendConfig
 
@@ -113,3 +116,48 @@ def test_declare_recall_health_and_wrong_key(
         b.recall(_ctx(), "zebra", "local:default")
     assert ei.value.subtype == "auth_required" and key not in str(ei.value)
     assert b.health()["status"] == "unauthenticated"
+
+
+def test_a_named_daemon_endpoint_drives_the_gate_to_a_real_cam(
+    cam: tuple[str, str], tmp_path: Path,
+) -> None:
+    """The operator names the server in conductor config; the score names only the endpoint."""
+    import asyncio
+    import tempfile
+
+    url, key = cam
+    daemon = DaemonConfig.model_validate({"memory_backends": {"cam": {"default": {
+        "base_url": url, "api_key_env": "MARIANNE_TEST_CAM_KEY"}}}})
+    root = Path(tempfile.mkdtemp(prefix="mg", dir="/tmp"))
+    run_dir = root / "run"
+    run_dir.mkdir(mode=0o700)
+    gate = MemoryDispatchGate(
+        run_dir=run_dir, memory_root=root / "files", audit_dir=root / "audit", user="ada",
+        start_reaper=False,
+        cam_endpoints={n: e.as_settings() for n, e in daemon.memory_backends.cam.items()},
+    )
+    gate.register_job("j", MemoryConfig.model_validate({"backends": {
+        "shared": {"system": "cam", "scope": "local:default"}}}))
+
+    async def main() -> None:
+        try:
+            p = await gate.deliver(
+                "j", SheetIdentity(1, 1, "work"), timeout_seconds=60,
+                existing_mcp_config=None, workspace=root / "ws",
+            )
+            assert p is not None and gate._gateway is not None
+            sid = gate._open[("j", p.dispatch_id)].session_ids[0]
+            gate._gateway.declare(
+                sid, "okapis have striped legs",
+                provenance={"evidence_locator": "notes/okapi.md"},
+            )
+            out = gate._gateway.recall(sid, "okapi legs")
+            assert any("okapis" in r["content"] for r in out["results"])
+        finally:
+            await gate.shutdown()
+
+    try:
+        asyncio.run(asyncio.wait_for(main(), 60))
+    finally:
+        import shutil
+        shutil.rmtree(root, ignore_errors=True)

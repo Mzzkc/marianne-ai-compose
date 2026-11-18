@@ -994,6 +994,10 @@ class JobManager:
             memory_root=_marianne_home / "memory" / "files",
             audit_dir=_marianne_home / "memory" / "audit",
             user=_memory_user(),
+            cam_endpoints={
+                name: ep.as_settings()
+                for name, ep in self._config.memory_backends.cam.items()
+            },
         )
         self._baton_adapter.set_memory_gate(self._memory_gate)
         try:
@@ -1147,6 +1151,7 @@ class JobManager:
         "learning",  # semantic analyzer built at boot
         "profiler",  # collector built at boot
         "mcp_pool",  # server pool started at boot
+        "memory_backends",  # memory gate built at boot with these endpoints
         "keyring",  # key holders built at boot
         "monitor_interval_seconds",  # monitor loop started at boot
     )

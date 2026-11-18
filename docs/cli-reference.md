@@ -777,7 +777,7 @@ code-registry and corpus-sweep tests.
 | ERROR | V345 | `memory` caps out of range (`recall_cap_bytes` 1024 to 1048576), an attachment cap above the score default, or an unknown `provenance` value |
 | INFO | V349 | `provenance: off` is deprecated and was read as `optional` |
 | ERROR | V346 | A `memory` `access` value is neither `inherit` nor `grant:<name>[@<version>]` |
-| ERROR | V350 | A `system: cam` attachment's `settings` are missing `base_url`, name both or neither of `api_key_env`/`api_key_file`, hold a literal key instead of a variable name, or use plain http for a non-loopback host |
+| ERROR | V350 | A `system: cam` attachment's `settings` carry anything but `endpoint` and `timeout_seconds`: `base_url`, `api_key_env`, `api_key_file` and `allow_remote` are the operator's, set under `memory_backends.cam.<name>` in the conductor config; also a malformed `endpoint` name or `timeout_seconds` |
 | ERROR | V347 | A `memory` `access` names a grant; no grant store exists yet, so only `inherit` is accepted |
 | WARNING | V327 | A score sets a reserved key — accepted, but no runtime code reads it; also warns when `movements.<N>.voices` cannot expand with the sheet's size/start settings |
 | WARNING | V328 | Deprecated spelling or key: root `max_wall_seconds` (now `schedule.max_wall_seconds`), `checkpoints:` (now `approvals:`), hook-level `on_failure` (now `if_hook_fails`), root `conductor` |

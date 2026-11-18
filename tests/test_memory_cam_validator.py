@@ -1,4 +1,4 @@
-"""V350: ``system: cam`` settings."""
+"""V350: a ``system: cam`` attachment names an operator endpoint; it never carries a connection."""
 
 from __future__ import annotations
 
@@ -38,53 +38,37 @@ def test_cam_is_a_shipped_system(tmp_path: Path) -> None:
 
 
 def test_clean_settings(tmp_path: Path) -> None:
-    ok = "{base_url: 'http://127.0.0.1:8321', api_key_env: CAM_API_KEY, timeout_seconds: 5}"
-    assert _run(MemoryCamSettingsCheck(), tmp_path, ok) == []
-    f = "{base_url: 'https://cam.example.org', api_key_file: /etc/cam/key, allow_remote: true}"
-    assert _run(MemoryCamSettingsCheck(), tmp_path, f) == []
+    assert _run(MemoryCamSettingsCheck(), tmp_path, "{}") == []
+    assert _run(MemoryCamSettingsCheck(), tmp_path, "{endpoint: lab, timeout_seconds: 5}") == []
 
 
 def test_other_systems_untouched(tmp_path: Path) -> None:
     assert _run(MemoryCamSettingsCheck(), tmp_path, "{}", system="files") == []
 
 
-def test_missing_base_url(tmp_path: Path) -> None:
-    (i,) = _run(MemoryCamSettingsCheck(), tmp_path, "{api_key_env: CAM_API_KEY}")
-    assert i.check_id == "V350" and i.severity is ValidationSeverity.ERROR
-    assert "base_url is required" in i.message
-
-
-def test_both_or_neither_key_setting(tmp_path: Path) -> None:
-    for s in (
-        "{base_url: 'http://127.0.0.1:1'}",
-        "{base_url: 'http://127.0.0.1:1', api_key_env: K, api_key_file: /x}",
+def test_score_cannot_carry_the_connection(tmp_path: Path) -> None:
+    for key, value in (
+        ("base_url", "'http://127.0.0.1:8321'"),
+        ("api_key_env", "ANTHROPIC_API_KEY"),
+        ("api_key_file", "/home/x/.secrets/token"),
+        ("allow_remote", "true"),
     ):
-        (i,) = _run(MemoryCamSettingsCheck(), tmp_path, s)
-        assert "exactly one of api_key_env and api_key_file" in i.message
+        (i,) = _run(MemoryCamSettingsCheck(), tmp_path, f"{{{key}: {value}}}")
+        assert i.check_id == "V350" and i.severity is ValidationSeverity.ERROR
+        assert key in i.message and "operator" in i.message
+        assert "memory_backends.cam" in (i.suggestion or "")
 
 
-def test_literal_key_refused_and_not_echoed(tmp_path: Path) -> None:
-    (i,) = _run(
-        MemoryCamSettingsCheck(), tmp_path,
-        f"{{base_url: 'http://127.0.0.1:1', api_key_env: {SECRET}}}",
-    )
-    assert "NAME of an environment variable" in i.message
-    assert SECRET not in i.message and SECRET not in (i.suggestion or "")
-    (j,) = _run(
-        MemoryCamSettingsCheck(), tmp_path,
-        f"{{base_url: 'http://127.0.0.1:1', api_key_file: {SECRET}}}",
-    )
-    assert SECRET not in j.message and "api_key_env" in (j.suggestion or "")
+def test_literal_key_is_refused_and_not_echoed(tmp_path: Path) -> None:
+    for key in ("api_key_env", "api_key_file"):
+        (i,) = _run(MemoryCamSettingsCheck(), tmp_path, f"{{{key}: {SECRET}}}")
+        assert SECRET not in i.message and SECRET not in (i.suggestion or "")
 
 
-def test_remote_plain_http_and_unknown_key(tmp_path: Path) -> None:
-    (i,) = _run(
-        MemoryCamSettingsCheck(), tmp_path,
-        "{base_url: 'http://cam.example.org', api_key_env: K}",
-    )
-    assert "non-loopback" in i.message
-    (j,) = _run(
-        MemoryCamSettingsCheck(), tmp_path,
-        "{base_url: 'http://127.0.0.1:1', api_key_env: K, api_key: oops}",
-    )
-    assert "not a cam setting" in j.message
+def test_unknown_key_and_bad_values(tmp_path: Path) -> None:
+    (i,) = _run(MemoryCamSettingsCheck(), tmp_path, "{api_key: oops}")
+    assert "not a cam setting" in i.message
+    (j,) = _run(MemoryCamSettingsCheck(), tmp_path, "{endpoint: 'Bad Name'}")
+    assert "endpoint" in j.message
+    (k,) = _run(MemoryCamSettingsCheck(), tmp_path, "{timeout_seconds: 0}")
+    assert "timeout_seconds" in k.message
