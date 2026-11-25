@@ -601,6 +601,8 @@ class TestMusicianWrapperWiresCallback:
             backend=backend,
             context=ctx,
             effective_instrument="test-cli",
+            memory_manifest=None,
+            memory_dispatch=None,
         )
 
         assert ("J1", 7) not in adapter._active_pids  # cleared on completion
@@ -662,6 +664,8 @@ class TestMusicianWrapperWiresCallback:
         await adapter._musician_wrapper(
             job_id="J2", sheet=sheet, backend=backend,
             context=ctx, effective_instrument="test-cli",
+            memory_manifest=None,
+            memory_dispatch=None,
         )
 
         # Mid-execute the entry must have been present.
@@ -714,6 +718,8 @@ class TestMusicianWrapperWiresCallback:
         await adapter._musician_wrapper(
             job_id="J3", sheet=sheet, backend=backend,
             context=ctx, effective_instrument="http",
+            memory_manifest=None,
+            memory_dispatch=None,
         )
 
         assert adapter._active_pids == {}

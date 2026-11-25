@@ -70,6 +70,8 @@ async def test_receipt_is_written_only_after_sheet_task_boundary(tmp_path: Path)
             backend=backend,
             context=context,
             effective_instrument="test-cli",
+            memory_manifest=None,
+            memory_dispatch=None,
         )
 
     mocked_sheet_task.assert_awaited_once()
@@ -134,6 +136,8 @@ async def test_required_context_failure_becomes_dispatch_failure(tmp_path: Path)
             backend=MagicMock(),
             context=AttemptContext(attempt_number=1, mode=AttemptMode.NORMAL),
             effective_instrument="test-cli",
+            memory_manifest=None,
+            memory_dispatch=None,
         )
 
     mocked_sheet_task.assert_not_awaited()

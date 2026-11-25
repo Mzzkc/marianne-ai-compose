@@ -935,6 +935,8 @@ class TestMusicianWrapperExceptionHandling:
                 sheet=sheets[0],
                 backend=mock_backend,
                 context=AttemptContext(attempt_number=1, mode=AttemptMode.NORMAL),
+                memory_manifest=None,
+                memory_dispatch=None,
             )
 
         pool.release.assert_called_once_with("claude-code", mock_backend)
@@ -964,6 +966,8 @@ class TestMusicianWrapperExceptionHandling:
                     sheet=sheets[0],
                     backend=mock_backend,
                     context=AttemptContext(attempt_number=1, mode=AttemptMode.NORMAL),
+                    memory_manifest=None,
+                    memory_dispatch=None,
                 )
 
         pool.release.assert_called_once_with("claude-code", mock_backend)
@@ -989,6 +993,8 @@ class TestMusicianWrapperExceptionHandling:
                 sheet=sheets[0],
                 backend=mock_backend,
                 context=AttemptContext(attempt_number=1, mode=AttemptMode.NORMAL),
+                memory_manifest=None,
+                memory_dispatch=None,
             )
 
         pool.release.assert_called_once()  # Release was attempted

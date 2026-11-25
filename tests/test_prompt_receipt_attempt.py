@@ -54,6 +54,8 @@ async def test_completed_attempt_checkpoint_shows_the_receipt(tmp_path: Path) ->
         job_id="j", sheet=sheet, backend=backend,
         context=AttemptContext(attempt_number=1, mode=AttemptMode.NORMAL),
         effective_instrument="test-cli",
+        memory_manifest=None,
+        memory_dispatch=None,
     )
     events = []
     while not adapter.baton.inbox.empty():
