@@ -52,6 +52,13 @@ L13 reserved-taught  a doc, skill or shipped example score sets a key the schema
                       ``(concept)`` row with an existing doc anchor; a broken
                       link target is the same defect (PL-10)
 
+L14 cli-untaught   a top-level ``mzt`` command no shipped skill names
+                      (``mzt <name>`` literal, word-bounded; one-directional
+                      CLI -> skills, because skills may name commands for
+                      adversarial eval bait). Deliberately untaught internal
+                      commands live in ``INTERNAL_MZT_COMMANDS`` with a reason
+                      each -- never in the baseline fixture.
+
 Exit 0 when no finding is outside the baseline, 1 on regression, 2 on usage or
 environment error. ``--json`` prints machine-readable output.
 """
@@ -66,6 +73,7 @@ import subprocess
 import sys
 import typing
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from types import UnionType
@@ -88,8 +96,9 @@ CHECKS = {
     "L11": "orphan-check",
     "L12": "glossary-unresolved",
     "L13": "reserved-taught",
+    "L14": "cli-untaught",
 }
-GATING = {"L01", "L02", "L03", "L04", "L05", "L06", "L07", "L10", "L11", "L12", "L13"}
+GATING = {"L01", "L02", "L03", "L04", "L05", "L06", "L07", "L10", "L11", "L12", "L13", "L14"}
 
 # Author surfaces, relative to the repository root. The plugin tree is the
 # ``plugins`` submodule.
@@ -106,6 +115,34 @@ SKILL_REFS = (
 CONFIG_REFERENCE = "docs/configuration-reference.md"
 CLI_REFERENCE = "docs/cli-reference.md"
 GLOSSARY = "docs/glossary.md"
+
+# The full shipped skill surface L14 reads: every markdown file under the
+# plugins skill tree, not just the curated SKILL_FILES + SKILL_REFS list (which
+# does not include command/ or conducting/).
+TAUGHT_SURFACES_GLOB = "plugins/marianne/skills/**/*.md"
+
+# Commands the skills deliberately do not teach, each with a one-line reason
+# that is a claim about the code. This is NOT baseline debt: an entry is a
+# reviewed decision to keep a command untaught, and adding a reason requires
+# confirming it against the CLI. A guard test pins every key to a real
+# top-level command so a typo or a removed command cannot hide here.
+INTERNAL_MZT_COMMANDS: dict[str, str] = {
+    "compose": "not implemented: the command prints 'The compose system is not yet implemented'",
+    "compile": "legacy compiler path; the current authoring path is score YAML",
+    "corpus": "local corpus build/stat tooling, not a conducting surface",
+    "entropy-status": "learning-store inspection",
+    "patterns-budget": "learning-store inspection",
+    "patterns-entropy": "learning-store inspection",
+    "patterns-list": "learning-store inspection",
+    "patterns-why": "learning-store inspection",
+    "learning-activity": "learning-store inspection",
+    "learning-drift": "learning-store inspection",
+    "learning-epistemic-drift": "learning-store inspection",
+    "learning-export": "learning-store inspection",
+    "learning-insights": "learning-store inspection",
+    "learning-record-evolution": "learning-store inspection",
+    "learning-stats": "learning-store inspection",
+}
 
 # Words that carry no meaning for L02: a description that only says "the" or
 # "configuration" shares nothing with its name.
@@ -710,6 +747,73 @@ def mzt_commands() -> set[str]:
     return names
 
 
+def taught_skill_text(repo: Path) -> str:
+    """Concatenated text of every shipped skill markdown file.
+
+    Raises ``SurfaceMissing`` when the glob yields nothing: an empty surface
+    would report every command untaught (bare checkout) or, worse, pass
+    vacuously. The check must never score an empty string.
+    """
+    pattern = repo.glob(TAUGHT_SURFACES_GLOB)
+    paths = sorted(p for p in pattern if p.is_file())
+    if not paths:
+        raise SurfaceMissing(
+            f"{TAUGHT_SURFACES_GLOB} matched no files under {repo}; if the skills "
+            "live in the plugins submodule, run `git submodule update --init plugins` "
+            "(the CLI-vs-skills check cannot judge an empty surface)"
+        )
+    return "\n".join(p.read_text(encoding="utf-8") for p in paths)
+
+
+def cli_untaught(
+    repo: Path,
+    commands: set[str] | None = None,
+    skill_text: str | None = None,
+    internal: Mapping[str, str] | None = None,
+) -> list[Finding]:
+    """L14: top-level ``mzt`` commands no shipped skill names (CLI -> skills).
+
+    ``mzt_commands()`` returns full paths (``"mzt agents run"``), so a
+    top-level name is ``path.split()[1]`` -- comparing a bare name against the
+    path set verbatim would report every command group untaught forever. A
+    name counts as taught only for the literal, word-bounded token
+    ``mzt <name>``: bare words like ``config`` or ``top`` occur as ordinary
+    prose in dozens of skill files and teach nothing.
+
+    The direction is one-way on purpose. Skills contain ``mzt maestro`` and
+    ``mzt is`` as adversarial eval bait; checking "every ``mzt X`` in a skill
+    is real" would misread those, so only CLI -> skills is checked.
+
+    ``commands``, ``skill_text`` and ``internal`` let the control tests inject
+    a synthetic command set and skill text without the real CLI or tree.
+    """
+    if commands is None:
+        commands = {p.split()[1] for p in mzt_commands() if len(p.split()) > 1}
+    if skill_text is None:
+        skill_text = taught_skill_text(repo)
+    if internal is None:
+        internal = INTERNAL_MZT_COMMANDS
+    findings: list[Finding] = []
+    for name in sorted(commands):
+        if name in internal:
+            continue
+        taught = re.search(
+            rf"(?<![A-Za-z0-9_-])mzt[ \t]+{re.escape(name)}(?![A-Za-z0-9_-])",
+            skill_text,
+        )
+        if not taught:
+            findings.append(
+                Finding(
+                    "L14",
+                    f"cli-untaught:{name}",
+                    "no shipped skill names this mzt command (a bare word "
+                    "without the `mzt ` prefix does not teach it)",
+                    gating=True,
+                )
+            )
+    return findings
+
+
 def status_values() -> set[str]:
     """Every run- and sheet-status value the runtime can report."""
     from marianne.core.checkpoint import JobStatus, SheetStatus
@@ -1120,6 +1224,9 @@ def run_checks(
 
     # L12 ships without baseline debt: missing/malformed rows fail as well.
     findings.extend(glossary_findings(repo, keys, root))
+
+    # L14 CLI commands the skills never name (the issue-#559 class of lag).
+    findings.extend(cli_untaught(repo))
 
     # dedupe by id, keep first
     seen: set[str] = set()

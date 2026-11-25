@@ -503,3 +503,69 @@ def test_l13_fires_on_reserved_keys_taught_and_not_on_live_or_labelled(tmp_path:
         ("docs/guide.md", 1), ("examples/bad.yaml", -1),
     ]
     assert all(path == "dead_knob" for _, _, path in hits)
+
+
+# --------------------------------------------------------------------------
+# L14 cli-untaught: CLI -> skills, one direction (issue #559)
+# --------------------------------------------------------------------------
+
+
+def test_l14_fires_on_an_untaught_command_only() -> None:
+    """A command no skill names as `mzt <name>` is reported; one that a skill
+    names literally is not. Synthetic set and text -- no real CLI, no real
+    tree."""
+    text = "Engage parts with `mzt agents run` (interim). Use `mzt top` to watch.\n"
+    findings = cl.cli_untaught(
+        Path("."), commands={"agents", "top", "mail"}, skill_text=text, internal={}
+    )
+    assert [f.id for f in findings] == ["L14:cli-untaught:mail"]
+    assert all(f.check == "L14" and f.gating for f in findings)
+
+
+def test_l14_is_silent_once_a_skill_names_the_command() -> None:
+    text = "Run `mzt mail` to read conductor mail.\n"
+    assert cl.cli_untaught(
+        Path("."), commands={"mail"}, skill_text=text, internal={}
+    ) == []
+
+
+def test_l14_adversarial_fixture_text_is_not_teaching() -> None:
+    """The three traps the definition must not fall into:
+
+    * a bare word without the ``mzt `` prefix does not count as teaching;
+    * ``mzt maestro`` (eval bait) raises nothing, because the direction is
+      CLI -> skills only;
+    * an injected ``internal`` mapping silences a listed name, but no finding
+      ever lands in the baseline fixture (guarded in verify.sh).
+    """
+    text = (
+        "The config lives in ~/.marianne. Top of the queue. "
+        "The mcp server starts locally. Eval bait: `mzt maestro` and `mzt is`.\n"
+    )
+    findings = cl.cli_untaught(
+        Path("."),
+        commands={"config", "top", "mcp", "maestro"},
+        skill_text=text,
+        internal={},
+    )
+    assert {f.id for f in findings} == {
+        "L14:cli-untaught:config",
+        "L14:cli-untaught:top",
+        "L14:cli-untaught:mcp",
+    }
+    silenced = cl.cli_untaught(
+        Path("."),
+        commands={"config", "top", "mcp", "maestro"},
+        skill_text=text,
+        internal={"config": "reason", "top": "reason", "mcp": "reason"},
+    )
+    assert silenced == []
+
+
+def test_internal_command_list_is_well_formed() -> None:
+    """Every allow-list key is a real top-level ``mzt`` command with a
+    non-empty reason, so a typo or a removed command cannot hide in the list
+    (the guard the plan requires once the list is filled)."""
+    real = {p.split()[1] for p in cl.mzt_commands() if len(p.split()) > 1}
+    assert cl.INTERNAL_MZT_COMMANDS.keys() <= real
+    assert all(str(v).strip() for v in cl.INTERNAL_MZT_COMMANDS.values())
