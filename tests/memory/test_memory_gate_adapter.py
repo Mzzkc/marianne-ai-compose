@@ -18,6 +18,7 @@ from marianne.core.config.memory import MemoryConfig
 from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.daemon.baton.events import ShutdownRequested
 from marianne.daemon.baton.memory_gate import MemoryDispatchGate
+from marianne.daemon.baton.state import BatonSheetStatus
 from marianne.execution.base import ExecutionResult, SheetRequestState
 from tests.memory.test_memory_gate import make
 from tests.test_mcp_conductor_dispatch import (
@@ -650,3 +651,161 @@ async def test_memory_refusal_still_falls_back_to_another_instrument(tmp_path: P
     # the next refusal (on the fallback) with the chain spent ends the sheet
     await core.handle_event(_refusal(1))
     assert st.status is BatonSheetStatus.FAILED
+
+
+# ------------------------------------------------- GH #556: memory parameters are required
+
+
+def _required_memory_parameters() -> list[tuple[str, Any, str]]:
+    """Every signature on the dispatch path that sits between the gate and the prompt."""
+    from marianne.daemon.baton.musician import _build_prompt, sheet_task
+    from marianne.daemon.baton.prompt import PromptRenderer
+
+    return [
+        ("BatonAdapter._create_musician_task_after_acquire",
+         BatonAdapter._create_musician_task_after_acquire, "memory_manifest"),
+        ("BatonAdapter._create_musician_task_after_acquire",
+         BatonAdapter._create_musician_task_after_acquire, "memory_dispatch"),
+        ("BatonAdapter._musician_wrapper", BatonAdapter._musician_wrapper, "memory_manifest"),
+        ("BatonAdapter._musician_wrapper", BatonAdapter._musician_wrapper, "memory_dispatch"),
+        ("PromptRenderer.render", PromptRenderer.render, "memory_manifest"),
+        ("sheet_task", sheet_task, "memory_manifest"),
+        ("_build_prompt", _build_prompt, "memory_manifest"),
+    ]
+
+
+# ``_musician_wrapper`` is the one signature a forgotten manifest was shown to make silent
+# (the session stayed open, the prompt lost its memory block, the sheet reported success),
+# and ``_create_musician_task_after_acquire`` is the signature the issue names. Both are required.
+_REQUIRED_LABELS = frozenset({
+    "BatonAdapter._create_musician_task_after_acquire", "BatonAdapter._musician_wrapper",
+})
+_REQUIRED = [c for c in _required_memory_parameters() if c[0] in _REQUIRED_LABELS]
+# The other three only forward a value they were handed, so none can itself cause the
+# defect. They are still defaulted: making them required edits ~190 test call sites that
+# never carry a manifest and breaks the ``plugins`` submodule's tests (a separate
+# repository). Listed here so that drift stays visible instead of silent.
+_FORWARDING_ONLY = [c for c in _required_memory_parameters() if c[0] not in _REQUIRED_LABELS]
+assert len(_REQUIRED) == 4 and len(_FORWARDING_ONLY) == 3  # the partition covers every case
+
+
+@pytest.mark.parametrize(
+    ("label", "func", "name"), _REQUIRED,
+    ids=[f"{label}.{name}" for label, _, name in _REQUIRED],
+)
+def test_memory_parameter_is_required_keyword_only(label: str, func: Any, name: str) -> None:
+    """GH #556: a defaulted manifest lets a dispatch path forget memory silently."""
+    import inspect
+
+    param = inspect.signature(func).parameters[name]
+    assert param.kind is inspect.Parameter.KEYWORD_ONLY, f"{label}.{name} must be keyword-only"
+    assert param.default is inspect.Parameter.empty, f"{label}.{name} must not have a default"
+
+
+@pytest.mark.parametrize("label", [label for label, _, _ in _FORWARDING_ONLY])
+@pytest.mark.xfail(
+    strict=True,
+    reason="GH #556: forwarding-only signature, defaulted pending the maintainer's scope call",
+)
+def test_forwarding_memory_parameter_is_required_keyword_only(label: str) -> None:
+    import inspect
+
+    func = {label: func for label, func, _ in _FORWARDING_ONLY}[label]
+    param = inspect.signature(func).parameters["memory_manifest"]
+    assert param.default is inspect.Parameter.empty, f"{label}.memory_manifest has a default"
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(30)
+async def test_live_memory_session_without_a_manifest_fails_the_dispatch(
+    short_tmp: Path,
+) -> None:
+    """GH #556: a dropped manifest fails the sheet; it never runs unannounced.
+
+    The gate returns the manifest and the dispatch id from one call, so a live
+    session with no manifest can only mean a caller dropped it. Before the fix
+    the memory server was still attached, the prompt had no memory block, and
+    the sheet reported success.
+    """
+    gate = make(short_tmp)
+    backend = _Recording()
+    pool = _BackendPool(backend, _Registry(profile("claude-code")))
+    adapter = _adapter(pool, gate, short_tmp, memory=True)
+    real_wrapper = adapter._musician_wrapper
+
+    async def drop_the_manifest(**kwargs: Any) -> None:
+        assert kwargs["memory_manifest"], "the dispatch path did carry a manifest"
+        kwargs["memory_manifest"] = None
+        await real_wrapper(**kwargs)
+
+    adapter._musician_wrapper = drop_the_manifest  # type: ignore[method-assign]
+    try:
+        run_task = asyncio.create_task(adapter.run())
+        try:
+            done = await asyncio.wait_for(
+                adapter.wait_for_completion("mem-job"), timeout=10.0,
+            )
+            assert done is False  # the sheet failed; it did not run unannounced
+        finally:
+            await adapter.baton.inbox.put(ShutdownRequested(graceful=True))
+            await asyncio.wait_for(run_task, timeout=10.0)
+        await gate.drain()
+        state = adapter.baton.get_sheet_state("mem-job", 1)
+        assert state is not None
+        assert state.status is BatonSheetStatus.FAILED
+        assert state.error_message is not None
+        assert state.error_message.startswith("memory_manifest_missing: ")
+        assert state.normal_attempts + state.completion_attempts <= 1  # no retry
+        assert backend.prompt is None  # the sheet never ran
+        assert len(pool.release_calls) == 1  # the backend was released
+        assert gate.open_dispatches == 0 and _sockets(short_tmp) == []  # nothing leaked
+    finally:
+        await gate.shutdown()
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(30)
+async def test_missing_manifest_with_a_fallback_chain_fails_without_retry(
+    short_tmp: Path,
+) -> None:
+    """GH #556: the guard is classified like a memory refusal, so each instrument in the
+    chain is tried once and the sheet then fails — no retry backoff for a code bug."""
+    sheet = _sheet(short_tmp).model_copy(update={
+        "instrument_fallbacks": ["secondary-cli"], "instrument_fallback_configs": [{}],
+    })
+    gate = make(short_tmp)
+    backend = _Recording()
+    pool = _BackendPool(backend, _Registry(profile("claude-code")))
+    adapter = BatonAdapter(max_concurrent_sheets=1)
+    adapter.set_backend_pool(pool)  # type: ignore[arg-type]
+    adapter.set_memory_gate(gate)
+    adapter.register_job(
+        "mem-job", [sheet], {1: []}, prompt_config=PromptConfig(template="x"), memory=MEMORY,
+    )
+    real_wrapper = adapter._musician_wrapper
+
+    async def drop_the_manifest(**kwargs: Any) -> None:
+        kwargs["memory_manifest"] = None
+        await real_wrapper(**kwargs)
+
+    adapter._musician_wrapper = drop_the_manifest  # type: ignore[method-assign]
+    try:
+        run_task = asyncio.create_task(adapter.run())
+        try:
+            done = await asyncio.wait_for(
+                adapter.wait_for_completion("mem-job"), timeout=10.0,
+            )
+        finally:
+            await adapter.baton.inbox.put(ShutdownRequested(graceful=True))
+            await asyncio.wait_for(run_task, timeout=10.0)
+        await gate.drain()
+        assert done is False
+        state = adapter.baton.get_sheet_state("mem-job", 1)
+        assert state is not None
+        assert state.status is BatonSheetStatus.FAILED
+        assert state.instrument_name == "secondary-cli"  # the chain was walked, once each
+        assert state.normal_attempts + state.completion_attempts == 1
+        assert backend.prompt is None
+        assert gate.open_dispatches == 0 and _sockets(short_tmp) == []
+    finally:
+        await gate.shutdown()
