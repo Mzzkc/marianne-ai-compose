@@ -3414,13 +3414,13 @@ class BatonAdapter:
         effective_instrument: str | None = None,
         technique_manifest: str | None = None,
         technique_skill_docs: dict[str, str] | None = None,
-        memory_manifest: str | None = None,
+        memory_manifest: str | None,
         output_router_active: bool = False,
         mcp_code_bridge_active: bool = False,
         mcp_bind_mounts: list[Path] | None = None,
         event_generation: int | None = None,
         effective_model: str | None = None,
-        memory_dispatch: str | None = None,
+        memory_dispatch: str | None,
     ) -> None:
         """Wrapper around sheet_task that handles backend release.
 
@@ -3446,6 +3446,16 @@ class BatonAdapter:
                 workspace ``techniques_rt.py`` module for MCP-backed code mode.
             mcp_bind_mounts: Host socket directories to expose if bwrap
                 sandboxing is available for code mode.
+            memory_manifest: The memory block this sheet's prompt must carry
+                when the score declares ``memory:`` (GH #496); ``None`` when the
+                sheet has no active attachment. Required on purpose (GH #556):
+                a caller that forgets it must not silently run a memory sheet.
+            memory_dispatch: The id of this dispatch's open memory sessions,
+                torn down by the wrapper's ``finally``; ``None`` without memory.
+
+        Reports a dispatch failure (never runs the sheet) when a memory session is
+        open but no manifest announces it: the gate never produces that pair, so it
+        means a caller dropped the manifest (GH #556).
         """
         # Resolve the instrument name for this execution before try/finally.
         # After fallback, effective_instrument differs from sheet.instrument_name.
@@ -3484,6 +3494,28 @@ class BatonAdapter:
             )
 
         try:
+            # GH #556: a live memory session must be announced. The gate returns the
+            # manifest and the dispatch id from one call, so this pair cannot be
+            # produced by a correct dispatch path; it means a caller dropped the
+            # manifest. Without this the sheet ran with memory tools wired in and
+            # no prompt block naming them, and reported success.
+            if memory_dispatch is not None and not memory_manifest:
+                _logger.error(
+                    "adapter.memory_manifest_missing",
+                    extra={"job_id": job_id, "sheet_num": sheet.num,
+                           "dispatch_id": memory_dispatch},
+                )
+                self._send_dispatch_failure(
+                    job_id,
+                    sheet.num,
+                    actual_instrument,
+                    "memory_manifest_missing: this dispatch opened memory sessions "
+                    f"({memory_dispatch!r}) but carries no memory block; refusing to "
+                    "run a memory sheet without announcing its memory",
+                    memory_unsupported=True,
+                )
+                return
+
             # The baton inbox accepts BatonEvent (union type), but
             # sheet_task is typed to put SheetAttemptResult specifically.
             # This is safe because SheetAttemptResult IS a BatonEvent.
