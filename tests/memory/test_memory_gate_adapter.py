@@ -785,6 +785,10 @@ async def test_missing_manifest_with_a_fallback_chain_fails_without_retry(
     real_wrapper = adapter._musician_wrapper
 
     async def drop_the_manifest(**kwargs: Any) -> None:
+        # Precondition, not the assertion under test: this scenario is a manifest that was
+        # delivered and then lost. Without this line a dispatch path that stopped carrying a
+        # manifest at all (None -> None) would still pass every assertion below.
+        assert kwargs["memory_manifest"], "the dispatch path did carry a manifest"
         kwargs["memory_manifest"] = None
         await real_wrapper(**kwargs)
 
