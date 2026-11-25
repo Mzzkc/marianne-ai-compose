@@ -2632,7 +2632,21 @@ class BatonAdapter:
             sheet_num: The sheet that failed to dispatch.
             instrument_name: The instrument that was requested.
             error_msg: Description of why dispatch failed.
-            state: Optional execution state for accurate attempt number.
+            state: Optional execution state. When given, the failure carries the
+                next attempt number and the state's ``dispatch_epoch``; without
+                it the attempt is ``1`` and the epoch is ``None``.
+            unavailable: Classify the failure as ``INSTRUMENT_UNAVAILABLE`` with
+                error code ``E505`` (the instrument could not be reached).
+            memory_unsupported: Classify the failure as a memory refusal
+                (``MEMORY_DELIVERY_UNSUPPORTED``) with error code ``E505``. The
+                baton does not retry a memory refusal on the instrument that
+                refused it: it advances the fallback chain and fails the sheet
+                once the chain is spent. Covers an instrument that cannot be
+                handed an MCP config and a dispatch that opened memory
+                sessions without a manifest (GH #556).
+
+        With neither flag the failure is classified ``E505`` and carries no
+        error code, and the baton applies its ordinary retry rules.
         """
         attempt = 1
         if state is not None:
@@ -3438,6 +3452,13 @@ class BatonAdapter:
             technique_manifest: Optional technique manifest text resolved
                 by the dispatch loop for this sheet's phase. Passed through
                 to PromptRenderer.render() for Stage 1 prompt injection.
+            technique_skill_docs: Technique skill documents resolved for this
+                sheet's phase, keyed by name. Passed through to
+                PromptRenderer.render() alongside ``technique_manifest``.
+            memory_manifest: The memory block this sheet's prompt must carry
+                when the score declares ``memory:`` (GH #496); ``None`` when the
+                sheet has no active attachment. Required on purpose (GH #556):
+                a caller that forgets it must not silently run a memory sheet.
             output_router_active: Whether this sheet's resolved techniques
                 need post-execution output classification. A2A delegation and
                 parsed MCP tool calls are phase-scoped; code execution remains
@@ -3446,16 +3467,25 @@ class BatonAdapter:
                 workspace ``techniques_rt.py`` module for MCP-backed code mode.
             mcp_bind_mounts: Host socket directories to expose if bwrap
                 sandboxing is available for code mode.
-            memory_manifest: The memory block this sheet's prompt must carry
-                when the score declares ``memory:`` (GH #496); ``None`` when the
-                sheet has no active attachment. Required on purpose (GH #556):
-                a caller that forgets it must not silently run a memory sheet.
+            event_generation: The job's event generation at dispatch, stamped
+                on the events this wrapper emits so the baton can tell them
+                from those of an earlier registration of the same job id.
+            effective_model: The model this attempt is priced as, when the
+                sheet is bound to one; selects the profile's price row and
+                names the model in the ``adapter.price_row`` log. Used for
+                pricing only here: the model the backend runs is carried to
+                ``sheet_task`` by ``context``.
             memory_dispatch: The id of this dispatch's open memory sessions,
                 torn down by the wrapper's ``finally``; ``None`` without memory.
 
         Reports a dispatch failure (never runs the sheet) when a memory session is
         open but no manifest announces it: the gate never produces that pair, so it
-        means a caller dropped the manifest (GH #556).
+        means a caller dropped the manifest (GH #556). That failure is classified
+        like a memory refusal (``MEMORY_DELIVERY_UNSUPPORTED``, code ``E505``), so
+        the instrument that refused it is not retried: the sheet moves to the next
+        instrument in its fallback chain, each instrument once, and fails with none
+        left. The ``finally`` still runs, so the backend is released and the
+        sessions are torn down.
         """
         # Resolve the instrument name for this execution before try/finally.
         # After fallback, effective_instrument differs from sheet.instrument_name.

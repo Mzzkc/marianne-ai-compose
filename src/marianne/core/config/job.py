@@ -1166,7 +1166,10 @@ class JobConfig(BaseModel):
         "trust, phases, caps). The conductor gives each sheet a memory session for "
         "the attachments active in its phase, delivered as an MCP server to "
         "instruments that accept an MCP config; a dispatch to an instrument that "
-        "does not is refused (`memory_delivery_unsupported`).",
+        "does not is refused (`memory_delivery_unsupported`). A dispatch that "
+        "opened a session but carries no memory block is refused too "
+        "(`memory_manifest_missing`); that one is a conductor defect, not "
+        "something a score can cause.",
     )
 
     # Movement declarations (M4: movement-level instrument and voice config)
