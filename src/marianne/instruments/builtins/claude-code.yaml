@@ -82,6 +82,14 @@ models:
     max_concurrent: 4
 
   # ── Gateway-routed models (Anthropic-compatible Claude Code gateway) ──
+  # GLM 5.4 (Z.AI, released 2026-11-23): live-probed 2026-11-25 through an
+  # Anthropic-compatible route; reports contextWindow 1,000,000.
+  - name: "glm-5.4[1m]"
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 131072
+    max_concurrent: 4
   - name: "glm-5.3[1m]"
     context_window: 1000000
     cost_per_1k_input: 0.0

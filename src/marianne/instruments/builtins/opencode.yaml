@@ -58,11 +58,20 @@ default_timeout_seconds: 1800
 
 models:
   # ═══════════════════════════════════════════════════════════════════
-  # Z.AI Coding Plan (paid subscription seat — glm-5.3 is current)
+  # Z.AI Coding Plan (paid subscription seat — glm-5.4 is current, 2026-11-23)
   # ═══════════════════════════════════════════════════════════════════
   # glm-5.3 runs at 1M context on this seat (same engine as the
   # Anthropic-compatible gateway's glm-5.3[1m] route); flash/highspeed
   # variants carry conservative output caps until officially documented.
+  # glm-5.4: listed by `opencode models` (variants low, high, max; 1M context,
+  # 131,072 output), released 2026-11-23.
+  - name: "zai-coding-plan/glm-5.4"
+    effort_levels: {minimal: low, low: low, high: high, max: max}
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 131072
+    max_concurrent: 4
   - name: "zai-coding-plan/glm-5.3"
     effort_levels: {minimal: low, low: low, high: high, max: max}
     context_window: 1000000
