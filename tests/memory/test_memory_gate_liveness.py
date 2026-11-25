@@ -294,10 +294,21 @@ def test_a_slow_worker_job_is_logged_with_its_kind(
 ) -> None:
     import marianne.daemon.baton.memory_gate as mg
 
+    # The worker logs the warning AFTER it has published the job's result (``_Worker._loop``:
+    # ``set_result`` first, then the timing read, then the log), and the gate never joins the
+    # worker thread. So the awaiter can resume, the test can return and pytest can undo this
+    # patch before the worker has logged anything: the warning then goes to the real logger
+    # and ``seen`` is still empty (measured: 14 in 20 000 runs under no load at all). Wait for
+    # the log call itself instead of racing it.
+    logged = threading.Event()
     seen: list[tuple[str, dict[str, object]]] = []
-    monkeypatch.setattr(
-        mg._logger, "warning", lambda event, **kw: seen.append((event, kw.get("extra", {})))
-    )
+
+    def record(event: str, **kw: object) -> None:
+        seen.append((event, kw.get("extra", {})))  # type: ignore[arg-type]
+        if event == "memory_gate.slow_job":
+            logged.set()
+
+    monkeypatch.setattr(mg._logger, "warning", record)
 
     async def main() -> None:
         gate = make(short_tmp, slow_job_seconds=0.0)  # every job counts as slow
@@ -307,8 +318,13 @@ def test_a_slow_worker_job_is_logged_with_its_kind(
                 return 1
 
             await gate._run(marker_job)
+            # Wait for the worker's log call; the loop must stay free for the handoff.
+            deadline = asyncio.get_running_loop().time() + 5.0
+            while not logged.is_set() and asyncio.get_running_loop().time() < deadline:
+                await asyncio.sleep(0.001)
         finally:
             await gate.shutdown()
 
     run(main)
+    assert logged.is_set(), "the worker never logged memory_gate.slow_job"
     assert any(e == "memory_gate.slow_job" and x.get("kind") == "marker_job" for e, x in seen)
