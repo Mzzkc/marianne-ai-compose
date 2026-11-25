@@ -502,7 +502,8 @@ class TestAntigravityModelSet:
             )
 
     def test_capacity_metadata_matches_current_and_historical_contracts(self) -> None:
-        """Gemini 4 and 3.8 carry catalog capacity; cross-vendor rows follow their direct-vendor contract."""
+        """Gemini 4 and 3.8 carry catalog capacity; cross-vendor rows follow their
+        direct-vendor contract."""
         profile = _load_antigravity_profile()
         cross_vendor = {
             "claude-opus-5-5-high": (1_000_000, 128_000),

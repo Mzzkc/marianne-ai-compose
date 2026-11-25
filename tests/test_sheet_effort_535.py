@@ -934,7 +934,10 @@ def test_opencode_levels_are_per_model_and_headless_only() -> None:
     assert profile.accepted_effort_levels(model=glm, schema_mode=False) == [
         "minimal", "low", "high", "max",
     ]
-    assert profile.accepted_effort_levels(model="opencode/glm-5.3-flash-free", schema_mode=False) == [
+    levels = profile.accepted_effort_levels(
+        model="opencode/glm-5.3-flash-free", schema_mode=False,
+    )
+    assert levels == [
         "minimal", "low", "high", "max",
     ]
     # A row without effort_levels refuses the key (no variants in `opencode models`).

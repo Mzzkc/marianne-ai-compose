@@ -45,7 +45,8 @@ def _read(workspace: Path) -> tuple[str, list[str]]:
         ),
         (
             "BLOCKED",
-            "FINDINGS:\n- needs independent verification: the author cannot run the Windows build\n",
+            "FINDINGS:\n- needs independent verification: the author cannot run the Windows "
+            "build\n",
             "REQUIRED FIXES:\n- someone with a Windows seat runs it\n",
             ["needs independent verification: the author cannot run the Windows build"],
         ),
