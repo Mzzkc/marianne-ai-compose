@@ -1794,9 +1794,13 @@ sheet:
 
 - The reference is a bare `{{ name }}` or a dotted `{{ book.count }}` — no
   filters, arithmetic or comparisons (`{{ n + 1 }}` is V338).
+- Quote the reference and put it on the count; the key stays a numeric stage
+  (`2: '{{ chapter_count }}'`). An unquoted reference is a YAML error, and a
+  named stage key such as `draft` is a schema error; both exit 2 without V338.
 - The variable must be an integer or a string of ASCII digits, `1` to `1000`.
-  Surrounding whitespace in the string is ignored (`" 4 "` is `4`). A float, a
-  boolean, `null`, other text, or an undeclared name is `V338`.
+  Surrounding whitespace and leading zeroes in the string are ignored
+  (`" 004 "` is `4`); signs are refused. A float, a boolean, `null`, other text,
+  or an undeclared name is `V338`.
 - It reads only the YAML's own `prompt.variables`. `mzt run --var` merges
   after the width is resolved and cannot change it.
 - Literal counts are not capped and behave as before.

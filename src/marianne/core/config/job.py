@@ -165,13 +165,35 @@ def _out_of_range(name: str, number: int | None) -> FlowIssue:
 def resolve_fan_out_width(width: object, variables: Mapping[str, object]) -> int | FlowIssue:
     """Resolve one ``sheet.fan_out`` value to an integer width (#569).
 
-    A literal integer passes through. A string must be exactly a bare
-    ``{{ name }}`` reference (optionally ``{{ a.b }}``); the named
-    ``prompt.variables`` entry must be an integer or a string of ASCII
-    digits, optionally padded with whitespace, in
-    ``1..MAX_VARIABLE_FAN_OUT_WIDTH``. Returns one ``FlowIssue``
-    (``V-FLOW-25``) naming the stage-agnostic reason; the caller supplies
-    the span. Raises nothing.
+    A literal integer is returned unchanged and is left for ``SheetConfig``
+    to validate. The ``1..MAX_VARIABLE_FAN_OUT_WIDTH`` bound applies only
+    to variable references. A boolean or any other non-string value returns
+    an invalid-width issue.
+
+    A string must be exactly one bare ``{{ name }}`` reference, optionally
+    dotted (``{{ a.b }}``) and padded with whitespace. The ``variables``
+    mapping is walked along that name; a missing step, or a step whose value
+    is ``None``, is ``_not_declared``. What is found must be an integer or a
+    string of ASCII digits (no sign), in ``1..MAX_VARIABLE_FAN_OUT_WIDTH``:
+
+    - an integer is echoed in the out-of-range message when its absolute
+      value is below ``10**10``;
+    - a digit string is judged by its significant digits, so leading zeroes
+      never count against it. Surrounding whitespace is ignored. Up to the
+      cap's own digit count it is converted and echoed like an integer;
+      longer values return an out-of-range issue without conversion or
+      echoing the value. This avoids CPython's integer-conversion limit.
+    - any other value (a float, a ``bool``, other text, an empty string) is
+      ``_not_a_whole_number``.
+
+    Args:
+        width: One value from ``sheet.fan_out``.
+        variables: The declared ``prompt.variables`` mapping.
+
+    Returns:
+        The width, or one ``FlowIssue`` (``V-FLOW-25``) naming the reason.
+        The issue carries no span: the caller supplies the stage. Invalid
+        widths return issues rather than raising validation errors.
     """
     if isinstance(width, int) and not isinstance(width, bool):
         return width
@@ -492,6 +514,15 @@ class SheetConfig(BaseModel):
     produces 9 concrete sheets (stage 2 instantiated 3 times). After expansion,
     ``total_items`` and ``dependencies`` reflect expanded values, and ``fan_out``
     is cleared to ``{}`` to prevent re-expansion on resume.
+
+    A count may name a ``prompt.variables`` entry instead of a literal
+    (``'{{ chapter_count }}'``). It is resolved to an integer before this
+    model validates, by :func:`resolve_fan_out_width` through
+    ``JobConfig``. Resolved references enter this class as integers; the
+    field's own type remains ``dict[int, int]``. This
+    class does not resolve anything itself: built directly with a
+    ``'{{ name }}'`` count, it refuses it as a non-integer. A reference
+    that cannot be resolved is V338, raised while the ``JobConfig`` loads.
     """
 
     model_config = ConfigDict(extra="forbid")
