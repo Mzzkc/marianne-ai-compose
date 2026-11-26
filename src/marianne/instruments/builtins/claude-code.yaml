@@ -96,6 +96,20 @@ models:
     cost_per_1k_output: 0.0
     max_output_tokens: 131072
     max_concurrent: 4
+  # GLM 5.3 and 5.3-flash without the [1m] suffix (probed live 2026-11-25): the middle and
+  # light tiers in the GLM-first class chains.
+  - name: "glm-5.3"
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 131072
+    max_concurrent: 4
+  - name: glm-5.3-flash
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
   - name: glm-5-Turbo
     context_window: 1000000
     cost_per_1k_input: 0.0
