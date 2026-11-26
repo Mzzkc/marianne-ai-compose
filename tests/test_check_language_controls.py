@@ -535,8 +535,10 @@ def test_l14_adversarial_fixture_text_is_not_teaching() -> None:
     * a bare word without the ``mzt `` prefix does not count as teaching;
     * ``mzt maestro`` (eval bait) raises nothing, because the direction is
       CLI -> skills only;
-    * an injected ``internal`` mapping silences a listed name, but no finding
-      ever lands in the baseline fixture (guarded in verify.sh).
+    * an injected ``internal`` mapping silences a listed name.
+
+    That no L14 finding lands in the baseline fixture is not asserted here: it
+    is a property of the shipped fixture, guarded by the score's verify.sh.
     """
     text = (
         "The config lives in ~/.marianne. Top of the queue. "
@@ -562,10 +564,123 @@ def test_l14_adversarial_fixture_text_is_not_teaching() -> None:
     assert silenced == []
 
 
+# Text that must NOT teach a command. Each row is one way a loose matcher would
+# wrongly count a command as named; the first two are the word boundaries.
+L14_NOT_TEACHING = [
+    ("`xmzt config` and pre_mzt top", "config", "left boundary: a longer token is not mzt"),
+    ("`-mzt top`", "top", "left boundary: a dash is a word character here, as in a flag"),
+    ("`mzt-config` is a package name", "config", "the prefix is followed by a hyphen, not a space"),
+    (
+        "`mzt configuration` is not a command",
+        "config",
+        "right boundary: a longer word is not the command",
+    ),
+    ("the mzt top-level name is `top`", "top", "right boundary: `top-level` is not `top`"),
+    ("MZT config", "config", "the mzt token is case-sensitive"),
+    ("mzt\nconfig", "config", "a newline is not the separator"),
+]
+
+
+@pytest.mark.parametrize(("text", "command", "because"), L14_NOT_TEACHING)
+def test_l14_word_boundaries_do_not_teach(text: str, command: str, because: str) -> None:
+    """``mzt <name>`` must be a whole token on both sides, and case-sensitive.
+
+    Without the boundaries ``xmzt config`` and ``mzt configuration`` would both
+    count as teaching ``config``, so a skill could silence the gate with prose
+    that names no command."""
+    assert cl.cli_untaught(
+        Path("."), commands={command}, skill_text=text, internal={}
+    ), because
+
+
+@pytest.mark.parametrize(
+    ("text", "command"),
+    [
+        ("run `mzt config` first", "config"),
+        ("`mzt\tconfig` (tab separated)", "config"),
+        ("`mzt  config` (two spaces)", "config"),
+        ("(see `mzt top`)", "top"),
+    ],
+)
+def test_l14_teaches_only_the_whole_token(text: str, command: str) -> None:
+    """The positive half of the boundary rule: punctuation and extra whitespace
+    still teach, so the boundaries are not over-tight."""
+    assert cl.cli_untaught(
+        Path("."), commands={command}, skill_text=text, internal={}
+    ) == []
+
+
+def test_l14_an_empty_skill_surface_fails_loud(tmp_path: Path) -> None:
+    """A bare checkout has no skills. Returning ``""`` there would report every
+    command untaught (or pass vacuously), so the surface must refuse to be
+    scored. Absent, empty and markdown-free directories are each an error."""
+
+    def no_markdown(surface: Path) -> None:
+        surface.mkdir()
+        # A non-markdown file is on disk, but the surface glob reads no .md.
+        (surface / "notes.txt").write_text("`mzt config`")
+
+    for name, make in (
+        ("absent", lambda surface: None),
+        ("empty", lambda surface: surface.mkdir()),
+        ("no-markdown", no_markdown),
+    ):
+        surface = tmp_path / name
+        make(surface)
+        with pytest.raises(cl.SurfaceMissing, match="plugins submodule"):
+            cl.taught_skill_text(surface)
+
+
+def test_l14_a_populated_skill_surface_does_not_raise(tmp_path: Path) -> None:
+    """The guard fires on an empty surface only: one markdown file is enough."""
+    surface = tmp_path / "plugins/marianne/skills/command"
+    surface.mkdir(parents=True)
+    (surface / "SKILL.md").write_text("`mzt top`")
+    assert "mzt top" in cl.taught_skill_text(tmp_path)
+
+
+def test_l14_reads_every_markdown_file_recursively(tmp_path: Path) -> None:
+    """The surface is every ``**/*.md`` under the skill tree, including nested
+    reference files, and nothing else."""
+    skills = tmp_path / "plugins/marianne/skills"
+    (skills / "command/references").mkdir(parents=True)
+    (skills / "command/references/loops.md").write_text("`mzt top`")
+    (skills / "command/notes.txt").write_text("`mzt config`")
+    text = cl.taught_skill_text(tmp_path)
+    assert "mzt top" in text
+    assert "mzt config" not in text
+
+
 def test_internal_command_list_is_well_formed() -> None:
     """Every allow-list key is a real top-level ``mzt`` command with a
     non-empty reason, so a typo or a removed command cannot hide in the list
     (the guard the plan requires once the list is filled)."""
-    real = {p.split()[1] for p in cl.mzt_commands() if len(p.split()) > 1}
+    real = cl.top_level_commands()
     assert cl.INTERNAL_MZT_COMMANDS.keys() <= real
     assert all(str(v).strip() for v in cl.INTERNAL_MZT_COMMANDS.values())
+
+
+def test_internal_command_list_membership_is_pinned() -> None:
+    """The exact key set of the allow-list.
+
+    ``keys() <= real`` above cannot see an entry being *dropped*: a deleted key
+    is simply absent from a subset check. An untaught command leaving the list
+    should fail here, loudly, rather than only on the real tree.
+    """
+    assert sorted(cl.INTERNAL_MZT_COMMANDS) == [
+        "compile",
+        "compose",
+        "corpus",
+        "entropy-status",
+        "learning-activity",
+        "learning-drift",
+        "learning-epistemic-drift",
+        "learning-export",
+        "learning-insights",
+        "learning-record-evolution",
+        "learning-stats",
+        "patterns-budget",
+        "patterns-entropy",
+        "patterns-list",
+        "patterns-why",
+    ]

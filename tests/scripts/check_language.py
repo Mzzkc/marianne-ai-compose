@@ -9,10 +9,16 @@ The four layers are one type system (GH #436):
 * skills      -- what an LLM has loaded while it writes a score
                  (score-authoring and composing skills plus their ``docs/ref``).
 
+L14 reads a wider skill surface than the checks above it: every ``*.md`` under
+``plugins/marianne/skills/`` (``TAUGHT_SURFACES_GLOB``), not just the curated
+``SKILL_FILES`` + ``SKILL_REFS`` list.
+
 Every finding names one author-visible key path (``retry.max_retries``), never a
 bare word, because one word means different things at different levels
 (``on_success`` at the root is a hook list; under ``sheet.triggers`` it is a
-trigger). A finding has a stable id ``CHECK:subject`` so a baseline fixture can
+trigger). L14 is the exception its subject requires: it names a top-level
+``mzt`` command (``cli-untaught:agents``), because a command has exactly one
+name and one level. A finding has a stable id ``CHECK:subject`` so a baseline fixture can
 hold today's known gaps and fail only on regression, the way
 ``tests/fixtures/validation_corpus_baseline.json`` holds the validator corpus.
 
@@ -747,6 +753,15 @@ def mzt_commands() -> set[str]:
     return names
 
 
+def top_level_commands() -> set[str]:
+    """The top-level ``mzt`` command names: leaves and command groups alike.
+
+    The one definition of "a top-level command" for L14 and its guards, so the
+    gate and the tests that pin it cannot drift apart.
+    """
+    return {path.split()[1] for path in mzt_commands() if len(path.split()) > 1}
+
+
 def taught_skill_text(repo: Path) -> str:
     """Concatenated text of every shipped skill markdown file.
 
@@ -773,22 +788,31 @@ def cli_untaught(
 ) -> list[Finding]:
     """L14: top-level ``mzt`` commands no shipped skill names (CLI -> skills).
 
-    ``mzt_commands()`` returns full paths (``"mzt agents run"``), so a
-    top-level name is ``path.split()[1]`` -- comparing a bare name against the
-    path set verbatim would report every command group untaught forever. A
-    name counts as taught only for the literal, word-bounded token
-    ``mzt <name>``: bare words like ``config`` or ``top`` occur as ordinary
-    prose in dozens of skill files and teach nothing.
+    The top-level names come from ``top_level_commands()``. ``mzt_commands()``
+    returns full paths (``"mzt agents run"``), so a top-level name is
+    ``path.split()[1]`` -- comparing a bare name against the path set verbatim
+    would report every command group untaught forever. A name counts as taught
+    only for the literal, word-bounded token ``mzt <name>``: bare words like
+    ``config`` or ``top`` occur as ordinary prose in dozens of skill files and
+    teach nothing.
 
     The direction is one-way on purpose. Skills contain ``mzt maestro`` and
     ``mzt is`` as adversarial eval bait; checking "every ``mzt X`` in a skill
-    is real" would misread those, so only CLI -> skills is checked.
+    is real" would misread those, so only CLI -> skills is checked. A skill
+    can therefore name a subcommand that does not exist under a real command
+    and pass here; the contract-aware reverse check for the expert CLI contract
+    is ``plugins/tests/test_cli_contract_paths.py``.
+
+    A finding is ``L14:cli-untaught:<name>``, gating, with ``where`` set to the
+    surface glob that was searched. A command in ``internal`` is skipped before
+    it is matched, so an allow-listed command is never reported even when no
+    skill names it.
 
     ``commands``, ``skill_text`` and ``internal`` let the control tests inject
     a synthetic command set and skill text without the real CLI or tree.
     """
     if commands is None:
-        commands = {p.split()[1] for p in mzt_commands() if len(p.split()) > 1}
+        commands = top_level_commands()
     if skill_text is None:
         skill_text = taught_skill_text(repo)
     if internal is None:
@@ -809,6 +833,7 @@ def cli_untaught(
                     "no shipped skill names this mzt command (a bare word "
                     "without the `mzt ` prefix does not teach it)",
                     gating=True,
+                    where=[TAUGHT_SURFACES_GLOB],
                 )
             )
     return findings
