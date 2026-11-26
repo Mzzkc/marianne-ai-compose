@@ -78,6 +78,13 @@ async def evaluate_skip_command(
         ``(should_skip, reason)``. ``should_skip`` is True only on a clean
         exit-0; every error path returns ``(False, "")`` (fail-open).
     """
+    if swc.command is None:
+        _logger.warning(
+            "baton.skip_command.no_command",
+            extra={"sheet_num": sheet_num},
+        )
+        return (False, "")
+
     full_context = dict(context)
     full_context["workspace"] = str(workspace)
 

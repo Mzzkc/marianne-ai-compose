@@ -260,7 +260,12 @@ ALL_CONFIG_MODELS: list[type[BaseModel]] = [
 # declaration. Its valid construction and round-trip properties are covered by
 # the dedicated schedule tests.
 # InstrumentDef: an alias must name a `profile` or a `chain` (GH #473).
-_MODELS_REQUIRING_DECLARATION: set[type[BaseModel]] = {ScheduleConfig, InstrumentDef}
+# SkipWhenCommand: requires either 'command' or 'unchanged' predicate (GH #570).
+_MODELS_REQUIRING_DECLARATION: set[type[BaseModel]] = {
+    ScheduleConfig,
+    InstrumentDef,
+    SkipWhenCommand,
+}
 
 
 # =============================================================================

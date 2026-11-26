@@ -619,9 +619,9 @@ Available when `cross_sheet` is configured:
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `previous_outputs` | dict[int, str] | Stdout from previous sheets. Keys are sheet numbers. Skipped upstream sheets appear as `[SKIPPED]` instead of being silently omitted. |
+| `previous_outputs` | dict[int, str] | Stdout from previous sheets. Keys are sheet numbers. Skipped upstream sheets appear as `[SKIPPED]` (or their recorded stdout if skipped as unchanged) instead of being silently omitted. |
 | `previous_files` | dict[str, str] | File contents captured between sheets. Keys are file paths. |
-| `skipped_upstream` | list[int] | Sheet numbers of upstream sheets that were skipped (via `skip_when`). Use this to handle incomplete fan-in data explicitly in your template. |
+| `skipped_upstream` | list[int] | Sheet numbers of upstream sheets that were skipped via command `skip_when`. Upstream sheets skipped as unchanged provide their recorded output and do not create a gap. |
 
 **Example usage:**
 
@@ -1867,16 +1867,18 @@ The `stagger_delay_ms` option adds a small delay between launching parallel shee
 
 ### Conditional Sheet Skipping
 
-`skip_when` skips sheets based on shell command exit codes (#119: the
-old expression-based form was removed — it was never evaluated at
-runtime; `skip_when_command` was renamed to this shorter key). Exit 0 =
-skip the sheet, non-zero = run the sheet. Supports `{workspace}` template
-expansion and configurable timeout. On timeout or error, the sheet runs
-(fail-open for safety).
+`skip_when` conditionally skips sheets based on either shell command exit codes or whether inputs are unchanged since the last pass (#119, GH #570).
+
+A rule takes **exactly one** predicate:
+- `command`: shell command to evaluate. Exit 0 = skip the sheet, non-zero = run the sheet. Supports `{workspace}` template expansion and configurable `timeout_seconds`.
+- `unchanged: true`: skip the sheet when it is unchanged since it last passed. Evaluated on fresh runs only; any doubt runs the sheet.
 
 ```yaml
 sheet:
   skip_when:
+    5:
+      unchanged: true
+      description: "Skip drafting if inputs and products are unchanged"
     6:
       command: 'grep -q "TOTAL_PHASES: 1$" "{workspace}/03-plan.md"'
       description: "Skip phase 2 — plan has only 1 phase"
@@ -1886,25 +1888,24 @@ sheet:
       description: "Skip phase 3 — plan has fewer than 3 phases"
 ```
 
-This is useful when earlier stages write workspace files that determine
-whether later stages should run — for example, a planning stage that
-decides how many implementation phases are needed.
+#### Skip When Unchanged Since It Last Passed
 
-**A skip does not cascade.** The baton treats an intentionally skipped sheet
-as satisfying its dependents (they read `[SKIPPED]` in `previous_outputs` and
-run), so skipping sheet 1 does not skip sheets 2–9. A chain terminator — "when
-the marker exists, this iteration does nothing" — therefore needs the marker
-test on **every** sheet, including the sheet whose trigger chains, or the
-later sheets run for real and the trigger fires again (`codebase-rewrite`
-did this on 2026-10-22 and spawned an iteration its own review had ended).
+When a rule specifies `unchanged: true` (GH #570), Marianne checks whether the sheet's prompt, configuration, and declared products match the record of its last successful first attempt.
+
+- **Declared-input contract**: Seen inputs include the prompt and preamble Marianne assembles, the sheet's declared products, and the upstream dependency gate. Unseen inputs (files read by an agent's tools that no cadenza, dependency, or product declares) cannot be detected; sheets reading undeclared files should not carry the rule.
+- **Transitive dependency check**: If any upstream dependency of the sheet executed during this run, the sheet runs.
+- **Forced re-runs**: To force execution, run `mzt resume --force --from-sheet 1`, remove the rule, or delete `<workspace>/.marianne/pass-ledger/`.
+- Records live in `<workspace>/.marianne/pass-ledger/<scope>/` keyed by score file so self-chaining runs and schedule ticks share the ledger.
+- A sheet skipped as unchanged provides its recorded `stdout_tail` to downstream `previous_outputs` rather than `[SKIPPED]`.
 
 `SkipWhenCommand` fields:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `command` | str | **(required)** | Shell command. `{workspace}` is expanded. Exit 0 = skip. |
-| `description` | str | `null` | Human-readable skip reason (shown in logs). |
-| `timeout_seconds` | float | `10.0` | Max seconds to wait (0-60). Fail-open on timeout. |
+| `command` | str \| null | `null` | Shell command (one of `command` / `unchanged`). `{workspace}` is expanded. Exit 0 = skip. |
+| `unchanged` | bool | `false` | Skip if inputs and declared products are unchanged since last pass (one of `command` / `unchanged`). |
+| `description` | str \| null | `null` | Human-readable skip reason (shown in logs). |
+| `timeout_seconds` | float | `10.0` | Max seconds to wait for command (0-60). Command rules only; fail-open on timeout. |
 
 **Tip:** to skip based on previous sheet results, have the earlier sheet
 write a marker/summary file and grep it — workspace files are the

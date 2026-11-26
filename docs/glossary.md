@@ -58,3 +58,4 @@ do not consume that conductor budget.
 - **Approvals** (`approvals`): the preferred spelling for the reserved confirmation section, which has no runtime reader and warns with V327 when set ([reference](configuration-reference.md#checkpoints)).
 - **Checkpoints, legacy score key** (`checkpoints`): the deprecated alias for approvals, accepted for one release with V328 and still reserved ([reference](configuration-reference.md#checkpoints)).
 - **Checkpoint, saved progress** (concept): persisted execution state used to resume interrupted work, distinct from the reserved approvals section ([reference](cli-reference.md#mzt-resume)).
+- **skip_when unchanged** (concept): conditional skip predicate (`skip_when: {N: {unchanged: true}}`) that bypasses sheet execution on fresh runs when prompt, dispatch inputs, and declared products are unchanged since its last pass ([reference](configuration-reference.md#skipwhencommand-sub-config)).

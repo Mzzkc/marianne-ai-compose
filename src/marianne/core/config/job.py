@@ -587,11 +587,13 @@ class SheetConfig(BaseModel):
     # Conditional execution (#119, formerly skip_when_command / GH#71).
     # The old expression-based skip_when (GH#13) was never evaluated at
     # runtime — command predicates replaced it under the shorter name.
+    # GH #570 added the unchanged predicate.
     skip_when: dict[int, SkipWhenCommand] = Field(
         default_factory=dict,
         description=(
-            "Command-based conditional skip rules. Map of sheet_num -> SkipWhenCommand. "
-            "The command is run via shell; exit 0 = skip the sheet, non-zero = run it. "
+            "Conditional skip rules. Map of sheet_num -> SkipWhenCommand. "
+            "Supports command predicates (exit 0 = skip, non-zero = run) and "
+            "unchanged predicates (skip when inputs and products are unchanged since last pass). "
             "Supports {workspace} template expansion in the command string. "
             "On timeout or error, the sheet runs (fail-open). "
             "Example: {8: {command: 'grep -q \"PHASES: 1\" plan.md', description: 'Skip phase 2'}}"
@@ -772,7 +774,9 @@ class SheetConfig(BaseModel):
                     "Expression-based skip_when was removed (#119) — it was "
                     "never evaluated at runtime. skip_when now takes a "
                     "command predicate per sheet: "
-                    "{sheet_num: {command: 'shell command (exit 0 = skip)'}}."
+                    "{sheet_num: {command: 'shell command (exit 0 = skip)'}}. "
+                    "For skipping when inputs did not change since the last pass, use "
+                    "{sheet_num: {unchanged: true}} (GH #570)."
                 )
         return data
 

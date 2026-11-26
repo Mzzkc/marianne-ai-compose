@@ -15,6 +15,7 @@ from marianne.validation.checks.best_practices import (
     JinjaInValidationPathCheck,
     NoValidationsCheck,
     PlaceholderQuotingCheck,
+    SkipWhenArchiveFreshCheck,
     SkipWhenSheetRangeCheck,
     VariableShadowingCheck,
 )
@@ -152,6 +153,7 @@ __all__ = [
     "FanOutWithoutParallelCheck",
     "VariableShadowingCheck",
     "SkipWhenSheetRangeCheck",
+    "SkipWhenArchiveFreshCheck",
     # Technique checks
     "TechniqueSkillPathCheck",
     "TechniqueMcpInstrumentCheck",

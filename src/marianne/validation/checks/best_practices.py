@@ -538,6 +538,53 @@ class SkipWhenSheetRangeCheck:
         return issues
 
 
+class SkipWhenArchiveFreshCheck:
+    """Warn when skip_when unchanged is used with workspace_lifecycle.archive_on_fresh (V339).
+
+    archive_on_fresh archives .marianne/ and non-preserved outputs before
+    dispatch, so unchanged rules find no record or missing products and never skip.
+    """
+
+    check_id = "V339"
+    severity = ValidationSeverity.WARNING
+    description = "Checks skip_when unchanged does not conflict with archive_on_fresh"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+        if not (config.workspace_lifecycle and config.workspace_lifecycle.archive_on_fresh):
+            return issues
+
+        for k, rule in config.sheet.skip_when.items():
+            if rule.unchanged:
+                issues.append(
+                    ValidationIssue(
+                        check_id=self.check_id,
+                        severity=self.severity,
+                        message=(
+                            f"skip_when unchanged on sheet {k} with "
+                            f"workspace_lifecycle.archive_on_fresh: true: "
+                            "every fresh run archives .marianne/ and the non-preserved outputs "
+                            "before dispatch, so this rule finds no record "
+                            "(or finds its products gone) and never skips. "
+                            "Keep both with workspace_lifecycle.preserve_patterns, "
+                            "or remove the rule."
+                        ),
+                        suggestion=(
+                            "workspace_lifecycle.preserve_patterns can preserve pass records and "
+                            f"outputs across fresh runs, or remove unchanged from sheet {k}"
+                        ),
+                        metadata={SHEET_NUM_KEY: str(k), "source": "skip_when"},
+                    )
+                )
+
+        return issues
+
+
 class FanOutMessagingCheck:
     """Warn when an explicit messaging mode has no concurrent siblings (V235)."""
 

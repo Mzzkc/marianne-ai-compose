@@ -762,19 +762,23 @@ class ValidationRule(BaseModel):
 
 
 class SkipWhenCommand(BaseModel):
-    """A command-based conditional skip rule for sheet execution.
+    """A conditional skip rule for sheet execution (command or unchanged predicate).
 
-    When the command exits 0, the sheet is SKIPPED.
+    When a command exits 0, the sheet is SKIPPED.
     When the command exits non-zero, the sheet RUNS.
-    On timeout or error, the sheet RUNS (fail-open for safety).
+    When unchanged is True, the sheet is SKIPPED if its inputs and declared
+    products are unchanged since it last passed.
+    On timeout, error, or any evaluation doubt, the sheet RUNS (fail-open for safety).
 
+    A rule specifies exactly one of ``command`` or ``unchanged``.
     The ``command`` field supports ``{workspace}`` template expansion,
     following the same pattern as validation commands.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    command: str = Field(
+    command: str | None = Field(
+        default=None,
         description="Shell command to evaluate. Exit 0 = skip the sheet. "
         "Supports {workspace} template expansion.",
     )
@@ -788,3 +792,37 @@ class SkipWhenCommand(BaseModel):
         le=60,
         description="Maximum seconds to wait for command (fail-open on timeout)",
     )
+    unchanged: bool = Field(
+        default=False,
+        description=(
+            "Skip the sheet when it is unchanged since it last passed (GH #570): "
+            "the prompt and dispatch Marianne would give it are the ones its "
+            "last pass received, its declared products are still there byte for "
+            "byte, and nothing it depends on ran this time. Evaluated on fresh "
+            "runs only; any doubt runs the sheet. A rule carries exactly one of "
+            "command or unchanged."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_predicates(self) -> SkipWhenCommand:
+        has_command = self.command is not None
+        has_unchanged = bool(self.unchanged)
+
+        if has_command and has_unchanged:
+            raise ValueError(
+                "Cannot specify both 'command' and 'unchanged' predicates in skip_when rule"
+            )
+        if not has_command and not has_unchanged:
+            raise ValueError(
+                "Must specify either 'command' or 'unchanged' predicate in skip_when rule"
+            )
+        if (
+            has_unchanged
+            and "timeout_seconds" in self.model_fields_set
+            and self.timeout_seconds != 10.0
+        ):
+            raise ValueError(
+                "timeout_seconds belongs to a command rule, cannot be used with unchanged"
+            )
+        return self

@@ -588,7 +588,7 @@ Defines how the work is divided into sheets (execution units).
 | `total_items` | `int` | **required** | `>= 1` | Total number of items to process |
 | `start_item` | `int` | `1` | `>= 1` | First item number (1-indexed) |
 | `dependencies` | `dict[int, list[int]]` | `{}` | No self-references | Sheet dependency declarations. Map of `sheet_num -> [prerequisites]`. Sheets without entries are independent. |
-| `skip_when` | `dict[int, SkipWhenCommand]` | `{}` | | Command-based conditional skip rules (#119, formerly `skip_when_command`). Map of `sheet_num -> SkipWhenCommand`. The command runs via shell; exit 0 = skip the sheet, non-zero = run it. Fail-open on timeout or error. |
+| `skip_when` | `dict[int, SkipWhenCommand]` | `{}` | | Conditional skip rules (#119, formerly `skip_when_command`; GH #570). Map of `sheet_num -> SkipWhenCommand`. Evaluated on fresh runs only; any doubt runs the sheet. Supports `command` predicates (exit 0 = skip, non-zero = run) and `unchanged` predicates (skip when inputs and products did not change since the last pass). Fail-open on timeout or error. |
 | `stdout_to` | `dict[int, str]` | `{}` | Inside the workspace; V004 on a home-absolute path; V214 on a sheet outside the range | Per-sheet file for the instrument's full stdout (`sheet.stdout_to`). Map of `sheet_num -> workspace-relative path` (or `{workspace}/...`). The musician writes the whole reply there before validations run, so a sheet on an `http` profile, which has no filesystem, can meet `file_exists`/`content_regex` and hand the file to later sheets; `stdout_tail` keeps only the last 500 characters. A fanned-out stage gets one file per voice (`answer-2.md`, `answer-3.md`). A failed attempt writes nothing; a path that escapes the workspace is refused with a preflight warning. |
 | `prompt_extensions` | `dict[int, list[str]]` | `{}` | | Per-sheet prompt extensions. Map of `sheet_num -> list of extension strings`. Applied in addition to score-level `prompt.prompt_extensions`. |
 | `prelude` | `list[InjectionItem]` | `[]` | | Shared context injected into ALL sheets. Each item references a file and a category (`context`, `skill`, or `tool`). File paths support Jinja templating. Files are read at sheet execution time. |
@@ -646,13 +646,14 @@ sheet:
 
 *Source: `src/marianne/core/config/execution.py` — `SkipWhenCommand`*
 
-Defines a command-based conditional skip rule for sheet execution. When the command exits 0, the sheet is **skipped**. When the command exits non-zero, the sheet **runs**. On timeout or error, the sheet runs (fail-open for safety).
+Defines a conditional skip rule for sheet execution (command or unchanged predicate). Exactly one of `command` or `unchanged` must be set. When the command exits 0, the sheet is **skipped**; when non-zero, it **runs**. When `unchanged` is true, the sheet is **skipped** if its inputs and declared products are unchanged since it last passed. On timeout, error, or evaluation doubt, the sheet runs (fail-open for safety).
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| `command` | `str` | **required** | | Shell command to evaluate. Exit 0 = skip the sheet. Supports `{workspace}` template expansion. |
+| `command` | `str \| None` | `None` | (one of `command` / `unchanged`) | Shell command to evaluate. Exit 0 = skip the sheet. Supports `{workspace}` template expansion. |
+| `unchanged` | `bool` | `False` | (one of `command` / `unchanged`) | Skip sheet if inputs and declared products are unchanged since last passed. Evaluated on fresh runs only. |
 | `description` | `str \| None` | `None` | | Human-readable reason for the skip condition |
-| `timeout_seconds` | `float` | `10.0` | `> 0`, `<= 60` | Maximum seconds to wait for command. Fail-open on timeout. |
+| `timeout_seconds` | `float` | `10.0` | `> 0`, `<= 60` | Maximum seconds to wait for command. Command rules only; fail-open on timeout. |
 
 ```yaml
 sheet:
@@ -664,6 +665,10 @@ sheet:
       command: "cd {workspace} && pytest tests/ -x --tb=no -q"
       description: "Skip if tests already pass"
       timeout_seconds: 30
+    # Skip sheet 5 if inputs and outputs are unchanged since it last passed
+    5:
+      unchanged: true
+      description: "Skip re-drafting if inputs are unchanged"
     # Skip sheet 8 if a marker file exists
     8:
       command: "test -f {workspace}/phase2-complete.marker"
