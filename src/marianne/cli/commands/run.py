@@ -362,11 +362,13 @@ class SubmitResult:
     """A submission outcome as a value: no printing, no ``typer.Exit``.
 
     Attributes:
-        status: Which of the nine outcomes this is.
+        status: Which :class:`SubmitStatus` outcome this is.
         job_id: The conductor-assigned job id, when known.
         message: The conductor's message, or the refusal reason.
         error: The ``error_message`` of an early failure.
-        response: The conductor's raw reply dict, when it sent one.
+        response: The conductor's raw reply dict, when it sent one: the
+            ``job.submit`` reply, or on ``EARLY_FAILED`` the early-failure
+            poll's reply. ``None`` when nothing reached the conductor.
         pid: On ``NOT_ROUTED`` with a refused socket, the PID of a conductor
             that is still alive (busy, GH #455); ``None`` when it is absent.
         cause: The exception behind a ``ROUTE_ERROR``.
@@ -388,9 +390,10 @@ def _score_load_error(config_file: Path) -> str | None:
     """Why ``config_file`` is not a loadable score, or ``None`` when unsure.
 
     A pre-submission check, so it refuses only what it can prove. It returns
-    a reason for a file that is a score and fails the score schema, or is not
-    YAML at all. It returns ``None`` — and leaves the decision to the
-    conductor, as before this check existed — for anything else:
+    a reason for a file that is a score and fails the score schema, for text
+    that is not parseable YAML, or for YAML that is not a mapping (an empty
+    file or a bare scalar). It returns ``None`` — and leaves the decision to
+    the conductor, as before this check existed — for anything else:
 
     * a file it cannot read (missing, unreadable, not UTF-8);
     * a fleet config (``type: fleet``), which is not a ``JobConfig`` and has
@@ -453,6 +456,12 @@ async def submit_score(
     value. It never prints and never raises ``typer.Exit``; every refusal —
     including an invalid job id or an unloadable score — is a returned
     ``SubmitResult``, and neither reaches the conductor.
+
+    The score check is conservative (:func:`_score_load_error` refuses only
+    what it can prove), and neither refusal is new for ``mzt run``: ``run``
+    refuses a bad ``--job-id`` and an invalid score in its own command body,
+    before it calls the adapter, so here those branches serve
+    ``mzt agents run``, which calls this function directly.
     """
     from marianne.daemon.exceptions import (
         DaemonAccessDeniedError,
@@ -634,9 +643,12 @@ def render_submit_result(
     Raises ``typer.Exit(1)`` for every outcome a caller cannot continue past.
     Today the ``_try_daemon_submit`` adapter is its only caller: ``run`` and
     ``_run_fleet`` both submit through it. The renderer stays synchronous, so
-    ``rejection_followup`` lets the adapter run the async rate-limit panel in
-    text mode, after the error and before the exit, which is where ``mzt run``
-    has always shown it.
+    ``rejection_followup`` is how the adapter gets the rate-limit panel into
+    the output: it awaits the query (:func:`_fetch_rate_limits_on_rejection`)
+    before rendering, then hands the sync print (:func:`_print_rate_limits`)
+    in here, to run in text mode after the error and before the exit, which
+    is where ``mzt run`` has always shown it. It is called only for
+    ``REJECTED``.
 
     ``NOT_ROUTED`` is not rendered here: the adapter returns ``False`` for it
     and the caller renders it through ``_report_conductor_unreachable``.

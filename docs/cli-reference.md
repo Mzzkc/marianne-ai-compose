@@ -84,7 +84,7 @@ Usage: mzt run [OPTIONS] CONFIG_FILE
 | `--yes` | `-y` | false | Auto-confirm suggested fixes when using `--self-healing` |
 | `--require-lock` | | _(none)_ | Admission gate (GH #403): path to the composition lock the composing skill's release gate wrote (`check_score_release.py --write-lock`). The conductor verifies the lock's `score_sha256` against the exact bytes it is about to parse; a missing, stale, unreadable or malformed lock rejects the job with that reason. Omit for ordinary unlocked submission. |
 | `--fresh` | | false | Re-run a score from scratch: re-register all sheets and, when the score sets `workspace_lifecycle.archive_on_fresh`, archive non-preserved workspace files first. Auto-triggered for completed scores when the YAML changed. |
-| `--job-id` | | _(score filename)_ | Name this run (GH #505). The job ID defaults to the score file's stem; `--job-id NAME` lets one shipped score serve several commissions side by side without a renamed copy. When the score omits `workspace:`, the auto-managed workspace follows the name too (`~/workspaces/NAME`); an explicit `workspace:` still wins. Use the same name with `status`, `pause`, `resume`, `resolve` and `cancel`. Letters, digits, `.`, `_` and `-`, at most 100 characters. Not supported for fleet configs. A `type: fleet` member is named `<fleet>--<stem>` by the fleet itself (GH #514), so two fleets with an `integration.yaml` never share a job ID. |
+| `--job-id` | | _(score filename)_ | Name this run (GH #505). The job ID defaults to the score file's stem; `--job-id NAME` lets one shipped score serve several commissions side by side without a renamed copy. When the score omits `workspace:`, the auto-managed workspace follows the name too (`~/workspaces/NAME`); an explicit `workspace:` still wins. Use the same name with `status`, `pause`, `resume`, `resolve` and `cancel`. Must start with a letter or digit; after that letters, digits, `.`, `_` and `-`, at most 100 characters. An invalid `--job-id` is a usage error (exit 2, reported on stderr) and nothing is submitted; with `--json` stdout stays empty for it. Not supported for fleet configs. A `type: fleet` member is named `<fleet>--<stem>` by the fleet itself (GH #514), so two fleets with an `integration.yaml` never share a job ID. |
 | `--var` | | _(none)_ | Per-invocation template variable as `key=value` (repeatable). Merges into the score's `prompt.variables`, CLI overriding YAML on collision — point one generic score at different inputs without editing it. Values are strings (typed vars belong in YAML). Persisted across resume and inherited by every job a concert trigger chains from this one. |
 
 #### Auto-Fresh Detection
@@ -147,6 +147,9 @@ mzt run job.yaml --fresh
 |------|---------|
 | 0 | Success or graceful shutdown |
 | 1 | Configuration error or score failure |
+| 2 | Usage error: an invalid option value such as `--job-id 'has spaces'`, or a `CONFIG_FILE` that does not exist. Reported on stderr with nothing on stdout, `--json` included |
+
+A score that does not load (malformed YAML, or one that fails the score schema) is checked before the conductor is contacted: exit 1, with `{"error": "..."}` on `--json` or the error and a `Validate with: mzt validate FILE` hint otherwise. `agents run` checks the score before probing the conductor too (GH #561): an invalid score is `SUBMIT_REFUSED` with `invalid score FILE: ` and the score's own error as the hint, cut to 300 characters, so with the conductor down it reports the score rather than the conductor.
 
 ---
 
@@ -696,7 +699,7 @@ The agents root is read, never written; `run` writes only under the runs directo
 | `AGENT_UNKNOWN` | No such agent with an installed targeted-work score |
 | `AGENT_BUSY` | The agent has a running, queued, pending or paused job |
 | `DEBT_REFUSED` | The agent has 3 or more pending lifecycle debts |
-| `SUBMIT_REFUSED` | No or unreadable inventory, binder refusal (stale evidence, no route), the conductor refused or is down, or the run already exists. Also printed when the conductor accepted the job and it failed immediately inside the early-failure poll — in that case the files are kept and the hint names the job (`mzt diagnose JOB`) |
+| `SUBMIT_REFUSED` | No or unreadable inventory, binder refusal (stale evidence, no route), the conductor refused or is down, or the run already exists. Also printed when the conductor accepted the job and it failed immediately inside the early-failure poll — in that case the files are kept and the hint names the job (`mzt diagnose JOB`). Also printed when the bound score fails to load or fails the score schema (GH #561): the hint starts `invalid score FILE: ` and carries the score's own error, and no job exists, so the files are unbound. A conductor that is alive but not answering is reported as busy in the hint, not as down (it is never one to start) |
 
 `list` can also print `CONDUCTOR_DOWN` and `COMPILER_MISSING`.
 
