@@ -211,7 +211,7 @@ class TestMovementCadenzaOrdering:
         )
         assert _run(cfg) == []
 
-    def test_producer_behind_one_voice_warns_once(self) -> None:
+    def test_movement_cadenza_ordering_is_judged_per_voice(self) -> None:
         # Dependencies {2: [3]} expand instance-matched: sheets 2, 3, 4 each
         # depend on the same-numbered voice of stage 3. A producer at sheet 6
         # is an ancestor of voice 2 only — voices 1 and 3 are unsafe, and the
