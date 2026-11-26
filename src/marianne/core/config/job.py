@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import re
 import warnings
+from collections.abc import Mapping
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 import yaml
 from pydantic import (
@@ -80,6 +81,69 @@ from marianne.core.constants import DEFAULT_INSTRUMENT_NAME, FLOW_RESERVED_NAMES
 from marianne.core.expressions import ExpressionError, parse_expression
 from marianne.core.validation_condition import check_validation_condition
 from marianne.telemetry.config import TelemetryConfig
+
+MAX_VARIABLE_FAN_OUT_WIDTH: Final[int] = 1000
+"""Upper bound on a fan-out width resolved from a prompt variable (#569)."""
+
+_FAN_OUT_VARIABLE_REF: Final[re.Pattern[str]] = re.compile(
+    r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*\}\}"
+)
+_WHOLE_NUMBER: Final[re.Pattern[str]] = re.compile(r"[0-9]+")
+
+
+def resolve_fan_out_width(width: object, variables: Mapping[str, object]) -> int | FlowIssue:
+    """Resolve one ``sheet.fan_out`` value to an integer width (#569).
+
+    A literal integer passes through. A string must be exactly a bare
+    ``{{ name }}`` reference (optionally ``{{ a.b }}``); the named
+    ``prompt.variables`` entry must be an integer or a string of ASCII
+    digits in ``1..MAX_VARIABLE_FAN_OUT_WIDTH``. Returns one
+    ``FlowIssue`` (``V-FLOW-25``) naming the stage-agnostic reason;
+    the caller supplies the span.
+    """
+
+    def _issue(message: str, hint: str | None = None) -> FlowIssue:
+        return FlowIssue(check="V-FLOW-25", span=None, message=message, hint=hint)
+
+    if not isinstance(width, str):
+        if isinstance(width, bool) or not isinstance(width, int):
+            return _issue(f"{width!r} is not a width or a '{{{{ variable }}}}' reference",
+                          "Use an integer or '{{ variable }}' naming a prompt.variables entry")
+        return width
+    match = _FAN_OUT_VARIABLE_REF.fullmatch(width.strip())
+    if match is None:
+        return _issue(
+            f"{width!r} is not a width or a '{{{{ variable }}}}' reference",
+            "Use an integer or '{{ variable }}' naming a prompt.variables entry",
+        )
+    name = match.group(1)
+    value: object = variables
+    for part in name.split("."):
+        if not isinstance(value, Mapping) or part not in value:
+            return _issue(
+                f"variable {name!r} is not declared in prompt.variables",
+                "Declare it under prompt.variables",
+            )
+        value = value[part]
+    if value is None:
+        return _issue(
+            f"variable {name!r} is not declared in prompt.variables",
+            "Declare it under prompt.variables",
+        )
+    if isinstance(value, bool):
+        return _issue(f"variable {name!r} is {value!r}; a width must be a whole number")
+    if isinstance(value, int):
+        number = value
+    elif isinstance(value, str) and _WHOLE_NUMBER.fullmatch(value.strip()):
+        number = int(value.strip())
+    else:
+        return _issue(f"variable {name!r} is {value!r}; a width must be a whole number")
+    if not 1 <= number <= MAX_VARIABLE_FAN_OUT_WIDTH:
+        return _issue(
+            f"variable {name!r} resolves to {number}; "
+            f"a width must be 1-{MAX_VARIABLE_FAN_OUT_WIDTH}"
+        )
+    return number
 
 
 class InjectionCategory(str, Enum):
@@ -490,7 +554,10 @@ class SheetConfig(BaseModel):
             "Fan-out declarations. Map of stage_num -> instance count. "
             "Stages not listed default to 1 instance. "
             "Example: {2: 3, 4: 3} creates 3 parallel instances of stages 2 and 4. "
-            "Requires size=1 and start_item=1. Cleared after expansion."
+            "Requires size=1 and start_item=1. Cleared after expansion. "
+            "A count may instead be a prompt variable reference, '{{ name }}', "
+            "resolved from prompt.variables at load time to an integer 1-1000 "
+            "(V338 otherwise); literal counts are not capped."
         ),
     )
 
@@ -1427,6 +1494,45 @@ class JobConfig(BaseModel):
         if fan_out:
             data = dict(data)
             data["sheet"] = {**sheet, "fan_out": fan_out}
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_fan_out_widths(cls, data: object) -> object:
+        """Turn ``'{{ name }}'`` fan-out widths into integers from prompt.variables (#569)."""
+        if not isinstance(data, dict):
+            return data
+        sheet = data.get("sheet")
+        if not isinstance(sheet, dict):
+            return data
+        fan_out = sheet.get("fan_out")
+        if not isinstance(fan_out, dict) or not fan_out:
+            return data
+        prompt = data.get("prompt")
+        variables: Mapping[str, object] = (
+            prompt.get("variables") if isinstance(prompt, dict) else {}
+        ) or {}
+        resolved: dict[object, int] = {}
+        issues: list[FlowIssue] = []
+        for stage, width in fan_out.items():
+            if isinstance(width, str) and "{{" in width:
+                outcome = resolve_fan_out_width(width, variables)
+                if isinstance(outcome, FlowIssue):
+                    issues.append(
+                        FlowIssue(
+                            check=outcome.check,
+                            span=str(stage),
+                            message=outcome.message,
+                            hint=outcome.hint,
+                        )
+                    )
+                else:
+                    resolved[stage] = outcome
+        if issues:
+            raise FlowConfigError(tuple(issues))
+        if resolved:
+            data = dict(data)
+            data["sheet"] = {**sheet, "fan_out": {**fan_out, **resolved}}
         return data
 
     @field_validator("movements")

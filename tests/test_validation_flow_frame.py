@@ -238,3 +238,50 @@ prompt: {{template: hello}}
     assert [i.check_id for i in issues] == (["V233"] if fires else [])
     if fires:
         assert "never exists" in issues[0].message and "{workspace}" in issues[0].message
+
+
+def test_variable_fan_out_width_error_is_coded_and_exit_one(tmp_path: Path) -> None:
+    path = _file(
+        tmp_path,
+        """name: fan-var
+prompt:
+  template: Write the book.
+  variables:
+    chapter_count: "5000"
+sheet:
+  size: 1
+  total_items: 3
+  fan_out:
+    2: '{{ chapter_count }}'
+""",
+    )
+    result = CliRunner().invoke(app, ["validate", str(path), "--json"])
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert data["issues"][0]["check_id"] == "V338"
+    assert data["issues"][0]["severity"] == "error"
+    assert "1-1000" in data["issues"][0]["message"]
+    assert data["summary"]["sheets"] is None  # the score never expanded
+
+
+def test_variable_fan_out_width_validates_clean(tmp_path: Path) -> None:
+    path = _file(
+        tmp_path,
+        """name: fan-var
+sheet:
+  size: 1
+  total_items: 2
+  fan_out:
+    2: '{{ chapter_count }}'
+prompt:
+  template: Write the book.
+  variables:
+    chapter_count: "3"
+""",
+    )
+    result = CliRunner().invoke(app, ["validate", str(path), "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["summary"]["sheets"] == 4
+    assert data["summary"]["stages"] == 2
+    assert data["summary"]["fan_out"] is True

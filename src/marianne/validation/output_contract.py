@@ -150,6 +150,7 @@ def _known_suppression_severities() -> dict[str, ValidationSeverity]:
             "V316": ValidationSeverity.ERROR,
             "V317": ValidationSeverity.ERROR,
             "V320": ValidationSeverity.ERROR,
+            "V338": ValidationSeverity.ERROR,
             # Rendered by the flow load renderer (_FLOW_CODES → V230); no
             # registered check owns it (my own S3 Inspect advisory), but the
             # emission exists, so suppression must be able to judge it.
