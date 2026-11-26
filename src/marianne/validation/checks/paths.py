@@ -170,7 +170,8 @@ class AbsoluteHomePathCheck:
 
     Judged against the RAW YAML, not the model: the model pre-resolves a
     ``~/`` workspace into an absolute-under-home Path at load time, which
-    would false-positive the explicitly-portable tilde form.
+    would false-positive the explicitly-portable tilde form. Movement
+    cadenzas (``movements.<n>.cadenzas``) are scanned the same way (GH #571).
     """
 
     @property
@@ -349,6 +350,8 @@ class InjectionSizeCheck:
     A REQUIRED item over its cap is an ERROR: the sheet cannot run, and a
     warning let nine fleet scores through every static gate to fail at
     sheet 1 (GH #515). An optional item stays a WARNING (it will be dropped).
+    A movement cadenza item is measured once per declaration, under the
+    source label ``cadenza (stage N)`` (GH #571).
     """
 
     @property
@@ -425,6 +428,10 @@ class PreludeCadenzaFileCheck:
     Only checks non-templated paths (no Jinja ``{{``). Templated paths
     are resolved at execution time and cannot be validated statically.
     Definite input files must exist before execution.
+
+    Movement cadenzas (``movements.<n>.cadenzas``, GH #571) are checked like
+    sheet cadenzas: once per (stage, item), under the source label
+    ``cadenza (stage N)``, with the same declared-product exemption.
     """
 
     @property
@@ -552,7 +559,10 @@ class CadenzaOrderingCheck:
     """V109: a cadenza reads a file whose producer runs later (#137).
 
     Uses three signals:
-    - CONSUMER: ``cadenzas`` (which sheet injects/reads which file).
+    - CONSUMER: ``cadenzas`` (which sheet injects/reads which file). A
+      movement cadenza (``movements.<n>.cadenzas``, GH #571) is read by each
+      voice it reaches, so it is judged per voice, with at most one finding
+      per (stage, item).
     - PRODUCER: movement ``produces``, ``stdout_to``, or the sheet-gated
       ``file_exists`` proxy (in descending ownership priority).
     - ORDER: the dependency DAG (which sheet is guaranteed to run first).
@@ -561,6 +571,9 @@ class CadenzaOrderingCheck:
     declared to produce, but P is NOT a DAG-ancestor of
     M — so F is not guaranteed to exist when M's cadenza fires. WARNING
     only: declared output is not proof that a file exists at cadenza time.
+    F is matched to the producers by file name as written, so a per-voice
+    path such as ``unit-{{ voice }}.md`` matches only a producer declared
+    under that same name.
     """
 
     @property

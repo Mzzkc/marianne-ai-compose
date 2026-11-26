@@ -310,7 +310,8 @@ class MovementCadenzaItem(InjectionItem):
     ``as``, ``required``, ``max_bytes``), plus ``voice`` to narrow the item
     to one voice of the fan-out instead of every voice. Legal only under
     ``movements.<n>.cadenzas``; a ``voice`` spelled under ``sheet.prelude``
-    or ``sheet.cadenzas`` is an unknown field and is stripped (V010/V011).
+    or ``sheet.cadenzas`` is an unknown field there: it is stripped and
+    reported as V010 (a warning that names ``movements.cadenzas.voice``).
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
@@ -323,8 +324,9 @@ class MovementCadenzaItem(InjectionItem):
             "fan-out instance number, 1-based (movement cadenzas only). "
             "Unset (the default) reaches every voice of the movement. "
             "Compare with the `{{ voice }}` template variable, which "
-            "renders per voice inside a path. A voice the movement does "
-            "not have reaches nobody (V216 reports it)."
+            "renders per voice inside a path (1 on a movement with a single "
+            "voice). A voice the movement does not have reaches nobody "
+            "(V216 reports it)."
         ),
     )
 
@@ -540,7 +542,8 @@ class MovementDef(BaseModel):
             "to a single fan-out voice, and paths may template on "
             "`{{ voice }}`. Read before the sheet.cadenzas items of each "
             "voice, and never copied into sheet.cadenzas. Movement numbers "
-            "are stages, so a movement that has no sheet is V216."
+            "are stages: a cadenza on a movement that has no sheet, or with "
+            "a voice the movement does not have, is V216."
         ),
     )
 

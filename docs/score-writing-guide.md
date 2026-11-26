@@ -274,7 +274,7 @@ marked with **(required)**.
 | `state_path` | Path | `null` | Legacy companion to `state_backend`; omit. |
 | `pause_between_sheets_seconds` | int | `2` | Seconds to wait between sheets (rate limit courtesy). |
 | `instruments` | dict[str, InstrumentDef] | `{}` | Named instrument definitions local to this score. See [Multi-Instrument Scores](#multi-instrument-scores). |
-| `movements` | dict[int, MovementDef] | `{}` | Movement declarations with names, instruments, and voice counts. See [Multi-Instrument Scores](#multi-instrument-scores). |
+| `movements` | dict[int, MovementDef] | `{}` | Movement declarations with names, instruments, voice counts, and cadenzas (context for every voice of the movement). See [Multi-Instrument Scores](#multi-instrument-scores). |
 | `instrument_fallbacks` | list[str] | `[]` | Fallback instrument chain when the primary instrument is unavailable. See [Instrument Fallbacks](#instrument-fallbacks). |
 
 ### `instrument`
@@ -436,7 +436,7 @@ Defines how work is divided into sheets.
 | `skip_when` | dict[int, SkipWhenCommand] | `{}` | Command-based conditional skip rules (#119, formerly `skip_when_command`). Shell command exit 0 = skip, non-zero = run. See [Conditional Sheet Skipping](#conditional-sheet-skipping). |
 | `stdout_to` | dict[int, str] | `{}` | Per-sheet file (workspace-relative or `{workspace}/...`) the musician writes the instrument's full stdout to before validations run. The way a sheet on an `http` profile, which has no filesystem, produces a file. |
 | `prelude` | list[InjectionItem] | `[]` | Shared file injections for ALL sheets. See [Prelude and Cadenza](#prelude-and-cadenza-context-injection). |
-| `cadenzas` | dict[int, list[InjectionItem]] | `{}` | Per-sheet file injections. See [Prelude and Cadenza](#prelude-and-cadenza-context-injection). |
+| `cadenzas` | dict[int, list[InjectionItem]] | `{}` | Per-sheet file injections, keyed by concrete sheet number (also under fan-out). See [Prelude and Cadenza](#prelude-and-cadenza-context-injection). |
 | `per_sheet_instruments` | dict[int, str] | `{}` | Per-sheet instrument overrides. See [Multi-Instrument Scores](#multi-instrument-scores). |
 | `per_sheet_instrument_config` | dict[int, dict] | `{}` | Per-sheet instrument config overrides. |
 | `instrument_map` | dict[str, list[int]] | `{}` | Batch instrument assignment. See [Multi-Instrument Scores](#multi-instrument-scores). |
@@ -1311,6 +1311,14 @@ precedence over `sheet.stdout_to`, which takes precedence over a sheet-gated
 See the [configuration reference](configuration-reference.md#movements) for
 the full field semantics.
 
+### Declaring Movement Cadenzas
+
+A movement can also declare `cadenzas:` — context injected into every voice of
+that movement. Under fan-out this replaces listing each expanded sheet number
+under `sheet.cadenzas`; an optional `voice:` narrows one item to one voice, and
+a path may template on `{{ voice }}`. See
+[Stage-Level Cadenzas](#stage-level-cadenzas-movementsncadenzas).
+
 ### Named Instrument Definitions
 
 For scores that reference the same instrument configuration in multiple places, declare
@@ -1995,8 +2003,8 @@ in the prompt.
 
 - **Prelude** — shared context/skills/tools injected into ALL sheets
   (like a musical prelude that sets the tone)
-- **Cadenza** — per-sheet specific injections
-  (like a soloist's moment in the composition)
+- **Cadenza** — per-sheet specific injections, or per-movement ones that reach
+  every voice of the stage (like a soloist's moment in the composition)
 
 ### Injection Categories
 
@@ -2088,21 +2096,25 @@ movements:
         required: true
 ```
 
-Two pitfalls worth knowing:
+Here stage 11 has at least 15 voices; a `voice:` above the movement's voice
+count is the V216 error described below.
+
+Two things to know:
 
 - `{{ voice }}` is a **template variable** that renders per voice inside a
   path; `voice:` is an **item field** that selects which voices get the item.
   They compose but are not the same thing.
-- On a movement with a single voice, `{{ voice }}` renders as the literal
-  text `None` (`unit-{{ voice }}.md` becomes `unit-None.md`) — a solo
-  movement's cadenza must not template on `{{ voice }}`.
+- A movement with a single voice has voice `1`: there `{{ voice }}` resolves
+  to `1` (`unit-{{ voice }}.md` reads `unit-1.md`), and `voice: 1` is
+  delivered.
 
 A movement cadenza item may not name a stage the score does not have, or a
 voice above the movement's voice count — both are V216 errors, and so is a
 concrete `sheet.cadenzas` key outside the expanded range. A sheet reads its
 prelude, then its movement's cadenza items, then its own `sheet.cadenzas`
-items, in that order. `voice:` is stripped with a V010/V011 finding when
-spelled on a prelude or `sheet.cadenzas` item.
+items, in that order. `voice:` spelled on a prelude or `sheet.cadenzas` item
+is an unknown field there: it is stripped and reported as a V010 warning that
+names `movements.cadenzas.voice` as its home.
 
 ### Prelude vs. cross_sheet vs. prompt_extensions
 
@@ -2110,7 +2122,7 @@ These three features serve different purposes:
 
 | Feature | Scope | Content Source | Prompt Position |
 |---------|-------|---------------|-----------------|
-| `prelude` / `cadenzas` | All sheets / per-sheet | File contents (read at execution time) | Category-dependent (context/skill/tool) |
+| `prelude` / `cadenzas` | All sheets / per-sheet or per-movement | File contents (read at execution time) | Category-dependent (context/skill/tool) |
 | `cross_sheet` | Automatic from previous sheets | stdout + captured files | Template variables (`previous_outputs`, `previous_files`) |
 | `prompt_extensions` | Score-level or per-sheet | Literal inline strings | Appended by the executor through request-local sheet state; omitted in raw prompt mode |
 
@@ -2126,6 +2138,13 @@ a file through `prelude` or `cadenzas` when its contents should be injected.
 
 `mzt validate` checks static prelude/cadenza file paths (V108 ERROR)
 but skips Jinja-templated paths that can't be resolved before execution.
+Movement cadenza items are checked the same way, once per stage and item, and
+reported as `cadenza (stage N)`.
+
+V109 compares file names as written: the file name of a cadenza path against
+each producer declaration's. A per-voice path such as `unit-{{ voice }}.md`
+therefore matches only a producer declared under that same name — one spelled
+`unit-{instance}.md` gives no signal and no warning.
 
 ---
 
@@ -2447,7 +2466,7 @@ done
 | V007 | Invalid regex in validation pattern | Fix regex in `content_regex` or `rate_limit.detection_patterns` |
 | V101 | Undefined template variable (warning) | Check spelling against the built-ins (`workspace`, `score_dir`, `sheet_num`, loop indices, …) or add the variable to `prompt.variables` |
 | V103 | Very short timeout (warning) | Increase `instrument_config.timeout_seconds` |
-| V108 | Missing prelude/cadenza file (warning) | Check file path in `sheet.prelude` or `sheet.cadenzas`. Jinja-templated paths are skipped. |
+| V108 | Missing prelude/cadenza file (error) | Check the file path in `sheet.prelude`, `sheet.cadenzas` or `movements.<N>.cadenzas`. Jinja-templated paths are skipped. |
 | V336 (info) | A sheet's instrument has no `default_model` and no model is set at any scope: it runs on the harness's own default | Set `instrument_config.model: <id>`, an alias `config: {model: <id>}`, or a chain/class entry `model` |
 | V337 | `instrument_config.tools` the resolved profile cannot apply | Name only tools from the list the message gives, bind the sheet to a profile that declares a `tools:` block, run the sheet headless if the mapping is not interactive, or remove `tools` from the scope that reaches that instrument |
 | V335 | `instrument_config.effort` the resolved profile or model cannot apply | Use a level the message lists, pick a model whose row maps it, run the sheet headless if the mapping is not interactive, or remove `effort` from the scope that reaches that instrument |

@@ -683,7 +683,7 @@ sheet:
 
 *Source: `src/marianne/core/config/job.py` — `InjectionItem`*
 
-A single injection item referencing a file **or a directory** with a category. Used in `prelude` (all sheets) and `cadenzas` (per-sheet) to inject file content into prompts at category-appropriate locations. Exactly one of `file` or `directory` must be specified.
+A single injection item referencing a file **or a directory** with a category. Used in `prelude` (all sheets), in `cadenzas` (per-sheet) and in a movement's `cadenzas` (every voice of the movement; those items may also set `voice`) to inject file content into prompts at category-appropriate locations. Exactly one of `file` or `directory` must be specified.
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -692,7 +692,7 @@ A single injection item referencing a file **or a directory** with a category. U
 | `as` | `InjectionCategory` | **required** | `"context"`, `"skill"`, or `"tool"` | Category determining prompt placement. See InjectionCategory below. |
 | `required` | `bool` | `false` | | Fail the sheet **before execution** when this attachment cannot be read. Persistent-agent identity, memory, and every load-bearing cadenza attachment should set this `true` — missing context then fails loudly instead of silently running degraded. Runtime context-delivery receipts record the resolved paths and hashes actually assembled into the prompt. |
 | `max_bytes` | `int \| None` | `None` | `> 0` | Cap on the bytes this item injects (a directory sums its files). Over the cap, a `required` item fails the sheet before execution with the measured size; an optional item is dropped with a warning — never shipped as an over-sized prompt. Give every cadenza ledger that grows with every sheet (an `active/` directory, a memory file) a cap; `mzt validate` reports V334 when a static path is already over it: an ERROR for a `required` item (the sheet cannot run), a WARNING for an optional one (GH #474, #515). The composing release checker measures the same files, so a lock cannot be written over a required item that cannot inject. Every attempt records what each item delivered (path, sha256, bytes) or why it was dropped as the sheet's `prompt_receipt` (GH #546; see `mzt status --json` in the CLI reference). |
-| `voice` | `int \| None` | `None` | `>= 1`; movement cadenzas only | Legal only on a movement cadenza item (`movements.<n>.cadenzas[]`, GH #571): deliver the item to one voice of the movement — the fan-out instance number, 1-based. Unset reaches every voice. A `voice` spelled on a prelude or `sheet.cadenzas` item is an unknown field there (V010/V011) and is stripped. Not the same thing as the `{{ voice }}` template variable, which renders per voice inside a path. |
+| `voice` | `int \| None` | `None` | `>= 1`; movement cadenzas only | Legal only on a movement cadenza item (`movements.<n>.cadenzas[]`, GH #571): deliver the item to one voice of the movement — the fan-out instance number, 1-based. Unset reaches every voice. A `voice` spelled on a prelude or `sheet.cadenzas` item is an unknown field there: it is stripped and reported as a V010 warning that names `movements.cadenzas.voice` as its home. Not the same thing as the `{{ voice }}` template variable, which renders per voice inside a path (`1` on a movement with a single voice). |
 
 **InjectionCategory values:**
 

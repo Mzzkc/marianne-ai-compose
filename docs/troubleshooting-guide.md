@@ -552,10 +552,11 @@ Or, if it's intentional (e.g., defined conditionally in the template), ignore th
 INFO [V108] Prelude file not found: /path/to/file.md
 ```
 
-**Cause:** Static file path in `sheet.prelude` or `sheet.cadenzas` doesn't exist.
+**Cause:** Static file path in `sheet.prelude`, `sheet.cadenzas` or a movement's `cadenzas` (`movements.<N>.cadenzas`) doesn't exist.
 
 **Fix:**
 - Check the path
+- A message that says `cadenza (stage N)` comes from a movement cadenza: every voice of stage `N` reads it, or only the one voice a `voice:` names (GH #571)
 - If using Jinja templating (e.g., `{{ workspace }}/file.md`), this warning is expected — Marianne can't validate dynamic paths until execution
 
 ### V201: Jinja Syntax in Validation Path (Warning)
