@@ -89,6 +89,77 @@ _FAN_OUT_VARIABLE_REF: Final[re.Pattern[str]] = re.compile(
     r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*\}\}"
 )
 _WHOLE_NUMBER: Final[re.Pattern[str]] = re.compile(r"[0-9]+")
+_CAP_DIGITS: Final[int] = len(str(MAX_VARIABLE_FAN_OUT_WIDTH))
+"""The most significant digits an in-range width can have: those of the cap."""
+
+_ECHO_LIMIT: Final[int] = 10**10
+"""An out-of-range value is echoed in a message only below this; beyond it, described."""
+
+
+def _significant_digits(value: object) -> str | None:
+    """The significant digits of a digit string, or ``None`` when it is not one.
+
+    ``""`` means zero. Judging by text is what keeps the resolver total: CPython
+    raises ``ValueError`` instead of converting a digit run longer than
+    ``sys.get_int_max_str_digits()`` (4300 by default), so whether a string is
+    a number cannot be left to ``int()``. Leading zeroes carry no magnitude and
+    are dropped here, so a valid width survives any number of them.
+    """
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    if not _WHOLE_NUMBER.fullmatch(stripped):
+        return None
+    return stripped.lstrip("0")
+
+
+def _not_a_width(width: object) -> FlowIssue:
+    """The width is neither an integer nor a bare ``{{ name }}`` reference."""
+    return FlowIssue(
+        check="V-FLOW-25",
+        span=None,
+        message=f"{width!r} is not a width or a '{{{{ variable }}}}' reference",
+        hint="Use an integer or '{{ variable }}' naming a prompt.variables entry",
+    )
+
+
+def _not_declared(name: str) -> FlowIssue:
+    """No ``prompt.variables`` entry answers this reference."""
+    return FlowIssue(
+        check="V-FLOW-25",
+        span=None,
+        message=f"variable {name!r} is not declared in prompt.variables",
+        hint="Declare it under prompt.variables",
+    )
+
+
+def _not_a_whole_number(name: str, value: object) -> FlowIssue:
+    """The variable is declared, but its value is not an integer."""
+    return FlowIssue(
+        check="V-FLOW-25",
+        span=None,
+        message=f"variable {name!r} is {value!r}; a width must be a whole number",
+    )
+
+
+def _out_of_range(name: str, number: int | None) -> FlowIssue:
+    """The value is a whole number outside ``1..MAX_VARIABLE_FAN_OUT_WIDTH``.
+
+    ``number`` is the value, or ``None`` when it is too long to convert or to
+    show. A number is echoed only while it is short: CPython raises for an
+    ``int`` it cannot format (beyond ``sys.get_int_max_str_digits()``), and
+    a 300-digit value is not worth reading even where it converts. ``abs()``
+    and a comparison never format anything.
+    """
+    if number is not None and abs(number) < _ECHO_LIMIT:
+        found = f"resolves to {number}"
+    else:
+        found = "is out of range"
+    return FlowIssue(
+        check="V-FLOW-25",
+        span=None,
+        message=f"variable {name!r} {found}; a width must be 1-{MAX_VARIABLE_FAN_OUT_WIDTH}",
+    )
 
 
 def resolve_fan_out_width(width: object, variables: Mapping[str, object]) -> int | FlowIssue:
@@ -97,52 +168,42 @@ def resolve_fan_out_width(width: object, variables: Mapping[str, object]) -> int
     A literal integer passes through. A string must be exactly a bare
     ``{{ name }}`` reference (optionally ``{{ a.b }}``); the named
     ``prompt.variables`` entry must be an integer or a string of ASCII
-    digits in ``1..MAX_VARIABLE_FAN_OUT_WIDTH``. Returns one
-    ``FlowIssue`` (``V-FLOW-25``) naming the stage-agnostic reason;
-    the caller supplies the span.
+    digits, optionally padded with whitespace, in
+    ``1..MAX_VARIABLE_FAN_OUT_WIDTH``. Returns one ``FlowIssue``
+    (``V-FLOW-25``) naming the stage-agnostic reason; the caller supplies
+    the span. Raises nothing.
     """
-
-    def _issue(message: str, hint: str | None = None) -> FlowIssue:
-        return FlowIssue(check="V-FLOW-25", span=None, message=message, hint=hint)
-
-    if not isinstance(width, str):
-        if isinstance(width, bool) or not isinstance(width, int):
-            return _issue(f"{width!r} is not a width or a '{{{{ variable }}}}' reference",
-                          "Use an integer or '{{ variable }}' naming a prompt.variables entry")
+    if isinstance(width, int) and not isinstance(width, bool):
         return width
+    if not isinstance(width, str):
+        return _not_a_width(width)
     match = _FAN_OUT_VARIABLE_REF.fullmatch(width.strip())
     if match is None:
-        return _issue(
-            f"{width!r} is not a width or a '{{{{ variable }}}}' reference",
-            "Use an integer or '{{ variable }}' naming a prompt.variables entry",
-        )
+        return _not_a_width(width)
     name = match.group(1)
     value: object = variables
     for part in name.split("."):
-        if not isinstance(value, Mapping) or part not in value:
-            return _issue(
-                f"variable {name!r} is not declared in prompt.variables",
-                "Declare it under prompt.variables",
-            )
+        if not isinstance(value, Mapping) or value.get(part) is None:
+            return _not_declared(name)
         value = value[part]
-    if value is None:
-        return _issue(
-            f"variable {name!r} is not declared in prompt.variables",
-            "Declare it under prompt.variables",
-        )
     if isinstance(value, bool):
-        return _issue(f"variable {name!r} is {value!r}; a width must be a whole number")
+        return _not_a_whole_number(name, value)
     if isinstance(value, int):
-        number = value
-    elif isinstance(value, str) and _WHOLE_NUMBER.fullmatch(value.strip()):
-        number = int(value.strip())
+        number: int | None = value
     else:
-        return _issue(f"variable {name!r} is {value!r}; a width must be a whole number")
-    if not 1 <= number <= MAX_VARIABLE_FAN_OUT_WIDTH:
-        return _issue(
-            f"variable {name!r} resolves to {number}; "
-            f"a width must be 1-{MAX_VARIABLE_FAN_OUT_WIDTH}"
-        )
+        digits = _significant_digits(value)
+        if digits is None:
+            return _not_a_whole_number(name, value)
+        if not digits:
+            number = 0  # every digit is a zero: a whole number, and out of range
+        elif len(digits) <= _CAP_DIGITS:
+            number = int(digits)  # at most the cap's own digit count: always convertible
+        else:
+            # More significant digits than the cap has, so out of range; also
+            # too long for int() to convert or for a message to show.
+            number = None
+    if number is None or not 1 <= number <= MAX_VARIABLE_FAN_OUT_WIDTH:
+        return _out_of_range(name, number)
     return number
 
 
@@ -1509,9 +1570,17 @@ class JobConfig(BaseModel):
         if not isinstance(fan_out, dict) or not fan_out:
             return data
         prompt = data.get("prompt")
-        variables: Mapping[str, object] = (
-            prompt.get("variables") if isinstance(prompt, dict) else {}
-        ) or {}
+        # A ``mode="before"`` validator receives whichever shape the caller
+        # passed: the raw mapping from YAML, or a ``PromptConfig`` an embedder
+        # built first. Both declare variables; read them from either, or the
+        # model form reports every variable as "not declared".
+        if isinstance(prompt, PromptConfig):
+            declared: object = prompt.variables
+        elif isinstance(prompt, dict):
+            declared = prompt.get("variables")
+        else:
+            declared = None
+        variables: Mapping[str, object] = declared if isinstance(declared, Mapping) else {}
         resolved: dict[object, int] = {}
         issues: list[FlowIssue] = []
         for stage, width in fan_out.items():
