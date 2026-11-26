@@ -439,7 +439,10 @@ Movement declarations. Map of movement number to MovementDef. Movements are sequ
 phases. Each movement can specify a name (for display in `mzt status`), an instrument
 (overriding the score default), instrument configuration, and a voice count (shorthand for `fan_out`).
 
-Movement numbers must be positive integers within the range `[1, total_items]`.
+Movement numbers must be positive integers. The loader does not range-check
+them against the stage count; a movement number with no sheet of its own is
+silent at load and reported by V216 when it declares cadenzas — a cadenza
+on a movement that has no sheet reaches nobody.
 With `sheet.size: 1` and `sheet.start_item: 1`, `voices` expands the movement
 through the same fan-out engine as `sheet.fan_out`: dependencies, voice variables,
 and sheet numbering all use the expanded sheets. An explicit `sheet.fan_out`
@@ -488,6 +491,7 @@ movements:
 | `voices` | `int \| None` | `None` | `>= 1` | Number of parallel voices in this movement. Shorthand for `fan_out: {N: voices}`. |
 | `produces` | `list[str]` | `[]` | | Files this movement writes. Workspace-relative paths support `{workspace}` and `{sheet_num}`; each fan-out voice declares its own expanded outputs. Used for cadenza ordering and foreign-artifact checks; keep validations to check successful output. |
 | `instrument_fallbacks` | `list[str]` | `[]` | | Default fallback chain for sheets in this movement. Overrides score-level `instrument_fallbacks`. |
+| `cadenzas` | `list[MovementCadenzaItem]` | `[]` | | Context injections for every voice of this movement (GH #571). Each item is a prelude-shaped InjectionItem; the optional `voice` field narrows one item to a single fan-out voice, and paths may template on `{{ voice }}`. Read before the `sheet.cadenzas` items of each voice. |
 
 **Instrument resolution precedence** (highest to lowest):
 1. `sheet.per_sheet_instruments` (per-sheet override)
@@ -592,7 +596,7 @@ Defines how the work is divided into sheets (execution units).
 | `stdout_to` | `dict[int, str]` | `{}` | Inside the workspace; V004 on a home-absolute path; V214 on a sheet outside the range | Per-sheet file for the instrument's full stdout (`sheet.stdout_to`). Map of `sheet_num -> workspace-relative path` (or `{workspace}/...`). The musician writes the whole reply there before validations run, so a sheet on an `http` profile, which has no filesystem, can meet `file_exists`/`content_regex` and hand the file to later sheets; `stdout_tail` keeps only the last 500 characters. A fanned-out stage gets one file per voice (`answer-2.md`, `answer-3.md`). A failed attempt writes nothing; a path that escapes the workspace is refused with a preflight warning. |
 | `prompt_extensions` | `dict[int, list[str]]` | `{}` | | Per-sheet prompt extensions. Map of `sheet_num -> list of extension strings`. Applied in addition to score-level `prompt.prompt_extensions`. |
 | `prelude` | `list[InjectionItem]` | `[]` | | Shared context injected into ALL sheets. Each item references a file and a category (`context`, `skill`, or `tool`). File paths support Jinja templating. Files are read at sheet execution time. |
-| `cadenzas` | `dict[int, list[InjectionItem]]` | `{}` | | Per-sheet context injections. Map of `sheet_num -> list of InjectionItems`. Applied in addition to prelude items for the specified sheet. |
+| `cadenzas` | `dict[int, list[InjectionItem]]` | `{}` | Keys are concrete sheet numbers, also under fan-out; V216 outside the range | Per-sheet context injections. Map of `sheet_num -> list of InjectionItems`. Keys are **concrete** sheet numbers, also after fan-out expansion — under `fan_out: {2: 3}` a key `5` names the concrete sheet 5, not stage 5. To reach every voice of a stage, declare the cadenza on the movement: `movements.<stage>.cadenzas` (GH #571); a sheet reads its movement's items before its own `sheet.cadenzas` items. |
 | `fan_out` | `dict[int, int \| str]` (authored YAML) | `{}` | Requires `size=1`, `start_item=1`; V338 when a `'{{ variable }}'` count cannot resolve | Fan-out declarations. Map of numeric `stage_num -> instance_count`. Creates parallel instances of stages. Cleared after expansion. A count may instead be a quoted bare reference to one `prompt.variables` entry, `'{{ chapter_count }}'` (or a dotted `'{{ book.count }}'`), resolved at load to an integer `1`-`1000`: the variable must be an integer or a string of ASCII digits with no sign (surrounding whitespace in the string is ignored), and an undeclared name, a non-integer or an out-of-range value is V338. Filters and arithmetic are refused. Literal counts are not capped. `--var` cannot change a width. The model field remains `dict[int, int]`; `JobConfig` resolves references before `SheetConfig` validates. |
 | `fan_out_messaging` | `"file" \| "none"` | `"file"` | | Fan-out messaging (`fan_out.messaging` conceptually). Use this sibling field, preserving the stage-to-count `fan_out` mapping. `file` prepares scratch-owned inboxes and adds polling instructions with sibling numbers and descriptions; `none` omits that prompt setup. Explicit use without concurrent voices emits V234 WARNING. |
 | `fan_out_stage_map` | `dict[int, dict[str, int]] \| None` | `None` | | Per-sheet fan-out metadata, populated by expansion. Survives serialization for resume support. |
@@ -688,6 +692,7 @@ A single injection item referencing a file **or a directory** with a category. U
 | `as` | `InjectionCategory` | **required** | `"context"`, `"skill"`, or `"tool"` | Category determining prompt placement. See InjectionCategory below. |
 | `required` | `bool` | `false` | | Fail the sheet **before execution** when this attachment cannot be read. Persistent-agent identity, memory, and every load-bearing cadenza attachment should set this `true` — missing context then fails loudly instead of silently running degraded. Runtime context-delivery receipts record the resolved paths and hashes actually assembled into the prompt. |
 | `max_bytes` | `int \| None` | `None` | `> 0` | Cap on the bytes this item injects (a directory sums its files). Over the cap, a `required` item fails the sheet before execution with the measured size; an optional item is dropped with a warning — never shipped as an over-sized prompt. Give every cadenza ledger that grows with every sheet (an `active/` directory, a memory file) a cap; `mzt validate` reports V334 when a static path is already over it: an ERROR for a `required` item (the sheet cannot run), a WARNING for an optional one (GH #474, #515). The composing release checker measures the same files, so a lock cannot be written over a required item that cannot inject. Every attempt records what each item delivered (path, sha256, bytes) or why it was dropped as the sheet's `prompt_receipt` (GH #546; see `mzt status --json` in the CLI reference). |
+| `voice` | `int \| None` | `None` | `>= 1`; movement cadenzas only | Legal only on a movement cadenza item (`movements.<n>.cadenzas[]`, GH #571): deliver the item to one voice of the movement — the fan-out instance number, 1-based. Unset reaches every voice. A `voice` spelled on a prelude or `sheet.cadenzas` item is an unknown field there (V010/V011) and is stripped. Not the same thing as the `{{ voice }}` template variable, which renders per voice inside a path. |
 
 **InjectionCategory values:**
 

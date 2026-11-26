@@ -1807,10 +1807,14 @@ sheet:
 
 **Address later keys by stage.** Every concrete sheet number *after* a
 variable-width stage shifts with the width. A score that hard-codes sheet
-numbers in `cadenzas`, `per_sheet_fallbacks` or `loops` after such a stage
-re-points them when the variable changes. Keep the width constant for those
-scores, or keep those maps on stages before it, until stage-key addressing
-lands for them.
+numbers in `cadenzas`, `per_sheet_fallbacks`, `prompt_extensions`,
+`per_sheet_instruments` or `per_sheet_instrument_config` after such a stage
+re-points them when the variable changes (`loops` is not one of them — its
+spans are already stage keys under fan-out). Keep the width constant for
+those scores, or keep those maps on stages before it. Cadenzas have the
+stage-keyed form: declare shared context on the movement,
+`movements.<N>.cadenzas`, and every voice of the stage reads it however wide
+the stage becomes (GH #571).
 
 ### Dependency Expansion Patterns
 
@@ -2046,6 +2050,59 @@ sheet:
 
 Files are read at **sheet execution time**, not when the YAML is parsed.
 This means dynamic outputs from earlier sheets are available.
+
+### Stage-Level Cadenzas (movements.N.cadenzas)
+
+Under `fan_out`, `sheet.cadenzas` keys are **concrete** sheet numbers — a
+cadenza that should reach every voice of a fanned-out stage would have to
+list every expanded sheet number by hand (V225 points this out). Declare it
+on the movement instead: `movements.<stage>.cadenzas` reaches **every voice**
+of that stage, however wide it is (GH #571):
+
+```yaml
+movements:
+  7:
+    name: Draft
+    cadenzas:
+      - file: "{{ workspace }}/frozen/outline.json"
+        as: context
+        required: true
+```
+
+Every voice of stage 7 now injects the frozen outline. A voice-specific item
+uses the `voice` item field (the fan-out instance number, 1-based), and a
+per-voice path templates on `{{ voice }}` — the same positional variable the
+template itself exposes:
+
+```yaml
+movements:
+  11:
+    name: Claim check
+    cadenzas:
+      - file: "{{ workspace }}/units/unit-{{ voice }}.md"
+        as: context
+        required: true
+      - voice: 15
+        file: "{{ workspace }}/frozen/outline.json"
+        as: context
+        required: true
+```
+
+Two pitfalls worth knowing:
+
+- `{{ voice }}` is a **template variable** that renders per voice inside a
+  path; `voice:` is an **item field** that selects which voices get the item.
+  They compose but are not the same thing.
+- On a movement with a single voice, `{{ voice }}` renders as the literal
+  text `None` (`unit-{{ voice }}.md` becomes `unit-None.md`) — a solo
+  movement's cadenza must not template on `{{ voice }}`.
+
+A movement cadenza item may not name a stage the score does not have, or a
+voice above the movement's voice count — both are V216 errors, and so is a
+concrete `sheet.cadenzas` key outside the expanded range. A sheet reads its
+prelude, then its movement's cadenza items, then its own `sheet.cadenzas`
+items, in that order. `voice:` is stripped with a V010/V011 finding when
+spelled on a prelude or `sheet.cadenzas` item.
 
 ### Prelude vs. cross_sheet vs. prompt_extensions
 

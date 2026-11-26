@@ -211,7 +211,10 @@ the variable may hold an integer or an ASCII digit string with surrounding
 whitespace. Invalid references or values produce `V338`. The width stays fixed
 for the run, so `mzt run --var` cannot change it. Literal counts remain uncapped.
 See [Width from a variable](docs/score-writing-guide.md#width-from-a-variable)
-for constraints and the effect on later sheet numbers.
+for constraints and the effect on later sheet numbers. To give every voice of
+a stage the same context, declare it on the movement —
+`movements.<stage>.cadenzas` — instead of listing the expanded sheet numbers
+(see [Stage-Level Cadenzas](docs/score-writing-guide.md#stage-level-cadenzas-movementsncadenzas)).
 
 Concurrent fan-out voices can exchange notes while they run through the
 scratch-owned mailbox — `sheet.fan_out_messaging: file` (the default) prepares
