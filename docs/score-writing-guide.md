@@ -432,7 +432,7 @@ Defines how work is divided into sheets.
 | `total_items` | int | **(required)** | Total items to process. `total_sheets = ceil((total_items - start_item + 1) / size)`. |
 | `start_item` | int | `1` | First item number (1-indexed). |
 | `dependencies` | dict[int, list[int]] | `{}` | Sheet/stage dependency DAG. See [Fan-Out and Dependencies](#fan-out-and-dependencies). |
-| `fan_out` | dict[int, int] | `{}` | Stage → instance count. See [Fan-Out and Dependencies](#fan-out-and-dependencies). |
+| `fan_out` | dict[int, int \| str] | `{}` | Stage → instance count; a count may be `'{{ variable }}'`, resolved from `prompt.variables` at load (1-1000, V338). See [Fan-Out and Dependencies](#fan-out-and-dependencies). |
 | `skip_when` | dict[int, SkipWhenCommand] | `{}` | Command-based conditional skip rules (#119, formerly `skip_when_command`). Shell command exit 0 = skip, non-zero = run. See [Conditional Sheet Skipping](#conditional-sheet-skipping). |
 | `stdout_to` | dict[int, str] | `{}` | Per-sheet file (workspace-relative or `{workspace}/...`) the musician writes the instrument's full stdout to before validations run. The way a sheet on an `http` profile, which has no filesystem, produces a file. |
 | `prelude` | list[InjectionItem] | `[]` | Shared file injections for ALL sheets. See [Prelude and Cadenza](#prelude-and-cadenza-context-injection). |
@@ -1191,9 +1191,11 @@ A few things that will not work:
    language. You cannot make HTTP calls, read files, or execute commands
    from inside a template. That's what the agent does.
 
-3. **No dynamic fan-out** — You cannot compute fan-out count from inside a
-   template. `fan_out:` is YAML config, evaluated before templates render.
-   The structure is fixed; only the content is dynamic.
+3. **Fan-out width is fixed at load time** — A `fan_out:` count may name a
+   `prompt.variables` entry (`2: '{{ chapter_count }}'`) and is resolved to
+   an integer when the YAML is parsed. Templates cannot compute it, and
+   `--var` cannot change it: the structure is fixed per run; only the
+   content is dynamic.
 
 4. **Validation paths use different syntax** — Validation `path` fields use
    `{single_brace}` Python format strings (`{workspace}`, `{sheet_num}`),
@@ -1773,6 +1775,37 @@ sheet:
 | 3 | 2 | 2 | 3 |
 | 4 | 2 | 3 | 3 |
 | 5 | 3 | 1 | 1 |
+
+#### Width from a variable
+
+A count may be a reference to one `prompt.variables` entry instead of a
+literal. It resolves when the score loads, so the width is fixed per run:
+
+```yaml
+prompt:
+  variables:
+    chapter_count: "10"     # an integer, or a string of digits
+sheet:
+  size: 1
+  total_items: 3
+  fan_out:
+    2: '{{ chapter_count }}'   # stage 2 runs 10 voices
+```
+
+- The reference is a bare `{{ name }}` or a dotted `{{ book.count }}` — no
+  filters, arithmetic or comparisons (`{{ n + 1 }}` is V338).
+- The variable must be an integer or a string of ASCII digits, `1` to `1000`.
+  A float, a boolean, `null`, other text, or an undeclared name is `V338`.
+- It reads only the YAML's own `prompt.variables`. `mzt run --var` merges
+  after the width is resolved and cannot change it.
+- Literal counts are not capped and behave as before.
+
+**Address later keys by stage.** Every concrete sheet number *after* a
+variable-width stage shifts with the width. A score that hard-codes sheet
+numbers in `cadenzas`, `per_sheet_fallbacks` or `loops` after such a stage
+re-points them when the variable changes. Keep the width constant for those
+scores, or keep those maps on stages before it, until stage-key addressing
+lands for them.
 
 ### Dependency Expansion Patterns
 

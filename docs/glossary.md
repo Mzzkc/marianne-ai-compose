@@ -19,7 +19,7 @@ do not consume that conductor budget.
 - **Movement** (`movements`): a named phase that groups an instrument, settings and parallel voices at a numbered stage ([reference](configuration-reference.md#movements)).
 - **Voice** (`movements.<k>.voices`): one parallel instance within a movement, with the voice count expanding through the fan-out engine ([reference](configuration-reference.md#movements)).
 - **Stage** (concept): the logical stage number shared by a group of parallel sheets, addressed by the stage template variable while instance distinguishes the voices ([reference](score-writing-guide.md#fan-out-variables)).
-- **Fan-out** (`sheet.fan_out`): a map from stage numbers to parallel instance counts ([reference](configuration-reference.md#sheet)).
+- **Fan-out** (`sheet.fan_out`): a map from stage numbers to parallel instance counts, each a literal or a `'{{ variable }}'` resolved from `prompt.variables` at load ([reference](configuration-reference.md#sheet)).
 - **Run** (`mzt run`): one execution of a score, submitted immediately by this command even when the score also declares recurrence ([reference](cli-reference.md#mzt-run)).
 - **Tick** (`schedule`): a scheduled run of a recurring score, admitted when due and skipped if the previous run is still active ([reference](configuration-reference.md#schedule)).
 - **Workspace** (`workspace`): the directory where the score writes its outputs, resolved to an absolute path when loaded ([reference](configuration-reference.md#top-level-fields)).
