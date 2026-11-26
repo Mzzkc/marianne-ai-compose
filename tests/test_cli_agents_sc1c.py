@@ -8,6 +8,7 @@ the scenario fixtures the SC1 shim served to the qualified conductor card.
 
 from __future__ import annotations
 
+import importlib
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -468,14 +469,12 @@ def test_d3_early_failure_keeps_the_engagement_and_names_the_job(
         "_route",
         AsyncMock(return_value=[{"job_id": "x", "status": "failed", "error_message": "boom"}]),
     )
+    submit_route = AsyncMock(
+        return_value=(True, {"job_id": "x", "status": "accepted", "message": ""})
+    )
     with (
         patch("marianne.daemon.detect.is_daemon_available", new=AsyncMock(return_value=True)),
-        patch(
-            "marianne.daemon.detect.try_daemon_route",
-            new=AsyncMock(
-                return_value=(True, {"job_id": "x", "status": "accepted", "message": ""})
-            ),
-        ),
+        patch("marianne.daemon.detect.try_daemon_route", new=submit_route),
         patch(
             "marianne.cli.commands.run.await_early_failure",
             new=AsyncMock(
@@ -486,6 +485,9 @@ def test_d3_early_failure_keeps_the_engagement_and_names_the_job(
         result = _run(world)
     out = _json(result)
     assert result.exit_code == 1 and out["code"] == "SUBMIT_REFUSED"
+    # The submission reached the conductor: an early failure can only be
+    # reported for a job that was submitted (anti-vacuity, plan Phase 3).
+    assert [c.args[0] for c in submit_route.await_args_list] == ["job.submit"]
     assert "accepted" in out["hint"] and "boom" in out["hint"] and "diagnose" in out["hint"]
     # The bound score is KEPT: the conductor holds a registered job for it.
     bound = list(world["runs"].glob("*/*.yaml"))
@@ -578,6 +580,52 @@ def test_submit_sends_job_id_and_escalation(tmp_path: Path) -> None:
     method, params = sent[0]
     assert method == "job.submit" and params["job_id"] == "targeted-work-x-2"
     assert params["escalation"] is True and params["config_path"] == str(score.resolve())
+
+
+# ---- the status -> SubmitOutcome mapping, one branch per test (review Q5).
+# `submit_score` itself is patched, so each test pins one branch of
+# _submit_score and nothing below it. Before these existed, four of the five
+# failure branches could be inverted with every test green.
+
+
+def _mapped(tmp_path: Path, result: Any) -> SubmitOutcome:
+    """What ``_submit_score`` turns one fixed ``SubmitResult`` into."""
+    score = tmp_path / "s.yaml"
+    score.write_text("name: t\nsheet: {size: 1, total_items: 1}\nprompt:\n  template: hi\n")
+    with patch(
+        "marianne.cli.commands.run.submit_score",
+        new=AsyncMock(return_value=result),
+    ):
+        return agents_cmd._submit_score(score, "targeted-work-x-3")
+
+
+def test_map_rejected_is_not_ok(tmp_path: Path) -> None:
+    run_module = importlib.import_module("marianne.cli.commands.run")
+    out = _mapped(tmp_path, run_module.SubmitResult(run_module.SubmitStatus.REJECTED, message="no"))
+    assert out == SubmitOutcome(False, hint="no")
+
+
+def test_map_not_routed_is_not_ok_and_says_start(tmp_path: Path) -> None:
+    run_module = importlib.import_module("marianne.cli.commands.run")
+    out = _mapped(tmp_path, run_module.SubmitResult(run_module.SubmitStatus.NOT_ROUTED))
+    assert not out.ok and not out.job_exists
+    assert "mzt start" in out.hint
+
+
+def test_map_route_error_is_not_ok_and_names_the_cause(tmp_path: Path) -> None:
+    run_module = importlib.import_module("marianne.cli.commands.run")
+    out = _mapped(
+        tmp_path,
+        run_module.SubmitResult(run_module.SubmitStatus.ROUTE_ERROR, cause=ValueError("x")),
+    )
+    assert not out.ok and not out.job_exists
+    assert "x" in out.hint
+
+
+def test_map_pending_is_ok_with_the_job_id(tmp_path: Path) -> None:
+    run_module = importlib.import_module("marianne.cli.commands.run")
+    out = _mapped(tmp_path, run_module.SubmitResult(run_module.SubmitStatus.PENDING, job_id="p-1"))
+    assert out == SubmitOutcome(True, job_id="p-1")
 
 
 def test_d1_run_survives_a_log_line_during_submit(

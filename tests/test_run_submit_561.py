@@ -299,28 +299,125 @@ class TestRunJsonIsOneDocument:
         assert _one_document(result.stdout)["status"] == "accepted"
 
 
+class TestRunTextOutput:
+    """Guards for ``mzt run`` in text mode (no ``--json``).
+
+    The JSON class above proves nothing about text mode, which is where these
+    three behaviours live. Each was deletable with every test green before
+    these existed.
+    """
+
+    def _invoke(self, tmp_path: Any, route: Any, poll: Any = None, *extra: str) -> Any:
+        score = _score(tmp_path)
+        with (
+            patch("marianne.daemon.detect.is_daemon_available", new=AsyncMock(return_value=True)),
+            patch("marianne.daemon.detect.try_daemon_route", new=AsyncMock(side_effect=route)),
+            patch(
+                "marianne.cli.commands.run.await_early_failure",
+                new=poll or AsyncMock(return_value=None),
+            ),
+        ):
+            return runner.invoke(app, ["run", str(score), *extra])
+
+    def test_early_failure_names_diagnose(self, tmp_path: Any) -> None:
+        """An early failure tells the operator the next step: ``mzt diagnose JOB``."""
+        failed = AsyncMock(
+            return_value={"job_id": "x", "status": "failed", "error_message": "boom"}
+        )
+        result = self._invoke(tmp_path, _accepted, failed)
+        assert result.exit_code == 1
+        assert "Score failed: x" in result.stdout
+        assert "boom" in result.stdout
+        assert "mzt diagnose x" in result.stdout
+
+    def test_fresh_rejection_offers_clear(self, tmp_path: Any) -> None:
+        """``--fresh`` on an already-running score offers ``mzt clear`` (not "wait")."""
+        async def already_running(method: str, params: dict[str, Any]) -> tuple[bool, Any]:
+            return True, {"job_id": "", "status": "rejected", "message": "already running"}
+
+        result = self._invoke(tmp_path, already_running, None, "--fresh")
+        assert result.exit_code == 1
+        assert "mzt clear --score <id>" in result.stdout
+        assert "Or wait for it to finish" not in result.stdout
+
+    def test_plain_rejection_offers_wait_not_clear(self, tmp_path: Any) -> None:
+        """Without ``--fresh`` the same rejection offers waiting, as it always has."""
+        async def already_running(method: str, params: dict[str, Any]) -> tuple[bool, Any]:
+            return True, {"job_id": "", "status": "rejected", "message": "already running"}
+
+        result = self._invoke(tmp_path, already_running)
+        assert result.exit_code == 1
+        assert "Or wait for it to finish" in result.stdout
+        assert "mzt clear --score <id>" not in result.stdout
+
+    def test_rate_limit_panel_follows_the_error(self, tmp_path: Any) -> None:
+        """Under pressure the rate-limit panel prints after the rejection, never before."""
+        async def under_pressure(method: str, params: dict[str, Any]) -> tuple[bool, Any]:
+            if method == "job.submit":
+                return True, {
+                    "job_id": "", "status": "rejected", "message": "System under pressure",
+                }
+            return True, {"backends": {"claude-cli": {"seconds_remaining": 90.0}}}
+
+        result = self._invoke(tmp_path, under_pressure)
+        assert result.exit_code == 1
+        error_at = result.stdout.find("Conductor rejected score")
+        panel_at = result.stdout.find("Active rate limits")
+        assert error_at != -1 and panel_at != -1, result.stdout
+        assert error_at < panel_at, result.stdout
+
+
 @pytest.mark.xfail(
     strict=True,
-    reason="D7 (follow-up issue): mzt --log-format json installs its log handler on "
-    "stdout (core/logging.py), so a WARNING logged during submit lands ahead of the "
-    "--json result. The general fix (handler to stderr) flips "
-    "test_json_log_lines_decode_strict_and_parse and a documented option; it needs "
-    "its own owner decision. This pin fails loudly when that fix lands.",
+    reason="D7 (not yet filed as its own issue): mzt --log-format json installs its log "
+    "handler on stdout (core/logging.py), so a WARNING logged during submit lands ahead "
+    "of the --json result. The general fix (handler to stderr) flips "
+    "test_json_log_lines_decode_strict_and_parse and a documented option; it needs its "
+    "own owner decision. This pin fails loudly when that fix lands.",
 )
 def test_d7_log_format_json_run_is_one_document(tmp_path: Any) -> None:
     """D7 pin: `mzt --log-format json run SCORE --json` must be one document.
+
+    Deterministic, and isolated from the machine. The conductor is stubbed
+    with an accepting route that logs a WARNING, so the pin xfails for its
+    stated reason here, on CI, and on a developer box with a live conductor
+    alike — and never submits a real job. An unstubbed version read as
+    `xfail` wherever no conductor answered, which proved nothing.
 
     The trap: configure_global_logging runs once per process, so without the
     `_log_config.configured = False` reset the handler keeps the first
     CLI-invoking test's stdout and this test passes for the wrong reason.
     Reset it before the invoke, every time.
     """
+    import structlog
+
     import marianne.cli.helpers as helpers
 
+    async def noisy_route(method: str, params: dict[str, Any]) -> tuple[bool, Any]:
+        structlog.get_logger("test").warning("route_noise", hint="D7: should not hit stdout")
+        return True, {"job_id": params.get("job_id", "x"), "status": "accepted", "message": ""}
+
+    reached: list[str] = []
+
+    async def recording_route(method: str, params: dict[str, Any]) -> tuple[bool, Any]:
+        reached.append(method)
+        return await noisy_route(method, params)
+
     helpers._log_config.configured = False
-    result = runner.invoke(
-        app,
-        ["--log-format", "json", "run", str(_score(tmp_path)), "--json"],
-    )
+    with (
+        patch("marianne.daemon.detect.is_daemon_available", new=AsyncMock(return_value=True)),
+        patch(
+            "marianne.daemon.detect.try_daemon_route",
+            new=AsyncMock(side_effect=recording_route),
+        ),
+        patch("marianne.cli.commands.run.await_early_failure", new=AsyncMock(return_value=None)),
+    ):
+        result = runner.invoke(
+            app,
+            ["--log-format", "json", "run", str(_score(tmp_path)), "--json"],
+        )
+    # The route ran, so the pin is about the log line and not about an
+    # unreachable conductor.
+    assert reached == ["job.submit"], result.output
     assert result.exit_code == 0, result.output
     assert _one_document(result.stdout)["status"] == "accepted"

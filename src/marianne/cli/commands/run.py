@@ -11,8 +11,10 @@ execution plan without executing anything (no conductor needed).
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn
 
@@ -339,19 +341,20 @@ def _report_conductor_unreachable(json_output: bool) -> NoReturn:
 
 
 class SubmitStatus(str, Enum):
-    """What the conductor did with a submission (#561).
+    """How a submission ended (#561).
 
-    ``submit_score`` returns one of these; the commands render.
+    What the conductor did with it, or why it never got there. ``submit_score``
+    returns one of these; the commands render.
     """
 
     ACCEPTED = "accepted"
     PENDING = "pending"
     REJECTED = "rejected"
     EARLY_FAILED = "early_failed"
-    UNREACHABLE = "unreachable"
     ROUTE_ERROR = "route_error"
     NOT_ROUTED = "not_routed"
     BAD_JOB_ID = "bad_job_id"
+    INVALID_SCORE = "invalid_score"
 
 
 @dataclass(frozen=True)
@@ -359,13 +362,16 @@ class SubmitResult:
     """A submission outcome as a value: no printing, no ``typer.Exit``.
 
     Attributes:
-        status: Which of the eight outcomes this is.
+        status: Which of the nine outcomes this is.
         job_id: The conductor-assigned job id, when known.
         message: The conductor's message, or the refusal reason.
         error: The ``error_message`` of an early failure.
         response: The conductor's raw reply dict, when it sent one.
-        pid: A live-but-unanswering conductor's PID (busy case, GH #455).
+        pid: On ``NOT_ROUTED`` with a refused socket, the PID of a conductor
+            that is still alive (busy, GH #455); ``None`` when it is absent.
         cause: The exception behind a ``ROUTE_ERROR``.
+        fresh: Whether the submission asked for a fresh run; selects the
+            "already running" hint, so a renderer needs no extra argument.
     """
 
     status: SubmitStatus
@@ -375,6 +381,55 @@ class SubmitResult:
     response: dict[str, Any] | None = None
     pid: int | None = None
     cause: Exception | None = None
+    fresh: bool = False
+
+
+def _score_load_error(config_file: Path) -> str | None:
+    """Why ``config_file`` is not a loadable score, or ``None`` when unsure.
+
+    A pre-submission check, so it refuses only what it can prove. It returns
+    a reason for a file that is a score and fails the score schema, or is not
+    YAML at all. It returns ``None`` — and leaves the decision to the
+    conductor, as before this check existed — for anything else:
+
+    * a file it cannot read (missing, unreadable, not UTF-8);
+    * a fleet config (``type: fleet``), which is not a ``JobConfig`` and has
+      its own loader in ``_run_fleet``;
+    * a path object without ``read_text`` (tests and embedders pass placeholders).
+
+    Read-only. :meth:`JobConfig.from_yaml` creates the managed workspace root
+    for a score that omits ``workspace:`` (#58), which this check must not
+    do, so it runs the same steps on the file's own text and stops short of
+    that one. Unknown fields are stripped first, as there: ``mzt run`` accepts
+    them with a warning, so they must not read as a refusal here.
+    """
+    from marianne.core.config import JobConfig
+    from marianne.core.config.schema_walk import strip_unknown_score_fields
+
+    try:
+        text = config_file.read_text(encoding="utf-8")
+    except (AttributeError, OSError, UnicodeDecodeError):
+        return None
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        return f"YAML syntax error: {exc}"
+    if not isinstance(data, dict):
+        return (
+            f"The score file {config_file} is empty or invalid. A Marianne score requires "
+            "at minimum: name, sheet, and prompt sections."
+        )
+    if data.get("type") == "fleet":
+        return None
+    if not data.get("workspace"):
+        # A placeholder wherever the managed derivation would land.
+        data["workspace"] = str(config_file.resolve().parent / "workspace")
+    try:
+        clean, _unknown = strip_unknown_score_fields(data, JobConfig)
+        JobConfig.model_validate(clean)
+    except Exception as exc:  # noqa: BLE001 — every parse failure is one refusal string
+        return str(exc)
+    return None
 
 
 async def submit_score(
@@ -390,13 +445,14 @@ async def submit_score(
     require_lock: Path | None = None,
     job_id: str | None = None,
 ) -> SubmitResult:
-    """Validate the job id, submit the score to the conductor, return the outcome.
+    """Validate, submit the score to the conductor, return the outcome.
 
     The one submit path ``mzt run`` and ``mzt agents run`` both call (#561).
-    It loads and validates the score, probes the conductor, routes
+    It validates the job id and the score, probes the conductor, routes
     ``job.submit``, polls briefly for an early failure, and returns a typed
     value. It never prints and never raises ``typer.Exit``; every refusal —
-    including an invalid job id — is a returned ``SubmitResult``.
+    including an invalid job id or an unloadable score — is a returned
+    ``SubmitResult``, and neither reaches the conductor.
     """
     from marianne.daemon.exceptions import (
         DaemonAccessDeniedError,
@@ -404,6 +460,14 @@ async def submit_score(
         DaemonProtocolError,
         DaemonUnresponsiveError,
     )
+
+    def not_routed() -> SubmitResult:
+        # A refused socket with a live PID is a busy conductor, never an absent
+        # one (GH #455): carry the evidence, and let the renderer word it.
+        from marianne.cli.helpers import conductor_socket_present, live_conductor_pid
+
+        pid = live_conductor_pid() if conductor_socket_present() else None
+        return SubmitResult(status=SubmitStatus.NOT_ROUTED, pid=pid, fresh=fresh)
 
     # Job id first, as a value (#561 D4): an invalid id must not escape as a
     # click.UsageError and must not touch the conductor.
@@ -413,13 +477,23 @@ async def submit_score(
         try:
             validate_job_id(job_id)
         except typer.BadParameter as exc:
-            return SubmitResult(status=SubmitStatus.BAD_JOB_ID, message=str(exc.message))
+            return SubmitResult(
+                status=SubmitStatus.BAD_JOB_ID, message=str(exc.message), fresh=fresh
+            )
+
+    # Then the score, for the same reason: a syntax or schema error is known
+    # here and must not depend on the conductor being up to be reported.
+    score_error = _score_load_error(config_file)
+    if score_error is not None:
+        return SubmitResult(
+            status=SubmitStatus.INVALID_SCORE, message=score_error, fresh=fresh
+        )
 
     try:
         from marianne.daemon.detect import is_daemon_available, try_daemon_route
 
         if not await is_daemon_available():
-            return SubmitResult(status=SubmitStatus.NOT_ROUTED)
+            return not_routed()
 
         params: dict[str, Any] = {
             "config_path": str(config_file.resolve()),
@@ -442,7 +516,7 @@ async def submit_score(
 
         routed, result = await try_daemon_route("job.submit", params)
         if not routed:
-            return SubmitResult(status=SubmitStatus.NOT_ROUTED)
+            return not_routed()
 
         if not isinstance(result, dict):
             # D6: a non-dict reply is a protocol problem, not a rejection —
@@ -450,6 +524,7 @@ async def submit_score(
             return SubmitResult(
                 status=SubmitStatus.ROUTE_ERROR,
                 cause=DaemonProtocolError("job.submit returned a non-dict reply"),
+                fresh=fresh,
             )
 
         status = result.get("status", "unknown")
@@ -458,11 +533,19 @@ async def submit_score(
 
         if status == "pending":
             return SubmitResult(
-                status=SubmitStatus.PENDING, job_id=got_id, message=msg, response=result
+                status=SubmitStatus.PENDING,
+                job_id=got_id,
+                message=msg,
+                response=result,
+                fresh=fresh,
             )
         if status != "accepted":
             return SubmitResult(
-                status=SubmitStatus.REJECTED, job_id=got_id, message=msg, response=result
+                status=SubmitStatus.REJECTED,
+                job_id=got_id,
+                message=msg,
+                response=result,
+                fresh=fresh,
             )
 
         # Poll briefly to catch early failures (e.g. template errors).
@@ -478,22 +561,27 @@ async def submit_score(
                 job_id=got_id,
                 error=str(early.get("error_message") or "") if isinstance(early, dict) else "",
                 response=early if isinstance(early, dict) else None,
+                fresh=fresh,
             )
         return SubmitResult(
-            status=SubmitStatus.ACCEPTED, job_id=got_id, message=msg, response=result
+            status=SubmitStatus.ACCEPTED,
+            job_id=got_id,
+            message=msg,
+            response=result,
+            fresh=fresh,
         )
     except DaemonAccessDeniedError as exc:
-        return SubmitResult(status=SubmitStatus.ROUTE_ERROR, cause=exc)
+        return SubmitResult(status=SubmitStatus.ROUTE_ERROR, cause=exc, fresh=fresh)
     except (DaemonUnresponsiveError, DaemonProtocolError) as exc:
-        return SubmitResult(status=SubmitStatus.ROUTE_ERROR, cause=exc)
+        return SubmitResult(status=SubmitStatus.ROUTE_ERROR, cause=exc, fresh=fresh)
     except (OSError, ConnectionError, TimeoutError) as exc:
         _logger.warning("daemon_submit_failed", error=str(exc), exc_info=True)
-        return SubmitResult(status=SubmitStatus.NOT_ROUTED)
+        return not_routed()
     except Exception as exc:
         # F-450: MethodNotFoundError and other DaemonError subclasses
         # re-raised by try_daemon_route are route errors, not crashes.
         if isinstance(exc, DaemonError):
-            return SubmitResult(status=SubmitStatus.ROUTE_ERROR, cause=exc)
+            return SubmitResult(status=SubmitStatus.ROUTE_ERROR, cause=exc, fresh=fresh)
         raise
 
 
@@ -535,12 +623,23 @@ def _report_submit_unreachable(result: SubmitResult, json_output: bool) -> None:
         )
 
 
-def render_submit_result(result: SubmitResult, *, json_output: bool) -> None:
+def render_submit_result(
+    result: SubmitResult,
+    *,
+    json_output: bool,
+    rejection_followup: Callable[[], None] | None = None,
+) -> None:
     """Print a ``SubmitResult`` the way ``mzt run`` has always printed one.
 
-    Raises ``typer.Exit(1)`` for every outcome a caller cannot continue
-    past. The one rendering path for ``run``, ``_run_fleet`` and the
-    ``_try_daemon_submit`` adapter, so ``mzt run``'s output is unchanged.
+    Raises ``typer.Exit(1)`` for every outcome a caller cannot continue past.
+    Today the ``_try_daemon_submit`` adapter is its only caller: ``run`` and
+    ``_run_fleet`` both submit through it. The renderer stays synchronous, so
+    ``rejection_followup`` lets the adapter run the async rate-limit panel in
+    text mode, after the error and before the exit, which is where ``mzt run``
+    has always shown it.
+
+    ``NOT_ROUTED`` is not rendered here: the adapter returns ``False`` for it
+    and the caller renders it through ``_report_conductor_unreachable``.
     """
     from marianne.cli.helpers import report_daemon_access_denied, report_daemon_route_error
 
@@ -570,7 +669,11 @@ def render_submit_result(result: SubmitResult, *, json_output: bool) -> None:
                 if result.message
                 else "Conductor rejected score."
             )
-            output_error(rejection, hints=_rejection_hints(result.message))
+            # The result carries `fresh`, so the "already running" hint is the
+            # one this submission earned, with no extra argument to pass.
+            output_error(rejection, hints=_rejection_hints(result.message, fresh=result.fresh))
+            if rejection_followup is not None:
+                rejection_followup()
         raise typer.Exit(1)
 
     if result.status == SubmitStatus.EARLY_FAILED:
@@ -584,28 +687,37 @@ def render_submit_result(result: SubmitResult, *, json_output: bool) -> None:
             output_error(f"Score failed: {job_id}", hints=hints)
         raise typer.Exit(1)
 
-    if result.status == SubmitStatus.BAD_JOB_ID:
-        # Only reachable through the adapter (run validates earlier as a
-        # returned value path in submit_score); treated as a refusal.
+    if result.status in (SubmitStatus.BAD_JOB_ID, SubmitStatus.INVALID_SCORE):
+        # Reached only when a caller passes an unvalidated id or an unchecked
+        # score straight to the adapter; `run` refuses both at its own entry.
         if json_output:
             output_json({"error": result.message})
         else:
-            output_error(result.message, hints=["Check the --job-id value."])
+            output_error(result.message, hints=_refusal_hints(result.status))
         raise typer.Exit(1)
 
     if result.status == SubmitStatus.ROUTE_ERROR:
         cause = result.cause
-        assert cause is not None
+        if cause is None:
+            raise ValueError("ROUTE_ERROR without a cause")
         from marianne.daemon.exceptions import DaemonAccessDeniedError
 
         if isinstance(cause, DaemonAccessDeniedError):
             report_daemon_access_denied(cause, json_output=json_output)
-        else:
-            report_daemon_route_error(cause, json_output=json_output)
+        report_daemon_route_error(cause, json_output=json_output)
+        return  # both reporters raise; this keeps the function honest if one stops
 
-    if result.status == SubmitStatus.NOT_ROUTED:
-        _report_submit_unreachable(result, json_output)
-        raise typer.Exit(1)
+    raise ValueError(f"unhandled SubmitStatus: {result.status!r}")
+
+
+def _refusal_hints(status: SubmitStatus) -> list[str]:
+    """The hints ``mzt run`` prints for a submission refused before the conductor."""
+    if status == SubmitStatus.BAD_JOB_ID:
+        return ["Check the --job-id value."]
+    return [
+        "Validate with: mzt validate <file>",
+        "Fix the score and run it again.",
+    ]
 
 
 async def _try_daemon_submit(
@@ -625,11 +737,13 @@ async def _try_daemon_submit(
     """Submit a job to the running conductor (thin adapter over ``submit_score``).
 
     Returns True if the daemon accepted the submission, False if the
-    daemon is not reachable or rejected the job. Access denial emits an
-    unknown-running-state diagnostic and exits without falling back.
-    Kept as an adapter (#561): five test files call it by name. The actual
-    work — probe, ``try_daemon_route("job.submit", params)``, early-failure
-    poll — lives in :func:`submit_score` below.
+    daemon is not reachable. A refusal or an early failure is rendered and
+    exits 1; access denial emits an unknown-running-state diagnostic and exits
+    without falling back. Kept as an adapter (#561): five test files call it
+    by name, and ``tests/test_adversary_m1c3.py`` reads its source for the
+    ``try_daemon_route`` delegation (F-122). The work itself — probe,
+    ``try_daemon_route("job.submit", params)``, early-failure poll — lives in
+    :func:`submit_score` above.
     """
 
     result = await submit_score(
@@ -645,34 +759,22 @@ async def _try_daemon_submit(
         job_id=job_id,
     )
 
-    if result.status == SubmitStatus.REJECTED:
-        # The rate-limit panel queries the conductor, so it stays in the
-        # rendering layer (text mode only).
-        if not json_output:
-            await _show_rate_limits_on_rejection(result.message)
-        render_submit_result(result, json_output=json_output)  # raises Exit(1)
-
-    # A direct BAD_JOB_ID (run validates before calling, so this is the
-    # adapter's only route to it) renders as a rejection and exits 1.
-    if result.status in (
-        SubmitStatus.BAD_JOB_ID,
-        SubmitStatus.EARLY_FAILED,
-        SubmitStatus.UNREACHABLE,
-        SubmitStatus.ROUTE_ERROR,
-    ):
-        render_submit_result(result, json_output=json_output)
-
-    # NOT_ROUTED: the callers keep _report_conductor_unreachable, whose busy
-    # path re-probes the live PID (GH #455); the adapter reports unreachability
-    # the old way — return False.
     if result.status == SubmitStatus.NOT_ROUTED:
+        # The caller renders it through _report_conductor_unreachable, whose
+        # busy path re-probes the live PID (GH #455); report unreachability
+        # the old way — return False.
         return False
 
-    # ACCEPTED and PENDING render (one path with run/_run_fleet); everything
-    # else is either rendered above or reported by the caller.
-    if result.status in (SubmitStatus.ACCEPTED, SubmitStatus.PENDING):
-        render_submit_result(result, json_output=json_output)
-    return result.status in (SubmitStatus.ACCEPTED, SubmitStatus.PENDING)
+    # The rate-limit panel queries the conductor, so its fetch stays in this
+    # async layer (text mode only); its print is handed to the renderer, which
+    # shows it after the error and before the exit, where mzt run always has.
+    panel: Callable[[], None] | None = None
+    if not json_output and result.status == SubmitStatus.REJECTED:
+        backends = await _fetch_rate_limits_on_rejection(result.message)
+        if backends:
+            panel = partial(_print_rate_limits, backends)
+    render_submit_result(result, json_output=json_output, rejection_followup=panel)
+    return True
 
 
 def _rejection_hints(msg: str, *, fresh: bool = False) -> list[str]:
@@ -908,26 +1010,31 @@ def _show_fleet_dry_run(fleet_config: FleetConfig, config_path: Path) -> None:
     console.print(table)
 
 
-async def _show_rate_limits_on_rejection(msg: str) -> None:
-    """Query and display active rate limits after a rejection.
+async def _fetch_rate_limits_on_rejection(msg: str) -> dict[str, Any] | None:
+    """Active rate limits when a rejection is pressure-related, else ``None``.
 
-    Called after a submission is rejected. When the rejection is
-    pressure-related, queries the conductor for active rate limits
-    and displays them with time-remaining info.
+    Called after a submission is rejected, before the rejection is rendered:
+    the query needs the event loop, the display does not. Pair with
+    :func:`_print_rate_limits`, which shows what this returned.
 
-    Fail-open: never raises. If the query fails, nothing is shown.
+    Fail-open: never raises. If the query fails, nothing is returned.
     """
-    msg_lower = msg.lower()
-    if "pressure" not in msg_lower:
-        return
+    if "pressure" not in msg.lower():
+        return None
 
     try:
         from ..helpers import query_rate_limits
-        from ..output import format_rate_limit_info
 
-        backends = await query_rate_limits()
-        if not backends:
-            return
+        return await query_rate_limits()
+    except Exception:  # noqa: BLE001 — fail-open: rate-limit info is extra, never blocks run
+        _logger.debug("run.rate_limit_info_unavailable", exc_info=True)
+        return None
+
+
+def _print_rate_limits(backends: dict[str, Any]) -> None:
+    """Display active rate limits with time-remaining info. Fail-open: never raises."""
+    try:
+        from ..output import format_rate_limit_info
 
         lines = format_rate_limit_info(backends)
         if lines:

@@ -488,16 +488,33 @@ class SubmitOutcome:
     job_exists: bool = False  # the conductor registered the job (even if it then failed)
 
 
+#: Longest hint ``run`` prints. The sentence that names the job and the next
+#: step is never cut; only the conductor's or the score's own detail is.
+_HINT_MAX = 300
+#: Below this many characters an error excerpt is noise, so it is dropped.
+_EARLY_FAILED_DETAIL_MIN = 40
+
+
+def _clip(text: str, budget: int) -> str:
+    """Shorten ``text`` to ``budget`` characters, marking a cut with an ellipsis."""
+    text = " ".join(text.split())
+    if len(text) <= budget:
+        return text
+    return text[: max(budget - 1, 0)].rstrip() + "…"
+
+
 def _submit_score(score_path: Path, job_id: str) -> SubmitOutcome:
     """Submit with the same function ``mzt run`` uses, in process (#561).
 
-    :func:`run.submit_score` validates the score, routes ``job.submit``
-    through the conductor and returns the outcome as a value; this maps it
-    onto ``SubmitOutcome``. ``escalation=True`` makes a sheet that exhausts
-    its retries stop at a fermata (what ``mzt next`` reports as
+    :func:`run.submit_score` validates the score and the job id, routes
+    ``job.submit`` through the conductor and returns the outcome as a value;
+    this maps it onto ``SubmitOutcome``. ``escalation=True`` makes a sheet
+    that exhausts its retries stop at a fermata (what ``mzt next`` reports as
     UNSTICK/ESCALATE and ``mzt resolve`` answers) instead of failing the job.
     No stdout capture: a value, not scraped printed text.
     """
+    from marianne.cli.helpers import BUSY_HINTS, busy_conductor_message
+
     from .run import SubmitStatus, submit_score
 
     result = asyncio.run(
@@ -511,26 +528,47 @@ def _submit_score(score_path: Path, job_id: str) -> SubmitOutcome:
         # already failed inside the early-failure poll. The engagement stays
         # bound (the conductor holds a registered job for it); _run reports
         # the failure truthfully instead of pretending the submit was refused.
-        hint = result.error or "the conductor accepted the job and it failed"
-        hint = (
-            f"the conductor accepted job {result.job_id} and it failed within the "
-            f"early-failure poll: {hint} (the bound score is kept; inspect it with: "
-            f"mzt diagnose {result.job_id})"
-        )
-        return SubmitOutcome(False, hint=hint[:300], job_exists=True)
+        # Only the error is ever shortened: the sentence that names the job
+        # and says `mzt diagnose JOB` is the next step, so it is never cut.
+        # A job id may be 100 characters and is named twice, so with the
+        # longest ids that sentence alone passes _HINT_MAX; then the error
+        # gives way entirely rather than the recovery command.
+        job = result.job_id or job_id
+        lead = f"the conductor accepted job {job} and it failed within the early-failure poll: "
+        kept = f" (the bound score is kept; inspect it with: mzt diagnose {job})"
+        budget = _HINT_MAX - len(lead) - len(kept)
+        if budget >= _EARLY_FAILED_DETAIL_MIN:
+            detail = _clip(
+                result.error or "the conductor accepted the job and it failed", budget
+            )
+        else:
+            detail = ""
+        hint = lead + detail + kept
+        return SubmitOutcome(False, hint=hint, job_exists=True)
     if result.status is SubmitStatus.REJECTED:
-        return SubmitOutcome(False, hint=result.message[:300])
+        return SubmitOutcome(False, hint=_clip(result.message, _HINT_MAX))
+    if result.status is SubmitStatus.INVALID_SCORE:
+        # Refused here, before the conductor: no job exists. The engagement is
+        # unbound, and the operator gets the score's own error, not "conductor
+        # is down".
+        return SubmitOutcome(
+            False,
+            hint=_clip(f"invalid score {score_path.name}: {result.message}", _HINT_MAX),
+        )
     if result.status is SubmitStatus.BAD_JOB_ID:
-        return SubmitOutcome(False, hint=(result.message or f"invalid job id {job_id!r}")[:300])
+        return SubmitOutcome(
+            False, hint=_clip(result.message or f"invalid job id {job_id!r}", _HINT_MAX)
+        )
     if result.status is SubmitStatus.NOT_ROUTED:
         if result.pid is not None:
-            from marianne.cli.helpers import busy_conductor_message
-
-            hint = busy_conductor_message(result.pid)
-            return SubmitOutcome(False, hint=hint[:300])
+            # A live conductor that did not answer (GH #455): busy, never one
+            # to start. busy_conductor_message says so; the first BUSY_HINT
+            # says what to do instead.
+            busy = busy_conductor_message(result.pid, "the socket did not accept a connection")
+            return SubmitOutcome(False, hint=_clip(f"{busy} {BUSY_HINTS[0]}", _HINT_MAX))
         return SubmitOutcome(False, hint="Marianne conductor is not running. Start with: mzt start")
     # ROUTE_ERROR: name the underlying daemon error.
-    return SubmitOutcome(False, hint=str(result.cause)[:300])
+    return SubmitOutcome(False, hint=_clip(str(result.cause), _HINT_MAX))
 
 
 def _unbind(engagement: Any) -> None:
