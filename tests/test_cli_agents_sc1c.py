@@ -55,7 +55,9 @@ def _score(shape: str, agent: str) -> dict[str, Any]:
         "workspace": "/REQUIRES-LIVE-BINDING",
         "instrument": "stale",
         "instrument_fallbacks": [],
-        "sheet": {"per_sheet_instruments": {}, "per_sheet_fallbacks": {}},
+        # a real installed score carries total_items; without it JobConfig
+        # rejects the score and an e2e test measures D5, not the submit
+        "sheet": {"total_items": 12, "per_sheet_instruments": {}, "per_sheet_fallbacks": {}},
         "prompt": {
             "variables": {
                 "marianne_agent": {
@@ -399,20 +401,166 @@ def test_all_error_codes_are_in_the_closed_enum() -> None:
     assert set(agents_cmd.ERROR_CODES) == CODES
 
 
-# ------------------------------------------------------------ submit goes through mzt run
+# ------------------------------------------------------------ the real submit seam
+
+# Bound at import, before any fixture replaces the module attribute: the REAL
+# value-returning submit. `world` puts a fake over `agents_cmd._submit_score`;
+# the end-to-end D tests must reach the real seam to prove anything, so they
+# restore it and patch the conductor underneath it instead.
+_REAL_SUBMIT = agents_cmd._submit_score
 
 
-def test_submit_score_uses_the_mzt_run_path_and_reads_its_json(tmp_path: Path) -> None:
+@pytest.fixture
+def real_seam(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Put the REAL ``_submit_score`` back over ``world``'s fake."""
+    monkeypatch.setattr(agents_cmd, "_submit_score", _REAL_SUBMIT)
+    return []
+
+
+def test_d1_stdout_noise_then_accepted_is_ok(tmp_path: Path) -> None:
+    """D1, unit form (red on the old stdout capture).
+
+    A log line on stdout during the submit must not turn an accepted job
+    into a refusal. Under the repo's conftest the default structlog factory
+    prints to stdout — exactly what ``redirect_stdout`` captured and
+    ``json.loads`` choked on.
+    """
+    import structlog
+
     score = tmp_path / "s.yaml"
     score.write_text(
-        yaml.safe_dump(
-            {
-                "name": "t",
-                "workspace": str(tmp_path / "ws"),
-                "sheet": {"size": 1, "total_items": 1},
-                "prompt": {"template": "hi"},
-            }
-        )
+        "name: t\n"
+        f"workspace: {tmp_path / 'ws'}\n"
+        "sheet: {size: 1, total_items: 1}\n"
+        "prompt:\n  template: hi\n"
+    )
+    sent: list[tuple[str, dict[str, Any]]] = []
+
+    async def noisy_route(method: str, params: dict[str, Any]) -> tuple[bool, Any]:
+        structlog.get_logger("test").warning("submit_noise", hint="non-JSON on stdout")
+        sent.append((method, params))
+        return True, {"job_id": params["job_id"], "status": "accepted", "message": "queued"}
+
+    with (
+        patch("marianne.daemon.detect.is_daemon_available", new=AsyncMock(return_value=True)),
+        patch("marianne.daemon.detect.try_daemon_route", new=AsyncMock(side_effect=noisy_route)),
+        patch("marianne.cli.commands.run.await_early_failure", new=AsyncMock(return_value=None)),
+    ):
+        ok = agents_cmd._submit_score(score, "targeted-work-x-1")
+    assert ok == SubmitOutcome(True, job_id="targeted-work-x-1")
+    method, params = sent[0]
+    assert method == "job.submit" and params["job_id"] == "targeted-work-x-1"
+    assert params["escalation"] is True and params["config_path"] == str(score.resolve())
+
+
+def test_d3_early_failure_keeps_the_engagement_and_names_the_job(
+    world: dict[str, Any], real_seam: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D3, end to end: accepted, then failed inside the early-failure poll.
+
+    The old code reported SUBMIT_REFUSED and (with a conductor-faithful
+    status reply) left the engagement bound with no next step. The fix keeps
+    the files AND says the job exists, naming ``mzt diagnose JOB``.
+    """
+    # A conductor-faithful reply: the real conductor's status reply carries job_id.
+    monkeypatch.setattr(
+        conduct,
+        "_route",
+        AsyncMock(return_value=[{"job_id": "x", "status": "failed", "error_message": "boom"}]),
+    )
+    with (
+        patch("marianne.daemon.detect.is_daemon_available", new=AsyncMock(return_value=True)),
+        patch(
+            "marianne.daemon.detect.try_daemon_route",
+            new=AsyncMock(
+                return_value=(True, {"job_id": "x", "status": "accepted", "message": ""})
+            ),
+        ),
+        patch(
+            "marianne.cli.commands.run.await_early_failure",
+            new=AsyncMock(
+                return_value={"job_id": "x", "status": "failed", "error_message": "boom"}
+            ),
+        ),
+    ):
+        result = _run(world)
+    out = _json(result)
+    assert result.exit_code == 1 and out["code"] == "SUBMIT_REFUSED"
+    assert "accepted" in out["hint"] and "boom" in out["hint"] and "diagnose" in out["hint"]
+    # The bound score is KEPT: the conductor holds a registered job for it.
+    bound = list(world["runs"].glob("*/*.yaml"))
+    assert bound, "the bound score must survive an early failure"
+    # And the retry of the same task is still refused (it is already bound),
+    # but now with a hint that says the job exists, not a silent dead end.
+    result2 = _run(world)
+    out2 = _json(result2)
+    assert result2.exit_code == 1 and out2["code"] == "SUBMIT_REFUSED"
+    assert "already bound" in out2["hint"]
+
+
+def test_d4_bad_job_id_is_a_refusal(tmp_path: Path) -> None:
+    """D4, unit form: an invalid job id comes back as a refusal, not an escape."""
+    score = tmp_path / "s.yaml"
+    score.write_text(
+        "name: t\n"
+        f"workspace: {tmp_path / 'ws'}\n"
+        "sheet: {size: 1, total_items: 1}\n"
+        "prompt:\n  template: hi\n"
+    )
+    called: list[str] = []
+
+    async def route(method: str, params: dict[str, Any]) -> tuple[bool, Any]:
+        called.append(method)
+        return True, {"job_id": "x", "status": "accepted"}
+
+    with (
+        patch("marianne.daemon.detect.is_daemon_available", new=AsyncMock(return_value=True)),
+        patch("marianne.daemon.detect.try_daemon_route", new=AsyncMock(side_effect=route)),
+    ):
+        out = agents_cmd._submit_score(score, "bad job id!")
+    assert not called, "an invalid job id must not reach the conductor"
+    assert not out.ok and out.hint and "bad job id!" in out.hint
+
+
+def test_d4_bad_job_id_through_the_cli_is_exit_1_with_a_json_body(
+    world: dict[str, Any], real_seam: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D4, end to end: exit 1 with ``{ok, code, hint}``, and no job.submit routed."""
+    import marianne_compiler.agent_cli as agent_cli_mod
+
+    real_bind = agent_cli_mod.bind_engagement
+
+    def binder(agent: str, **kw: Any) -> Any:
+        engagement = real_bind(agent, **kw)
+        # The binder derives job_name from validated names, so force an
+        # invalid one the way an embedding caller could.
+        object.__setattr__(engagement, "job_name", "bad job id!")
+        return engagement
+
+    monkeypatch.setattr(agent_cli_mod, "bind_engagement", binder)
+    with (
+        patch("marianne.daemon.detect.is_daemon_available", new=AsyncMock(return_value=True)),
+        patch(
+            "marianne.daemon.detect.try_daemon_route",
+            new=AsyncMock(return_value=(True, {"job_id": "x", "status": "accepted"})),
+        ),
+    ):
+        result = _run(world)
+    out = _json(result)
+    assert result.exit_code == 1 and set(out) == RUN_FAIL_KEYS
+    assert out["code"] == "SUBMIT_REFUSED" and "bad job id!" in out["hint"]
+    # No bound score is left behind (BAD_JOB_ID carries no job_exists).
+    assert not list(world["runs"].glob("*/*.yaml"))
+
+
+def test_submit_sends_job_id_and_escalation(tmp_path: Path) -> None:
+    """Guard: the refactor keeps today's ``params`` (job id, escalation, path)."""
+    score = tmp_path / "s.yaml"
+    score.write_text(
+        "name: t\n"
+        f"workspace: {tmp_path / 'ws'}\n"
+        "sheet: {size: 1, total_items: 1}\n"
+        "prompt:\n  template: hi\n"
     )
     sent: list[tuple[str, dict[str, Any]]] = []
 
@@ -422,25 +570,34 @@ def test_submit_score_uses_the_mzt_run_path_and_reads_its_json(tmp_path: Path) -
 
     with (
         patch("marianne.daemon.detect.is_daemon_available", new=AsyncMock(return_value=True)),
-        patch("marianne.daemon.detect.try_daemon_route", new=route),
+        patch("marianne.daemon.detect.try_daemon_route", new=AsyncMock(side_effect=route)),
         patch("marianne.cli.commands.run.await_early_failure", new=AsyncMock(return_value=None)),
     ):
-        ok = agents_cmd._submit_score(score, "targeted-work-x-1")
-    assert ok == SubmitOutcome(True, job_id="targeted-work-x-1")
+        ok = agents_cmd._submit_score(score, "targeted-work-x-2")
+    assert ok == SubmitOutcome(True, job_id="targeted-work-x-2")
     method, params = sent[0]
-    assert method == "job.submit" and params["job_id"] == "targeted-work-x-1"
+    assert method == "job.submit" and params["job_id"] == "targeted-work-x-2"
     assert params["escalation"] is True and params["config_path"] == str(score.resolve())
 
-    async def reject(method: str, params: dict[str, Any]) -> tuple[bool, Any]:
-        return True, {"job_id": "", "status": "rejected", "message": "System under pressure"}
+
+def test_d1_run_survives_a_log_line_during_submit(
+    world: dict[str, Any], real_seam: list[str]
+) -> None:
+    """Guard, end to end: stdout is one JSON document even when the submit logs."""
+    import structlog
+
+    async def noisy_route(method: str, params: dict[str, Any]) -> tuple[bool, Any]:
+        structlog.get_logger("test").warning("submit_noise")
+        return True, {"job_id": "x", "status": "accepted", "message": ""}
 
     with (
         patch("marianne.daemon.detect.is_daemon_available", new=AsyncMock(return_value=True)),
-        patch("marianne.daemon.detect.try_daemon_route", new=reject),
-        patch("marianne.cli.commands.run._show_rate_limits_on_rejection", new=AsyncMock()),
+        patch("marianne.daemon.detect.try_daemon_route", new=AsyncMock(side_effect=noisy_route)),
+        patch("marianne.cli.commands.run.await_early_failure", new=AsyncMock(return_value=None)),
     ):
-        refused = agents_cmd._submit_score(score, "targeted-work-x-2")
-    assert not refused.ok and "pressure" in refused.hint
+        result = _run(world)
+    assert result.exit_code == 0, result.output
+    assert _json(result)["ok"] is True
 
 
 def test_parse_task_matches_the_shim_rules() -> None:

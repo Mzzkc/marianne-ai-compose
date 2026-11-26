@@ -696,11 +696,11 @@ The agents root is read, never written; `run` writes only under the runs directo
 | `AGENT_UNKNOWN` | No such agent with an installed targeted-work score |
 | `AGENT_BUSY` | The agent has a running, queued, pending or paused job |
 | `DEBT_REFUSED` | The agent has 3 or more pending lifecycle debts |
-| `SUBMIT_REFUSED` | No or unreadable inventory, binder refusal (stale evidence, no route), the conductor refused or is down, or the run already exists |
+| `SUBMIT_REFUSED` | No or unreadable inventory, binder refusal (stale evidence, no route), the conductor refused or is down, or the run already exists. Also printed when the conductor accepted the job and it failed immediately inside the early-failure poll — in that case the files are kept and the hint names the job (`mzt diagnose JOB`) |
 
 `list` can also print `CONDUCTOR_DOWN` and `COMPILER_MISSING`.
 
-`run` calls the compiler's engage path in process (`bind_engagement`: shape `targeted-work` with `--defer-lifecycle`, the task copied read-only and injected into every sheet, `--class` passed through) and then submits through the function `mzt run` uses, with `--escalation` on, so a sheet that exhausts its retries stops at a fermata that `mzt next` reports and `mzt resolve` answers. Nothing shells out. If the conductor refuses, the bound files are removed so the same task can be run again. The job id is `targeted-work-NAME-task-<8 hex of the task file>-<date>`; `result_path` is the REPORT name inside the workspace.
+`run` calls the compiler's engage path in process (`bind_engagement`: shape `targeted-work` with `--defer-lifecycle`, the task copied read-only and injected into every sheet, `--class` passed through) and then submits through the function `mzt run` uses, with `--escalation` on, so a sheet that exhausts its retries stops at a fermata that `mzt next` reports and `mzt resolve` answers. Nothing shells out. If the conductor refuses, the bound files are removed so the same task can be run again. If the conductor accepted the job but it failed inside the early-failure poll, the files are kept — the conductor holds a registered job for that score — and the hint names the job with `mzt diagnose JOB`, so a retry reading `already bound` has a next step (`mzt cancel JOB`, then a new task file). The job id is `targeted-work-NAME-task-<8 hex of the task file>-<date>`; `result_path` is the REPORT name inside the workspace.
 
 **Interim.** `targeted-work` defers consolidate, reflect, maturity and resurrect: each run adds pending lifecycle debt, which `engage` refuses at 3. Pay it with a `lifecycle-integration` engagement.
 
