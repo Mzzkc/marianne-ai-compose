@@ -101,23 +101,36 @@ class MixedFanOutKeyingCheck:
     def check(self, config: JobConfig, config_path: Path, raw_yaml: str) -> list[ValidationIssue]:
         if not config.sheet.fan_out_stage_map or not (config.sheet.loops or config.sheet.triggers):
             return []
-        names = [
-            name
-            for name, mapping in (
-                ("cadenzas", config.sheet.cadenzas),
-                ("prompt_extensions", config.sheet.prompt_extensions),
-                ("per_sheet_instruments", config.sheet.per_sheet_instruments),
+        issues: list[ValidationIssue] = []
+        if config.sheet.cadenzas:
+            # Cadenzas have a stage-keyed home: name it (#571). The other
+            # two maps keep the bare observation.
+            remedy = (
+                "cadenzas keys are concrete sheets; flow spans were stage keys. "
+                "Declare shared context on the movement, "
+                "movements.<stage>.cadenzas, to reach every voice (GH #571)"
             )
-            if mapping
-        ]
-        return [
-            _issue(
-                self.check_id,
-                self.severity,
-                f"{name} keys are concrete sheets; flow spans were stage keys",
+            issues.append(
+                ValidationIssue(
+                    check_id=self.check_id,
+                    severity=self.severity,
+                    message=remedy,
+                    suggestion=remedy,
+                )
             )
-            for name in names
-        ]
+        for name, mapping in (
+            ("prompt_extensions", config.sheet.prompt_extensions),
+            ("per_sheet_instruments", config.sheet.per_sheet_instruments),
+        ):
+            if mapping:
+                issues.append(
+                    _issue(
+                        self.check_id,
+                        self.severity,
+                        f"{name} keys are concrete sheets; flow spans were stage keys",
+                    )
+                )
+        return issues
 
 
 class ConstantUntilCheck:

@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 from marianne.core.config import JobConfig
+from marianne.core.config.job import stage_sheets
 from marianne.core.constants import FLOW_RESERVED_NAMES
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks.paths import WorkspaceParentExistsCheck
@@ -108,7 +109,7 @@ class CadenzaTargetCheck:
 
     def check(self, config: JobConfig, config_path: Path, raw_yaml: str) -> list[ValidationIssue]:
         total = config.sheet.total_sheets
-        return [
+        issues = [
             ValidationIssue(
                 self.check_id,
                 self.severity,
@@ -117,6 +118,40 @@ class CadenzaTargetCheck:
             for number in config.sheet.cadenzas
             if number < 1 or number > total
         ]
+        # Movement cadenza targets (#571): the movement number is a stage,
+        # and movement numbers are not range-checked at load, so a stage
+        # that has no sheet is reported here — as is a voice above the
+        # stage's voice count.
+        for stage, movement in config.movements.items():
+            movement_items = movement.cadenzas
+            if not movement_items:
+                continue
+            voices = stage_sheets(config, stage)
+            if not voices:
+                issues.append(
+                    ValidationIssue(
+                        self.check_id,
+                        self.severity,
+                        f"movements.{stage}.cadenzas target stage {stage}, which has "
+                        f"no sheet in this score (valid stages are "
+                        f"1-{config.sheet.total_stages}); the items reach nobody",
+                    )
+                )
+                continue
+            fan_count = config.sheet.get_fan_out_metadata(voices[0]).fan_count
+            for movement_item in movement_items:
+                voice = movement_item.voice
+                if voice is not None and voice > fan_count:
+                    issues.append(
+                        ValidationIssue(
+                            self.check_id,
+                            self.severity,
+                            f"movements.{stage}.cadenzas target voice {voice} of a "
+                            f"movement with {fan_count} voice(s); the item reaches "
+                            "nobody",
+                        )
+                    )
+        return issues
 
 
 class ConcertTargetCheck:

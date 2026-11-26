@@ -133,6 +133,50 @@ prompt: {template: hello}
     assert ForwardGotoFanOutCheck().check(config, path, path.read_text())[0].check_id == "V231"
 
 
+def test_fan_out_keying_names_the_movement_cadenza_remedy(tmp_path: Path) -> None:
+    """The V225 cadenzas finding tells the author where the stage-keyed home is (#571)."""
+    path = _file(
+        tmp_path,
+        """name: flow-fan-cadenzas
+sheet:
+  size: 1
+  total_items: 2
+  fan_out: {1: 2}
+  cadenzas:
+    1:
+      - {file: plan.md, as: context}
+  loops:
+    1: {index: i, until: 'file("x").exists', max_iterations: 2}
+prompt: {template: hello}
+""",
+    )
+    config = JobConfig.from_yaml(path)
+    issues = MixedFanOutKeyingCheck().check(config, path, path.read_text())
+    assert len(issues) == 1
+    assert issues[0].check_id == "V225"
+    assert "movements.<stage>.cadenzas" in issues[0].message
+    assert "movements.<stage>.cadenzas" in (issues[0].suggestion or "")
+    # The other two maps keep the bare observation, without a cadenza remedy.
+    path = tmp_path / "flow-fan-extensions.yaml"
+    path.write_text(
+        """name: flow-fan-extensions
+sheet:
+  size: 1
+  total_items: 2
+  fan_out: {1: 2}
+  prompt_extensions: {1: [note]}
+  loops:
+    1: {index: i, until: 'file("x").exists', max_iterations: 2}
+prompt: {template: hello}
+"""
+    )
+    config = JobConfig.from_yaml(path)
+    issues = MixedFanOutKeyingCheck().check(config, path, path.read_text())
+    assert [i.message for i in issues] == [
+        "prompt_extensions keys are concrete sheets; flow spans were stage keys"
+    ]
+
+
 def _loop_score(tmp_path: Path, name: str, instrument_block: str) -> Path:
     return _file(
         tmp_path,

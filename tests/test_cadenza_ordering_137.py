@@ -172,3 +172,77 @@ class TestV108Suppression:
         assert v108 == []  # disk-existence noise suppressed
         assert len(v109) == 1  # ordering bug still surfaced
         assert "late.md" in v109[0].message
+
+
+def _fan_out_config(*, movements: dict, validations: list, dependencies: dict) -> JobConfig:
+    """A 3-stage score whose stages 2 and 3 each have 3 voices (#571)."""
+    return JobConfig.model_validate(
+        {
+            "name": "ord-571",
+            "workspace": "./ws",
+            "instrument": "claude-code",
+            "movements": movements,
+            "sheet": {
+                "size": 1,
+                "total_items": 3,
+                "fan_out": {2: 3, 3: 3},
+                "dependencies": dependencies,
+            },
+            "prompt": {"template": "x"},
+            "validations": validations,
+        }
+    )
+
+
+class TestMovementCadenzaOrdering:
+    """V109 judges a movement cadenza per voice, warning once per (stage, item) (#571).
+
+    Stage 1 is a solo sheet; stage 2 (the reader) = sheets 2-4, stage 3 =
+    sheets 5-7. Stage-keyed dependencies under fan-out connect voice i ->
+    voice i (instance-matched), so the ancestor sets of one stage's voices
+    differ — which is exactly what per-voice judgement must respect.
+    """
+
+    def test_producer_behind_every_voice_is_silent(self) -> None:
+        cfg = _fan_out_config(
+            movements={2: {"cadenzas": [{"file": "report.md", "as": "context"}]}},
+            validations=[{"type": "file_exists", "path": "report.md", "sheet": 1}],
+            dependencies={2: [1]},
+        )
+        assert _run(cfg) == []
+
+    def test_producer_behind_one_voice_warns_once(self) -> None:
+        # Dependencies {2: [3]} expand instance-matched: sheets 2, 3, 4 each
+        # depend on the same-numbered voice of stage 3. A producer at sheet 6
+        # is an ancestor of voice 2 only — voices 1 and 3 are unsafe, and the
+        # item warns exactly once.
+        cfg = _fan_out_config(
+            movements={2: {"cadenzas": [{"file": "report.md", "as": "context"}]}},
+            validations=[{"type": "file_exists", "path": "report.md", "sheet": 6}],
+            dependencies={2: [3]},
+        )
+        issues = _run(cfg)
+        assert len(issues) == 1
+        assert issues[0].severity.value == "warning"
+        assert "report.md" in issues[0].message
+
+    def test_voiced_item_is_judged_on_its_own_voice(self) -> None:
+        # The producer is behind voice 2 only; the `voice: 2` item reads it
+        # there, so it is safe — while the unvoiced item on the same
+        # movement still warns once.
+        movements = {
+            2: {
+                "cadenzas": [
+                    {"file": "report.md", "as": "context"},
+                    {"voice": 2, "file": "report.md", "as": "context"},
+                ]
+            }
+        }
+        cfg = _fan_out_config(
+            movements=movements,
+            validations=[{"type": "file_exists", "path": "report.md", "sheet": 6}],
+            dependencies={2: [3]},
+        )
+        issues = _run(cfg)
+        assert len(issues) == 1
+        assert "report.md" in issues[0].message

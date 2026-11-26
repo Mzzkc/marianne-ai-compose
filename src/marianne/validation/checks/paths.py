@@ -6,7 +6,7 @@ Validates that paths referenced in the configuration exist and are accessible.
 from pathlib import Path
 
 from marianne.core.config import JobConfig
-from marianne.core.config.job import InjectionItem
+from marianne.core.config.job import InjectionItem, movement_cadenzas, stage_sheets
 from marianne.core.producers import (
     dag_ancestors,
     declared_products_from_config,
@@ -251,6 +251,17 @@ class AbsoluteHomePathCheck:
                     if isinstance(target, str) and _is_home_absolute(target):
                         _flag(f"sheet.stdout_to.{num}", target)
 
+        # Movement cadenzas (#571): scan the raw declarations too, so a
+        # home-absolute path in a movement cadenza cannot escape V004.
+        movements_cfg = data.get("movements")
+        if isinstance(movements_cfg, dict):
+            for stage, movement in movements_cfg.items():
+                if not isinstance(movement, dict):
+                    continue
+                movement_items = movement.get("cadenzas")
+                if isinstance(movement_items, list):
+                    _scan_items(movement_items, f"movements.{stage}.cadenzas")
+
         prompt_cfg = data.get("prompt")
         if isinstance(prompt_cfg, dict):
             variables = prompt_cfg.get("variables")
@@ -364,6 +375,11 @@ class InjectionSizeCheck:
         ]
         for sheet_num, group in config.sheet.cadenzas.items():
             items.extend((item, f"cadenza (sheet {sheet_num})") for item in group)
+        for stage, movement_items in movement_cadenzas(config).items():
+            # Measured once per (stage, item) — not once per voice (#571).
+            items.extend(
+                (movement_item, f"cadenza (stage {stage})") for movement_item in movement_items
+            )
         for item, source in items:
             if item.max_bytes is None:
                 continue
@@ -448,6 +464,19 @@ class PreludeCadenzaFileCheck:
                     self._check_item(
                         item,
                         f"cadenza (sheet {sheet_num})",
+                        config,
+                        config_path,
+                        raw_yaml,
+                        produced,
+                    )
+                )
+        for stage, movement_items in movement_cadenzas(config).items():
+            # One finding per (stage, item) — not one per voice (#571).
+            for movement_item in movement_items:
+                issues.extend(
+                    self._check_item(
+                        movement_item,
+                        f"cadenza (stage {stage})",
                         config,
                         config_path,
                         raw_yaml,
@@ -594,5 +623,51 @@ class CadenzaOrderingCheck:
                         ),
                     )
                 )
+
+        # Movement cadenzas (#571): judged per voice — instance-matched
+        # dependencies make the ancestor sets of one stage's voices differ,
+        # and the item is safe only if every voice it reaches has a
+        # producing ancestor. At most one finding per (stage, item).
+        for stage, movement_items in movement_cadenzas(config).items():
+            for movement_item in movement_items:
+                if movement_item.file is None:  # directory cadenza
+                    continue
+                name = Path(movement_item.file).name
+                producing_sheets = producers.get(name)
+                if not producing_sheets:
+                    continue
+                for reader_sheet in stage_sheets(config, stage):
+                    if movement_item.voice is not None:
+                        fan_meta = config.sheet.get_fan_out_metadata(reader_sheet)
+                        if movement_item.voice != fan_meta.instance:
+                            continue  # this voice is not one the item reaches
+                    ancestors = dag_ancestors(reader_sheet, deps)
+                    if producing_sheets & ancestors:
+                        continue  # this voice is safe
+                    latest = max(producing_sheets)
+                    issues.append(
+                        ValidationIssue(
+                            check_id=self.check_id,
+                            severity=self.severity,
+                            message=(
+                                f"Sheet {reader_sheet}'s cadenza reads "
+                                f"'{movement_item.file}', but the stage that "
+                                f"produces it (sheet {latest}, per its producer "
+                                f"declaration) is not guaranteed to run first "
+                                f"— the file may not exist yet when this "
+                                f"cadenza fires."
+                            ),
+                            line=find_line_in_yaml(raw_yaml, movement_item.file),
+                            context=movement_item.file,
+                            suggestion=(
+                                f"Add a dependency so the producing stage runs "
+                                f"before sheet {reader_sheet} (voice "
+                                f"{config.sheet.get_fan_out_metadata(reader_sheet).instance} "
+                                f"of movement {stage}), or move the producer "
+                                f"earlier."
+                            ),
+                        )
+                    )
+                    break  # one finding per (stage, item)
 
         return issues

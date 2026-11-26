@@ -421,6 +421,60 @@ class TestToYamlRoundTrip:
         assert original.model_dump() == restored.model_dump()
 
     @pytest.mark.adversarial
+    def test_movement_cadenzas_roundtrip(self):
+        """Movement cadenzas survive model_dump and to_yaml round trips (#571).
+
+        The width is declared with sheet.fan_out (not movements.N.voices) so
+        the re-validated dump stays a fixed point — the voices spelling has
+        its own pre-existing re-expansion bug, out of scope here.
+        """
+        from marianne.core.sheet import build_sheets
+
+        original = JobConfig.model_validate(
+            {
+                "name": "stage-cadenzas-571",
+                "workspace": str(Path("./ws")),
+                "movements": {
+                    2: {
+                        "cadenzas": [
+                            {"file": "shared.md", "as": "context"},
+                            {"voice": 2, "file": "only-2.md", "as": "context"},
+                        ]
+                    }
+                },
+                "sheet": {
+                    "size": 1,
+                    "total_items": 3,
+                    "fan_out": {2: 3},
+                    "cadenzas": {5: [{"file": "x.md", "as": "context"}]},
+                },
+                "prompt": {"template": "x"},
+            }
+        )
+
+        def delivery(config: JobConfig) -> dict[int, list[str]]:
+            return {s.num: [i.file for i in s.cadenza] for s in build_sheets(config)}
+
+        reference = delivery(original)
+        assert reference == {
+            1: [],
+            2: ["shared.md"],
+            3: ["shared.md", "only-2.md"],
+            4: ["shared.md"],
+            5: ["x.md"],
+        }
+
+        reloaded = JobConfig.model_validate(original.model_dump(mode="json"))
+        assert reloaded.model_dump(mode="json") == original.model_dump(mode="json")
+        assert delivery(reloaded) == reference
+        assert set(reloaded.sheet.cadenzas) == {5}
+
+        restored = JobConfig.from_yaml_string(original.to_yaml())
+        assert delivery(restored) == reference
+        assert set(restored.sheet.cadenzas) == {5}
+        assert [getattr(i, "voice", None) for i in restored.movements[2].cadenzas] == [None, 2]
+
+    @pytest.mark.adversarial
     def test_score_composer_roundtrip(self):
         """score-composer.yaml (with prelude fix) survives round-trip."""
         original = JobConfig.from_yaml(Path("examples/engineering/score-composer.yaml"))

@@ -366,6 +366,40 @@ class TestBuildSheetsFanOut:
         counts = [s.voice_count for s in sheets]
         assert counts == [1, 3, 3, 3, 1]
 
+    def test_build_sheets_composes_movement_and_sheet_cadenzas(self):
+        """Movement cadenzas reach every voice, then the sheet's own items (#571)."""
+        from marianne.core.sheet import build_sheets
+
+        config = self._make_config(
+            movements={
+                1: {"name": "Plan"},
+                2: {
+                    "name": "Build",
+                    "cadenzas": [
+                        {"file": "shared.md", "as": "context"},
+                        {"voice": 2, "file": "only-2.md", "as": "context"},
+                    ],
+                },
+                3: {"name": "Check"},
+            },
+            sheet={
+                "size": 1,
+                "total_items": 3,
+                "start_item": 1,
+                "fan_out": {2: 3},
+                "cadenzas": {3: [{"file": "sheet-only.md", "as": "context"}]},
+            },
+        )
+        sheets = build_sheets(config)
+        got = {s.num: [i.file for i in s.cadenza] for s in sheets}
+        assert got == {
+            1: [],
+            2: ["shared.md"],
+            3: ["shared.md", "only-2.md", "sheet-only.md"],
+            4: ["shared.md"],
+            5: [],
+        }
+
 
 class TestMailboxSheetConstruction:
     def test_messaging_default_and_invalid_mode(self):

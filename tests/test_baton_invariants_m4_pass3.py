@@ -78,6 +78,7 @@ from marianne.core.config.job import (
     InjectionItem,
     InstrumentDef,
     JobConfig,
+    MovementCadenzaItem,
     MovementDef,
     PromptConfig,
     SheetConfig,
@@ -199,6 +200,7 @@ ALL_CONFIG_MODELS: list[type[BaseModel]] = [
     # job.py
     AliasEntry,
     InjectionItem,
+    MovementCadenzaItem,
     InstrumentDef,
     MovementDef,
     SheetConfig,

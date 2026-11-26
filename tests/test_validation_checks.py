@@ -1138,6 +1138,36 @@ class TestInjectionSizeCheck:
         )
         assert issues == []
 
+    def test_injection_size_check_measures_a_movement_item_once(self, tmp_path: Path) -> None:
+        # A movement cadenza is measured once per (stage, item), not once
+        # per voice of the fan-out (#571).
+        from marianne.validation.checks.paths import InjectionSizeCheck
+
+        memo = tmp_path / "memory.md"
+        memo.write_text("m" * 2048)
+        yaml_content = dedent(f"""
+            name: test-job
+            movements:
+              2:
+                cadenzas:
+                  - file: {memo}
+                    as: context
+                    max_bytes: 1024
+            sheet:
+              size: 1
+              total_items: 3
+              fan_out: {{2: 3}}
+            prompt:
+              template: "Test"
+        """).strip()
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text(yaml_content)
+        config = JobConfig.from_yaml(config_path)
+        issues = InjectionSizeCheck().check(config, config_path, yaml_content)
+        assert [(i.check_id, i.metadata["source"], i.severity) for i in issues] == [
+            ("V334", "cadenza (stage 2)", ValidationSeverity.WARNING)
+        ]
+
 
 class TestPreludeCadenzaFileCheck:
     """Tests for PreludeCadenzaFileCheck (V108)."""
@@ -1239,6 +1269,40 @@ class TestPreludeCadenzaFileCheck:
         assert issues[0].check_id == "V108"
         assert "cadenza" in issues[0].message
         assert "sheet 2" in issues[0].message
+
+    def test_prelude_cadenza_file_check_reports_a_movement_item_once(self, tmp_path: Path) -> None:
+        """A movement cadenza item is reported once per (stage, item), by stage (#571)."""
+        from marianne.validation.checks.paths import PreludeCadenzaFileCheck
+
+        yaml_content = dedent("""
+            name: test-job
+            movements:
+              2:
+                cadenzas:
+                  - file: /nonexistent/missing-a.md
+                    as: context
+                  - file: /nonexistent/missing-b.md
+                    as: context
+            sheet:
+              size: 1
+              total_items: 3
+              fan_out: {2: 3}
+            prompt:
+              template: "Test"
+        """).strip()
+
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text(yaml_content)
+        config = JobConfig.from_yaml(config_path)
+
+        check = PreludeCadenzaFileCheck()
+        issues = check.check(config, config_path, yaml_content)
+
+        # 3 voices x 2 items would be six findings; one per (stage, item) is two.
+        assert sorted((i.check_id, i.metadata["source"]) for i in issues) == [
+            ("V108", "cadenza (stage 2)"),
+            ("V108", "cadenza (stage 2)"),
+        ]
 
     def test_skips_jinja_templated_paths(self, tmp_path: Path) -> None:
         """Paths with Jinja templates ({{ }}) are skipped."""

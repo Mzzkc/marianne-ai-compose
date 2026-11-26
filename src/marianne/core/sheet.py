@@ -26,7 +26,12 @@ from pydantic import BaseModel, Field
 
 from marianne.core.config.classes import ClassEntry, ClassSnapshot, InstrumentResolution
 from marianne.core.config.execution import ValidationRule
-from marianne.core.config.job import AliasEntry, InjectionItem, InstrumentDef
+from marianne.core.config.job import (
+    AliasEntry,
+    InjectionItem,
+    InstrumentDef,
+    cadenzas_for_sheet,
+)
 from marianne.core.constants import SHEET_NUM_KEY, positional_template_variables
 from marianne.core.producers import (
     declared_products_from_config,
@@ -60,7 +65,9 @@ class Sheet(BaseModel):
 
     Context injection:
         prelude: Shared context injected into all sheets
-        cadenza: Per-sheet context injection
+        cadenza: Per-sheet context injection — this sheet's movement cadenza
+            items (every voice of its stage, or one voice via `voice:`)
+            read first, then its sheet.cadenzas items
         prompt_extensions: Additional prompt directives
 
     Acceptance criteria:
@@ -155,7 +162,9 @@ class Sheet(BaseModel):
     )
     cadenza: list[InjectionItem] = Field(
         default_factory=list,
-        description="Per-sheet context injection (cadenza items)",
+        description="Per-sheet context injection (cadenza items): this sheet's "
+        "movement cadenza items (every voice, or one voice via `voice:`) "
+        "read first, then its sheet.cadenzas items",
     )
     prompt_extensions: list[str] = Field(
         default_factory=list,
@@ -508,7 +517,7 @@ def build_sheets(config: JobConfig, *, classes: ClassSnapshot | None = None) -> 
 
         # --- Context Injection ---
         prelude = list(config.sheet.prelude)
-        cadenza = list(config.sheet.cadenzas.get(sheet_num, []))
+        cadenza = cadenzas_for_sheet(config, sheet_num)
 
         # Prompt extensions: score-level + per-sheet
         extensions = list(config.prompt.prompt_extensions)

@@ -303,6 +303,32 @@ class InjectionItem(BaseModel):
         return self
 
 
+class MovementCadenzaItem(InjectionItem):
+    """A cadenza declared on a movement, so it reaches every voice of that stage (#571).
+
+    Same shape as an :class:`InjectionItem` (``file`` or ``directory``,
+    ``as``, ``required``, ``max_bytes``), plus ``voice`` to narrow the item
+    to one voice of the fan-out instead of every voice. Legal only under
+    ``movements.<n>.cadenzas``; a ``voice`` spelled under ``sheet.prelude``
+    or ``sheet.cadenzas`` is an unknown field and is stripped (V010/V011).
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    voice: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Deliver this item to one voice of the movement only — the "
+            "fan-out instance number, 1-based (movement cadenzas only). "
+            "Unset (the default) reaches every voice of the movement. "
+            "Compare with the `{{ voice }}` template variable, which "
+            "renders per voice inside a path. A voice the movement does "
+            "not have reaches nobody (V216 reports it)."
+        ),
+    )
+
+
 AliasSelect = Literal["cycle", "spread", "cheapest", "widest", "balance"]
 
 
@@ -448,7 +474,8 @@ class MovementDef(BaseModel):
 
     Movements are sequential execution phases. Each movement can specify
     a name, an instrument (overriding the score default), instrument config,
-    and a voice count (shorthand for fan-out).
+    and a voice count (shorthand for fan-out). A movement can also declare
+    cadenzas — context injected into every voice of the movement (GH #571).
 
     Example YAML::
 
@@ -460,6 +487,9 @@ class MovementDef(BaseModel):
             name: Implementation
             voices: 3
             instrument: gemini-cli
+            cadenzas:
+              - {file: "{{ workspace }}/shared-plan.md", as: context}
+              - {voice: 2, file: "{{ workspace }}/only-voice-2.md", as: context}
           3:
             name: Review
     """
@@ -500,6 +530,18 @@ class MovementDef(BaseModel):
         default_factory=list,
         description="Default fallback chain for sheets in this movement. "
         "Overrides score-level instrument_fallbacks for sheets in this movement.",
+    )
+    cadenzas: list[MovementCadenzaItem] = Field(
+        default_factory=list,
+        description=(
+            "Context injections for every voice of this movement (GH #571). "
+            "Each item is a prelude-shaped InjectionItem (file or directory, "
+            "as, required, max_bytes); an optional `voice` narrows one item "
+            "to a single fan-out voice, and paths may template on "
+            "`{{ voice }}`. Read before the sheet.cadenzas items of each "
+            "voice, and never copied into sheet.cadenzas. Movement numbers "
+            "are stages, so a movement that has no sheet is V216."
+        ),
     )
 
 
@@ -636,7 +678,12 @@ class SheetConfig(BaseModel):
         default_factory=dict,
         description=(
             "Per-sheet context injections. Map of sheet_num -> list of InjectionItems. "
-            "Applied in addition to prelude items for the specified sheet. "
+            "Keys are CONCRETE sheet numbers, also after fan-out expansion "
+            "(under fan_out {2: 3} a key 5 names the concrete sheet 5, not "
+            "stage 5). Applied in addition to prelude items for the specified "
+            "sheet; read after this sheet's movement cadenza items. "
+            "To reach every voice of a stage, declare the cadenza on the "
+            "movement — movements.<stage>.cadenzas (GH #571). "
             "Example: {2: [{file: 'extra-context.md', as: 'context'}]}"
         ),
     )
@@ -1873,6 +1920,57 @@ class JobConfig(BaseModel):
         identifier.
         """
         return self.instrument or DEFAULT_INSTRUMENT_NAME
+
+
+def movement_cadenzas(config: JobConfig) -> dict[int, list[MovementCadenzaItem]]:
+    """Stage-keyed cadenza declarations, as authored (#571).
+
+    Returns the map of stage number to that movement's cadenza items,
+    stages ascending, listing only the movements that declare items. The
+    movement number is the stage — the same namespace as ``sheet.fan_out``
+    keys and loop spans. Nothing is copied into ``sheet.cadenzas``: the
+    items are resolved per sheet by :func:`cadenzas_for_sheet`.
+    """
+    return {
+        stage: movement.cadenzas
+        for stage, movement in sorted(config.movements.items())
+        if movement.cadenzas
+    }
+
+
+def cadenzas_for_sheet(config: JobConfig, sheet_num: int) -> list[InjectionItem]:
+    """The cadenza items one concrete sheet reads, in delivery order (#571).
+
+    The movement cadenza items whose ``voice`` is ``None`` or equals the
+    sheet's fan-out instance (``1`` on a solo movement), then the sheet's
+    own ``sheet.cadenzas[sheet_num]`` items. Pure: it never writes to
+    ``config``, so a re-validated dump (resume) never delivers them twice.
+    """
+    fan_meta = config.sheet.get_fan_out_metadata(sheet_num)
+    composed: list[InjectionItem] = []
+    movement = config.movements.get(fan_meta.stage)
+    if movement is not None:
+        for movement_item in movement.cadenzas:
+            if movement_item.voice is None or movement_item.voice == fan_meta.instance:
+                composed.append(movement_item)
+    composed.extend(config.sheet.cadenzas.get(sheet_num, ()))
+    return composed
+
+
+def stage_sheets(config: JobConfig, stage: int) -> list[int]:
+    """The concrete sheets of a stage, lowest first (#571).
+
+    Read from ``fan_out_stage_map`` after expansion; a stage without
+    fan-out is the sheet of that number; a stage that has no sheet (for
+    example a movement number past the last stage) returns ``[]``.
+    """
+    if config.sheet.fan_out_stage_map:
+        return sorted(
+            num for num, meta in config.sheet.fan_out_stage_map.items() if meta["stage"] == stage
+        )
+    if 1 <= stage <= config.sheet.total_sheets:
+        return [stage]
+    return []
 
 
 def merge_runtime_variables(
