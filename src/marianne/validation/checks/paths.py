@@ -591,83 +591,79 @@ class CadenzaOrderingCheck:
 
         for reader_sheet, items in config.sheet.cadenzas.items():
             for item in items:
-                if item.file is None:  # directory cadenzas have no single file
-                    continue
-                name = Path(item.file).name
-                producing_sheets = producers.get(name)
-                if not producing_sheets:
-                    continue  # no producer signal — V108 covers disk existence
-                ancestors = dag_ancestors(reader_sheet, deps)
-                # Safe iff SOME producer is guaranteed to run before the
-                # reader (a strict DAG ancestor).
-                if producing_sheets & ancestors:
-                    continue
-                latest = max(producing_sheets)
-                issues.append(
-                    ValidationIssue(
-                        check_id=self.check_id,
-                        severity=self.severity,
-                        message=(
-                            f"Sheet {reader_sheet}'s cadenza reads "
-                            f"'{item.file}', but the stage that produces it "
-                            f"(sheet {latest}, per its producer declaration) is "
-                            f"not guaranteed to run first — the file may not "
-                            f"exist yet when this cadenza fires."
-                        ),
-                        line=find_line_in_yaml(raw_yaml, item.file),
-                        context=item.file,
-                        suggestion=(
-                            f"Add a dependency so the producing stage runs "
-                            f"before sheet {reader_sheet}, or move the "
-                            f"producer earlier."
-                        ),
-                    )
+                finding = self._late_producer_finding(
+                    item, reader_sheet, producers, deps, raw_yaml, f"sheet {reader_sheet}"
                 )
+                if finding is not None:
+                    issues.append(finding)
 
         # Movement cadenzas (#571): judged per voice — instance-matched
         # dependencies make the ancestor sets of one stage's voices differ,
         # and the item is safe only if every voice it reaches has a
         # producing ancestor. At most one finding per (stage, item).
         for stage, movement_items in movement_cadenzas(config).items():
+            voices = [
+                (reader_sheet, config.sheet.get_fan_out_metadata(reader_sheet).instance)
+                for reader_sheet in stage_sheets(config, stage)
+            ]
             for movement_item in movement_items:
-                if movement_item.file is None:  # directory cadenza
-                    continue
-                name = Path(movement_item.file).name
-                producing_sheets = producers.get(name)
-                if not producing_sheets:
-                    continue
-                for reader_sheet in stage_sheets(config, stage):
-                    if movement_item.voice is not None:
-                        fan_meta = config.sheet.get_fan_out_metadata(reader_sheet)
-                        if movement_item.voice != fan_meta.instance:
-                            continue  # this voice is not one the item reaches
-                    ancestors = dag_ancestors(reader_sheet, deps)
-                    if producing_sheets & ancestors:
-                        continue  # this voice is safe
-                    latest = max(producing_sheets)
-                    issues.append(
-                        ValidationIssue(
-                            check_id=self.check_id,
-                            severity=self.severity,
-                            message=(
-                                f"Sheet {reader_sheet}'s cadenza reads "
-                                f"'{movement_item.file}', but the stage that "
-                                f"produces it (sheet {latest}, per its producer "
-                                f"declaration) is not guaranteed to run first "
-                                f"— the file may not exist yet when this "
-                                f"cadenza fires."
-                            ),
-                            line=find_line_in_yaml(raw_yaml, movement_item.file),
-                            context=movement_item.file,
-                            suggestion=(
-                                f"Add a dependency so the producing stage runs "
-                                f"before sheet {reader_sheet} (voice "
-                                f"{config.sheet.get_fan_out_metadata(reader_sheet).instance} "
-                                f"of movement {stage}), or move the producer "
-                                f"earlier."
-                            ),
-                        )
+                for reader_sheet, instance in voices:
+                    if movement_item.voice is not None and movement_item.voice != instance:
+                        continue  # this voice is not one the item reaches
+                    finding = self._late_producer_finding(
+                        movement_item,
+                        reader_sheet,
+                        producers,
+                        deps,
+                        raw_yaml,
+                        f"sheet {reader_sheet} (voice {instance} of movement {stage})",
                     )
-                    break  # one finding per (stage, item)
+                    if finding is not None:
+                        issues.append(finding)
+                        break  # one finding per (stage, item)
 
         return issues
+
+    def _late_producer_finding(
+        self,
+        item: InjectionItem,
+        reader_sheet: int,
+        producers: dict[str, set[int]],
+        deps: dict[int, list[int]],
+        raw_yaml: str,
+        reader: str,
+    ) -> ValidationIssue | None:
+        """The finding for one item read by one sheet, or ``None``.
+
+        ``None`` when nothing declares the item's file (V108 covers disk
+        existence), when it is a directory (no single file to reason about),
+        or when some producer is a DAG ancestor of the reader and so is
+        guaranteed to run first. ``reader`` is how the suggestion names the
+        reading sheet: ``sheet N``, or ``sheet N (voice V of movement M)``.
+        """
+        if item.file is None:  # directory cadenzas have no single file
+            return None
+        producing_sheets = producers.get(Path(item.file).name)
+        if not producing_sheets:
+            return None  # no producer signal — V108 covers disk existence
+        # Safe iff SOME producer is guaranteed to run before the
+        # reader (a strict DAG ancestor).
+        if producing_sheets & dag_ancestors(reader_sheet, deps):
+            return None
+        latest = max(producing_sheets)
+        return ValidationIssue(
+            check_id=self.check_id,
+            severity=self.severity,
+            message=(
+                f"Sheet {reader_sheet}'s cadenza reads '{item.file}', but the stage "
+                f"that produces it (sheet {latest}, per its producer declaration) is "
+                f"not guaranteed to run first — the file may not exist yet when this "
+                f"cadenza fires."
+            ),
+            line=find_line_in_yaml(raw_yaml, item.file),
+            context=item.file,
+            suggestion=(
+                f"Add a dependency so the producing stage runs before {reader}, "
+                f"or move the producer earlier."
+            ),
+        )

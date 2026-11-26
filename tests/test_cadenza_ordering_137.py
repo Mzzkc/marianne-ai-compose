@@ -246,3 +246,54 @@ class TestMovementCadenzaOrdering:
         issues = _run(cfg)
         assert len(issues) == 1
         assert "report.md" in issues[0].message
+
+
+class TestSharedOrderingDiagnostic:
+    """The sheet and movement forms of one late read get the same finding (#571).
+
+    Both are judged and worded in one place, so a change to the ordering
+    rule or the wording cannot reach one form and miss the other. They
+    differ only in the reader the suggestion names.
+    """
+
+    def test_sheet_and_movement_readers_differ_only_in_the_named_reader(self) -> None:
+        # Sheet 2 reads report.md, which sheet 3 produces, and sheet 3 runs
+        # after sheet 2 (dependencies are `sheet: [runs first]`). The same
+        # late read is declared under sheet.cadenzas and on movement 2.
+        raw = """\
+name: ord
+workspace: ./ws
+instrument: claude-code
+movements:
+  2:
+    cadenzas:
+      - {file: report.md, as: context}
+sheet:
+  size: 1
+  total_items: 3
+  cadenzas:
+    2:
+      - {file: report.md, as: context}
+  dependencies: {3: [2]}
+prompt: {template: x}
+validations:
+  - {type: file_exists, path: report.md, sheet: 3}
+"""
+        config = JobConfig.from_yaml_string(raw)
+        issues = CadenzaOrderingCheck().check(config, Path("s.yaml"), raw)
+
+        assert len(issues) == 2
+        sheet_finding, movement_finding = issues  # sheet readers are judged first
+        for finding in issues:
+            assert finding.check_id == "V109"
+            assert finding.severity.value == "warning"
+            assert "report.md" in finding.message
+        assert sheet_finding.message == movement_finding.message
+        assert sheet_finding.line == movement_finding.line
+        assert sheet_finding.context == movement_finding.context == "report.md"
+        assert sheet_finding.suggestion is not None
+        assert movement_finding.suggestion is not None
+        assert (
+            sheet_finding.suggestion.replace("sheet 2,", "sheet 2 (voice 1 of movement 2),")
+            == movement_finding.suggestion
+        )
