@@ -342,11 +342,14 @@ cli:
       # dialog; "Yes, I accept" is reached with Down+Enter on v2.x.
       - pattern: "Bypass Permissions mode"
         keys: ["Down", "Enter"]
-    # The BARE input prompt line: "❯ " with nothing typed after it.
+    # The empty input prompt line: "❯ " with nothing typed after it, or with
+    # the placeholder Claude Code 2.1.332+ draws in an empty box
+    # ('❯ Try "edit <filepath> to…"', GH #586; the bare-only pattern never
+    # matched it and every interactive start timed out).
     # Must stay anchored — the trust dialog renders a selection cursor
     # ("❯ 1. Yes, I trust this folder") that an unanchored pattern
     # matches, and a prompt pasted into that dialog is silently lost.
-    ready_pattern: '(?m)^\s*❯\s*$'
+    ready_pattern: '(?m)^\s*❯(?:\s*$|\s+Try ")'
     # Busy: tool-run hint, or a spinner line with elapsed time like
     # "· Percolating… (2s)" / "✻ Baked for 24s".
     busy_patterns:
