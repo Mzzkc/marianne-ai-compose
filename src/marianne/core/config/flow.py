@@ -65,7 +65,11 @@ def span_range(span: str) -> range:
 
 
 MAX_LOOP_ITERATIONS: Final[int] = 10_000
-"""Upper bound on a loop's iteration cap, literal or resolved from a variable (#568)."""
+"""Upper bound on ``max_iterations`` and on a cap resolved from a prompt variable (#568).
+
+A literal ``max_iterations`` and a ``count`` or ``max_iterations`` read from a
+prompt variable must not exceed it. A literal ``count`` has no upper bound.
+"""
 
 
 class LoopConfig(BaseModel):

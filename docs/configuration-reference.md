@@ -2168,18 +2168,28 @@ sheet:
       max_iterations: '{{ max_passes }}'
 ```
 
-The reference is resolved when the score loads, to an integer or a string of
-ASCII digits in `1`-`10000` (surrounding whitespace and leading zeroes are
-ignored; signs are refused); a bare reference only — no filters, arithmetic
-or surrounding text. An undeclared name, a non-integer or an out-of-range
-value is a coded error, **V351**, one issue per failing loop and field whose
-`metadata.span` is the loop key as written, instead of a pydantic `int_parsing`
-trace. Literal caps are unchanged. The cap is fixed per run: `mzt run --var`
-merges after it is resolved and cannot change it — while `until`'s `var.x`
-expressions still read `--var`. Note that
-`until: 'loop.pass_no >= var.max_passes'` is a different tool: it ends the
-loop `condition_met` when the goal is met rather than at a cap, and the
-`max_iterations` safety cap still applies on top of it.
+The reference is resolved when the score loads, to an integer; the variable
+must be an integer or a string of ASCII digits in `1`-`10000` (surrounding
+whitespace and leading zeroes are ignored; signs are refused). The reference
+must be bare — no filters, arithmetic or surrounding text. An undeclared
+name, a non-integer or an out-of-range value is a coded error, **V351**, one
+issue per failing loop and field whose `metadata.span` is the loop key as
+written, instead of a pydantic `int_parsing` trace. Literal caps are
+unchanged: a literal `max_iterations` keeps its own `1`-`10000` bound, and a
+literal `count` has no upper bound. The resolved cap is fixed per run:
+`mzt run --var` merges after it is resolved and cannot change it.
+
+An `until` expression's `var.x` reads the merged variables at run time, so it
+does see `--var`. That makes `until: 'loop.pass_no >= var.max_passes'` a
+different tool from the cap: it ends the loop `condition_met` when the goal
+is met rather than at a cap, and the `max_iterations` safety cap still
+applies on top of it (a cap below the goal still ends the loop on the cap).
+Because an expression never compares a number with a string, that form needs
+`max_passes` as a bare integer in the YAML (`max_passes: 12`, not `"12"`)
+that `--var` does not override — a `--var` value is always a string.
+Otherwise the loop ends `condition_error` and the span's last sheet fails
+with E999 on the first pass. To read a `--var` value, compare it as text:
+`until: 'var.max_passes == "12"'`.
 
 Expressions support booleans, comparisons, arithmetic, parentheses, `var.name`,
 `loop.name`, `sheet(N)`/`sheet.current`, and `file("path")` facts. File facts
