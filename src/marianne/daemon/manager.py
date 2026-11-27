@@ -7234,7 +7234,9 @@ class JobManager:
         )
         reopened_count = _reopen_loops_for_resume(
             checkpoint, pre_resume_status, from_sheet=from_sheet,
-            loop_caps={span: loop.max_iterations for span, loop in (config.sheet.loops or {}).items()},
+            loop_caps={
+                span: loop.max_iterations for span, loop in (config.sheet.loops or {}).items()
+            },
         )
         if reopened_count:
             _logger.info(
