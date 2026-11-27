@@ -89,8 +89,6 @@ _FAN_OUT_VARIABLE_REF: Final[re.Pattern[str]] = re.compile(
     r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*\}\}"
 )
 _WHOLE_NUMBER: Final[re.Pattern[str]] = re.compile(r"[0-9]+")
-_CAP_DIGITS: Final[int] = len(str(MAX_VARIABLE_FAN_OUT_WIDTH))
-"""The most significant digits an in-range width can have: those of the cap."""
 
 _ECHO_LIMIT: Final[int] = 10**10
 """An out-of-range value is echoed in a message only below this; beyond it, described."""
@@ -113,37 +111,37 @@ def _significant_digits(value: object) -> str | None:
     return stripped.lstrip("0")
 
 
-def _not_a_width(width: object) -> FlowIssue:
-    """The width is neither an integer nor a bare ``{{ name }}`` reference."""
+def _not_a_reference(value: object, *, noun: str, check: str) -> FlowIssue:
+    """The value is neither an integer nor a bare ``{{ name }}`` reference."""
     return FlowIssue(
-        check="V-FLOW-25",
+        check=check,
         span=None,
-        message=f"{width!r} is not a width or a '{{{{ variable }}}}' reference",
+        message=f"{value!r} is not a {noun} or a '{{{{ variable }}}}' reference",
         hint="Use an integer or '{{ variable }}' naming a prompt.variables entry",
     )
 
 
-def _not_declared(name: str) -> FlowIssue:
+def _not_declared(name: str, *, check: str) -> FlowIssue:
     """No ``prompt.variables`` entry answers this reference."""
     return FlowIssue(
-        check="V-FLOW-25",
+        check=check,
         span=None,
         message=f"variable {name!r} is not declared in prompt.variables",
         hint="Declare it under prompt.variables",
     )
 
 
-def _not_a_whole_number(name: str, value: object) -> FlowIssue:
+def _not_a_whole_number(name: str, value: object, *, noun: str, check: str) -> FlowIssue:
     """The variable is declared, but its value is not an integer."""
     return FlowIssue(
-        check="V-FLOW-25",
+        check=check,
         span=None,
-        message=f"variable {name!r} is {value!r}; a width must be a whole number",
+        message=f"variable {name!r} is {value!r}; a {noun} must be a whole number",
     )
 
 
-def _out_of_range(name: str, number: int | None) -> FlowIssue:
-    """The value is a whole number outside ``1..MAX_VARIABLE_FAN_OUT_WIDTH``.
+def _out_of_range(name: str, number: int | None, *, bound: int, noun: str, check: str) -> FlowIssue:
+    """The value is a whole number outside ``1..bound``.
 
     ``number`` is the value, or ``None`` when it is too long to convert or to
     show. A number is echoed only while it is short: CPython raises for an
@@ -156,10 +154,88 @@ def _out_of_range(name: str, number: int | None) -> FlowIssue:
     else:
         found = "is out of range"
     return FlowIssue(
-        check="V-FLOW-25",
+        check=check,
         span=None,
-        message=f"variable {name!r} {found}; a width must be 1-{MAX_VARIABLE_FAN_OUT_WIDTH}",
+        message=f"variable {name!r} {found}; a {noun} must be 1-{bound}",
     )
+
+
+def resolve_variable_integer(
+    value: object,
+    variables: Mapping[str, object],
+    *,
+    bound: int,
+    noun: str,
+    check: str,
+) -> int | FlowIssue:
+    """Resolve one integer field that may be a bare ``{{ name }}`` reference (#569, #568).
+
+    A literal integer is returned unchanged and is left for the model field's
+    own validation. The caller's ``bound`` applies only to variable
+    references. A boolean or any other non-string value returns an issue
+    saying the value is not a ``noun``.
+
+    A string must be exactly one bare ``{{ name }}`` reference, optionally
+    dotted (``{{ a.b }}``) and padded with whitespace. The ``variables``
+    mapping is walked along that name; a missing step, or a step whose value
+    is ``None``, is ``_not_declared``. What is found must be an integer or a
+    string of ASCII digits (no sign), in ``1..bound``:
+
+    - an integer is echoed in the out-of-range message when its absolute
+      value is below ``10**10``;
+    - a digit string is judged by its significant digits, so leading zeroes
+      never count against it. Surrounding whitespace is ignored. Up to the
+      bound's own digit count it is converted and echoed like an integer;
+      longer values return an out-of-range issue without conversion or
+      echoing the value. This avoids CPython's integer-conversion limit.
+    - any other value (a float, a ``bool``, other text, an empty string) is
+      ``_not_a_whole_number``.
+
+    Args:
+        value: One field value, e.g. from ``sheet.fan_out`` or a loop cap.
+        variables: The declared ``prompt.variables`` mapping.
+        bound: The inclusive upper bound for a resolved value.
+        noun: What the field is called in messages ("width", "loop cap").
+        check: The flow check id stamped on every issue.
+
+    Returns:
+        The integer, or one ``FlowIssue`` naming the reason. The issue
+        carries no span: the caller supplies it. Invalid values return
+        issues rather than raising validation errors.
+    """
+    cap_digits = len(str(bound))
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if not isinstance(value, str):
+        return _not_a_reference(value, noun=noun, check=check)
+    match = _FAN_OUT_VARIABLE_REF.fullmatch(value.strip())
+    if match is None:
+        return _not_a_reference(value, noun=noun, check=check)
+    name = match.group(1)
+    found: object = variables
+    for part in name.split("."):
+        if not isinstance(found, Mapping) or found.get(part) is None:
+            return _not_declared(name, check=check)
+        found = found[part]
+    if isinstance(found, bool):
+        return _not_a_whole_number(name, found, noun=noun, check=check)
+    if isinstance(found, int):
+        number: int | None = found
+    else:
+        digits = _significant_digits(found)
+        if digits is None:
+            return _not_a_whole_number(name, found, noun=noun, check=check)
+        if not digits:
+            number = 0  # every digit is a zero: a whole number, and out of range
+        elif len(digits) <= cap_digits:
+            number = int(digits)  # at most the bound's own digit count: always convertible
+        else:
+            # More significant digits than the bound has, so out of range;
+            # also too long for int() to convert or for a message to show.
+            number = None
+    if number is None or not 1 <= number <= bound:
+        return _out_of_range(name, number, bound=bound, noun=noun, check=check)
+    return number
 
 
 def resolve_fan_out_width(width: object, variables: Mapping[str, object]) -> int | FlowIssue:
@@ -195,38 +271,13 @@ def resolve_fan_out_width(width: object, variables: Mapping[str, object]) -> int
         The issue carries no span: the caller supplies the stage. Invalid
         widths return issues rather than raising validation errors.
     """
-    if isinstance(width, int) and not isinstance(width, bool):
-        return width
-    if not isinstance(width, str):
-        return _not_a_width(width)
-    match = _FAN_OUT_VARIABLE_REF.fullmatch(width.strip())
-    if match is None:
-        return _not_a_width(width)
-    name = match.group(1)
-    value: object = variables
-    for part in name.split("."):
-        if not isinstance(value, Mapping) or value.get(part) is None:
-            return _not_declared(name)
-        value = value[part]
-    if isinstance(value, bool):
-        return _not_a_whole_number(name, value)
-    if isinstance(value, int):
-        number: int | None = value
-    else:
-        digits = _significant_digits(value)
-        if digits is None:
-            return _not_a_whole_number(name, value)
-        if not digits:
-            number = 0  # every digit is a zero: a whole number, and out of range
-        elif len(digits) <= _CAP_DIGITS:
-            number = int(digits)  # at most the cap's own digit count: always convertible
-        else:
-            # More significant digits than the cap has, so out of range; also
-            # too long for int() to convert or for a message to show.
-            number = None
-    if number is None or not 1 <= number <= MAX_VARIABLE_FAN_OUT_WIDTH:
-        return _out_of_range(name, number)
-    return number
+    return resolve_variable_integer(
+        width,
+        variables,
+        bound=MAX_VARIABLE_FAN_OUT_WIDTH,
+        noun="width",
+        check="V-FLOW-25",
+    )
 
 
 class InjectionCategory(str, Enum):

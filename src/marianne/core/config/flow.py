@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Annotated, Any
+from typing import Annotated, Any, Final
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
@@ -64,6 +64,10 @@ def span_range(span: str) -> range:
     return range(start, end + 1)
 
 
+MAX_LOOP_ITERATIONS: Final[int] = 10_000
+"""Upper bound on a loop's iteration cap, literal or resolved from a variable (#568)."""
+
+
 class LoopConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -76,10 +80,24 @@ class LoopConfig(BaseModel):
         ),
     )
     count: int | None = Field(
-        default=None, ge=1, description="Maximum iteration count; exact count when until is absent."
+        default=None,
+        ge=1,
+        description=(
+            "Maximum iteration count; exact count when until is absent. May be a "
+            "quoted '{{ name }}' reference to one prompt.variables entry (dotted "
+            "paths allowed), resolved by JobConfig at load to 1-10000; a reference "
+            "that cannot be resolved is V351."
+        ),
     )
     max_iterations: int = Field(
-        default=50, ge=1, le=10_000, description="Absolute iteration safety cap."
+        default=50,
+        ge=1,
+        le=MAX_LOOP_ITERATIONS,
+        description=(
+            "Absolute iteration safety cap. May be a quoted '{{ name }}' reference to "
+            "one prompt.variables entry (dotted paths allowed), resolved by JobConfig "
+            "at load to 1-10000; a reference that cannot be resolved is V351."
+        ),
     )
     cost_limit_usd: float | None = Field(
         default=None, gt=0, description="Maximum accumulated span cost in USD."
