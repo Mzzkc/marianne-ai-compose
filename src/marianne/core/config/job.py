@@ -41,6 +41,7 @@ from marianne.core.config.execution import (
     ValidationRule,
 )
 from marianne.core.config.flow import (
+    MAX_LOOP_ITERATIONS,
     FlowConfigError,
     FlowIssue,
     LoopConfig,
@@ -278,6 +279,24 @@ def resolve_fan_out_width(width: object, variables: Mapping[str, object]) -> int
         noun="width",
         check="V-FLOW-25",
     )
+
+
+def _declared_prompt_variables(data: dict[str, object]) -> Mapping[str, object]:
+    """The declared ``prompt.variables`` of a raw ``JobConfig`` payload (#569, #568).
+
+    A ``mode="before"`` validator receives whichever shape the caller
+    passed: the raw mapping from YAML, or a ``PromptConfig`` an embedder
+    built first. Both declare variables; read them from either, or the
+    model form reports every variable as "not declared".
+    """
+    prompt = data.get("prompt")
+    if isinstance(prompt, PromptConfig):
+        declared: object = prompt.variables
+    elif isinstance(prompt, dict):
+        declared = prompt.get("variables")
+    else:
+        declared = None
+    return declared if isinstance(declared, Mapping) else {}
 
 
 class InjectionCategory(str, Enum):
@@ -619,6 +638,14 @@ class SheetConfig(BaseModel):
     class does not resolve anything itself: built directly with a
     ``'{{ name }}'`` count, it refuses it as a non-integer. A reference
     that cannot be resolved is V338, raised while the ``JobConfig`` loads.
+
+    A loop's ``max_iterations`` or ``count`` may likewise name a
+    ``prompt.variables`` entry (``'{{ max_passes }}'``, dotted paths
+    allowed). ``JobConfig`` resolves it to an integer in ``1..10000``
+    before this model validates, exactly as it resolves a fan-out width;
+    this class resolves nothing itself, and built directly with a
+    reference it refuses it as a non-integer. A reference that cannot be
+    resolved is V351, raised while the ``JobConfig`` loads.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -699,7 +726,12 @@ class SheetConfig(BaseModel):
     loops: dict[SheetSpan, LoopConfig] | None = Field(
         default=None,
         exclude_if=lambda value: value is None,
-        description="Do-while loops keyed by inclusive sheet span, or by stage span under fan-out.",
+        description=(
+            "Do-while loops keyed by inclusive sheet span, or by stage span under "
+            "fan-out. A loop's max_iterations or count may be a quoted '{{ name }}' "
+            "reference to a prompt.variables entry, resolved by JobConfig at load "
+            "(V351 when it cannot be)."
+        ),
     )
     triggers: dict[SheetSpan, SheetTriggerConfig] | None = Field(
         default=None,
@@ -1705,18 +1737,7 @@ class JobConfig(BaseModel):
         fan_out = sheet.get("fan_out")
         if not isinstance(fan_out, dict) or not fan_out:
             return data
-        prompt = data.get("prompt")
-        # A ``mode="before"`` validator receives whichever shape the caller
-        # passed: the raw mapping from YAML, or a ``PromptConfig`` an embedder
-        # built first. Both declare variables; read them from either, or the
-        # model form reports every variable as "not declared".
-        if isinstance(prompt, PromptConfig):
-            declared: object = prompt.variables
-        elif isinstance(prompt, dict):
-            declared = prompt.get("variables")
-        else:
-            declared = None
-        variables: Mapping[str, object] = declared if isinstance(declared, Mapping) else {}
+        variables = _declared_prompt_variables(data)
         resolved: dict[object, int] = {}
         issues: list[FlowIssue] = []
         for stage, width in fan_out.items():
@@ -1738,6 +1759,62 @@ class JobConfig(BaseModel):
         if resolved:
             data = dict(data)
             data["sheet"] = {**sheet, "fan_out": {**fan_out, **resolved}}
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_loop_caps(cls, data: object) -> object:
+        """Turn ``'{{ name }}'`` loop caps into integers from prompt.variables (#568)."""
+        if not isinstance(data, dict):
+            return data
+        sheet = data.get("sheet")
+        if not isinstance(sheet, dict):
+            # A SheetConfig model: its loops were already validated as integers.
+            return data
+        loops = sheet.get("loops")
+        if not isinstance(loops, dict) or not loops:
+            return data
+        variables = _declared_prompt_variables(data)
+        resolved: dict[object, dict[str, int]] = {}
+        issues: list[FlowIssue] = []
+        for key, loop in loops.items():
+            if not isinstance(loop, dict):
+                # A LoopConfig model, or None for `loops: {1: }`: the schema
+                # error is theirs to report, never an AttributeError here.
+                continue
+            for field in ("max_iterations", "count"):
+                value = loop.get(field)
+                if not (isinstance(value, str) and "{{" in value):
+                    continue  # brace-less strings keep pydantic's behaviour
+                outcome = resolve_variable_integer(
+                    value,
+                    variables,
+                    bound=MAX_LOOP_ITERATIONS,
+                    noun="loop cap",
+                    check="V-FLOW-26",
+                )
+                if isinstance(outcome, FlowIssue):
+                    issues.append(
+                        FlowIssue(
+                            check=outcome.check,
+                            span=str(key),
+                            message=f"loop {key} {field}: {outcome.message}",
+                            hint=outcome.hint,
+                        )
+                    )
+                else:
+                    resolved.setdefault(key, {})[field] = outcome
+        if issues:
+            raise FlowConfigError(tuple(issues))
+        if resolved:
+            data = dict(data)
+            data["sheet"] = {
+                **sheet,
+                "loops": {
+                    key: ({**loop, **resolved[key]} if key in resolved else loop)
+                    for key, loop in loops.items()
+                },
+            }
         return data
 
     @field_validator("movements")
