@@ -86,7 +86,7 @@ from marianne.telemetry.config import TelemetryConfig
 MAX_VARIABLE_FAN_OUT_WIDTH: Final[int] = 1000
 """Upper bound on a fan-out width resolved from a prompt variable (#569)."""
 
-_FAN_OUT_VARIABLE_REF: Final[re.Pattern[str]] = re.compile(
+_VARIABLE_INTEGER_REF: Final[re.Pattern[str]] = re.compile(
     r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*\}\}"
 )
 _WHOLE_NUMBER: Final[re.Pattern[str]] = re.compile(r"[0-9]+")
@@ -102,7 +102,7 @@ def _significant_digits(value: object) -> str | None:
     raises ``ValueError`` instead of converting a digit run longer than
     ``sys.get_int_max_str_digits()`` (4300 by default), so whether a string is
     a number cannot be left to ``int()``. Leading zeroes carry no magnitude and
-    are dropped here, so a valid width survives any number of them.
+    are dropped here, so a valid value survives any number of them.
     """
     if not isinstance(value, str):
         return None
@@ -209,7 +209,7 @@ def resolve_variable_integer(
         return value
     if not isinstance(value, str):
         return _not_a_reference(value, noun=noun, check=check)
-    match = _FAN_OUT_VARIABLE_REF.fullmatch(value.strip())
+    match = _VARIABLE_INTEGER_REF.fullmatch(value.strip())
     if match is None:
         return _not_a_reference(value, noun=noun, check=check)
     name = match.group(1)
