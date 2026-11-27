@@ -2150,6 +2150,37 @@ Use `{{ loops.pass_no }}` or `{{ pass_no }}` in prompts, `{pass_no}` in validati
 scoped to the loop, and `loop.pass_no` in expressions. A global validation
 cannot use a loop index that is unavailable on another sheet.
 
+A loop's iteration cap may name a `prompt.variables` entry instead of a
+literal — `max_iterations: '{{ max_passes }}'`, or a dotted `{{ book.count }}` —
+and so may `count`:
+
+```yaml
+prompt:
+  variables:
+    max_passes: "12"     # an integer, or a string of digits
+sheet:
+  size: 1
+  total_items: 2
+  loops:
+    1:
+      index: pass_no
+      until: 'file("done.txt").exists'
+      max_iterations: '{{ max_passes }}'
+```
+
+The reference is resolved when the score loads, to an integer or a string of
+ASCII digits in `1`-`10000` (surrounding whitespace and leading zeroes are
+ignored; signs are refused); a bare reference only — no filters, arithmetic
+or surrounding text. An undeclared name, a non-integer or an out-of-range
+value is a coded error, **V351**, one issue per failing loop and field whose
+`metadata.span` is the loop key as written, instead of a pydantic `int_parsing`
+trace. Literal caps are unchanged. The cap is fixed per run: `mzt run --var`
+merges after it is resolved and cannot change it — while `until`'s `var.x`
+expressions still read `--var`. Note that
+`until: 'loop.pass_no >= var.max_passes'` is a different tool: it ends the
+loop `condition_met` when the goal is met rather than at a cap, and the
+`max_iterations` safety cap still applies on top of it.
+
 Expressions support booleans, comparisons, arithmetic, parentheses, `var.name`,
 `loop.name`, `sheet(N)`/`sheet.current`, and `file("path")` facts. File facts
 include `.exists`, `.modified`, `.contains("text")`, and `.matches("regex")`.
