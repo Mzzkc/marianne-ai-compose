@@ -51,6 +51,13 @@ if TYPE_CHECKING:
 #: still move the sheet to one that can. It is not an instrument-health signal.
 MEMORY_UNSUPPORTED = "MEMORY_DELIVERY_UNSUPPORTED"
 
+#: ``SheetAttemptResult.error_classification`` for a memory attachment the conductor's own
+#: configuration cannot deliver (GH #572: a ``cam`` attachment naming an endpoint the conductor
+#: does not have, or setting an operator-only key). Not retried and not moved along the fallback
+#: chain: no instrument can deliver a misconfigured attachment. Fails the sheet at once with
+#: ``E301``. It is not an instrument-health signal.
+MEMORY_CONFIG_ERROR = "MEMORY_CONFIG_ERROR"
+
 
 @dataclass(frozen=True)
 class SheetAttemptResult:
@@ -100,7 +107,8 @@ class SheetAttemptResult:
     error_message: str | None = None
     # Structured E0xx-E9xx code from ErrorClassifier (#195). Additive,
     # backward compatible — None for the synthetic STALE/CANCELLED/E505/
-    # PROCESS_CRASH writers and the exception path that bypass _classify_error.
+    # PROCESS_CRASH writers and the exception path that bypass _classify_error;
+    # the ``MEMORY_CONFIG_ERROR`` writer (GH #572) sets ``E301``.
     error_code: str | None = None
     # Why the instrument process ended (completed/timeout/killed/error).
     # Persisted per attempt on the sheet (GH #434) so a fallen instrument's

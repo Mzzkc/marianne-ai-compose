@@ -8,6 +8,7 @@ import pytest
 
 from marianne.core.config.memory import MemoryConfig
 from marianne.daemon.baton.memory_gate import (
+    MemoryConfigError,
     MemoryDispatchGate,
     MemoryGateError,
     SheetIdentity,
@@ -147,6 +148,27 @@ def test_no_endpoints_configured_refuses_the_default(short_tmp: Path) -> None:
     err = _refusal(gate, short_tmp)
     assert "'default'" in err.reason and "none configured" in err.reason
     assert "mzt conductor reload" in err.reason and "restart" not in err.reason
+
+
+@pytest.mark.parametrize("settings,key", [
+    ({"base_url": "http://127.0.0.1:1"}, "memory_backends.cam.default"),
+    ({"endpoint": "default", "bogus": 1}, None),
+    ({"endpoint": 3}, None),
+    ({"endpoint": "nowhere"}, "memory_backends.cam.nowhere"),
+])
+def test_each_configuration_refusal_is_typed_naming_the_config_key(
+    short_tmp: Path, settings: dict[str, object], key: str | None,
+) -> None:
+    """GH #572: a configuration refusal is its own class, so its handling need not be guessed
+    from the ``memory_delivery_unsupported:`` prefix its text shares with the instrument
+    refusal (for which fallback is right)."""
+    gate = _gate(short_tmp, {
+        "shared": {"system": "cam", "scope": "project/b", "settings": settings},
+    })
+    err = _refusal(gate, short_tmp)
+    assert isinstance(err, MemoryConfigError)
+    assert err.attachment == "shared"
+    assert err.config_key == key
 
 
 def test_a_failed_second_attachment_leaves_nothing_open(short_tmp: Path) -> None:

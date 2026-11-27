@@ -1462,7 +1462,10 @@ class JobConfig(BaseModel):
         "trust, phases, caps). The conductor gives each sheet a memory session for "
         "the attachments active in its phase, delivered as an MCP server to "
         "instruments that accept an MCP config; a dispatch to an instrument that "
-        "does not is refused (`memory_delivery_unsupported`). A dispatch that "
+        "does not is refused (`memory_delivery_unsupported`). A misconfigured "
+        "attachment (a `cam` endpoint the conductor does not have, or an "
+        "operator-only setting) fails the sheet at once (`MEMORY_CONFIG_ERROR`, "
+        "`E301`) — no retry, no fallback move. A dispatch that "
         "opened a session but carries no memory block is refused too "
         "(`memory_manifest_missing`); that one is a conductor defect, not "
         "something a score can cause.",

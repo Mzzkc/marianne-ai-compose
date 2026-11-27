@@ -38,6 +38,7 @@ from marianne.core.errors.codes import ErrorCode
 from marianne.core.flow_state import FlowState
 from marianne.core.logging import get_logger
 from marianne.daemon.baton.events import (
+    MEMORY_CONFIG_ERROR,
     MEMORY_UNSUPPORTED,
     BatonEvent,
     CancelJob,
@@ -662,6 +663,18 @@ class BatonCore:
             inst.record_failure()
             if was_not_open and inst.circuit_breaker == CircuitBreakerState.OPEN:
                 self._schedule_circuit_breaker_recovery(instrument_name, inst)
+
+    @staticmethod
+    def _is_instrument_failure(event: SheetAttemptResult) -> bool:
+        """Whether a failed attempt is charged to the instrument it was dispatched to.
+
+        A memory configuration refusal (GH #572) is not: the instrument never ran and no
+        other instrument could deliver the attachment, so it is a fact about the score
+        and the conductor's configuration, not a health signal. The paths that end an
+        attempt before the terminal ``MEMORY_CONFIG_ERROR`` branch (a queued skip,
+        ``on_fail``) ask this first; so must any path added above that branch.
+        """
+        return not event.execution_success and event.error_classification != MEMORY_CONFIG_ERROR
 
     def _schedule_circuit_breaker_recovery(
         self, instrument_name: str, inst: InstrumentState
@@ -1964,7 +1977,7 @@ class BatonCore:
             event.validations_total == 0 or event.validation_pass_rate >= 100.0
         ):
             return False
-        if not event.execution_success:
+        if self._is_instrument_failure(event):
             self._update_instrument_on_failure(event.instrument_name)
         # Funnel as a non-attempt terminal: on_terminal consumes the
         # queued skip and converts the sheet to SKIPPED (error_code None).
@@ -2167,7 +2180,7 @@ class BatonCore:
             # (~1950 gate and the F-065 charge at ~2147).
             if event.execution_success and effective_pass_rate > 0:
                 self._update_instrument_on_success(event.instrument_name)
-            elif not event.execution_success:
+            elif self._is_instrument_failure(event):
                 self._update_instrument_on_failure(event.instrument_name)
             if self._check_sheet_cost_limit(event.job_id, event.sheet_num, sheet):
                 return
@@ -2243,6 +2256,22 @@ class BatonCore:
                 await self._handle_exhaustion(event.job_id, event.sheet_num, sheet)
                 if not self.is_job_registration_current(event.job_id, registration_token):
                     return
+            self._check_job_cost_limit(event.job_id)
+            return
+
+        if not event.execution_success and event.error_classification == MEMORY_CONFIG_ERROR:
+            # A misconfigured attachment is a fact about the score and the conductor's
+            # config: no instrument can deliver it. Fail now; charge no retry, move no
+            # fallback, and record nothing against the instrument (it never ran).
+            # ``record_attempt`` above already charged exactly one attempt and copied the
+            # code and message onto the sheet.
+            self._fail_sheet(
+                event.job_id,
+                sheet,
+                event.error_code or ErrorCode.CONFIG_INVALID.value,
+                event.error_message or "memory configuration refused",
+            )
+            self._state_dirty = True
             self._check_job_cost_limit(event.job_id)
             return
 

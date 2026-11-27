@@ -33,7 +33,10 @@ backend is acquired, ``teardown`` when the dispatch ends).
   stale sockets' bookkeeping, the cam endpoint table (``set_cam_endpoints`` rebinds it whole),
   and all gate dictionaries. None blocks on a lock or an fsync.
 * A failed memory open fails the dispatch; it does not degrade to "no memory". That is
-  intended: the sheet's prompt names tools that must exist.
+  intended: the sheet's prompt names tools that must exist. A *misconfigured* attachment
+  (``MemoryConfigError``) is stronger still: it fails the sheet at once
+  (``MEMORY_CONFIG_ERROR``, ``E301``) — it is not retried and does not move along the
+  fallback chain, because no instrument can deliver it.
 * Same-UID limit (stated once): the socket path is passed in the shim's environment rather
   than argv, which hides it from other users but not from other processes of the same user
   (``/proc/<pid>/environ`` is readable too), and every job of one conductor shares one
@@ -102,6 +105,21 @@ class MemoryGateError(Exception):
 
 class MemoryConfigCollision(MemoryGateError):
     """A memory server name is already present in the technique MCP config."""
+
+
+class MemoryConfigError(MemoryGateError):
+    """A memory attachment is misconfigured: no retry and no other instrument can change it.
+
+    ``config_key`` is the ``memory_backends.cam.<name>`` key the refusal points at: the
+    missing endpoint for an unknown endpoint, the attachment's own endpoint for an
+    operator-only setting. It is ``None`` when no one key is at fault (an unknown setting,
+    an ``endpoint`` that is not a name). The adapter adds the key to the dispatch failure's
+    message when the reason does not already name it.
+    """
+
+    def __init__(self, attachment: str, reason: str, *, config_key: str | None = None) -> None:
+        self.config_key = config_key
+        super().__init__(attachment, reason)
 
 
 @dataclass(frozen=True)
@@ -730,34 +748,37 @@ class MemoryDispatchGate:
         given = b.settings_dict()
         forbidden = sorted(set(given) & set(CAM_OPERATOR_ONLY))
         if forbidden:
-            raise MemoryGateError(
+            named = given.get("endpoint", DEFAULT_CAM_ENDPOINT)
+            raise MemoryConfigError(
                 b.name,
                 f"memory_delivery_unsupported: a score may not set {', '.join(forbidden)} for "
                 "a cam attachment; these are the operator's, set under `memory_backends.cam` "
                 "in the conductor configuration, and a score names an endpoint with "
                 "`settings: {endpoint: <name>}`",
+                config_key=f"memory_backends.cam.{named}" if isinstance(named, str) else None,
             )
         unknown = sorted(set(given) - {"endpoint", "timeout_seconds"})
         if unknown:
-            raise MemoryGateError(
+            raise MemoryConfigError(
                 b.name,
                 f"memory_delivery_unsupported: unknown cam setting(s) {', '.join(unknown)}; "
                 "a score may set only `endpoint` and `timeout_seconds`",
             )
         endpoint = given.get("endpoint", DEFAULT_CAM_ENDPOINT)
         if not isinstance(endpoint, str):
-            raise MemoryGateError(
+            raise MemoryConfigError(
                 b.name, "memory_delivery_unsupported: cam `endpoint` must be a name (a string)",
             )
         cfg = self._cam_endpoints.get(endpoint)
         if cfg is None:
             known = ", ".join(sorted(self._cam_endpoints)) or "none configured"
-            raise MemoryGateError(
+            raise MemoryConfigError(
                 b.name,
                 f"memory_delivery_unsupported: cam endpoint {endpoint!r} is not configured on "
                 f"this conductor (configured: {known}); set `memory_backends.cam.{endpoint}` "
                 "(base_url and api_key_env or api_key_file) in ~/.marianne/conductor.yaml "
                 "and run `mzt conductor reload`",
+                config_key=f"memory_backends.cam.{endpoint}",
             )
         merged = dict(cfg)
         if "timeout_seconds" in given:
@@ -1291,7 +1312,7 @@ class MemoryDispatchGate:
 __all__ = [
     "CONFIG_DIR_NAME", "FAR_FUTURE", "OWNERLESS_GRACE_SECONDS", "SHUTDOWN_BOUND_SECONDS",
     "SLOW_JOB_SECONDS",
-    "MemoryConfigCollision",
+    "MemoryConfigCollision", "MemoryConfigError",
     "MemoryDelivery", "MemoryDispatchGate",
     "MemoryGateError", "OpenedSession", "PreparedMemory", "SheetIdentity", "TeardownReport",
     "can_deliver", "lookup_profile", "merge_mcp_config",

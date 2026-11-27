@@ -239,6 +239,10 @@ async def test_prepare_failure_is_a_dispatch_failure_and_no_backend_is_acquired(
         assert failure.execution_success is False
         assert "Memory setup failed before backend acquisition" in failure.error_message
         assert "notes" in failure.error_message and "run_dir_unsafe" in failure.error_message
+        # GH #572 boundary: only a *configuration* refusal is typed; this one keeps the
+        # retry class, because an unsafe run directory can be fixed and retried.
+        assert failure.error_classification == "E505"
+        assert failure.error_code is None
         assert gate.open_dispatches == 0
     finally:
         await gate.shutdown()

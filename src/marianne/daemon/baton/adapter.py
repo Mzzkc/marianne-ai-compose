@@ -60,6 +60,7 @@ from marianne.core.config.flow import ConcertTrigger
 from marianne.core.config.instrument_settings import coerce_first_output_timeout
 from marianne.core.config.instruments import validate_openai_response_format
 from marianne.core.constants import VALIDATION_PASS_RATE_KEY
+from marianne.core.errors.codes import ErrorCode
 from marianne.core.expressions import parse_expression
 from marianne.core.sheet import Sheet
 from marianne.daemon.a2a.inbox import A2AInbox
@@ -67,6 +68,7 @@ from marianne.daemon.a2a.registry import AgentCardRegistry
 from marianne.daemon.baton.backend_pool import InstrumentNotRegisteredError
 from marianne.daemon.baton.core import BatonCore, CronHandler
 from marianne.daemon.baton.events import (
+    MEMORY_CONFIG_ERROR,
     MEMORY_UNSUPPORTED,
     A2ATaskRouted,
     A2ATaskSubmitted,
@@ -2977,6 +2979,7 @@ class BatonAdapter:
         state: SheetExecutionState | None = None,
         unavailable: bool = False,
         memory_unsupported: bool = False,
+        memory_config_error: bool = False,
     ) -> None:
         """Send a SheetAttemptResult failure event when dispatch cannot proceed.
 
@@ -3004,8 +3007,15 @@ class BatonAdapter:
                 once the chain is spent. Covers an instrument that cannot be
                 handed an MCP config and a dispatch that opened memory
                 sessions without a manifest (GH #556).
+            memory_config_error: Classify the failure as a memory
+                *configuration* refusal (``MEMORY_CONFIG_ERROR``) with error
+                code ``E301`` (GH #572): the attachment names a conductor
+                endpoint that does not exist, or sets a key only the operator
+                may set. The baton fails the sheet at once — no retry, no
+                fallback move, no instrument-health charge — because no
+                instrument can deliver a misconfigured attachment.
 
-        With neither flag the failure is classified ``E505`` and carries no
+        With none of the flags the failure is classified ``E505`` and carries no
         error code, and the baton applies its ordinary retry rules.
         """
         attempt = 1
@@ -3022,9 +3032,15 @@ class BatonAdapter:
             execution_success=False,
             error_classification=(
                 MEMORY_UNSUPPORTED if memory_unsupported
-                else "INSTRUMENT_UNAVAILABLE" if unavailable else "E505"
+                else "INSTRUMENT_UNAVAILABLE" if unavailable
+                else MEMORY_CONFIG_ERROR if memory_config_error
+                else "E505"
             ),
-            error_code="E505" if unavailable or memory_unsupported else None,
+            error_code=(
+                "E505" if unavailable or memory_unsupported
+                else ErrorCode.CONFIG_INVALID.value if memory_config_error
+                else None
+            ),
             error_message=error_msg,
         )
         self._baton.inbox.put_nowait(failure)
@@ -3246,12 +3262,34 @@ class BatonAdapter:
         memory_dispatch: str | None = None
         memory_manifest: str | None = None
         if job_id in getattr(self, "_job_memory", {}):
+            # Local import (like SheetIdentity below): a dispatch for a job without `memory:`
+            # must import no memory module (tests/memory/test_memory_gate_adapter.py).
+            from marianne.daemon.baton.memory_gate import MemoryConfigError
+
             try:
                 (
                     memory_manifest, mcp_config_path, memory_dispatch,
                 ) = await self._prepare_dispatch_memory(
                     job_id, sheet, mcp_config_path,
                 )
+            except MemoryConfigError as exc:
+                # GH #572: the attachment is misconfigured — a deterministic fact about the
+                # score and the conductor's config, not about this instrument. Typed so the
+                # baton can fail the sheet at once; the message already names the attachment
+                # and the `memory_backends.cam.<name>` key.
+                message = f"Memory setup failed before backend acquisition: {exc}"
+                if exc.config_key is not None and exc.config_key not in message:
+                    # The operator-only refusal names the section, not the endpoint's key
+                    # (the score, not the endpoint table, is at fault); say the key anyway
+                    # so the error names it as the issue requires.
+                    message = f"{message} (config key: `{exc.config_key}`)"
+                self._send_dispatch_failure(
+                    job_id, sheet_num, effective_instrument,
+                    message,
+                    state=state,
+                    memory_config_error=True,
+                )
+                return True
             except Exception as exc:  # noqa: BLE001 — dispatch failure is delivered to the baton for retry handling
                 self._send_dispatch_failure(
                     job_id, sheet_num, effective_instrument,

@@ -2642,7 +2642,7 @@ execution time.
 
 | Code | Name | Description |
 |------|------|-------------|
-| E301 | CONFIG_INVALID | Invalid score YAML; also an API refusal of the request itself (a 4xx other than 429 reported by the CLI, e.g. a `response_format` schema the API will not take as a tool `input_schema`) — the CLI's message is kept as the attempt's error and stderr tail (GH #486) |
+| E301 | CONFIG_INVALID | Invalid score YAML; also an API refusal of the request itself (a 4xx other than 429 reported by the CLI, e.g. a `response_format` schema the API will not take as a tool `input_schema`) — the CLI's message is kept as the attempt's error and stderr tail (GH #486); and a memory configuration refusal (`MEMORY_CONFIG_ERROR`: a `cam` attachment naming an endpoint the conductor does not have, or an operator-only setting) — fails the sheet at once (GH #572) |
 | E302 | CONFIG_MISSING_FIELD | Required field missing |
 | E303 | CONFIG_PATH_NOT_FOUND | Referenced path doesn't exist |
 | E304 | CONFIG_PARSE_ERROR | YAML syntax error |
