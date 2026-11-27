@@ -301,9 +301,18 @@ def test_null_loop_value_keeps_todays_schema_error() -> None:
 
 
 @pytest.mark.parametrize(
-    "value", [10001, 4.5, "missing"], ids=["out-of-range", "float", "undeclared"]
+    ("variables", "reason"),
+    [
+        ({"n": 10001}, "resolves to 10001"),
+        ({"n": 4.5}, "whole number"),
+        ({"n": "missing"}, "whole number"),
+        ({}, "not declared"),
+    ],
+    ids=["out-of-range", "float", "text", "undeclared"],
 )
-def test_prompt_model_reports_the_same_reasons_as_a_prompt_dict(value: object) -> None:
+def test_prompt_model_reports_the_same_reasons_as_a_prompt_dict(
+    variables: dict[str, object], reason: str
+) -> None:
     sheet: dict[str, object] = {
         "size": 1,
         "total_items": 2,
@@ -315,12 +324,13 @@ def test_prompt_model_reports_the_same_reasons_as_a_prompt_dict(value: object) -
             JobConfig.model_validate({"name": "x", "prompt": prompt, "sheet": sheet})
         except ValidationError as exc:
             return [(issue.check, issue.span, issue.message) for issue in _flow_issues(exc)]
-        raise AssertionError(f"{value!r} must be refused")
+        raise AssertionError(f"expected a refusal naming {reason!r} for variables {variables!r}")
 
-    as_dict = {"template": "hi", "variables": {"n": value}}
-    as_model = PromptConfig.model_validate({"template": "hi", "variables": {"n": value}})
-    assert reasons(as_dict)  # the dict form is refused, so the comparison is not vacuous
-    assert reasons(as_dict) == reasons(as_model)
+    as_dict: dict[str, object] = {"template": "hi", "variables": variables}
+    as_model = PromptConfig.model_validate({"template": "hi", "variables": variables})
+    from_dict = reasons(as_dict)  # the dict form is refused, so the comparison is not vacuous
+    assert from_dict == reasons(as_model)
+    assert reason in from_dict[0][2], from_dict
 
 
 def test_resolving_does_not_mutate_the_callers_input() -> None:
