@@ -1512,7 +1512,7 @@ memory:
 The address of a CAM server and the source of its key belong to the **operator**, not to a score. They are set once in the conductor configuration, under a name:
 
 ```yaml
-# ~/.marianne/conductor.yaml  (the operator's file; read when the conductor starts)
+# ~/.marianne/conductor.yaml  (the operator's file; read at start and on every reload)
 memory_backends:
   cam:
     default:                              # endpoint name; a score that names none gets `default`
@@ -1545,7 +1545,7 @@ memory:
 | `timeout_seconds` | Per-request ceiling (default 10); each request also stops at the call deadline |
 | `allow_remote` | Permit a non-loopback host (https only). Default `false` |
 
-A score's `settings` for `system: cam` may hold only `endpoint` and `timeout_seconds`. A score that sets `base_url`, `api_key_env`, `api_key_file` or `allow_remote` is refused: V350 reports it at `mzt validate`, and the dispatch refuses it again with `memory_delivery_unsupported` (the score file is not trusted with the conductor's environment variables or files, so it cannot send a credential to a server it names). A `endpoint` the conductor does not define is refused the same way, naming the endpoint and the `memory_backends.cam.<name>` key to set. `memory_backends` is read at conductor start; a hot reload that changes it reports `restart required`.
+A score's `settings` for `system: cam` may hold only `endpoint` and `timeout_seconds`. A score that sets `base_url`, `api_key_env`, `api_key_file` or `allow_remote` is refused: V350 reports it at `mzt validate`, and the dispatch refuses it again with `memory_delivery_unsupported` (the score file is not trusted with the conductor's environment variables or files, so it cannot send a credential to a server it names). A `endpoint` the conductor does not define is refused the same way, naming the endpoint and the `memory_backends.cam.<name>` key to set. `memory_backends` is read when the conductor starts and on every reload (`mzt conductor reload`, `SIGHUP`, or the watcher). A reload replaces the whole endpoint table: the next dispatch resolves against it, and a session that is already open keeps the backend it was opened with. A changed endpoint gets a new backend; a removed endpoint refuses the next dispatch that names it. An invalid edit is declined whole and the running endpoints are kept.
 
 What it can do today: `declare`, `recall` and `health` (a CAM running without an embedding model reports `degraded`, since recall is then lexical). `verify`, `bind`, `forget`, `fetch`, `stream_facts` and `migration_ingest` are refused with E7 `capability_unsupported` naming the operation, because CAM has no such operation yet. CAM recall has no cursor, so a recall is trimmed to the call's byte cap at a fact boundary on Marianne's side and the omitted facts are only counted. Every Marianne principal appears to CAM as the one key's principal until CAM ships stamped principals; the scope is passed through as CAM's scope.
 
@@ -1869,7 +1869,7 @@ Available but rarely need changing:
 | `orchestra` | `OrchestraConfig` | *(see sub-config)* | | Orchestra view: a public-safe fleet timeline, live over IPC and appended daily to `~/.marianne/orchestra/<day>.jsonl` for replay. Keys: `enabled` (true), `persist` (true), `directory`, `ring_size` (2000, `>= 100`), `keep_ended_seconds` (1800). The projection carries score name, sheet, instrument, outcome, time and a short note (fallback transition, retry attempt, or the verbatim chain-refusal reason, which can name the child score's path) |
 | `profiler` | `ProfilerConfig` | *(see sub-config)* | | System profiler (strace off by default, GPU probing off by default) |
 | `preflight` | `PreflightConfig` | *(see sub-config)* | | Preflight prompt analysis thresholds. Controls when prompts are warned or rejected based on estimated token count. |
-| `memory_backends` | `MemoryBackendsConfig` | `{}` | | Operator-side memory endpoints: `cam.<name>: {base_url, api_key_env \| api_key_file, allow_remote, timeout_seconds}`. Scores name an endpoint; they cannot set an address or key source (see [the `cam` backend](#the-cam-backend)). Restart to change |
+| `memory_backends` | `MemoryBackendsConfig` | `{}` | | Operator-side memory endpoints: `cam.<name>: {base_url, api_key_env \| api_key_file, allow_remote, timeout_seconds}`. Scores name an endpoint; they cannot set an address or key source (see [the `cam` backend](#the-cam-backend)). Hot — reload replaces the endpoint table (#573) |
 | `hot_reload` | `HotReloadConfig` | *(see [Hot Reload](#hot-reload))* | | Opt-in watcher that hot-applies config and instrument profile changes without a restart |
 | `config_file` | `Path \| None` | `None` | | Path to the YAML config file. Set automatically on startup; used by reload to re-read config from disk. |
 
@@ -1960,6 +1960,7 @@ value is kept):
 | `default_thinking_method` | Hot — live read at prompt build |
 | `log_level` | Hot — logging level reconfigured |
 | `hot_reload` | Hot — watcher reads live settings each cycle |
+| `memory_backends` | Hot — endpoint table replaced whole; new dispatches resolve against it, open sessions keep their backend (#573) |
 | `socket.*` | Restart-only |
 | `pid_file` | Restart-only |
 | `state_db_path` | Restart-only |

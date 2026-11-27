@@ -705,7 +705,8 @@ class DaemonConfig(BaseModel):
         default_factory=MemoryBackendsConfig,
         description="Operator-side memory backend endpoints (CAM servers by name). Scores "
         "name an endpoint; the address and key source are only ever set here. Read at "
-        "conductor start.",
+        "conductor start and on every config reload (#573): a reload replaces the whole "
+        "endpoint table.",
     )
     hot_reload: HotReloadConfig = Field(
         default_factory=HotReloadConfig,

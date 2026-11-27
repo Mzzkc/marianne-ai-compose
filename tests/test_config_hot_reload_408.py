@@ -14,7 +14,11 @@ stub — the same edge precedents mock.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import shutil
+import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -629,11 +633,14 @@ async def test_daemon_reload_over_real_socket(tmp_path: Path) -> None:
         assert status_before.config_generation == 1
         assert status_before.model_concurrency.get("alpha:m1") == 2
 
-        cfg_path.write_text(yaml.dump({"max_concurrent_jobs": 9}))
+        cfg_path.write_text(yaml.dump({
+            "max_concurrent_jobs": 9, "memory_backends": {"cam": _CAM},
+        }))
         result = await client.reload_config(reason="ipc-test")
         assert result["success"] is True
         assert result["config_generation"] == 2
         assert any("max_concurrent_jobs" in e for e in result["applied"])
+        assert "memory_backends" in result["applied"]  # #573: hot, not restart-only
 
         status_after = await client.status()
         assert status_after.config_generation == 2
@@ -652,6 +659,152 @@ async def test_daemon_reload_over_real_socket(tmp_path: Path) -> None:
     finally:
         await client.close()
         await server.stop()
+
+
+# ─── memory_backends hot-apply (#573) ──────────────────────────────────
+
+
+_CAM = {"default": {"base_url": "http://127.0.0.1:9", "api_key_env": "MZT_TEST_CAM_KEY"}}
+_CAM_MOVED = {"default": {"base_url": "http://127.0.0.1:4243", "api_key_env": "MZT_TEST_CAM_KEY"}}
+_CAM_ONLY = {"backends": {"shared": {"system": "cam", "scope": "project/b"}}}
+
+
+@contextlib.contextmanager
+def _gate_root() -> Iterator[Path]:
+    """A short private root for a gate that opens real sockets (AF_UNIX path limit)."""
+    root = Path(tempfile.mkdtemp(prefix="mg573", dir="/tmp"))
+    try:
+        yield root
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def _memory_gate(root: Path, config: DaemonConfig) -> Any:
+    """A real gate built the way ``JobManager.start()`` builds it (endpoints from ``config``)."""
+    from marianne.daemon.baton.memory_gate import MemoryDispatchGate
+
+    return MemoryDispatchGate(
+        run_dir=root / "run", memory_root=root / "files", audit_dir=root / "audit", user="ada",
+        cam_endpoints=JobManager._cam_endpoints_from(config),
+    )
+
+
+async def _deliver(gate: Any, job: str, root: Path) -> str:
+    """One dispatch of ``job`` on the gate; returns its dispatch id."""
+    from marianne.daemon.baton.memory_gate import SheetIdentity
+
+    delivery = await gate.deliver(
+        job, SheetIdentity(1, 1, "work"), timeout_seconds=60, existing_mcp_config=None,
+        workspace=root / "ws",
+    )
+    assert delivery is not None
+    return delivery.dispatch_id
+
+
+async def test_reload_applies_memory_backends_to_the_gate(tmp_path: Path) -> None:
+    """GH #573: a changed `memory_backends` hot-applies to the gate and is reported applied."""
+    from marianne.core.config.memory import MemoryConfig
+    from marianne.memory.backends.cam import CamBackend
+
+    org = _profile_dir(tmp_path)
+    cfg_path = _config_file(tmp_path)
+    config = _load_config(cfg_path)
+    manager = _manager(tmp_path, config=config, org_dir=org)
+    assert manager._memory_gate is None  # _manager() does not start(); the test wires it
+    with _gate_root() as root:
+        gate = _memory_gate(root, config)
+        manager._memory_gate = gate
+        gate.register_job("k", MemoryConfig.model_validate(_CAM_ONLY))
+        try:
+            cfg_path.write_text(yaml.dump({
+                "max_concurrent_jobs": 3, "memory_backends": {"cam": _CAM},
+            }))
+            result = await manager.reload_configuration("test")
+
+            assert result.success, result.error
+            assert "memory_backends" in result.applied
+            assert not any(e.startswith("memory_backends:") for e in result.declined)
+            assert manager.config.memory_backends.cam["default"].base_url == (
+                _CAM["default"]["base_url"]
+            )
+            assert gate._cam_endpoints == JobManager._cam_endpoints_from(manager.config)
+
+            # The next dispatch resolves the new endpoint.
+            dispatch = await _deliver(gate, "k", root)
+            assert gate._gateway is not None
+            (backend,) = gate._gateway._backends.values()
+            assert isinstance(backend, CamBackend)
+            assert backend._cfg.base_url == _CAM["default"]["base_url"]
+            assert gate.is_open("k", dispatch)
+
+            # A second edit applies again; an unchanged section is not re-reported.
+            cfg_path.write_text(yaml.dump({
+                "max_concurrent_jobs": 3, "memory_backends": {"cam": _CAM_MOVED},
+            }))
+            again = await manager.reload_configuration("test")
+            assert again.success and "memory_backends" in again.applied
+            same = await manager.reload_configuration("test")
+            assert same.success, same.error
+            assert "memory_backends" not in same.applied
+        finally:
+            await gate.shutdown()
+
+
+async def test_reload_reports_memory_backends_without_a_started_gate(tmp_path: Path) -> None:
+    """The gate exists only after ``start()``: the section still applies and is reported."""
+    org = _profile_dir(tmp_path)
+    cfg_path = _config_file(tmp_path)
+    config = _load_config(cfg_path)
+    manager = _manager(tmp_path, config=config, org_dir=org)
+    assert manager._memory_gate is None
+
+    cfg_path.write_text(yaml.dump({
+        "max_concurrent_jobs": 3, "memory_backends": {"cam": _CAM},
+    }))
+    result = await manager.reload_configuration("test")
+
+    assert result.success, result.error
+    assert "memory_backends" in result.applied
+    assert "default" in manager.config.memory_backends.cam
+
+
+async def test_reload_of_an_invalid_endpoint_is_fail_closed(tmp_path: Path) -> None:
+    """A bad endpoint edit is declined whole: generation, live config and the table stay."""
+    org = _profile_dir(tmp_path)
+    cfg_path = _config_file(tmp_path)
+    config = _load_config(cfg_path)
+    manager = _manager(tmp_path, config=config, org_dir=org)
+    with _gate_root() as root:
+        gate = _memory_gate(root, config)
+        manager._memory_gate = gate
+        try:
+            remote = {"base_url": "https://cam.example.org", "api_key_env": "MZT_TEST_CAM_KEY"}
+            cfg_path.write_text(yaml.dump(
+                {"max_concurrent_jobs": 3, "memory_backends": {"cam": {"default": remote}}},
+            ))  # non-loopback without allow_remote
+            failed = await manager.reload_configuration("test")
+
+            assert failed.success is False
+            assert manager.config is config
+            assert manager.config_generation == 1
+            assert gate._cam_endpoints == {}
+        finally:
+            await gate.shutdown()
+
+
+async def test_reload_does_not_report_an_unchanged_memory_backends(tmp_path: Path) -> None:
+    """An equal section is neither applied nor declined: no false `applied` entry."""
+    org = _profile_dir(tmp_path)
+    cfg_path = _config_file(tmp_path, max_concurrent_jobs=3, memory_backends={"cam": _CAM})
+    config = _load_config(cfg_path)
+    manager = _manager(tmp_path, config=config, org_dir=org)
+
+    result = await manager.reload_configuration("test")
+
+    assert result.success, result.error
+    assert "memory_backends" not in result.applied
+    assert not any(e.startswith("memory_backends") for e in result.declined)
+    assert "default" in manager.config.memory_backends.cam
 
 
 # ─── Watcher ───────────────────────────────────────────────────────────

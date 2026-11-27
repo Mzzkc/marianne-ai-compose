@@ -30,7 +30,8 @@ backend is acquired, ``teardown`` when the dispatch ends).
   runs longer than ``SLOW_JOB_SECONDS`` is logged (``memory_gate.slow_job``, with its kind).
 * Still on the event loop: endpoint bind/unbind (socket creation, ``start_unix_server``),
   backend construction and close, the run-directory ``mkdir`` in ``_ensure``, the sweep of
-  stale sockets' bookkeeping, and all gate dictionaries. None blocks on a lock or an fsync.
+  stale sockets' bookkeeping, the cam endpoint table (``set_cam_endpoints`` rebinds it whole),
+  and all gate dictionaries. None blocks on a lock or an fsync.
 * A failed memory open fails the dispatch; it does not degrade to "no memory". That is
   intended: the sheet's prompt names tools that must exist.
 * Same-UID limit (stated once): the socket path is passed in the shim's environment rather
@@ -470,7 +471,8 @@ class MemoryDispatchGate:
 
     Concurrency model (see also MEMORY-DISPATCH-GATE-NOTES.md):
 
-    * The loop owns all bookkeeping (``_open``, ``_jobs``, registered backends).
+    * The loop owns all bookkeeping (``_open``, ``_jobs``, registered backends) and the cam
+      endpoint table: :meth:`set_cam_endpoints` rebinds it whole, and the loop is its lock.
     * Every blocking action goes through ONE single-thread worker, in submission order:
       open a session, close a session, write a config, delete a config, sweep. Because
       there is one worker, two actions on the same thing can never overlap.
@@ -523,6 +525,18 @@ class MemoryDispatchGate:
 
     def now(self) -> float:
         return self._clock()
+
+    def set_cam_endpoints(self, cam_endpoints: Mapping[str, Mapping[str, Any]] | None) -> None:
+        """Replace the cam endpoint table (#573); the next dispatch resolves against it.
+
+        The table is replaced whole, on the loop. No lock is taken: the loop is the lock,
+        because the only reader (``_cam_settings``) runs on the loop with no ``await`` between
+        reading the table and building the backend. A session that is already open keeps the
+        backend it was opened with; an endpoint whose settings changed gets a new backend,
+        because the resolved settings are part of the backend key. ``DaemonConfig`` validates
+        the section before it reaches the gate, so nothing is checked here.
+        """
+        self._cam_endpoints = {name: dict(cfg) for name, cfg in (cam_endpoints or {}).items()}
 
     # ------------------------------------------------------------ the one worker
 
@@ -658,18 +672,26 @@ class MemoryDispatchGate:
             )
         return self._gateway, self._endpoint
 
-    @staticmethod
-    def _backend_key(b: ResolvedBinding) -> str:
+    def _backend_key(self, b: ResolvedBinding) -> str:
         """Registration key: attachment identity plus the policy the backend instance carries.
 
         The files backend holds provenance, recall cap and lock timeout in its own config,
         so two jobs that name the same attachment with different policy must not share an
         instance (the first job's policy would otherwise bind every later one).
+
+        A cam backend's policy is the endpoint it resolved to (``_cam_settings``), so an
+        endpoint changed by a reload (#573) builds a new backend instead of reusing the old
+        one while an older session still holds it. The items are sorted: equal tables must
+        give equal keys whatever order their mappings were built in. Called only from
+        ``_register_backend``, where an unknown endpoint is refused before any reference is
+        taken. Other systems keep their key unchanged.
         """
         policy = (
             f"{b.system}\x1f{b.provenance}\x1f{b.recall_cap_bytes}\x1f"
             f"{b.lock_timeout_seconds!r}\x1f{b.settings!r}"
         )
+        if b.system == "cam":
+            policy += "\x1f" + repr(sorted(self._cam_settings(b).items()))
         return f"{b.attachment_id}~{hashlib.sha256(policy.encode()).hexdigest()[:12]}"
 
     def _build_backend(self, b: ResolvedBinding) -> Any:
@@ -735,7 +757,7 @@ class MemoryDispatchGate:
                 f"memory_delivery_unsupported: cam endpoint {endpoint!r} is not configured on "
                 f"this conductor (configured: {known}); set `memory_backends.cam.{endpoint}` "
                 "(base_url and api_key_env or api_key_file) in ~/.marianne/conductor.yaml "
-                "and restart the conductor",
+                "and run `mzt conductor reload`",
             )
         merged = dict(cfg)
         if "timeout_seconds" in given:

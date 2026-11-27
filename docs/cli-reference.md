@@ -2194,6 +2194,36 @@ mzt restart --foreground
 
 ---
 
+### `mzt conductor reload`
+
+Hot-reload the conductor config and instrument profiles on the running conductor (GH #408): the same fail-closed path as `SIGHUP` and the file watcher. The whole new config is validated before anything is applied; a config file that fails to load leaves the running config unchanged. A broken instrument profile file keeps its previous entry and is reported as `Partial`.
+
+```
+Usage: mzt conductor reload [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--socket` | | | Unix socket path. Default: the active clone's socket, else the configured `socket.path`, else the legacy socket of a pre-move conductor |
+| `--reason` | | `cli` | Trigger reason recorded in the reload log |
+
+```bash
+mzt conductor reload
+```
+
+The command prints the new config generation, the applied entries (one `+ <entry>` per line, or `Applied: (nothing changed)`), the declined entries (`- <entry>`, running values kept) and, last, the reload result as one JSON line. Which fields a reload can apply is listed under [Hot Reload](configuration-reference.md#hot-reload).
+
+A CAM endpoint added or changed under `memory_backends.cam` is applied and reported as `+ memory_backends` (GH #573): the next dispatch resolves against the new endpoint table, and a session that is already open keeps the backend it was opened with.
+
+#### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | The reload succeeded, whether or not anything changed |
+| 1 | No conductor socket was found, the IPC call failed, or the reload was declined and the running config is unchanged |
+
+---
+
 ### `mzt conductor-status`
 
 Check conductor status via health probes.

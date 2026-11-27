@@ -996,10 +996,7 @@ class JobManager:
             memory_root=_marianne_home / "memory" / "files",
             audit_dir=_marianne_home / "memory" / "audit",
             user=_memory_user(),
-            cam_endpoints={
-                name: ep.as_settings()
-                for name, ep in self._config.memory_backends.cam.items()
-            },
+            cam_endpoints=self._cam_endpoints_from(self._config),
         )
         self._baton_adapter.set_memory_gate(self._memory_gate)
         try:
@@ -1153,7 +1150,6 @@ class JobManager:
         "learning",  # semantic analyzer built at boot
         "profiler",  # collector built at boot
         "mcp_pool",  # server pool started at boot
-        "memory_backends",  # memory gate built at boot with these endpoints
         "keyring",  # key holders built at boot
         "monitor_interval_seconds",  # monitor loop started at boot
     )
@@ -1218,6 +1214,16 @@ class JobManager:
                 caps[f"{profile.name}:{model.name}"] = model.max_concurrent
         return caps
 
+    @staticmethod
+    def _cam_endpoints_from(config: DaemonConfig) -> dict[str, dict[str, Any]]:
+        """Build the memory gate's cam endpoint table from a config's ``memory_backends``.
+
+        Boot and reload share this exact mechanism (#573), so the table a reload installs
+        is built the same way as the one the gate was constructed with. Names, paths and
+        addresses only: a key itself is never loaded here.
+        """
+        return {name: ep.as_settings() for name, ep in config.memory_backends.cam.items()}
+
     async def reload_configuration(
         self, reason: str, *, profile: str | None = None
     ) -> ConfigReloadResult:
@@ -1239,7 +1245,11 @@ class JobManager:
         2. Build the effective config: fields that cannot change in a
            running conductor keep their running values and are reported in
            ``declined``; everything else is applied in place (resize, never
-           replace holding objects — #231 pattern).
+           replace holding objects — #231 pattern). A changed
+           ``memory_backends`` section is applied that way (#573): it
+           replaces the memory gate's cam endpoint table and is reported in
+           ``applied`` as ``memory_backends``; the gate itself is kept, so a
+           session that is already open keeps the backend it was opened with.
         3. Swap the live registry (fresh profiles ∪ retained previous
            entries from broken files; a healthy fresh profile always wins
            the name), invalidate the backend pool (#171 semantics:
@@ -1420,6 +1430,15 @@ class JobManager:
                         effective.preflight.token_error_threshold
                     )
                 applied.append("preflight")
+
+            if effective.memory_backends != old.memory_backends:
+                # #573: the gate exists only after start(); the section is
+                # reported applied either way (the live config carries it).
+                if self._memory_gate is not None:
+                    self._memory_gate.set_cam_endpoints(
+                        self._cam_endpoints_from(effective)
+                    )
+                applied.append("memory_backends")
 
             for field_name in self._LIVE_READ_FIELDS:
                 if getattr(effective, field_name) != getattr(old, field_name):
