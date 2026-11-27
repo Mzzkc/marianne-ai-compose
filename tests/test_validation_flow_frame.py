@@ -329,3 +329,57 @@ prompt:
     assert data["summary"]["sheets"] == 4
     assert data["summary"]["stages"] == 2
     assert data["summary"]["fan_out"] is True
+
+
+def test_variable_loop_cap_error_is_coded_and_exit_one(tmp_path: Path) -> None:
+    path = _file(
+        tmp_path,
+        """name: loop-var
+prompt:
+  template: Write the book.
+  variables:
+    max_passes: "10001"
+sheet:
+  size: 1
+  total_items: 2
+  loops:
+    1:
+      index: pass_no
+      until: 'file("done.txt").exists'
+      max_iterations: '{{ max_passes }}'
+""",
+    )
+    result = CliRunner().invoke(app, ["validate", str(path), "--json"])
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert data["issues"][0]["check_id"] == "V351"
+    assert data["issues"][0]["severity"] == "error"
+    assert "1-10000" in data["issues"][0]["message"]
+    assert "max_iterations" in data["issues"][0]["message"]
+    assert data["summary"]["sheets"] is None  # the score never loaded
+
+
+def test_variable_loop_cap_validates_clean(tmp_path: Path) -> None:
+    path = _file(
+        tmp_path,
+        """name: loop-var
+sheet:
+  size: 1
+  total_items: 2
+  loops:
+    1:
+      index: pass_no
+      until: 'file("done.txt").exists'
+      max_iterations: '{{ max_passes }}'
+prompt:
+  template: Write the book.
+  variables:
+    max_passes: "3"
+""",
+    )
+    result = CliRunner().invoke(app, ["validate", str(path), "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["summary"]["sheets"] == 2
+    assert data["summary"]["stages"] == 2
+    assert data["summary"]["loops"] == ["1"]
