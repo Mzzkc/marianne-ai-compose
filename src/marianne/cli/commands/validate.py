@@ -347,6 +347,8 @@ _FLOW_CODES = {
     "V-FLOW-22": "V316",
     "V-FLOW-23": "V230",
     "V-FLOW-24": "V231",
+    "V-FLOW-25": "V338",
+    "V-FLOW-26": "V351",
 }
 
 

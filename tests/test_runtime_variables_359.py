@@ -131,3 +131,22 @@ class TestManagerMergeHelper:
             }
         )
         assert _merge_runtime_variables(config, {}) is config
+
+
+class TestVariableWidthsAreLoadTime:
+    """#569: a ``--var`` override does not change a fan-out width resolved at load."""
+
+    def test_var_override_does_not_change_a_resolved_width(self) -> None:
+        from marianne.core.config import JobConfig
+        from marianne.core.config.job import merge_runtime_variables
+        from marianne.core.sheet import build_sheets
+
+        config = JobConfig.from_yaml_string(
+            "name: book\nworkspace: ./output\n"
+            "prompt:\n  template: hi\n  variables: {chapter_count: '3'}\n"
+            "sheet:\n  total_items: 2\n  fan_out: {2: '{{ chapter_count }}'}\n"
+        )
+        assert len(build_sheets(config)) == 4
+        merged = merge_runtime_variables(config, {"chapter_count": "9"})
+        assert merged.prompt.variables["chapter_count"] == "9"
+        assert len(build_sheets(merged)) == 4  # the width is fixed at load

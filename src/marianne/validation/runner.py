@@ -60,6 +60,7 @@ from marianne.validation.checks import (
     ServedContextCheck,
     SheetEffortCheck,
     SheetToolsCheck,
+    SkipWhenArchiveFreshCheck,
     SkipWhenSheetRangeCheck,
     TechniqueMcpInstrumentCheck,
     TechniqueSkillPathCheck,
@@ -288,5 +289,6 @@ def create_default_checks() -> list[ValidationCheck]:
         FanOutWithoutParallelCheck(),
         VariableShadowingCheck(),
         SkipWhenSheetRangeCheck(),
+        SkipWhenArchiveFreshCheck(),
     ]
     return checks

@@ -237,12 +237,14 @@ Validation errors are retriable — Marianne re-runs the sheet with a completion
 
 | Code | Name | What It Means |
 |------|------|---------------|
-| E301 | CONFIG_INVALID | Invalid score YAML |
+| E301 | CONFIG_INVALID | Invalid score YAML; also a memory configuration refusal (`MEMORY_CONFIG_ERROR`, GH #572) — see below |
 | E302 | CONFIG_MISSING_FIELD | Required field missing |
 | E303 | CONFIG_PATH_NOT_FOUND | Referenced path does not exist |
 | E304 | CONFIG_PARSE_ERROR | YAML syntax error |
 
 Configuration errors are never retriable — they require a fix to the score YAML.
+
+A memory configuration refusal (`MEMORY_CONFIG_ERROR`) is the E301 whose fix may belong to the conductor instead of the score: a `cam` attachment names an endpoint the conductor does not have, or sets a key only the operator may set. The sheet fails on its first attempt — it is not retried and does not move to another instrument — with a message naming the attachment and the `memory_backends.cam.<name>` key. For a missing endpoint, add it under `memory_backends.cam` in `~/.marianne/conductor.yaml`, run `mzt conductor reload`, then re-run with `mzt resume <job> --from-sheet N`; for an operator-only key, take the key out of the score.
 
 ### Backend/Instrument Errors (E5xx)
 
@@ -552,10 +554,11 @@ Or, if it's intentional (e.g., defined conditionally in the template), ignore th
 INFO [V108] Prelude file not found: /path/to/file.md
 ```
 
-**Cause:** Static file path in `sheet.prelude` or `sheet.cadenzas` doesn't exist.
+**Cause:** Static file path in `sheet.prelude`, `sheet.cadenzas` or a movement's `cadenzas` (`movements.<N>.cadenzas`) doesn't exist.
 
 **Fix:**
 - Check the path
+- A message that says `cadenza (stage N)` comes from a movement cadenza: every voice of stage `N` reads it, or only the one voice a `voice:` names (GH #571)
 - If using Jinja templating (e.g., `{{ workspace }}/file.md`), this warning is expected — Marianne can't validate dynamic paths until execution
 
 ### V201: Jinja Syntax in Validation Path (Warning)

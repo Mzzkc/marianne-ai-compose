@@ -19,7 +19,7 @@ do not consume that conductor budget.
 - **Movement** (`movements`): a named phase that groups an instrument, settings and parallel voices at a numbered stage ([reference](configuration-reference.md#movements)).
 - **Voice** (`movements.<k>.voices`): one parallel instance within a movement, with the voice count expanding through the fan-out engine ([reference](configuration-reference.md#movements)).
 - **Stage** (concept): the logical stage number shared by a group of parallel sheets, addressed by the stage template variable while instance distinguishes the voices ([reference](score-writing-guide.md#fan-out-variables)).
-- **Fan-out** (`sheet.fan_out`): a map from stage numbers to parallel instance counts ([reference](configuration-reference.md#sheet)).
+- **Fan-out** (`sheet.fan_out`): a map from stage numbers to parallel instance counts, each a literal or a `'{{ variable }}'` resolved from `prompt.variables` at load ([reference](configuration-reference.md#sheet)).
 - **Run** (`mzt run`): one execution of a score, submitted immediately by this command even when the score also declares recurrence ([reference](cli-reference.md#mzt-run)).
 - **Tick** (`schedule`): a scheduled run of a recurring score, admitted when due and skipped if the previous run is still active ([reference](configuration-reference.md#schedule)).
 - **Workspace** (`workspace`): the directory where the score writes its outputs, resolved to an absolute path when loaded ([reference](configuration-reference.md#top-level-fields)).
@@ -36,7 +36,7 @@ do not consume that conductor budget.
 ## Supply context and continue work
 
 - **Prelude** (`sheet.prelude`): files or directories injected as context, skills or tools into every sheet ([reference](configuration-reference.md#sheet)).
-- **Cadenza** (`sheet.cadenzas`): context injected into specific sheets in addition to the prelude ([reference](configuration-reference.md#sheet)). An agent's `cadenzas/personal/active/` directory is only a folder until a score names it in a `prelude` or `cadenzas` entry.
+- **Cadenza** (`sheet.cadenzas`): context injected into specific sheets in addition to the prelude ([reference](configuration-reference.md#sheet)). Keys are concrete sheet numbers, also under fan-out; declare a cadenza on the movement (`movements.<stage>.cadenzas`, GH #571) to reach every voice of a stage. An agent's `cadenzas/personal/active/` directory is only a folder until a score names it in a `prelude` or `cadenzas` entry.
 - **Fermata** (`fermata`): a sheet status that holds execution for a composer decision, handled with the resolve command ([reference](cli-reference.md#mzt-resolve)).
 - **Completion mode** (`retry.completion_threshold_percent`): a partial validation pass strictly above this threshold enters targeted completion of the remaining work, while lower results spend normal retries ([reference](configuration-reference.md#retry)).
 - **Paused at chain** (`paused_at_chain`): the run status when a successful score's next concert link is held until the composer resumes it ([reference](configuration-reference.md#on_success-post-success-hooks)).
@@ -58,3 +58,4 @@ do not consume that conductor budget.
 - **Approvals** (`approvals`): the preferred spelling for the reserved confirmation section, which has no runtime reader and warns with V327 when set ([reference](configuration-reference.md#checkpoints)).
 - **Checkpoints, legacy score key** (`checkpoints`): the deprecated alias for approvals, accepted for one release with V328 and still reserved ([reference](configuration-reference.md#checkpoints)).
 - **Checkpoint, saved progress** (concept): persisted execution state used to resume interrupted work, distinct from the reserved approvals section ([reference](cli-reference.md#mzt-resume)).
+- **skip_when unchanged** (concept): conditional skip predicate (`skip_when: {N: {unchanged: true}}`) that bypasses sheet execution on fresh runs when prompt, dispatch inputs, and declared products are unchanged since its last pass ([reference](configuration-reference.md#skipwhencommand-sub-config)).

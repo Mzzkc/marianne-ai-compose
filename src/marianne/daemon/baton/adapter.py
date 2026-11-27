@@ -60,6 +60,7 @@ from marianne.core.config.flow import ConcertTrigger
 from marianne.core.config.instrument_settings import coerce_first_output_timeout
 from marianne.core.config.instruments import validate_openai_response_format
 from marianne.core.constants import VALIDATION_PASS_RATE_KEY
+from marianne.core.errors.codes import ErrorCode
 from marianne.core.expressions import parse_expression
 from marianne.core.sheet import Sheet
 from marianne.daemon.a2a.inbox import A2AInbox
@@ -67,6 +68,7 @@ from marianne.daemon.a2a.registry import AgentCardRegistry
 from marianne.daemon.baton.backend_pool import InstrumentNotRegisteredError
 from marianne.daemon.baton.core import BatonCore, CronHandler
 from marianne.daemon.baton.events import (
+    MEMORY_CONFIG_ERROR,
     MEMORY_UNSUPPORTED,
     A2ATaskRouted,
     A2ATaskSubmitted,
@@ -537,6 +539,14 @@ def _attempt_entry_config(
     return {}
 
 
+@dataclass
+class UnchangedVerdict:
+    skip: bool
+    reason: str = ""
+    detail: str = ""
+    stdout_tail: str = ""
+
+
 class BatonAdapter:
     """Bridges the conductor (JobManager) and the baton (BatonCore).
 
@@ -764,6 +774,20 @@ class BatonAdapter:
         # exit 0 → terminal skip. Absent job/sheet → no predicate (no-op).
         self._job_skip_commands: dict[str, dict[int, SkipWhenCommand]] = {}
 
+        # #570: per-job skip_when unchanged predicate structures
+        self._job_skip_unchanged: dict[str, dict[int, SkipWhenCommand]] = {}
+        self._job_unchanged_enabled: set[str] = set()
+        self._job_unchanged_taint: dict[str, set[int]] = {}
+        self._job_unchanged_deps: dict[str, dict[int, tuple[int, ...]]] = {}
+        self._job_unchanged_skipped: dict[str, set[int]] = {}
+        self._job_unchanged_tails: dict[str, dict[int, str]] = {}
+        self._job_unchanged_pending: dict[
+            tuple[str, int, int | None], tuple[dict[str, str], list[dict[str, str]]]
+        ] = {}
+        self._job_unchanged_unusable: set[str] = set()
+        self._job_ledger_scope: dict[str, str] = {}
+        self._job_declared_products: dict[str, dict[int, list[str]]] = {}
+
         # Per-job completion status: True = all sheets completed, False = has failures
         self._completion_results: dict[str, bool] = {}
 
@@ -897,6 +921,8 @@ class BatonAdapter:
         triggers: dict[str, SheetTriggerConfig] | None = None,
         flow_state: FlowState | None = None,
         flow_variables: dict[str, Any] | None = None,
+        declared_products: dict[int, list[str]] | None = None,
+        ledger_scope: str | None = None,
     ) -> None:
         """Register a job with the baton for event-driven execution.
 
@@ -958,7 +984,22 @@ class BatonAdapter:
         if spec_tags:
             self._job_spec_tags[job_id] = spec_tags
         if skip_when:
-            self._job_skip_commands[job_id] = dict(skip_when)
+            self._job_skip_commands[job_id] = {
+                n: r for n, r in skip_when.items() if r.command is not None
+            }
+        else:
+            self._job_skip_commands.pop(job_id, None)
+
+        self._index_unchanged(
+            job_id,
+            sheets,
+            dependencies,
+            skip_when,
+            loops,
+            declared_products=declared_products,
+            ledger_scope=ledger_scope,
+            enabled=True,
+        )
 
         # Create PromptRenderer if config is available (F-104)
         if prompt_config is not None:
@@ -1178,6 +1219,28 @@ class BatonAdapter:
             self._cleanup_generations = {}
         if not hasattr(self, "_cleanup_results"):
             self._cleanup_results = {}
+        if not hasattr(self, "_job_skip_commands"):
+            self._job_skip_commands = {}
+        if not hasattr(self, "_job_skip_unchanged"):
+            self._job_skip_unchanged = {}
+        if not hasattr(self, "_job_unchanged_enabled"):
+            self._job_unchanged_enabled = set()
+        if not hasattr(self, "_job_unchanged_taint"):
+            self._job_unchanged_taint = {}
+        if not hasattr(self, "_job_unchanged_deps"):
+            self._job_unchanged_deps = {}
+        if not hasattr(self, "_job_unchanged_skipped"):
+            self._job_unchanged_skipped = {}
+        if not hasattr(self, "_job_unchanged_tails"):
+            self._job_unchanged_tails = {}
+        if not hasattr(self, "_job_unchanged_pending"):
+            self._job_unchanged_pending = {}
+        if not hasattr(self, "_job_unchanged_unusable"):
+            self._job_unchanged_unusable = set()
+        if not hasattr(self, "_job_ledger_scope"):
+            self._job_ledger_scope = {}
+        if not hasattr(self, "_job_declared_products"):
+            self._job_declared_products = {}
 
     def _next_event_generation(self) -> int:
         """Allocate a public custody identity for one managed registration."""
@@ -1658,6 +1721,18 @@ class BatonAdapter:
         self._a2a_job_agents.pop(job_id, None)
         self._job_code_execution.pop(job_id, None)
         self._job_skip_commands.pop(job_id, None)
+        self._job_skip_unchanged.pop(job_id, None)
+        self._job_unchanged_enabled.discard(job_id)
+        self._job_unchanged_taint.pop(job_id, None)
+        self._job_unchanged_deps.pop(job_id, None)
+        self._job_unchanged_skipped.pop(job_id, None)
+        self._job_unchanged_tails.pop(job_id, None)
+        self._job_unchanged_unusable.discard(job_id)
+        self._job_ledger_scope.pop(job_id, None)
+        self._job_declared_products.pop(job_id, None)
+        pending_keys = [pk for pk in self._job_unchanged_pending if pk[0] == job_id]
+        for pk in pending_keys:
+            self._job_unchanged_pending.pop(pk, None)
         self._interactive_sheets.pop(job_id, None)
         # #352 inc-3: drop the job's output rings (memory bound).
         self._output_hub.clear_job(job_id)
@@ -1725,6 +1800,8 @@ class BatonAdapter:
         loops: dict[str, LoopConfig] | None = None,
         triggers: dict[str, SheetTriggerConfig] | None = None,
         flow_variables: dict[str, Any] | None = None,
+        declared_products: dict[int, list[str]] | None = None,
+        ledger_scope: str | None = None,
     ) -> None:
         """Recover a job from a checkpoint after conductor restart.
 
@@ -1781,7 +1858,22 @@ class BatonAdapter:
         if spec_tags:
             self._job_spec_tags[job_id] = spec_tags
         if skip_when:
-            self._job_skip_commands[job_id] = dict(skip_when)
+            self._job_skip_commands[job_id] = {
+                n: r for n, r in skip_when.items() if r.command is not None
+            }
+        else:
+            self._job_skip_commands.pop(job_id, None)
+
+        self._index_unchanged(
+            job_id,
+            sheets,
+            dependencies,
+            skip_when,
+            loops,
+            declared_products=declared_products,
+            ledger_scope=ledger_scope,
+            enabled=False,
+        )
 
         # Create PromptRenderer if config is available
         if prompt_config is not None:
@@ -2344,7 +2436,16 @@ class BatonAdapter:
                     # upstream sheets (#120 parity with legacy runner).
                     # Fan-in prompts see explicit gaps instead of silent
                     # omissions.
+                    # GH #570: An upstream skipped as unchanged provides its
+                    # recorded stdout_tail rather than an omission placeholder.
                     if prev_state.status == BatonSheetStatus.SKIPPED:
+                        unchanged_tail = self._job_unchanged_tails.get(job_id, {}).get(prev_num)
+                        if unchanged_tail is not None:
+                            stdout = unchanged_tail
+                            if len(stdout) > max_chars:
+                                stdout = stdout[:max_chars] + "\n... [truncated]"
+                            previous_outputs[prev_num] = stdout
+                            continue
                         previous_outputs[prev_num] = "[SKIPPED]"
                         continue
 
@@ -2437,6 +2538,267 @@ class BatonAdapter:
             if result.execution_success and result.stdout_tail:
                 return str(result.stdout_tail)
         return ""
+
+    # === Skip-when unchanged helpers (GH #570) ===============================
+
+    def _index_unchanged(
+        self,
+        job_id: str,
+        sheets: list[Sheet],
+        dependencies: dict[int, list[int]],
+        skip_when: dict[int, SkipWhenCommand] | None,
+        loops: Any | None,
+        declared_products: dict[int, list[str]] | None,
+        ledger_scope: str | None,
+        enabled: bool,
+    ) -> None:
+        from marianne.core.config.flow import span_range
+
+        self._job_skip_unchanged.pop(job_id, None)
+        self._job_unchanged_taint.pop(job_id, None)
+        self._job_unchanged_deps.pop(job_id, None)
+        self._job_unchanged_skipped[job_id] = set()
+        self._job_unchanged_tails[job_id] = {}
+        self._job_unchanged_unusable.discard(job_id)
+        if enabled:
+            self._job_unchanged_enabled.add(job_id)
+        else:
+            self._job_unchanged_enabled.discard(job_id)
+
+        if declared_products:
+            self._job_declared_products[job_id] = declared_products
+        else:
+            self._job_declared_products.pop(job_id, None)
+
+        if ledger_scope:
+            self._job_ledger_scope[job_id] = ledger_scope
+        else:
+            self._job_ledger_scope.pop(job_id, None)
+
+        deps_map: dict[int, tuple[int, ...]] = {
+            s.num: tuple(dependencies.get(s.num, [])) for s in sheets
+        }
+        self._job_unchanged_deps[job_id] = deps_map
+
+        ruled = {n: rule for n, rule in (skip_when or {}).items() if rule.unchanged}
+
+        loop_members: set[int] = set()
+        if loops:
+            for span in loops:
+                loop_members.update(span_range(span))
+
+        evaluable: dict[int, SkipWhenCommand] = {}
+        for n, rule in ruled.items():
+            if n in loop_members:
+                _logger.warning(
+                    "adapter.skip_unchanged.loop_member_ignored",
+                    job_id=job_id,
+                    sheet_num=n,
+                    reason=(
+                        "loop members always re-execute on every iteration; "
+                        "skip_when.unchanged is ignored"
+                    ),
+                )
+            else:
+                evaluable[n] = rule
+
+        if evaluable:
+            self._job_skip_unchanged[job_id] = evaluable
+
+        taint_set: set[int] = set()
+        for ruled_sheet in evaluable:
+            taint_set.add(ruled_sheet)
+            queue = list(deps_map.get(ruled_sheet, ()))
+            visited = set(queue)
+            while queue:
+                curr = queue.pop(0)
+                taint_set.add(curr)
+                for parent in deps_map.get(curr, ()):
+                    if parent not in visited:
+                        visited.add(parent)
+                        queue.append(parent)
+
+        self._job_unchanged_taint[job_id] = taint_set
+
+    async def _evaluate_unchanged(
+        self,
+        job_id: str,
+        sheet: Sheet,
+        inputs: dict[str, str],
+        sources: list[dict[str, str]],
+    ) -> UnchangedVerdict:
+        from marianne.daemon.baton import unchanged
+        from marianne.daemon.baton.pass_ledger import PassLedger
+
+        if job_id in self._job_unchanged_unusable:
+            _logger.warning(
+                "adapter.skip_unchanged.ledger_unusable",
+                job_id=job_id,
+                sheet_num=sheet.num,
+            )
+            return UnchangedVerdict(skip=False, reason="ledger_unusable")
+
+        scope = self._job_ledger_scope.get(job_id, job_id)
+        ledger_root = PassLedger.job_root(sheet.workspace, scope)
+        ledger = PassLedger(ledger_root)
+        record = await ledger.lookup(sheet.movement, sheet.voice)
+        if record is None:
+            _logger.info("adapter.skip_unchanged.no_record", job_id=job_id, sheet_num=sheet.num)
+            return UnchangedVerdict(skip=False, reason="no_record")
+
+        if record.workspace != str(sheet.workspace.resolve()):
+            _logger.info(
+                "adapter.skip_unchanged.workspace_moved",
+                job_id=job_id,
+                sheet_num=sheet.num,
+            )
+            return UnchangedVerdict(skip=False, reason="workspace_moved")
+
+        diff_comp = unchanged.first_difference(record.inputs, inputs)
+        if diff_comp is not None:
+            source_diff = unchanged.describe_source_change(record.sources, sources)
+            detail = f"{diff_comp} ({source_diff})" if source_diff else diff_comp
+            _logger.info(
+                "adapter.skip_unchanged.input_changed",
+                job_id=job_id,
+                sheet_num=sheet.num,
+                component=diff_comp,
+                detail=detail,
+            )
+            return UnchangedVerdict(skip=False, reason="input_changed", detail=detail)
+
+        changed_prod = unchanged.changed_products(sheet.workspace, record.products)
+        if changed_prod is not None:
+            _logger.info(
+                "adapter.skip_unchanged.product_changed",
+                job_id=job_id,
+                sheet_num=sheet.num,
+                path=changed_prod,
+            )
+            return UnchangedVerdict(skip=False, reason="product_changed", detail=changed_prod)
+
+        deps = self._job_unchanged_deps.get(job_id, {}).get(sheet.num, ())
+        skipped_set = self._job_unchanged_skipped.get(job_id, set())
+        for d in deps:
+            if d not in skipped_set:
+                _logger.info(
+                    "adapter.skip_unchanged.dependency_ran",
+                    job_id=job_id,
+                    sheet_num=sheet.num,
+                    dependency=d,
+                )
+                return UnchangedVerdict(skip=False, reason="dependency_ran", detail=str(d))
+
+        reason = f"{unchanged.REASON_PREFIX} (movement {sheet.movement})"
+        return UnchangedVerdict(skip=True, reason=reason, stdout_tail=record.stdout_tail)
+
+    async def _invalidate_before_execute(self, job_id: str, sheet_num: int) -> None:
+        from marianne.daemon.baton.pass_ledger import PassLedger
+
+        deps_map = self._job_unchanged_deps.get(job_id, {})
+        children_map: dict[int, list[int]] = {}
+        for child, parents in deps_map.items():
+            for p in parents:
+                children_map.setdefault(p, []).append(child)
+
+        closure: set[int] = {sheet_num}
+        queue = [sheet_num]
+        while queue:
+            curr = queue.pop(0)
+            for child in children_map.get(curr, []):
+                if child not in closure:
+                    closure.add(child)
+                    queue.append(child)
+
+        evaluable = self._job_skip_unchanged.get(job_id, {})
+        ruled_sheets = [n for n in closure if n in evaluable]
+        if not ruled_sheets:
+            return
+
+        job_sheets = self._job_sheets.get(job_id, {})
+        keys_to_invalidate: list[tuple[int, int | None]] = []
+        workspace = None
+        for n in ruled_sheets:
+            sh = job_sheets.get(n)
+            if sh is not None:
+                keys_to_invalidate.append((sh.movement, sh.voice))
+                if workspace is None:
+                    workspace = sh.workspace
+
+        if not keys_to_invalidate or workspace is None:
+            return
+
+        scope = self._job_ledger_scope.get(job_id, job_id)
+        ledger_root = PassLedger.job_root(workspace, scope)
+        ledger = PassLedger(ledger_root)
+        try:
+            await ledger.invalidate(keys_to_invalidate)
+        except OSError as exc:
+            _logger.error(
+                "adapter.skip_unchanged.invalidate_failed",
+                job_id=job_id,
+                sheet_num=sheet_num,
+                error=str(exc),
+            )
+            self._job_unchanged_unusable.add(job_id)
+
+    async def _record_pass_on_event(self, event: Any) -> None:
+        import datetime
+
+        from marianne.daemon.baton import unchanged
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.pass_ledger import PassLedger, PassRecord
+        from marianne.daemon.baton.state import BatonSheetStatus
+
+        if not isinstance(event, SheetAttemptResult):
+            return
+
+        key = (event.job_id, event.sheet_num, event.event_generation)
+        pending = self._job_unchanged_pending.pop(key, None)
+        if pending is None:
+            return
+
+        job_state = self._baton._jobs.get(event.job_id)
+        if job_state is None:
+            return
+        sheet_state = job_state.sheets.get(event.sheet_num)
+        if sheet_state is None or sheet_state.status is not BatonSheetStatus.COMPLETED:
+            return
+
+        sh = self._job_sheets.get(event.job_id, {}).get(event.sheet_num)
+        if sh is None:
+            return
+
+        inputs, sources = pending
+        scope = self._job_ledger_scope.get(event.job_id, event.job_id)
+        declared = self._job_declared_products.get(event.job_id, {}).get(event.sheet_num, [])
+        try:
+            prod_hashes = unchanged.product_digests(sh.workspace, declared)
+            record = PassRecord(
+                job_id=event.job_id,
+                ledger_scope=scope,
+                sheet_num=event.sheet_num,
+                movement=sh.movement,
+                voice=sh.voice,
+                workspace=str(sh.workspace.resolve()),
+                marianne_version=inputs.get("marianne_version", "0.1.0"),
+                passed_at=datetime.datetime.now(datetime.UTC).isoformat(),
+                attempt=1,
+                inputs=inputs,
+                sources=sources,
+                products=prod_hashes,
+                stdout_tail=event.stdout_tail or "",
+            )
+            ledger_root = PassLedger.job_root(sh.workspace, scope)
+            ledger = PassLedger(ledger_root)
+            await ledger.write(record)
+        except Exception as exc:  # noqa: BLE001 -- fail-open on record write failure
+            _logger.warning(
+                "adapter.skip_unchanged.record_failed",
+                job_id=event.job_id,
+                sheet_num=event.sheet_num,
+                error=str(exc),
+            )
 
     # =========================================================================
     # Completion Signaling
@@ -2617,6 +2979,7 @@ class BatonAdapter:
         state: SheetExecutionState | None = None,
         unavailable: bool = False,
         memory_unsupported: bool = False,
+        memory_config_error: bool = False,
     ) -> None:
         """Send a SheetAttemptResult failure event when dispatch cannot proceed.
 
@@ -2644,8 +3007,15 @@ class BatonAdapter:
                 once the chain is spent. Covers an instrument that cannot be
                 handed an MCP config and a dispatch that opened memory
                 sessions without a manifest (GH #556).
+            memory_config_error: Classify the failure as a memory
+                *configuration* refusal (``MEMORY_CONFIG_ERROR``) with error
+                code ``E301`` (GH #572): the attachment names a conductor
+                endpoint that does not exist, or sets a key only the operator
+                may set. The baton fails the sheet at once — no retry, no
+                fallback move, no instrument-health charge — because no
+                instrument can deliver a misconfigured attachment.
 
-        With neither flag the failure is classified ``E505`` and carries no
+        With none of the flags the failure is classified ``E505`` and carries no
         error code, and the baton applies its ordinary retry rules.
         """
         attempt = 1
@@ -2662,9 +3032,15 @@ class BatonAdapter:
             execution_success=False,
             error_classification=(
                 MEMORY_UNSUPPORTED if memory_unsupported
-                else "INSTRUMENT_UNAVAILABLE" if unavailable else "E505"
+                else "INSTRUMENT_UNAVAILABLE" if unavailable
+                else MEMORY_CONFIG_ERROR if memory_config_error
+                else "E505"
             ),
-            error_code="E505" if unavailable or memory_unsupported else None,
+            error_code=(
+                "E505" if unavailable or memory_unsupported
+                else ErrorCode.CONFIG_INVALID.value if memory_config_error
+                else None
+            ),
             error_message=error_msg,
         )
         self._baton.inbox.put_nowait(failure)
@@ -2886,12 +3262,34 @@ class BatonAdapter:
         memory_dispatch: str | None = None
         memory_manifest: str | None = None
         if job_id in getattr(self, "_job_memory", {}):
+            # Local import (like SheetIdentity below): a dispatch for a job without `memory:`
+            # must import no memory module (tests/memory/test_memory_gate_adapter.py).
+            from marianne.daemon.baton.memory_gate import MemoryConfigError
+
             try:
                 (
                     memory_manifest, mcp_config_path, memory_dispatch,
                 ) = await self._prepare_dispatch_memory(
                     job_id, sheet, mcp_config_path,
                 )
+            except MemoryConfigError as exc:
+                # GH #572: the attachment is misconfigured — a deterministic fact about the
+                # score and the conductor's config, not about this instrument. Typed so the
+                # baton can fail the sheet at once; the message already names the attachment
+                # and the `memory_backends.cam.<name>` key.
+                message = f"Memory setup failed before backend acquisition: {exc}"
+                if exc.config_key is not None and exc.config_key not in message:
+                    # The operator-only refusal names the section, not the endpoint's key
+                    # (the score, not the endpoint table, is at fault); say the key anyway
+                    # so the error names it as the issue requires.
+                    message = f"{message} (config key: `{exc.config_key}`)"
+                self._send_dispatch_failure(
+                    job_id, sheet_num, effective_instrument,
+                    message,
+                    state=state,
+                    memory_config_error=True,
+                )
+                return True
             except Exception as exc:  # noqa: BLE001 — dispatch failure is delivered to the baton for retry handling
                 self._send_dispatch_failure(
                     job_id, sheet_num, effective_instrument,
@@ -3658,6 +4056,79 @@ class BatonAdapter:
                         f"{type(exc).__name__}: {exc}",
                     )
                     return
+
+            # #570: skip_when unchanged predicate evaluation
+            rule = self._job_skip_unchanged.get(job_id, {}).get(sheet.num)
+            if rule is not None:
+                evaluating = job_id in self._job_unchanged_enabled
+                first_attempt = context.attempt_number == 1 and context.mode is AttemptMode.NORMAL
+                raw_prompt = (
+                    bool(getattr(profile, "raw_prompt", False))
+                    if profile is not None
+                    else False
+                )
+                delivery_rendered = context_delivery
+                if evaluating:
+                    if delivery_rendered is None:
+                        _logger.warning(
+                            "adapter.skip_unchanged.no_renderer",
+                            job_id=job_id,
+                            sheet_num=sheet.num,
+                        )
+                    elif raw_prompt:
+                        _logger.warning(
+                            "adapter.skip_unchanged.raw_prompt",
+                            job_id=job_id,
+                            sheet_num=sheet.num,
+                        )
+                    elif not first_attempt:
+                        _logger.info(
+                            "adapter.skip_unchanged.not_first_attempt",
+                            job_id=job_id,
+                            sheet_num=sheet.num,
+                        )
+
+                if delivery_rendered is not None and first_attempt and not raw_prompt:
+                    from marianne.daemon.baton import unchanged
+
+                    inputs = unchanged.dispatch_digest(
+                        rendered=delivery_rendered,
+                        sheet=sheet,
+                        instrument=actual_instrument,
+                        model=effective_model,
+                        profile=profile,
+                    )
+                    sources = unchanged.source_digests(delivery_rendered.prompt_receipt)
+                    if evaluating:
+                        verdict = await self._evaluate_unchanged(
+                            job_id, sheet, inputs=inputs, sources=sources
+                        )
+                        if verdict.skip:
+                            self._job_unchanged_skipped[job_id].add(sheet.num)
+                            self._job_unchanged_tails[job_id][sheet.num] = verdict.stdout_tail
+                            _logger.info(
+                                "adapter.sheet.skipped_unchanged",
+                                job_id=job_id,
+                                sheet_num=sheet.num,
+                                reason=verdict.reason,
+                            )
+                            await self._baton.inbox.put(
+                                SheetSkipped(
+                                    job_id=job_id,
+                                    sheet_num=sheet.num,
+                                    reason=verdict.reason,
+                                    event_generation=event_generation,
+                                    dispatch_epoch=context.dispatch_epoch,
+                                )
+                            )
+                            return
+                    self._job_unchanged_pending[(job_id, sheet.num, event_generation)] = (
+                        inputs,
+                        sources,
+                    )
+
+            if sheet.num in self._job_unchanged_taint.get(job_id, ()):
+                await self._invalidate_before_execute(job_id, sheet.num)
 
             # Resolve profile pricing from instrument registry (F-180). The
             # row is the model this sheet is bound to (an alias pin, or the
@@ -5096,6 +5567,7 @@ class BatonAdapter:
                     ):
                         await self._route_a2a_requests(event)
                     await self._baton.handle_event(event)
+                    await self._record_pass_on_event(event)
 
                 # #206: mirror instrument rate limits to the daemon-level
                 # coordinator AFTER the baton has applied its own state

@@ -274,7 +274,7 @@ marked with **(required)**.
 | `state_path` | Path | `null` | Legacy companion to `state_backend`; omit. |
 | `pause_between_sheets_seconds` | int | `2` | Seconds to wait between sheets (rate limit courtesy). |
 | `instruments` | dict[str, InstrumentDef] | `{}` | Named instrument definitions local to this score. See [Multi-Instrument Scores](#multi-instrument-scores). |
-| `movements` | dict[int, MovementDef] | `{}` | Movement declarations with names, instruments, and voice counts. See [Multi-Instrument Scores](#multi-instrument-scores). |
+| `movements` | dict[int, MovementDef] | `{}` | Movement declarations with names, instruments, voice counts, and cadenzas (context for every voice of the movement). See [Multi-Instrument Scores](#multi-instrument-scores). |
 | `instrument_fallbacks` | list[str] | `[]` | Fallback instrument chain when the primary instrument is unavailable. See [Instrument Fallbacks](#instrument-fallbacks). |
 
 ### `instrument`
@@ -432,11 +432,11 @@ Defines how work is divided into sheets.
 | `total_items` | int | **(required)** | Total items to process. `total_sheets = ceil((total_items - start_item + 1) / size)`. |
 | `start_item` | int | `1` | First item number (1-indexed). |
 | `dependencies` | dict[int, list[int]] | `{}` | Sheet/stage dependency DAG. See [Fan-Out and Dependencies](#fan-out-and-dependencies). |
-| `fan_out` | dict[int, int] | `{}` | Stage → instance count. See [Fan-Out and Dependencies](#fan-out-and-dependencies). |
+| `fan_out` | dict[int, int \| str] | `{}` | Stage → instance count; a count may be `'{{ variable }}'`, resolved from `prompt.variables` at load (1-1000, V338). See [Fan-Out and Dependencies](#fan-out-and-dependencies). |
 | `skip_when` | dict[int, SkipWhenCommand] | `{}` | Command-based conditional skip rules (#119, formerly `skip_when_command`). Shell command exit 0 = skip, non-zero = run. See [Conditional Sheet Skipping](#conditional-sheet-skipping). |
 | `stdout_to` | dict[int, str] | `{}` | Per-sheet file (workspace-relative or `{workspace}/...`) the musician writes the instrument's full stdout to before validations run. The way a sheet on an `http` profile, which has no filesystem, produces a file. |
 | `prelude` | list[InjectionItem] | `[]` | Shared file injections for ALL sheets. See [Prelude and Cadenza](#prelude-and-cadenza-context-injection). |
-| `cadenzas` | dict[int, list[InjectionItem]] | `{}` | Per-sheet file injections. See [Prelude and Cadenza](#prelude-and-cadenza-context-injection). |
+| `cadenzas` | dict[int, list[InjectionItem]] | `{}` | Per-sheet file injections, keyed by concrete sheet number (also under fan-out). See [Prelude and Cadenza](#prelude-and-cadenza-context-injection). |
 | `per_sheet_instruments` | dict[int, str] | `{}` | Per-sheet instrument overrides. See [Multi-Instrument Scores](#multi-instrument-scores). |
 | `per_sheet_instrument_config` | dict[int, dict] | `{}` | Per-sheet instrument config overrides. |
 | `instrument_map` | dict[str, list[int]] | `{}` | Batch instrument assignment. See [Multi-Instrument Scores](#multi-instrument-scores). |
@@ -514,7 +514,7 @@ List of rules checked after each sheet execution. See [Validation Types](#valida
 
 ### `memory`
 
-Declares named memory attachments. At dispatch the conductor opens a gateway session per attachment active in the sheet's phase and hands the musician six memory tools through an MCP shim; the instrument must accept an MCP config (not `cli`), or the dispatch is refused with `memory_delivery_unsupported`. `mzt validate` checks the shape (V340-V347, V350). A score without `memory:` runs exactly as before. Backends: `files` and `cam` (a separate program reached only over its HTTP API; a `cam` attachment names an `endpoint` the operator configured under `memory_backends.cam`, and never carries an address or a key); only `access: inherit` is available.
+Declares named memory attachments. At dispatch the conductor opens a gateway session per attachment active in the sheet's phase and hands the musician six memory tools through an MCP shim; the instrument must accept an MCP config (not `cli`), or the dispatch is refused with `memory_delivery_unsupported`. `mzt validate` checks the shape (V340-V347, V350). A score without `memory:` runs exactly as before. Backends: `files` and `cam` (a separate program reached only over its HTTP API; a `cam` attachment names an `endpoint` the operator configured under `memory_backends.cam`, and never carries an address or a key); only `access: inherit` is available. A misconfigured `cam` attachment — an `endpoint` the conductor does not have, a key other than `endpoint` and `timeout_seconds`, or an `endpoint` that is not a name — fails its sheet at once with `E301` (`MEMORY_CONFIG_ERROR`): it is not retried and does not move to another instrument, because no instrument can deliver a misconfigured attachment.
 
 ```yaml
 memory:
@@ -619,9 +619,9 @@ Available when `cross_sheet` is configured:
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `previous_outputs` | dict[int, str] | Stdout from previous sheets. Keys are sheet numbers. Skipped upstream sheets appear as `[SKIPPED]` instead of being silently omitted. |
+| `previous_outputs` | dict[int, str] | Stdout from previous sheets. Keys are sheet numbers. Skipped upstream sheets appear as `[SKIPPED]` (or their recorded stdout if skipped as unchanged) instead of being silently omitted. |
 | `previous_files` | dict[str, str] | File contents captured between sheets. Keys are file paths. |
-| `skipped_upstream` | list[int] | Sheet numbers of upstream sheets that were skipped (via `skip_when`). Use this to handle incomplete fan-in data explicitly in your template. |
+| `skipped_upstream` | list[int] | Sheet numbers of upstream sheets that were skipped via command `skip_when`. Upstream sheets skipped as unchanged provide their recorded output and do not create a gap. |
 
 **Example usage:**
 
@@ -1191,9 +1191,11 @@ A few things that will not work:
    language. You cannot make HTTP calls, read files, or execute commands
    from inside a template. That's what the agent does.
 
-3. **No dynamic fan-out** — You cannot compute fan-out count from inside a
-   template. `fan_out:` is YAML config, evaluated before templates render.
-   The structure is fixed; only the content is dynamic.
+3. **Fan-out width is fixed at load time** — A `fan_out:` count may name a
+   `prompt.variables` entry (`2: '{{ chapter_count }}'`) and is resolved to
+   an integer when the YAML is parsed. Templates cannot compute it, and
+   `--var` cannot change it: the structure is fixed per run; only the
+   content is dynamic.
 
 4. **Validation paths use different syntax** — Validation `path` fields use
    `{single_brace}` Python format strings (`{workspace}`, `{sheet_num}`),
@@ -1308,6 +1310,14 @@ precedence over `sheet.stdout_to`, which takes precedence over a sheet-gated
 `file_exists` proxy; a shared path belongs to every voice that declares it.
 See the [configuration reference](configuration-reference.md#movements) for
 the full field semantics.
+
+### Declaring Movement Cadenzas
+
+A movement can also declare `cadenzas:` — context injected into every voice of
+that movement. Under fan-out this replaces listing each expanded sheet number
+under `sheet.cadenzas`; an optional `voice:` narrows one item to one voice, and
+a path may template on `{{ voice }}`. See
+[Stage-Level Cadenzas](#stage-level-cadenzas-movementsncadenzas).
 
 ### Named Instrument Definitions
 
@@ -1774,6 +1784,46 @@ sheet:
 | 4 | 2 | 3 | 3 |
 | 5 | 3 | 1 | 1 |
 
+#### Width from a variable
+
+A count may be a reference to one `prompt.variables` entry instead of a
+literal. It resolves when the score loads, so the width is fixed per run:
+
+```yaml
+prompt:
+  variables:
+    chapter_count: "10"     # an integer, or a string of digits
+sheet:
+  size: 1
+  total_items: 3
+  fan_out:
+    2: '{{ chapter_count }}'   # stage 2 runs 10 voices
+```
+
+- The reference is a bare `{{ name }}` or a dotted `{{ book.count }}` — no
+  filters, arithmetic or comparisons (`{{ n + 1 }}` is V338).
+- Quote the reference and put it on the count; the key stays a numeric stage
+  (`2: '{{ chapter_count }}'`). An unquoted reference is a YAML error, and a
+  named stage key such as `draft` is a schema error; both exit 2 without V338.
+- The variable must be an integer or a string of ASCII digits, `1` to `1000`.
+  Surrounding whitespace and leading zeroes in the string are ignored
+  (`" 004 "` is `4`); signs are refused. A float, a boolean, `null`, other text,
+  or an undeclared name is `V338`.
+- It reads only the YAML's own `prompt.variables`. `mzt run --var` merges
+  after the width is resolved and cannot change it.
+- Literal counts are not capped and behave as before.
+
+**Address later keys by stage.** Every concrete sheet number *after* a
+variable-width stage shifts with the width. A score that hard-codes sheet
+numbers in `cadenzas`, `per_sheet_fallbacks`, `prompt_extensions`,
+`per_sheet_instruments` or `per_sheet_instrument_config` after such a stage
+re-points them when the variable changes (`loops` is not one of them — its
+spans are already stage keys under fan-out). Keep the width constant for
+those scores, or keep those maps on stages before it. Cadenzas have the
+stage-keyed form: declare shared context on the movement,
+`movements.<N>.cadenzas`, and every voice of the stage reads it however wide
+the stage becomes (GH #571).
+
 ### Dependency Expansion Patterns
 
 Dependencies declared at the stage level are automatically expanded to
@@ -1829,16 +1879,18 @@ The `stagger_delay_ms` option adds a small delay between launching parallel shee
 
 ### Conditional Sheet Skipping
 
-`skip_when` skips sheets based on shell command exit codes (#119: the
-old expression-based form was removed — it was never evaluated at
-runtime; `skip_when_command` was renamed to this shorter key). Exit 0 =
-skip the sheet, non-zero = run the sheet. Supports `{workspace}` template
-expansion and configurable timeout. On timeout or error, the sheet runs
-(fail-open for safety).
+`skip_when` conditionally skips sheets based on either shell command exit codes or whether inputs are unchanged since the last pass (#119, GH #570).
+
+A rule takes **exactly one** predicate:
+- `command`: shell command to evaluate. Exit 0 = skip the sheet, non-zero = run the sheet. Supports `{workspace}` template expansion and configurable `timeout_seconds`.
+- `unchanged: true`: skip the sheet when it is unchanged since it last passed. Evaluated on fresh runs only; any doubt runs the sheet.
 
 ```yaml
 sheet:
   skip_when:
+    5:
+      unchanged: true
+      description: "Skip drafting if inputs and products are unchanged"
     6:
       command: 'grep -q "TOTAL_PHASES: 1$" "{workspace}/03-plan.md"'
       description: "Skip phase 2 — plan has only 1 phase"
@@ -1848,25 +1900,24 @@ sheet:
       description: "Skip phase 3 — plan has fewer than 3 phases"
 ```
 
-This is useful when earlier stages write workspace files that determine
-whether later stages should run — for example, a planning stage that
-decides how many implementation phases are needed.
+#### Skip When Unchanged Since It Last Passed
 
-**A skip does not cascade.** The baton treats an intentionally skipped sheet
-as satisfying its dependents (they read `[SKIPPED]` in `previous_outputs` and
-run), so skipping sheet 1 does not skip sheets 2–9. A chain terminator — "when
-the marker exists, this iteration does nothing" — therefore needs the marker
-test on **every** sheet, including the sheet whose trigger chains, or the
-later sheets run for real and the trigger fires again (`codebase-rewrite`
-did this on 2026-10-22 and spawned an iteration its own review had ended).
+When a rule specifies `unchanged: true` (GH #570), Marianne checks whether the sheet's prompt, configuration, and declared products match the record of its last successful first attempt.
+
+- **Declared-input contract**: Seen inputs include the prompt and preamble Marianne assembles, the sheet's declared products, and the upstream dependency gate. Unseen inputs (files read by an agent's tools that no cadenza, dependency, or product declares) cannot be detected; sheets reading undeclared files should not carry the rule.
+- **Transitive dependency check**: If any upstream dependency of the sheet executed during this run, the sheet runs.
+- **Forced re-runs**: To force execution, run `mzt resume --force --from-sheet 1`, remove the rule, or delete `<workspace>/.marianne/pass-ledger/`.
+- Records live in `<workspace>/.marianne/pass-ledger/<scope>/` keyed by score file so self-chaining runs and schedule ticks share the ledger.
+- A sheet skipped as unchanged provides its recorded `stdout_tail` to downstream `previous_outputs` rather than `[SKIPPED]`.
 
 `SkipWhenCommand` fields:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `command` | str | **(required)** | Shell command. `{workspace}` is expanded. Exit 0 = skip. |
-| `description` | str | `null` | Human-readable skip reason (shown in logs). |
-| `timeout_seconds` | float | `10.0` | Max seconds to wait (0-60). Fail-open on timeout. |
+| `command` | str \| null | `null` | Shell command (one of `command` / `unchanged`). `{workspace}` is expanded. Exit 0 = skip. |
+| `unchanged` | bool | `false` | Skip if inputs and declared products are unchanged since last pass (one of `command` / `unchanged`). |
+| `description` | str \| null | `null` | Human-readable skip reason (shown in logs). |
+| `timeout_seconds` | float | `10.0` | Max seconds to wait for command (0-60). Command rules only; fail-open on timeout. |
 
 **Tip:** to skip based on previous sheet results, have the earlier sheet
 write a marker/summary file and grep it — workspace files are the
@@ -1952,8 +2003,8 @@ in the prompt.
 
 - **Prelude** — shared context/skills/tools injected into ALL sheets
   (like a musical prelude that sets the tone)
-- **Cadenza** — per-sheet specific injections
-  (like a soloist's moment in the composition)
+- **Cadenza** — per-sheet specific injections, or per-movement ones that reach
+  every voice of the stage (like a soloist's moment in the composition)
 
 ### Injection Categories
 
@@ -2008,13 +2059,70 @@ sheet:
 Files are read at **sheet execution time**, not when the YAML is parsed.
 This means dynamic outputs from earlier sheets are available.
 
+### Stage-Level Cadenzas (movements.N.cadenzas)
+
+Under `fan_out`, `sheet.cadenzas` keys are **concrete** sheet numbers — a
+cadenza that should reach every voice of a fanned-out stage would have to
+list every expanded sheet number by hand (V225 points this out). Declare it
+on the movement instead: `movements.<stage>.cadenzas` reaches **every voice**
+of that stage, however wide it is (GH #571):
+
+```yaml
+movements:
+  7:
+    name: Draft
+    cadenzas:
+      - file: "{{ workspace }}/frozen/outline.json"
+        as: context
+        required: true
+```
+
+Every voice of stage 7 now injects the frozen outline. A voice-specific item
+uses the `voice` item field (the fan-out instance number, 1-based), and a
+per-voice path templates on `{{ voice }}` — the same positional variable the
+template itself exposes:
+
+```yaml
+movements:
+  11:
+    name: Claim check
+    cadenzas:
+      - file: "{{ workspace }}/units/unit-{{ voice }}.md"
+        as: context
+        required: true
+      - voice: 15
+        file: "{{ workspace }}/frozen/outline.json"
+        as: context
+        required: true
+```
+
+Here stage 11 has at least 15 voices; a `voice:` above the movement's voice
+count is the V216 error described below.
+
+Two things to know:
+
+- `{{ voice }}` is a **template variable** that renders per voice inside a
+  path; `voice:` is an **item field** that selects which voices get the item.
+  They compose but are not the same thing.
+- A movement with a single voice has voice `1`: there `{{ voice }}` resolves
+  to `1` (`unit-{{ voice }}.md` reads `unit-1.md`), and `voice: 1` is
+  delivered.
+
+A movement cadenza item may not name a stage the score does not have, or a
+voice above the movement's voice count — both are V216 errors, and so is a
+concrete `sheet.cadenzas` key outside the expanded range. A sheet reads its
+prelude, then its movement's cadenza items, then its own `sheet.cadenzas`
+items, in that order. `voice:` spelled on a prelude or `sheet.cadenzas` item
+is an unknown field there: it is stripped and reported as a V010 warning that
+names `movements.cadenzas.voice` as its home.
+
 ### Prelude vs. cross_sheet vs. prompt_extensions
 
 These three features serve different purposes:
 
 | Feature | Scope | Content Source | Prompt Position |
 |---------|-------|---------------|-----------------|
-| `prelude` / `cadenzas` | All sheets / per-sheet | File contents (read at execution time) | Category-dependent (context/skill/tool) |
+| `prelude` / `cadenzas` | All sheets / per-sheet or per-movement | File contents (read at execution time) | Category-dependent (context/skill/tool) |
 | `cross_sheet` | Automatic from previous sheets | stdout + captured files | Template variables (`previous_outputs`, `previous_files`) |
 | `prompt_extensions` | Score-level or per-sheet | Literal inline strings | Appended by the executor through request-local sheet state; omitted in raw prompt mode |
 
@@ -2030,6 +2138,13 @@ a file through `prelude` or `cadenzas` when its contents should be injected.
 
 `mzt validate` checks static prelude/cadenza file paths (V108 ERROR)
 but skips Jinja-templated paths that can't be resolved before execution.
+Movement cadenza items are checked the same way, once per stage and item, and
+reported as `cadenza (stage N)`.
+
+V109 compares file names as written: the file name of a cadenza path against
+each producer declaration's. A per-voice path such as `unit-{{ voice }}.md`
+therefore matches only a producer declared under that same name — one spelled
+`unit-{instance}.md` gives no signal and no warning.
 
 ---
 
@@ -2351,7 +2466,7 @@ done
 | V007 | Invalid regex in validation pattern | Fix regex in `content_regex` or `rate_limit.detection_patterns` |
 | V101 | Undefined template variable (warning) | Check spelling against the built-ins (`workspace`, `score_dir`, `sheet_num`, loop indices, …) or add the variable to `prompt.variables` |
 | V103 | Very short timeout (warning) | Increase `instrument_config.timeout_seconds` |
-| V108 | Missing prelude/cadenza file (warning) | Check file path in `sheet.prelude` or `sheet.cadenzas`. Jinja-templated paths are skipped. |
+| V108 | Missing prelude/cadenza file (error) | Check the file path in `sheet.prelude`, `sheet.cadenzas` or `movements.<N>.cadenzas`. Jinja-templated paths are skipped. |
 | V336 (info) | A sheet's instrument has no `default_model` and no model is set at any scope: it runs on the harness's own default | Set `instrument_config.model: <id>`, an alias `config: {model: <id>}`, or a chain/class entry `model` |
 | V337 | `instrument_config.tools` the resolved profile cannot apply | Name only tools from the list the message gives, bind the sheet to a profile that declares a `tools:` block, run the sheet headless if the mapping is not interactive, or remove `tools` from the scope that reaches that instrument |
 | V335 | `instrument_config.effort` the resolved profile or model cannot apply | Use a level the message lists, pick a model whose row maps it, run the sheet headless if the mapping is not interactive, or remove `effort` from the scope that reaches that instrument |

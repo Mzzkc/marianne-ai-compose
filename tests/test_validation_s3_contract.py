@@ -115,6 +115,35 @@ def test_dependency_cycle_and_cadenza_target(tmp_path: Path) -> None:
     assert CadenzaTargetCheck().check(config, path, path.read_text())[0].check_id == "V216"
 
 
+def test_movement_cadenza_target_is_v216(tmp_path: Path) -> None:
+    """A movement cadenza naming a stage or voice that cannot exist is V216 (#571)."""
+    path = tmp_path / "staged.yaml"
+    path.write_text(
+        "name: staged-571\n"
+        "instrument: cli\n"
+        "movements:\n"
+        "  9:\n"
+        "    cadenzas:\n"
+        "      - {file: x.md, as: context}\n"
+        "  2:\n"
+        "    cadenzas:\n"
+        "      - {voice: 4, file: x.md, as: context}\n"
+        "sheet:\n"
+        "  size: 1\n"
+        "  total_items: 3\n"
+        "  fan_out: {2: 3}\n"
+        "prompt: {template: hello}\n"
+    )
+    config = JobConfig.from_yaml(path)
+    issues = CadenzaTargetCheck().check(config, path, path.read_text())
+    assert sorted(i.message for i in issues if i.check_id == "V216") == [
+        "movements.2.cadenzas target voice 4 of a movement with 3 voice(s); "
+        "the item reaches nobody",
+        "movements.9.cadenzas target stage 9, which has no sheet in this "
+        "score (valid stages are 1-3); the items reach nobody",
+    ]
+
+
 def test_static_concert_target_and_identity_allowlist(tmp_path: Path) -> None:
     path = _score(tmp_path, "on_success:\n  - {type: run_job, job_path: missing.yaml}\n")
     config = JobConfig.from_yaml(path)

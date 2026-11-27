@@ -439,7 +439,10 @@ Movement declarations. Map of movement number to MovementDef. Movements are sequ
 phases. Each movement can specify a name (for display in `mzt status`), an instrument
 (overriding the score default), instrument configuration, and a voice count (shorthand for `fan_out`).
 
-Movement numbers must be positive integers within the range `[1, total_items]`.
+Movement numbers must be positive integers. The loader does not range-check
+them against the stage count; a movement number with no sheet of its own is
+silent at load and reported by V216 when it declares cadenzas — a cadenza
+on a movement that has no sheet reaches nobody.
 With `sheet.size: 1` and `sheet.start_item: 1`, `voices` expands the movement
 through the same fan-out engine as `sheet.fan_out`: dependencies, voice variables,
 and sheet numbering all use the expanded sheets. An explicit `sheet.fan_out`
@@ -488,6 +491,7 @@ movements:
 | `voices` | `int \| None` | `None` | `>= 1` | Number of parallel voices in this movement. Shorthand for `fan_out: {N: voices}`. |
 | `produces` | `list[str]` | `[]` | | Files this movement writes. Workspace-relative paths support `{workspace}` and `{sheet_num}`; each fan-out voice declares its own expanded outputs. Used for cadenza ordering and foreign-artifact checks; keep validations to check successful output. |
 | `instrument_fallbacks` | `list[str]` | `[]` | | Default fallback chain for sheets in this movement. Overrides score-level `instrument_fallbacks`. |
+| `cadenzas` | `list[MovementCadenzaItem]` | `[]` | | Context injections for every voice of this movement (GH #571). Each item is a prelude-shaped InjectionItem; the optional `voice` field narrows one item to a single fan-out voice, and paths may template on `{{ voice }}`. Read before the `sheet.cadenzas` items of each voice. |
 
 **Instrument resolution precedence** (highest to lowest):
 1. `sheet.per_sheet_instruments` (per-sheet override)
@@ -588,12 +592,12 @@ Defines how the work is divided into sheets (execution units).
 | `total_items` | `int` | **required** | `>= 1` | Total number of items to process |
 | `start_item` | `int` | `1` | `>= 1` | First item number (1-indexed) |
 | `dependencies` | `dict[int, list[int]]` | `{}` | No self-references | Sheet dependency declarations. Map of `sheet_num -> [prerequisites]`. Sheets without entries are independent. |
-| `skip_when` | `dict[int, SkipWhenCommand]` | `{}` | | Command-based conditional skip rules (#119, formerly `skip_when_command`). Map of `sheet_num -> SkipWhenCommand`. The command runs via shell; exit 0 = skip the sheet, non-zero = run it. Fail-open on timeout or error. |
+| `skip_when` | `dict[int, SkipWhenCommand]` | `{}` | | Conditional skip rules (#119, formerly `skip_when_command`; GH #570). Map of `sheet_num -> SkipWhenCommand`. Evaluated on fresh runs only; any doubt runs the sheet. Supports `command` predicates (exit 0 = skip, non-zero = run) and `unchanged` predicates (skip when inputs and products did not change since the last pass). Fail-open on timeout or error. |
 | `stdout_to` | `dict[int, str]` | `{}` | Inside the workspace; V004 on a home-absolute path; V214 on a sheet outside the range | Per-sheet file for the instrument's full stdout (`sheet.stdout_to`). Map of `sheet_num -> workspace-relative path` (or `{workspace}/...`). The musician writes the whole reply there before validations run, so a sheet on an `http` profile, which has no filesystem, can meet `file_exists`/`content_regex` and hand the file to later sheets; `stdout_tail` keeps only the last 500 characters. A fanned-out stage gets one file per voice (`answer-2.md`, `answer-3.md`). A failed attempt writes nothing; a path that escapes the workspace is refused with a preflight warning. |
 | `prompt_extensions` | `dict[int, list[str]]` | `{}` | | Per-sheet prompt extensions. Map of `sheet_num -> list of extension strings`. Applied in addition to score-level `prompt.prompt_extensions`. |
 | `prelude` | `list[InjectionItem]` | `[]` | | Shared context injected into ALL sheets. Each item references a file and a category (`context`, `skill`, or `tool`). File paths support Jinja templating. Files are read at sheet execution time. |
-| `cadenzas` | `dict[int, list[InjectionItem]]` | `{}` | | Per-sheet context injections. Map of `sheet_num -> list of InjectionItems`. Applied in addition to prelude items for the specified sheet. |
-| `fan_out` | `dict[int, int]` | `{}` | Requires `size=1`, `start_item=1` | Fan-out declarations. Map of `stage_num -> instance_count`. Creates parallel instances of stages. Cleared after expansion. |
+| `cadenzas` | `dict[int, list[InjectionItem]]` | `{}` | Keys are concrete sheet numbers, also under fan-out; V216 outside the range | Per-sheet context injections. Map of `sheet_num -> list of InjectionItems`. Keys are **concrete** sheet numbers, also after fan-out expansion — under `fan_out: {2: 3}` a key `5` names the concrete sheet 5, not stage 5. To reach every voice of a stage, declare the cadenza on the movement: `movements.<stage>.cadenzas` (GH #571); a sheet reads its movement's items before its own `sheet.cadenzas` items. |
+| `fan_out` | `dict[int, int \| str]` (authored YAML) | `{}` | Requires `size=1`, `start_item=1`; V338 when a `'{{ variable }}'` count cannot resolve | Fan-out declarations. Map of numeric `stage_num -> instance_count`. Creates parallel instances of stages. Cleared after expansion. A count may instead be a quoted bare reference to one `prompt.variables` entry, `'{{ chapter_count }}'` (or a dotted `'{{ book.count }}'`), resolved at load to an integer `1`-`1000`: the variable must be an integer or a string of ASCII digits with no sign (surrounding whitespace in the string is ignored), and an undeclared name, a non-integer or an out-of-range value is V338. Filters and arithmetic are refused. Literal counts are not capped. `--var` cannot change a width. The model field remains `dict[int, int]`; `JobConfig` resolves references before `SheetConfig` validates. |
 | `fan_out_messaging` | `"file" \| "none"` | `"file"` | | Fan-out messaging (`fan_out.messaging` conceptually). Use this sibling field, preserving the stage-to-count `fan_out` mapping. `file` prepares scratch-owned inboxes and adds polling instructions with sibling numbers and descriptions; `none` omits that prompt setup. Explicit use without concurrent voices emits V234 WARNING. |
 | `fan_out_stage_map` | `dict[int, dict[str, int]] \| None` | `None` | | Per-sheet fan-out metadata, populated by expansion. Survives serialization for resume support. |
 | `spec_tags` | `dict[int, list[str]]` | `{}` | | Per-sheet spec fragment tag filters. Map of `sheet_num -> list of tags`. Only fragments matching at least one tag are injected for that sheet. Sheets without entries receive all fragments. |
@@ -646,13 +650,14 @@ sheet:
 
 *Source: `src/marianne/core/config/execution.py` — `SkipWhenCommand`*
 
-Defines a command-based conditional skip rule for sheet execution. When the command exits 0, the sheet is **skipped**. When the command exits non-zero, the sheet **runs**. On timeout or error, the sheet runs (fail-open for safety).
+Defines a conditional skip rule for sheet execution (command or unchanged predicate). Exactly one of `command` or `unchanged` must be set. When the command exits 0, the sheet is **skipped**; when non-zero, it **runs**. When `unchanged` is true, the sheet is **skipped** if its inputs and declared products are unchanged since it last passed. On timeout, error, or evaluation doubt, the sheet runs (fail-open for safety).
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| `command` | `str` | **required** | | Shell command to evaluate. Exit 0 = skip the sheet. Supports `{workspace}` template expansion. |
+| `command` | `str \| None` | `None` | (one of `command` / `unchanged`) | Shell command to evaluate. Exit 0 = skip the sheet. Supports `{workspace}` template expansion. |
+| `unchanged` | `bool` | `False` | (one of `command` / `unchanged`) | Skip sheet if inputs and declared products are unchanged since last passed. Evaluated on fresh runs only. |
 | `description` | `str \| None` | `None` | | Human-readable reason for the skip condition |
-| `timeout_seconds` | `float` | `10.0` | `> 0`, `<= 60` | Maximum seconds to wait for command. Fail-open on timeout. |
+| `timeout_seconds` | `float` | `10.0` | `> 0`, `<= 60` | Maximum seconds to wait for command. Command rules only; fail-open on timeout. |
 
 ```yaml
 sheet:
@@ -664,6 +669,10 @@ sheet:
       command: "cd {workspace} && pytest tests/ -x --tb=no -q"
       description: "Skip if tests already pass"
       timeout_seconds: 30
+    # Skip sheet 5 if inputs and outputs are unchanged since it last passed
+    5:
+      unchanged: true
+      description: "Skip re-drafting if inputs are unchanged"
     # Skip sheet 8 if a marker file exists
     8:
       command: "test -f {workspace}/phase2-complete.marker"
@@ -674,7 +683,7 @@ sheet:
 
 *Source: `src/marianne/core/config/job.py` — `InjectionItem`*
 
-A single injection item referencing a file **or a directory** with a category. Used in `prelude` (all sheets) and `cadenzas` (per-sheet) to inject file content into prompts at category-appropriate locations. Exactly one of `file` or `directory` must be specified.
+A single injection item referencing a file **or a directory** with a category. Used in `prelude` (all sheets), in `cadenzas` (per-sheet) and in a movement's `cadenzas` (every voice of the movement; those items may also set `voice`) to inject file content into prompts at category-appropriate locations. Exactly one of `file` or `directory` must be specified.
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -683,6 +692,7 @@ A single injection item referencing a file **or a directory** with a category. U
 | `as` | `InjectionCategory` | **required** | `"context"`, `"skill"`, or `"tool"` | Category determining prompt placement. See InjectionCategory below. |
 | `required` | `bool` | `false` | | Fail the sheet **before execution** when this attachment cannot be read. Persistent-agent identity, memory, and every load-bearing cadenza attachment should set this `true` — missing context then fails loudly instead of silently running degraded. Runtime context-delivery receipts record the resolved paths and hashes actually assembled into the prompt. |
 | `max_bytes` | `int \| None` | `None` | `> 0` | Cap on the bytes this item injects (a directory sums its files). Over the cap, a `required` item fails the sheet before execution with the measured size; an optional item is dropped with a warning — never shipped as an over-sized prompt. Give every cadenza ledger that grows with every sheet (an `active/` directory, a memory file) a cap; `mzt validate` reports V334 when a static path is already over it: an ERROR for a `required` item (the sheet cannot run), a WARNING for an optional one (GH #474, #515). The composing release checker measures the same files, so a lock cannot be written over a required item that cannot inject. Every attempt records what each item delivered (path, sha256, bytes) or why it was dropped as the sheet's `prompt_receipt` (GH #546; see `mzt status --json` in the CLI reference). |
+| `voice` | `int \| None` | `None` | `>= 1`; movement cadenzas only | Legal only on a movement cadenza item (`movements.<n>.cadenzas[]`, GH #571): deliver the item to one voice of the movement — the fan-out instance number, 1-based. Unset reaches every voice. A `voice` spelled on a prelude or `sheet.cadenzas` item is an unknown field there: it is stripped and reported as a V010 warning that names `movements.cadenzas.voice` as its home. Not the same thing as the `{{ voice }}` template variable, which renders per voice inside a path (`1` on a movement with a single voice). |
 
 **InjectionCategory values:**
 
@@ -1502,7 +1512,7 @@ memory:
 The address of a CAM server and the source of its key belong to the **operator**, not to a score. They are set once in the conductor configuration, under a name:
 
 ```yaml
-# ~/.marianne/conductor.yaml  (the operator's file; read when the conductor starts)
+# ~/.marianne/conductor.yaml  (the operator's file; read at start and on every reload)
 memory_backends:
   cam:
     default:                              # endpoint name; a score that names none gets `default`
@@ -1535,7 +1545,7 @@ memory:
 | `timeout_seconds` | Per-request ceiling (default 10); each request also stops at the call deadline |
 | `allow_remote` | Permit a non-loopback host (https only). Default `false` |
 
-A score's `settings` for `system: cam` may hold only `endpoint` and `timeout_seconds`. A score that sets `base_url`, `api_key_env`, `api_key_file` or `allow_remote` is refused: V350 reports it at `mzt validate`, and the dispatch refuses it again with `memory_delivery_unsupported` (the score file is not trusted with the conductor's environment variables or files, so it cannot send a credential to a server it names). A `endpoint` the conductor does not define is refused the same way, naming the endpoint and the `memory_backends.cam.<name>` key to set. `memory_backends` is read at conductor start; a hot reload that changes it reports `restart required`.
+A score's `settings` for `system: cam` may hold only `endpoint` and `timeout_seconds`. A score that sets `base_url`, `api_key_env`, `api_key_file` or `allow_remote` is refused: V350 reports it at `mzt validate`, and the dispatch refuses it again with `memory_delivery_unsupported` (the score file is not trusted with the conductor's environment variables or files, so it cannot send a credential to a server it names). A `endpoint` the conductor does not define is refused the same way, naming the endpoint and the `memory_backends.cam.<name>` key to set. These configuration refusals and the instrument refusal below share the `memory_delivery_unsupported:` prefix in their text; the class, not the text, decides what the baton does — a configuration refusal is `MEMORY_CONFIG_ERROR` and fails the sheet at once with `E301` (GH #572), an instrument refusal is `MEMORY_DELIVERY_UNSUPPORTED` and moves the sheet to the next instrument. `memory_backends` is read when the conductor starts and on every reload (`mzt conductor reload`, `SIGHUP`, or the watcher). A reload replaces the whole endpoint table: the next dispatch resolves against it, and a session that is already open keeps the backend it was opened with. A changed endpoint gets a new backend; a removed endpoint refuses the next dispatch that names it. An invalid edit is declined whole and the running endpoints are kept.
 
 What it can do today: `declare`, `recall` and `health` (a CAM running without an embedding model reports `degraded`, since recall is then lexical). `verify`, `bind`, `forget`, `fetch`, `stream_facts` and `migration_ingest` are refused with E7 `capability_unsupported` naming the operation, because CAM has no such operation yet. CAM recall has no cursor, so a recall is trimmed to the call's byte cap at a fact boundary on Marianne's side and the omitted facts are only counted. Every Marianne principal appears to CAM as the one key's principal until CAM ships stamped principals; the scope is passed through as CAM's scope.
 
@@ -1559,7 +1569,8 @@ At dispatch the conductor reads the score's `memory:` key (`marianne.daemon.bato
 - Delivery is all-or-nothing: if any attachment cannot be opened, nothing stays open and the sheet's dispatch fails with a message that names the attachment and the backend's reason (`Memory setup failed before backend acquisition`).
 - Memory reaches an instrument only through an MCP config. An instrument whose profile has neither `mcp_config_flag` nor `mcp_config_workspace_path` (for example `cli`, which has no model), or whose backend cannot be handed a config, is refused at dispatch with `memory_delivery_unsupported: <instrument>: <reason>`; the backend is released and nothing is left open.
 - A memory session is never handed to the musician unannounced. The memory block (the manifest) and the open sessions come from one call, so a session that is open while the sheet carries no memory block can only mean a caller on the dispatch path dropped the manifest (GH #556). The sheet is refused at dispatch with `memory_manifest_missing: this dispatch opened memory sessions (<dispatch id>) but carries no memory block; refusing to run a memory sheet without announcing its memory`, and the log carries `adapter.memory_manifest_missing`. The sheet never runs, the backend is released and the sessions close. Unlike the refusals above this one is not caused by the score: a correct dispatch path cannot produce it, so there is nothing to change in the score. `mzt status` shows the start of the message on the failed sheet and `mzt diagnose` reports it in full. Report it as a bug against the conductor with the `mzt diagnose` output and the conductor logs.
-- A memory refusal is not retried on the instrument that refused it. `memory_delivery_unsupported` and `memory_manifest_missing` are both classified as memory refusals (`MEMORY_DELIVERY_UNSUPPORTED`): the sheet moves to the next instrument in its fallback chain if one is left, with the refused attempt un-charged, and each instrument is tried once. With no instrument left the sheet fails with `E505` and the refusal's message.
+- An *instrument* refusal is not retried on the instrument that refused it. `memory_delivery_unsupported: <instrument>: <reason>` and `memory_manifest_missing` (GH #556) are both classified `MEMORY_DELIVERY_UNSUPPORTED`: the sheet moves to the next instrument in its fallback chain if one is left, with the refused attempt un-charged, and each instrument is tried once. With no instrument left the sheet fails with `E505` and the refusal's message.
+- A *configuration* refusal (GH #572) — a `cam` attachment whose `settings` the conductor cannot deliver: an `endpoint` it does not define, an operator-only key, another unknown key, or an `endpoint` that is not a name — is classified `MEMORY_CONFIG_ERROR` and fails the sheet at once with `E301`: it is neither retried nor moved along the fallback chain (no instrument can deliver a misconfigured attachment), and it does not count against the instrument, which never ran. The message names the attachment, and for an unknown endpoint or an operator-only setting also the `memory_backends.cam.<name>` key. In a flow job the sheet's `on_fail` trigger still fires, and the instrument is not charged there either. After the operator adds the endpoint and runs `mzt conductor reload`, re-run the job with `mzt resume <job> --from-sheet N` — a running job no longer sits in a retry window during which a hot reload could rescue it.
 - Only `access: inherit` is available. The backend is chosen by `memory.backends.<name>.system` (`files` or `cam`) through `marianne.memory.backends.backend_factory`. Files-backed memory lives under `~/.marianne/memory/files`, the audit log under `~/.marianne/memory/audit`, and sockets under `~/.marianne/run/s`.
 - The shim receives its socket path in the `MARIANNE_MEMORY_SOCKET` environment variable, not on its command line. This hides the path from other users only: a process of the same user can read `/proc/<pid>/environ` too, and all jobs of one conductor share one principal, so a sheet with a shell can reach another job's memory session if it finds the socket path.
 - A memory server name that already exists in the technique MCP config is refused rather than overwritten.
@@ -1859,7 +1870,7 @@ Available but rarely need changing:
 | `orchestra` | `OrchestraConfig` | *(see sub-config)* | | Orchestra view: a public-safe fleet timeline, live over IPC and appended daily to `~/.marianne/orchestra/<day>.jsonl` for replay. Keys: `enabled` (true), `persist` (true), `directory`, `ring_size` (2000, `>= 100`), `keep_ended_seconds` (1800). The projection carries score name, sheet, instrument, outcome, time and a short note (fallback transition, retry attempt, or the verbatim chain-refusal reason, which can name the child score's path) |
 | `profiler` | `ProfilerConfig` | *(see sub-config)* | | System profiler (strace off by default, GPU probing off by default) |
 | `preflight` | `PreflightConfig` | *(see sub-config)* | | Preflight prompt analysis thresholds. Controls when prompts are warned or rejected based on estimated token count. |
-| `memory_backends` | `MemoryBackendsConfig` | `{}` | | Operator-side memory endpoints: `cam.<name>: {base_url, api_key_env \| api_key_file, allow_remote, timeout_seconds}`. Scores name an endpoint; they cannot set an address or key source (see [the `cam` backend](#the-cam-backend)). Restart to change |
+| `memory_backends` | `MemoryBackendsConfig` | `{}` | | Operator-side memory endpoints: `cam.<name>: {base_url, api_key_env \| api_key_file, allow_remote, timeout_seconds}`. Scores name an endpoint; they cannot set an address or key source (see [the `cam` backend](#the-cam-backend)). Hot — reload replaces the endpoint table (#573) |
 | `hot_reload` | `HotReloadConfig` | *(see [Hot Reload](#hot-reload))* | | Opt-in watcher that hot-applies config and instrument profile changes without a restart |
 | `config_file` | `Path \| None` | `None` | | Path to the YAML config file. Set automatically on startup; used by reload to re-read config from disk. |
 
@@ -1950,6 +1961,7 @@ value is kept):
 | `default_thinking_method` | Hot — live read at prompt build |
 | `log_level` | Hot — logging level reconfigured |
 | `hot_reload` | Hot — watcher reads live settings each cycle |
+| `memory_backends` | Hot — endpoint table replaced whole; new dispatches resolve against it, open sessions keep their backend (#573) |
 | `socket.*` | Restart-only |
 | `pid_file` | Restart-only |
 | `state_db_path` | Restart-only |
@@ -2138,6 +2150,47 @@ proceeds; use a validation for a required artifact. Loop spans may be separate o
 Use `{{ loops.pass_no }}` or `{{ pass_no }}` in prompts, `{pass_no}` in validations
 scoped to the loop, and `loop.pass_no` in expressions. A global validation
 cannot use a loop index that is unavailable on another sheet.
+
+A loop's iteration cap may name a `prompt.variables` entry instead of a
+literal — `max_iterations: '{{ max_passes }}'`, or a dotted `{{ book.count }}` —
+and so may `count`:
+
+```yaml
+prompt:
+  variables:
+    max_passes: "12"     # an integer, or a string of digits
+sheet:
+  size: 1
+  total_items: 2
+  loops:
+    1:
+      index: pass_no
+      until: 'file("done.txt").exists'
+      max_iterations: '{{ max_passes }}'
+```
+
+The reference is resolved when the score loads, to an integer; the variable
+must be an integer or a string of ASCII digits in `1`-`10000` (surrounding
+whitespace and leading zeroes are ignored; signs are refused). The reference
+must be bare — no filters, arithmetic or surrounding text. An undeclared
+name, a non-integer or an out-of-range value is a coded error, **V351**, one
+issue per failing loop and field whose `metadata.span` is the loop key as
+written, instead of a pydantic `int_parsing` trace. Literal caps are
+unchanged: a literal `max_iterations` keeps its own `1`-`10000` bound, and a
+literal `count` has no upper bound. The resolved cap is fixed per run:
+`mzt run --var` merges after it is resolved and cannot change it.
+
+An `until` expression's `var.x` reads the merged variables at run time, so it
+does see `--var`. That makes `until: 'loop.pass_no >= var.max_passes'` a
+different tool from the cap: it ends the loop `condition_met` when the goal
+is met rather than at a cap, and the `max_iterations` safety cap still
+applies on top of it (a cap below the goal still ends the loop on the cap).
+Because an expression never compares a number with a string, that form needs
+`max_passes` as a bare integer in the YAML (`max_passes: 12`, not `"12"`)
+that `--var` does not override — a `--var` value is always a string.
+Otherwise the loop ends `condition_error` and the span's last sheet fails
+with E999 on the first pass. To read a `--var` value, compare it as text:
+`until: 'var.max_passes == "12"'`.
 
 Expressions support booleans, comparisons, arithmetic, parentheses, `var.name`,
 `loop.name`, `sheet(N)`/`sheet.current`, and `file("path")` facts. File facts

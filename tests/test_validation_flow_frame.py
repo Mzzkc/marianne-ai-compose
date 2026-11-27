@@ -133,6 +133,50 @@ prompt: {template: hello}
     assert ForwardGotoFanOutCheck().check(config, path, path.read_text())[0].check_id == "V231"
 
 
+def test_fan_out_keying_names_the_movement_cadenza_remedy(tmp_path: Path) -> None:
+    """The V225 cadenzas finding tells the author where the stage-keyed home is (#571)."""
+    path = _file(
+        tmp_path,
+        """name: flow-fan-cadenzas
+sheet:
+  size: 1
+  total_items: 2
+  fan_out: {1: 2}
+  cadenzas:
+    1:
+      - {file: plan.md, as: context}
+  loops:
+    1: {index: i, until: 'file("x").exists', max_iterations: 2}
+prompt: {template: hello}
+""",
+    )
+    config = JobConfig.from_yaml(path)
+    issues = MixedFanOutKeyingCheck().check(config, path, path.read_text())
+    assert len(issues) == 1
+    assert issues[0].check_id == "V225"
+    assert "movements.<stage>.cadenzas" in issues[0].message
+    assert "movements.<stage>.cadenzas" in (issues[0].suggestion or "")
+    # The other two maps keep the bare observation, without a cadenza remedy.
+    path = tmp_path / "flow-fan-extensions.yaml"
+    path.write_text(
+        """name: flow-fan-extensions
+sheet:
+  size: 1
+  total_items: 2
+  fan_out: {1: 2}
+  prompt_extensions: {1: [note]}
+  loops:
+    1: {index: i, until: 'file("x").exists', max_iterations: 2}
+prompt: {template: hello}
+"""
+    )
+    config = JobConfig.from_yaml(path)
+    issues = MixedFanOutKeyingCheck().check(config, path, path.read_text())
+    assert [i.message for i in issues] == [
+        "prompt_extensions keys are concrete sheets; flow spans were stage keys"
+    ]
+
+
 def _loop_score(tmp_path: Path, name: str, instrument_block: str) -> Path:
     return _file(
         tmp_path,
@@ -238,3 +282,104 @@ prompt: {{template: hello}}
     assert [i.check_id for i in issues] == (["V233"] if fires else [])
     if fires:
         assert "never exists" in issues[0].message and "{workspace}" in issues[0].message
+
+
+def test_variable_fan_out_width_error_is_coded_and_exit_one(tmp_path: Path) -> None:
+    path = _file(
+        tmp_path,
+        """name: fan-var
+prompt:
+  template: Write the book.
+  variables:
+    chapter_count: "5000"
+sheet:
+  size: 1
+  total_items: 3
+  fan_out:
+    2: '{{ chapter_count }}'
+""",
+    )
+    result = CliRunner().invoke(app, ["validate", str(path), "--json"])
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert data["issues"][0]["check_id"] == "V338"
+    assert data["issues"][0]["severity"] == "error"
+    assert "1-1000" in data["issues"][0]["message"]
+    assert data["summary"]["sheets"] is None  # the score never expanded
+
+
+def test_variable_fan_out_width_validates_clean(tmp_path: Path) -> None:
+    path = _file(
+        tmp_path,
+        """name: fan-var
+sheet:
+  size: 1
+  total_items: 2
+  fan_out:
+    2: '{{ chapter_count }}'
+prompt:
+  template: Write the book.
+  variables:
+    chapter_count: "3"
+""",
+    )
+    result = CliRunner().invoke(app, ["validate", str(path), "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["summary"]["sheets"] == 4
+    assert data["summary"]["stages"] == 2
+    assert data["summary"]["fan_out"] is True
+
+
+def test_variable_loop_cap_error_is_coded_and_exit_one(tmp_path: Path) -> None:
+    path = _file(
+        tmp_path,
+        """name: loop-var
+prompt:
+  template: Write the book.
+  variables:
+    max_passes: "10001"
+sheet:
+  size: 1
+  total_items: 2
+  loops:
+    1:
+      index: pass_no
+      until: 'file("done.txt").exists'
+      max_iterations: '{{ max_passes }}'
+""",
+    )
+    result = CliRunner().invoke(app, ["validate", str(path), "--json"])
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert data["issues"][0]["check_id"] == "V351"
+    assert data["issues"][0]["severity"] == "error"
+    assert "1-10000" in data["issues"][0]["message"]
+    assert "max_iterations" in data["issues"][0]["message"]
+    assert data["summary"]["sheets"] is None  # the score never loaded
+
+
+def test_variable_loop_cap_validates_clean(tmp_path: Path) -> None:
+    path = _file(
+        tmp_path,
+        """name: loop-var
+sheet:
+  size: 1
+  total_items: 2
+  loops:
+    1:
+      index: pass_no
+      until: 'file("done.txt").exists'
+      max_iterations: '{{ max_passes }}'
+prompt:
+  template: Write the book.
+  variables:
+    max_passes: "3"
+""",
+    )
+    result = CliRunner().invoke(app, ["validate", str(path), "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["summary"]["sheets"] == 2
+    assert data["summary"]["stages"] == 2
+    assert data["summary"]["loops"] == ["1"]

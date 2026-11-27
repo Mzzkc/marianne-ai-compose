@@ -299,7 +299,8 @@ class ErrorCode(str, Enum):
 
     # E3xx: Configuration errors
     CONFIG_INVALID = "E301"
-    """Configuration file is malformed or invalid."""
+    """Configuration file is malformed or invalid, or a memory attachment the
+    conductor's configuration cannot deliver (GH #572: ``MEMORY_CONFIG_ERROR``)."""
 
     CONFIG_MISSING_FIELD = "E302"
     """Required configuration field is missing."""

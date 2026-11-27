@@ -734,7 +734,7 @@ Key validation features:
 | Cost limits | `cost_limits.max_cost_per_job: 100` | Budget enforcement |
 | Timeout overrides | `sheet.per_sheet_instrument_config: {5: {timeout_seconds: 7200}}` | Per-sheet timeouts |
 | Spec corpus tags | `spec_tags: {3: [security, constraints]}` | Per-sheet knowledge filtering |
-| Skip conditions | `skip_when: {5: {command: 'test -f done.marker'}}` | Conditional sheet skipping (exit 0 = skip) |
+| Skip conditions | `skip_when: {5: {command: 'test -f done.marker'}, 6: {unchanged: true}}` | Conditional sheet skipping (command exit 0 or unchanged since last pass) |
 
 ---
 

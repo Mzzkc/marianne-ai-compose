@@ -367,6 +367,7 @@ kill -SIGHUP $(cat ~/.config/mzt/mzt.pid)
 - `resource_limits.*` — memory/process limits updated
 - `log_level` — logging reconfigured
 - `job_timeout_seconds`, `shutdown_timeout_seconds`, `monitor_interval_seconds`
+- `memory_backends.cam.*` — endpoint table replaced; running sheets keep their session
 
 **Non-reloadable fields** (require conductor restart):
 - `socket.*` (path, permissions, backlog)

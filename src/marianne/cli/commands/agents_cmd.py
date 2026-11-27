@@ -17,8 +17,9 @@ agent: the agents directory is read, and every write lands in the runs
 directory.
 
 The engage path is the compiler's ``bind_engagement`` called in process; the
-submit is ``mzt run``'s own function (``run.run``), not a subprocess. All
-conductor access goes through ``conduct._route`` and the submit through
+submit is the same value-returning function ``mzt run`` uses
+(:func:`run.submit_score`), not a subprocess and not scraped printed text.
+All conductor access goes through ``conduct._route`` and the submit through
 :func:`_submit_score`, so tests replace those two seams.
 """
 
@@ -27,8 +28,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
-import io
-import json
 import os
 import re
 from collections.abc import Callable
@@ -489,56 +488,87 @@ class SubmitOutcome:
     job_exists: bool = False  # the conductor registered the job (even if it then failed)
 
 
+#: Longest hint ``run`` prints. The sentence that names the job and the next
+#: step is never cut; only the conductor's or the score's own detail is.
+_HINT_MAX = 300
+#: Below this many characters an error excerpt is noise, so it is dropped.
+_EARLY_FAILED_DETAIL_MIN = 40
+
+
+def _clip(text: str, budget: int) -> str:
+    """Shorten ``text`` to ``budget`` characters, marking a cut with an ellipsis."""
+    text = " ".join(text.split())
+    if len(text) <= budget:
+        return text
+    return text[: max(budget - 1, 0)].rstrip() + "…"
+
+
 def _submit_score(score_path: Path, job_id: str) -> SubmitOutcome:
-    """Submit through ``mzt run``'s own function, in process, JSON mode.
+    """Submit with the same function ``mzt run`` uses, in process (#561).
 
-    ``run.run`` validates the score, routes ``job.submit`` through the
-    conductor and prints one JSON object; its stdout is captured and read
-    here. ``escalation=True`` makes a sheet that exhausts its retries stop at
-    a fermata (what ``mzt next`` reports as UNSTICK/ESCALATE and ``mzt resolve``
-    answers) instead of failing the job.
+    :func:`run.submit_score` validates the score and the job id, routes
+    ``job.submit`` through the conductor and returns the outcome as a value;
+    this maps it onto ``SubmitOutcome``. ``escalation=True`` makes a sheet
+    that exhausts its retries stop at a fermata (what ``mzt next`` reports as
+    UNSTICK/ESCALATE and ``mzt resolve`` answers) instead of failing the job.
+    No stdout capture: a value, not scraped printed text.
     """
-    from .run import run as mzt_run
+    from marianne.cli.helpers import BUSY_HINTS, busy_conductor_message
 
-    buffer = io.StringIO()
-    code = 0
-    try:
-        with contextlib.redirect_stdout(buffer):
-            mzt_run(
-                config_file=score_path,
-                dry_run=False,
-                start_sheet=None,
-                workspace=None,
-                json_output=True,
-                escalation=True,
-                self_healing=False,
-                yes=False,
-                fresh=False,
-                require_lock=None,
-                job_id=job_id,
-                var=None,
+    from .run import SubmitStatus, submit_score
+
+    result = asyncio.run(
+        submit_score(score_path, escalation=True, job_id=job_id),
+    )
+
+    if result.status in (SubmitStatus.ACCEPTED, SubmitStatus.PENDING):
+        return SubmitOutcome(True, job_id=result.job_id)
+    if result.status is SubmitStatus.EARLY_FAILED:
+        # D3: the conductor accepted this job — it exists, even though it
+        # already failed inside the early-failure poll. The engagement stays
+        # bound (the conductor holds a registered job for it); _run reports
+        # the failure truthfully instead of pretending the submit was refused.
+        # Only the error is ever shortened: the sentence that names the job
+        # and says `mzt diagnose JOB` is the next step, so it is never cut.
+        # A job id may be 100 characters and is named twice, so with the
+        # longest ids that sentence alone passes _HINT_MAX; then the error
+        # gives way entirely rather than the recovery command.
+        job = result.job_id or job_id
+        lead = f"the conductor accepted job {job} and it failed within the early-failure poll: "
+        kept = f" (the bound score is kept; inspect it with: mzt diagnose {job})"
+        budget = _HINT_MAX - len(lead) - len(kept)
+        if budget >= _EARLY_FAILED_DETAIL_MIN:
+            detail = _clip(
+                result.error or "the conductor accepted the job and it failed", budget
             )
-    except typer.Exit as exc:
-        code = int(exc.exit_code or 0)
-    payload: Any = None
-    with contextlib.suppress(ValueError):
-        payload = json.loads(buffer.getvalue())
-    if not isinstance(payload, dict):
+        else:
+            detail = ""
+        hint = lead + detail + kept
+        return SubmitOutcome(False, hint=hint, job_exists=True)
+    if result.status is SubmitStatus.REJECTED:
+        return SubmitOutcome(False, hint=_clip(result.message, _HINT_MAX))
+    if result.status is SubmitStatus.INVALID_SCORE:
+        # Refused here, before the conductor: no job exists. The engagement is
+        # unbound, and the operator gets the score's own error, not "conductor
+        # is down".
         return SubmitOutcome(
-            False, hint=(buffer.getvalue().strip() or f"mzt run exited {code} with no output")[:300]
+            False,
+            hint=_clip(f"invalid score {score_path.name}: {result.message}", _HINT_MAX),
         )
-    status = str(payload.get("status", ""))
-    got_id = str(payload.get("job_id") or "")
-    if code == 0 and status in ("accepted", "pending") and got_id:
-        return SubmitOutcome(True, job_id=got_id)
-    message = str(
-        payload.get("message") or payload.get("error") or payload.get("error_message") or payload
-    )
-    return SubmitOutcome(
-        False,
-        hint=message[:300],
-        job_exists=bool(got_id) and status in ("failed", "cancelled"),
-    )
+    if result.status is SubmitStatus.BAD_JOB_ID:
+        return SubmitOutcome(
+            False, hint=_clip(result.message or f"invalid job id {job_id!r}", _HINT_MAX)
+        )
+    if result.status is SubmitStatus.NOT_ROUTED:
+        if result.pid is not None:
+            # A live conductor that did not answer (GH #455): busy, never one
+            # to start. busy_conductor_message says so; the first BUSY_HINT
+            # says what to do instead.
+            busy = busy_conductor_message(result.pid, "the socket did not accept a connection")
+            return SubmitOutcome(False, hint=_clip(f"{busy} {BUSY_HINTS[0]}", _HINT_MAX))
+        return SubmitOutcome(False, hint="Marianne conductor is not running. Start with: mzt start")
+    # ROUTE_ERROR: name the underlying daemon error.
+    return SubmitOutcome(False, hint=_clip(str(result.cause), _HINT_MAX))
 
 
 def _unbind(engagement: Any) -> None:
@@ -710,6 +740,9 @@ def _run(
 
     outcome = submit(engagement.score_path, engagement.job_name)
     if not outcome.ok:
+        # job_exists (an early failure, D3) keeps the bound files: the
+        # conductor holds a registered job for that score, and the hint
+        # names it (mzt diagnose JOB) instead of leaving a dead end.
         if not outcome.job_exists:
             _unbind(engagement)
         raise fail("SUBMIT_REFUSED", outcome.hint or "the conductor refused the score")

@@ -46,7 +46,9 @@ from marianne.core.config.spec import SpecCorpusConfig
 from marianne.core.config.workspace import default_workspace_for, sanitize_workspace_name
 from marianne.core.constants import STATE_DB_FILENAME
 from marianne.core.logging import get_logger
+from marianne.core.producers import declared_products_from_config
 from marianne.daemon.backpressure import BackpressureController
+from marianne.daemon.baton.pass_ledger import scope_for
 from marianne.daemon.checkpoint_writer import CheckpointWriter
 from marianne.daemon.concurrency import ConcurrencyGate
 from marianne.daemon.config import DaemonConfig
@@ -1009,10 +1011,7 @@ class JobManager:
             memory_root=_marianne_home / "memory" / "files",
             audit_dir=_marianne_home / "memory" / "audit",
             user=_memory_user(),
-            cam_endpoints={
-                name: ep.as_settings()
-                for name, ep in self._config.memory_backends.cam.items()
-            },
+            cam_endpoints=self._cam_endpoints_from(self._config),
         )
         self._baton_adapter.set_memory_gate(self._memory_gate)
         try:
@@ -1166,7 +1165,6 @@ class JobManager:
         "learning",  # semantic analyzer built at boot
         "profiler",  # collector built at boot
         "mcp_pool",  # server pool started at boot
-        "memory_backends",  # memory gate built at boot with these endpoints
         "keyring",  # key holders built at boot
         "monitor_interval_seconds",  # monitor loop started at boot
     )
@@ -1231,6 +1229,16 @@ class JobManager:
                 caps[f"{profile.name}:{model.name}"] = model.max_concurrent
         return caps
 
+    @staticmethod
+    def _cam_endpoints_from(config: DaemonConfig) -> dict[str, dict[str, Any]]:
+        """Build the memory gate's cam endpoint table from a config's ``memory_backends``.
+
+        Boot and reload share this exact mechanism (#573), so the table a reload installs
+        is built the same way as the one the gate was constructed with. Names, paths and
+        addresses only: a key itself is never loaded here.
+        """
+        return {name: ep.as_settings() for name, ep in config.memory_backends.cam.items()}
+
     async def reload_configuration(
         self, reason: str, *, profile: str | None = None
     ) -> ConfigReloadResult:
@@ -1252,7 +1260,11 @@ class JobManager:
         2. Build the effective config: fields that cannot change in a
            running conductor keep their running values and are reported in
            ``declined``; everything else is applied in place (resize, never
-           replace holding objects — #231 pattern).
+           replace holding objects — #231 pattern). A changed
+           ``memory_backends`` section is applied that way (#573): it
+           replaces the memory gate's cam endpoint table and is reported in
+           ``applied`` as ``memory_backends``; the gate itself is kept, so a
+           session that is already open keeps the backend it was opened with.
         3. Swap the live registry (fresh profiles ∪ retained previous
            entries from broken files; a healthy fresh profile always wins
            the name), invalidate the backend pool (#171 semantics:
@@ -1433,6 +1445,15 @@ class JobManager:
                         effective.preflight.token_error_threshold
                     )
                 applied.append("preflight")
+
+            if effective.memory_backends != old.memory_backends:
+                # #573: the gate exists only after start(); the section is
+                # reported applied either way (the live config carries it).
+                if self._memory_gate is not None:
+                    self._memory_gate.set_cam_endpoints(
+                        self._cam_endpoints_from(effective)
+                    )
+                applied.append("memory_backends")
 
             for field_name in self._LIVE_READ_FIELDS:
                 if getattr(effective, field_name) != getattr(old, field_name):
@@ -5045,11 +5066,14 @@ class JobManager:
         # cleared jobs' workspace state below (the registry row + in-memory
         # entry going away isn't enough — stale workspace state would otherwise
         # be resurrected by a later offline read or re-submit).
-        to_clean: list[tuple[str, Path]] = []
+        to_clean: list[tuple[str, Path, str]] = []
         for jid in to_remove:
             removed_meta = self._job_meta.get(jid)
             if removed_meta is not None:
-                to_clean.append((jid, removed_meta.workspace))
+                from marianne.daemon.baton.pass_ledger import scope_for
+
+                scope = scope_for(removed_meta.config_path, jid)
+                to_clean.append((jid, removed_meta.workspace, scope))
             self._job_meta.pop(jid, None)
             self._live_states.pop(jid, None)
 
@@ -5061,8 +5085,8 @@ class JobManager:
 
         # #111: remove each cleared job's workspace state (per job, so a shared
         # workspace keeps other jobs' rows). Best-effort; never fails the clear.
-        for jid, ws in to_clean:
-            await self._delete_workspace_state(jid, ws)
+        for jid, ws, scope in to_clean:
+            await self._delete_workspace_state(jid, ws, ledger_scope=scope)
 
         _logger.info(
             "manager.clear_jobs",
@@ -5072,7 +5096,9 @@ class JobManager:
         return {"deleted": deleted}
 
     @staticmethod
-    async def _delete_workspace_state(job_id: str, workspace: Path) -> None:
+    async def _delete_workspace_state(
+        job_id: str, workspace: Path, ledger_scope: str | None = None
+    ) -> None:
         """Remove a cleared job's per-job state from the workspace backends (#111).
 
         ``clear`` removes a job from the registry and in-memory; this also
@@ -5087,6 +5113,16 @@ class JobManager:
         if not workspace.exists():
             return
         from marianne.state import JsonStateBackend, SQLiteStateBackend
+
+        if ledger_scope is not None:
+            from marianne.daemon.baton.pass_ledger import PassLedger
+
+            try:
+                await PassLedger(PassLedger.job_root(workspace, ledger_scope)).clear()
+            except Exception:  # noqa: BLE001
+                _logger.warning(
+                    "clear.workspace_pass_ledger_delete_failed", job_id=job_id, exc_info=True
+                )
 
         sqlite_path = workspace / STATE_DB_FILENAME
         if sqlite_path.exists():
@@ -6991,6 +7027,8 @@ class JobManager:
             cleanup_generation=(
                 meta.cleanup_generation if meta is not None else None
             ),
+            declared_products=declared_products_from_config(config),
+            ledger_scope=scope_for(request.config_path, job_id),
         )
 
         # #196: thread the score's retry backoff (base/exp/max + jitter) into
@@ -7372,6 +7410,11 @@ class JobManager:
             loops=config.sheet.loops,
             triggers=config.sheet.triggers,
             flow_variables=config.prompt.variables or {},
+            declared_products=declared_products_from_config(config),
+            ledger_scope=scope_for(
+                self._job_meta[job_id].config_path if job_id in self._job_meta else None,
+                job_id,
+            ),
         )
 
         # #196: re-thread retry backoff on resume too — BatonCore is in-memory

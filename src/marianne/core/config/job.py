@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import re
 import warnings
+from collections.abc import Mapping
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 import yaml
 from pydantic import (
@@ -40,6 +41,7 @@ from marianne.core.config.execution import (
     ValidationRule,
 )
 from marianne.core.config.flow import (
+    MAX_LOOP_ITERATIONS,
     FlowConfigError,
     FlowIssue,
     LoopConfig,
@@ -80,6 +82,221 @@ from marianne.core.constants import DEFAULT_INSTRUMENT_NAME, FLOW_RESERVED_NAMES
 from marianne.core.expressions import ExpressionError, parse_expression
 from marianne.core.validation_condition import check_validation_condition
 from marianne.telemetry.config import TelemetryConfig
+
+MAX_VARIABLE_FAN_OUT_WIDTH: Final[int] = 1000
+"""Upper bound on a fan-out width resolved from a prompt variable (#569)."""
+
+_VARIABLE_INTEGER_REF: Final[re.Pattern[str]] = re.compile(
+    r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*\}\}"
+)
+_WHOLE_NUMBER: Final[re.Pattern[str]] = re.compile(r"[0-9]+")
+
+_ECHO_LIMIT: Final[int] = 10**10
+"""An out-of-range value is echoed in a message only below this; beyond it, described."""
+
+
+def _significant_digits(value: object) -> str | None:
+    """The significant digits of a digit string, or ``None`` when it is not one.
+
+    ``""`` means zero. Judging by text is what keeps the resolver total: CPython
+    raises ``ValueError`` instead of converting a digit run longer than
+    ``sys.get_int_max_str_digits()`` (4300 by default), so whether a string is
+    a number cannot be left to ``int()``. Leading zeroes carry no magnitude and
+    are dropped here, so a valid value survives any number of them.
+    """
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    if not _WHOLE_NUMBER.fullmatch(stripped):
+        return None
+    return stripped.lstrip("0")
+
+
+def _not_a_reference(value: object, *, noun: str, check: str) -> FlowIssue:
+    """The value is neither an integer nor a bare ``{{ name }}`` reference."""
+    return FlowIssue(
+        check=check,
+        span=None,
+        message=f"{value!r} is not a {noun} or a '{{{{ variable }}}}' reference",
+        hint="Use an integer or '{{ variable }}' naming a prompt.variables entry",
+    )
+
+
+def _not_declared(name: str, *, check: str) -> FlowIssue:
+    """No ``prompt.variables`` entry answers this reference."""
+    return FlowIssue(
+        check=check,
+        span=None,
+        message=f"variable {name!r} is not declared in prompt.variables",
+        hint="Declare it under prompt.variables",
+    )
+
+
+def _not_a_whole_number(name: str, value: object, *, noun: str, check: str) -> FlowIssue:
+    """The variable is declared, but its value is not an integer."""
+    return FlowIssue(
+        check=check,
+        span=None,
+        message=f"variable {name!r} is {value!r}; a {noun} must be a whole number",
+    )
+
+
+def _out_of_range(name: str, number: int | None, *, bound: int, noun: str, check: str) -> FlowIssue:
+    """The value is a whole number outside ``1..bound``.
+
+    ``number`` is the value, or ``None`` when it is too long to convert or to
+    show. A number is echoed only while it is short: CPython raises for an
+    ``int`` it cannot format (beyond ``sys.get_int_max_str_digits()``), and
+    a 300-digit value is not worth reading even where it converts. ``abs()``
+    and a comparison never format anything.
+    """
+    if number is not None and abs(number) < _ECHO_LIMIT:
+        found = f"resolves to {number}"
+    else:
+        found = "is out of range"
+    return FlowIssue(
+        check=check,
+        span=None,
+        message=f"variable {name!r} {found}; a {noun} must be 1-{bound}",
+    )
+
+
+def resolve_variable_integer(
+    value: object,
+    variables: Mapping[str, object],
+    *,
+    bound: int,
+    noun: str,
+    check: str,
+) -> int | FlowIssue:
+    """Resolve one integer field that may be a bare ``{{ name }}`` reference (#569, #568).
+
+    A literal integer is returned unchanged and is left for the model field's
+    own validation. The caller's ``bound`` applies only to variable
+    references. A boolean or any other non-string value returns an issue
+    saying the value is not a ``noun``.
+
+    A string must be exactly one bare ``{{ name }}`` reference, optionally
+    dotted (``{{ a.b }}``) and padded with whitespace. The ``variables``
+    mapping is walked along that name; a missing step, or a step whose value
+    is ``None``, is ``_not_declared``. What is found must be an integer or a
+    string of ASCII digits (no sign), in ``1..bound``:
+
+    - an integer is echoed in the out-of-range message when its absolute
+      value is below ``10**10``;
+    - a digit string is judged by its significant digits, so leading zeroes
+      never count against it. Surrounding whitespace is ignored. Up to the
+      bound's own digit count it is converted and echoed like an integer;
+      longer values return an out-of-range issue without conversion or
+      echoing the value. This avoids CPython's integer-conversion limit.
+    - any other value (a float, a ``bool``, other text, an empty string) is
+      ``_not_a_whole_number``.
+
+    Args:
+        value: One field value, e.g. from ``sheet.fan_out`` or a loop cap.
+        variables: The declared ``prompt.variables`` mapping.
+        bound: The inclusive upper bound for a resolved value.
+        noun: What the field is called in messages ("width", "loop cap").
+        check: The flow check id stamped on every issue.
+
+    Returns:
+        The integer, or one ``FlowIssue`` naming the reason. The issue
+        carries no span: the caller supplies it. Invalid values return
+        issues rather than raising validation errors.
+    """
+    cap_digits = len(str(bound))
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if not isinstance(value, str):
+        return _not_a_reference(value, noun=noun, check=check)
+    match = _VARIABLE_INTEGER_REF.fullmatch(value.strip())
+    if match is None:
+        return _not_a_reference(value, noun=noun, check=check)
+    name = match.group(1)
+    found: object = variables
+    for part in name.split("."):
+        if not isinstance(found, Mapping) or found.get(part) is None:
+            return _not_declared(name, check=check)
+        found = found[part]
+    if isinstance(found, bool):
+        return _not_a_whole_number(name, found, noun=noun, check=check)
+    if isinstance(found, int):
+        number: int | None = found
+    else:
+        digits = _significant_digits(found)
+        if digits is None:
+            return _not_a_whole_number(name, found, noun=noun, check=check)
+        if not digits:
+            number = 0  # every digit is a zero: a whole number, and out of range
+        elif len(digits) <= cap_digits:
+            number = int(digits)  # at most the bound's own digit count: always convertible
+        else:
+            # More significant digits than the bound has, so out of range;
+            # also too long for int() to convert or for a message to show.
+            number = None
+    if number is None or not 1 <= number <= bound:
+        return _out_of_range(name, number, bound=bound, noun=noun, check=check)
+    return number
+
+
+def resolve_fan_out_width(width: object, variables: Mapping[str, object]) -> int | FlowIssue:
+    """Resolve one ``sheet.fan_out`` value to an integer width (#569).
+
+    A literal integer is returned unchanged and is left for ``SheetConfig``
+    to validate. The ``1..MAX_VARIABLE_FAN_OUT_WIDTH`` bound applies only
+    to variable references. A boolean or any other non-string value returns
+    an invalid-width issue.
+
+    A string must be exactly one bare ``{{ name }}`` reference, optionally
+    dotted (``{{ a.b }}``) and padded with whitespace. The ``variables``
+    mapping is walked along that name; a missing step, or a step whose value
+    is ``None``, is ``_not_declared``. What is found must be an integer or a
+    string of ASCII digits (no sign), in ``1..MAX_VARIABLE_FAN_OUT_WIDTH``:
+
+    - an integer is echoed in the out-of-range message when its absolute
+      value is below ``10**10``;
+    - a digit string is judged by its significant digits, so leading zeroes
+      never count against it. Surrounding whitespace is ignored. Up to the
+      cap's own digit count it is converted and echoed like an integer;
+      longer values return an out-of-range issue without conversion or
+      echoing the value. This avoids CPython's integer-conversion limit.
+    - any other value (a float, a ``bool``, other text, an empty string) is
+      ``_not_a_whole_number``.
+
+    Args:
+        width: One value from ``sheet.fan_out``.
+        variables: The declared ``prompt.variables`` mapping.
+
+    Returns:
+        The width, or one ``FlowIssue`` (``V-FLOW-25``) naming the reason.
+        The issue carries no span: the caller supplies the stage. Invalid
+        widths return issues rather than raising validation errors.
+    """
+    return resolve_variable_integer(
+        width,
+        variables,
+        bound=MAX_VARIABLE_FAN_OUT_WIDTH,
+        noun="width",
+        check="V-FLOW-25",
+    )
+
+
+def _declared_prompt_variables(data: dict[str, object]) -> Mapping[str, object]:
+    """The declared ``prompt.variables`` of a raw ``JobConfig`` payload (#569, #568).
+
+    A ``mode="before"`` validator receives whichever shape the caller
+    passed: the raw mapping from YAML, or a ``PromptConfig`` an embedder
+    built first. Both declare variables; read them from either, or the
+    model form reports every variable as "not declared".
+    """
+    prompt = data.get("prompt")
+    if isinstance(prompt, PromptConfig):
+        declared: object = prompt.variables
+    elif isinstance(prompt, dict):
+        declared = prompt.get("variables")
+    else:
+        declared = None
+    return declared if isinstance(declared, Mapping) else {}
 
 
 class InjectionCategory(str, Enum):
@@ -154,6 +371,34 @@ class InjectionItem(BaseModel):
         if not self.file and not self.directory:
             raise ValueError("One of 'file' or 'directory' is required.")
         return self
+
+
+class MovementCadenzaItem(InjectionItem):
+    """A cadenza declared on a movement, so it reaches every voice of that stage (#571).
+
+    Same shape as an :class:`InjectionItem` (``file`` or ``directory``,
+    ``as``, ``required``, ``max_bytes``), plus ``voice`` to narrow the item
+    to one voice of the fan-out instead of every voice. Legal only under
+    ``movements.<n>.cadenzas``; a ``voice`` spelled under ``sheet.prelude``
+    or ``sheet.cadenzas`` is an unknown field there: it is stripped and
+    reported as V010 (a warning that names ``movements.cadenzas.voice``).
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    voice: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Deliver this item to one voice of the movement only — the "
+            "fan-out instance number, 1-based (movement cadenzas only). "
+            "Unset (the default) reaches every voice of the movement. "
+            "Compare with the `{{ voice }}` template variable, which "
+            "renders per voice inside a path (1 on a movement with a single "
+            "voice). A voice the movement does not have reaches nobody "
+            "(V216 reports it)."
+        ),
+    )
 
 
 AliasSelect = Literal["cycle", "spread", "cheapest", "widest", "balance"]
@@ -301,7 +546,8 @@ class MovementDef(BaseModel):
 
     Movements are sequential execution phases. Each movement can specify
     a name, an instrument (overriding the score default), instrument config,
-    and a voice count (shorthand for fan-out).
+    and a voice count (shorthand for fan-out). A movement can also declare
+    cadenzas — context injected into every voice of the movement (GH #571).
 
     Example YAML::
 
@@ -313,6 +559,9 @@ class MovementDef(BaseModel):
             name: Implementation
             voices: 3
             instrument: gemini-cli
+            cadenzas:
+              - {file: "{{ workspace }}/shared-plan.md", as: context}
+              - {voice: 2, file: "{{ workspace }}/only-voice-2.md", as: context}
           3:
             name: Review
     """
@@ -354,6 +603,19 @@ class MovementDef(BaseModel):
         description="Default fallback chain for sheets in this movement. "
         "Overrides score-level instrument_fallbacks for sheets in this movement.",
     )
+    cadenzas: list[MovementCadenzaItem] = Field(
+        default_factory=list,
+        description=(
+            "Context injections for every voice of this movement (GH #571). "
+            "Each item is a prelude-shaped InjectionItem (file or directory, "
+            "as, required, max_bytes); an optional `voice` narrows one item "
+            "to a single fan-out voice, and paths may template on "
+            "`{{ voice }}`. Read before the sheet.cadenzas items of each "
+            "voice, and never copied into sheet.cadenzas. Movement numbers "
+            "are stages: a cadenza on a movement that has no sheet, or with "
+            "a voice the movement does not have, is V216."
+        ),
+    )
 
 
 class SheetConfig(BaseModel):
@@ -367,6 +629,23 @@ class SheetConfig(BaseModel):
     produces 9 concrete sheets (stage 2 instantiated 3 times). After expansion,
     ``total_items`` and ``dependencies`` reflect expanded values, and ``fan_out``
     is cleared to ``{}`` to prevent re-expansion on resume.
+
+    A count may name a ``prompt.variables`` entry instead of a literal
+    (``'{{ chapter_count }}'``). It is resolved to an integer before this
+    model validates, by :func:`resolve_fan_out_width` through
+    ``JobConfig``. Resolved references enter this class as integers; the
+    field's own type remains ``dict[int, int]``. This
+    class does not resolve anything itself: built directly with a
+    ``'{{ name }}'`` count, it refuses it as a non-integer. A reference
+    that cannot be resolved is V338, raised while the ``JobConfig`` loads.
+
+    A loop's ``max_iterations`` or ``count`` may likewise name a
+    ``prompt.variables`` entry (``'{{ max_passes }}'``, dotted paths
+    allowed). ``JobConfig`` resolves it to an integer in ``1..10000``
+    before this model validates, exactly as it resolves a fan-out width;
+    this class resolves nothing itself, and built directly with a
+    reference it refuses it as a non-integer. A reference that cannot be
+    resolved is V351, raised while the ``JobConfig`` loads.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -431,11 +710,13 @@ class SheetConfig(BaseModel):
     # Conditional execution (#119, formerly skip_when_command / GH#71).
     # The old expression-based skip_when (GH#13) was never evaluated at
     # runtime — command predicates replaced it under the shorter name.
+    # GH #570 added the unchanged predicate.
     skip_when: dict[int, SkipWhenCommand] = Field(
         default_factory=dict,
         description=(
-            "Command-based conditional skip rules. Map of sheet_num -> SkipWhenCommand. "
-            "The command is run via shell; exit 0 = skip the sheet, non-zero = run it. "
+            "Conditional skip rules. Map of sheet_num -> SkipWhenCommand. "
+            "Supports command predicates (exit 0 = skip, non-zero = run) and "
+            "unchanged predicates (skip when inputs and products are unchanged since last pass). "
             "Supports {workspace} template expansion in the command string. "
             "On timeout or error, the sheet runs (fail-open). "
             "Example: {8: {command: 'grep -q \"PHASES: 1\" plan.md', description: 'Skip phase 2'}}"
@@ -445,7 +726,12 @@ class SheetConfig(BaseModel):
     loops: dict[SheetSpan, LoopConfig] | None = Field(
         default=None,
         exclude_if=lambda value: value is None,
-        description="Do-while loops keyed by inclusive sheet span, or by stage span under fan-out.",
+        description=(
+            "Do-while loops keyed by inclusive sheet span, or by stage span under "
+            "fan-out. A loop's max_iterations or count may be a quoted '{{ name }}' "
+            "reference to a prompt.variables entry, resolved by JobConfig at load "
+            "(V351 when it cannot be)."
+        ),
     )
     triggers: dict[SheetSpan, SheetTriggerConfig] | None = Field(
         default=None,
@@ -478,7 +764,12 @@ class SheetConfig(BaseModel):
         default_factory=dict,
         description=(
             "Per-sheet context injections. Map of sheet_num -> list of InjectionItems. "
-            "Applied in addition to prelude items for the specified sheet. "
+            "Keys are CONCRETE sheet numbers, also after fan-out expansion "
+            "(under fan_out {2: 3} a key 5 names the concrete sheet 5, not "
+            "stage 5). Applied in addition to prelude items for the specified "
+            "sheet; read after this sheet's movement cadenza items. "
+            "To reach every voice of a stage, declare the cadenza on the "
+            "movement — movements.<stage>.cadenzas (GH #571). "
             "Example: {2: [{file: 'extra-context.md', as: 'context'}]}"
         ),
     )
@@ -490,7 +781,10 @@ class SheetConfig(BaseModel):
             "Fan-out declarations. Map of stage_num -> instance count. "
             "Stages not listed default to 1 instance. "
             "Example: {2: 3, 4: 3} creates 3 parallel instances of stages 2 and 4. "
-            "Requires size=1 and start_item=1. Cleared after expansion."
+            "Requires size=1 and start_item=1. Cleared after expansion. "
+            "A count may instead be a prompt variable reference, '{{ name }}', "
+            "resolved from prompt.variables at load time to an integer 1-1000 "
+            "(V338 otherwise); literal counts are not capped."
         ),
     )
 
@@ -613,7 +907,9 @@ class SheetConfig(BaseModel):
                     "Expression-based skip_when was removed (#119) — it was "
                     "never evaluated at runtime. skip_when now takes a "
                     "command predicate per sheet: "
-                    "{sheet_num: {command: 'shell command (exit 0 = skip)'}}."
+                    "{sheet_num: {command: 'shell command (exit 0 = skip)'}}. "
+                    "For skipping when inputs did not change since the last pass, use "
+                    "{sheet_num: {unchanged: true}} (GH #570)."
                 )
         return data
 
@@ -1166,7 +1462,10 @@ class JobConfig(BaseModel):
         "trust, phases, caps). The conductor gives each sheet a memory session for "
         "the attachments active in its phase, delivered as an MCP server to "
         "instruments that accept an MCP config; a dispatch to an instrument that "
-        "does not is refused (`memory_delivery_unsupported`). A dispatch that "
+        "does not is refused (`memory_delivery_unsupported`). A misconfigured "
+        "attachment (a `cam` endpoint the conductor does not have, or an "
+        "operator-only setting) fails the sheet at once (`MEMORY_CONFIG_ERROR`, "
+        "`E301`) — no retry, no fallback move. A dispatch that "
         "opened a session but carries no memory block is refused too "
         "(`memory_manifest_missing`); that one is a conductor defect, not "
         "something a score can cause.",
@@ -1429,6 +1728,98 @@ class JobConfig(BaseModel):
             data["sheet"] = {**sheet, "fan_out": fan_out}
         return data
 
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_fan_out_widths(cls, data: object) -> object:
+        """Turn ``'{{ name }}'`` fan-out widths into integers from prompt.variables (#569)."""
+        if not isinstance(data, dict):
+            return data
+        sheet = data.get("sheet")
+        if not isinstance(sheet, dict):
+            return data
+        fan_out = sheet.get("fan_out")
+        if not isinstance(fan_out, dict) or not fan_out:
+            return data
+        variables = _declared_prompt_variables(data)
+        resolved: dict[object, int] = {}
+        issues: list[FlowIssue] = []
+        for stage, width in fan_out.items():
+            if isinstance(width, str) and "{{" in width:
+                outcome = resolve_fan_out_width(width, variables)
+                if isinstance(outcome, FlowIssue):
+                    issues.append(
+                        FlowIssue(
+                            check=outcome.check,
+                            span=str(stage),
+                            message=outcome.message,
+                            hint=outcome.hint,
+                        )
+                    )
+                else:
+                    resolved[stage] = outcome
+        if issues:
+            raise FlowConfigError(tuple(issues))
+        if resolved:
+            data = dict(data)
+            data["sheet"] = {**sheet, "fan_out": {**fan_out, **resolved}}
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_loop_caps(cls, data: object) -> object:
+        """Turn ``'{{ name }}'`` loop caps into integers from prompt.variables (#568)."""
+        if not isinstance(data, dict):
+            return data
+        sheet = data.get("sheet")
+        if not isinstance(sheet, dict):
+            # A SheetConfig model: its loops were already validated as integers.
+            return data
+        loops = sheet.get("loops")
+        if not isinstance(loops, dict) or not loops:
+            return data
+        variables = _declared_prompt_variables(data)
+        resolved: dict[object, dict[str, int]] = {}
+        issues: list[FlowIssue] = []
+        for key, loop in loops.items():
+            if not isinstance(loop, dict):
+                # A LoopConfig model, or None for `loops: {1: }`: the schema
+                # error is theirs to report, never an AttributeError here.
+                continue
+            for field in ("max_iterations", "count"):
+                value = loop.get(field)
+                if not (isinstance(value, str) and "{{" in value):
+                    continue  # brace-less strings keep pydantic's behaviour
+                outcome = resolve_variable_integer(
+                    value,
+                    variables,
+                    bound=MAX_LOOP_ITERATIONS,
+                    noun="loop cap",
+                    check="V-FLOW-26",
+                )
+                if isinstance(outcome, FlowIssue):
+                    issues.append(
+                        FlowIssue(
+                            check=outcome.check,
+                            span=str(key),
+                            message=f"loop {key} {field}: {outcome.message}",
+                            hint=outcome.hint,
+                        )
+                    )
+                else:
+                    resolved.setdefault(key, {})[field] = outcome
+        if issues:
+            raise FlowConfigError(tuple(issues))
+        if resolved:
+            data = dict(data)
+            data["sheet"] = {
+                **sheet,
+                "loops": {
+                    key: ({**loop, **resolved[key]} if key in resolved else loop)
+                    for key, loop in loops.items()
+                },
+            }
+        return data
+
     @field_validator("movements")
     @classmethod
     def _validate_movement_keys(
@@ -1663,6 +2054,57 @@ class JobConfig(BaseModel):
         identifier.
         """
         return self.instrument or DEFAULT_INSTRUMENT_NAME
+
+
+def movement_cadenzas(config: JobConfig) -> dict[int, list[MovementCadenzaItem]]:
+    """Stage-keyed cadenza declarations, as authored (#571).
+
+    Returns the map of stage number to that movement's cadenza items,
+    stages ascending, listing only the movements that declare items. The
+    movement number is the stage — the same namespace as ``sheet.fan_out``
+    keys and loop spans. Nothing is copied into ``sheet.cadenzas``: the
+    items are resolved per sheet by :func:`cadenzas_for_sheet`.
+    """
+    return {
+        stage: movement.cadenzas
+        for stage, movement in sorted(config.movements.items())
+        if movement.cadenzas
+    }
+
+
+def cadenzas_for_sheet(config: JobConfig, sheet_num: int) -> list[InjectionItem]:
+    """The cadenza items one concrete sheet reads, in delivery order (#571).
+
+    The movement cadenza items whose ``voice`` is ``None`` or equals the
+    sheet's fan-out instance (``1`` on a solo movement), then the sheet's
+    own ``sheet.cadenzas[sheet_num]`` items. Pure: it never writes to
+    ``config``, so a re-validated dump (resume) never delivers them twice.
+    """
+    fan_meta = config.sheet.get_fan_out_metadata(sheet_num)
+    composed: list[InjectionItem] = []
+    movement = config.movements.get(fan_meta.stage)
+    if movement is not None:
+        for movement_item in movement.cadenzas:
+            if movement_item.voice is None or movement_item.voice == fan_meta.instance:
+                composed.append(movement_item)
+    composed.extend(config.sheet.cadenzas.get(sheet_num, ()))
+    return composed
+
+
+def stage_sheets(config: JobConfig, stage: int) -> list[int]:
+    """The concrete sheets of a stage, lowest first (#571).
+
+    Read from ``fan_out_stage_map`` after expansion; a stage without
+    fan-out is the sheet of that number; a stage that has no sheet (for
+    example a movement number past the last stage) returns ``[]``.
+    """
+    if config.sheet.fan_out_stage_map:
+        return sorted(
+            num for num, meta in config.sheet.fan_out_stage_map.items() if meta["stage"] == stage
+        )
+    if 1 <= stage <= config.sheet.total_sheets:
+        return [stage]
+    return []
 
 
 def merge_runtime_variables(

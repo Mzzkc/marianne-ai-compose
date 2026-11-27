@@ -18,7 +18,7 @@ import jinja2
 
 from marianne.core.config import JobConfig
 from marianne.core.config.flow import span_range
-from marianne.core.config.job import InjectionCategory, InjectionItem
+from marianne.core.config.job import InjectionCategory, InjectionItem, cadenzas_for_sheet
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.prompts.templating import PromptBuilder, SheetContext
 
@@ -379,7 +379,7 @@ def generate_preview(
 
         # 2. Resolve prelude/cadenza files
         injection_items: list[InjectionItem] = list(config.sheet.prelude)
-        cadenza_items = config.sheet.cadenzas.get(sheet_num, [])
+        cadenza_items = cadenzas_for_sheet(config, sheet_num)
         injection_items.extend(cadenza_items)
 
         if injection_items:

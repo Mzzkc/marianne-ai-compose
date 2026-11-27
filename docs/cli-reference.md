@@ -83,8 +83,8 @@ Usage: mzt run [OPTIONS] CONFIG_FILE
 | `--self-healing` | `-H` | false | Enable automatic diagnosis and remediation when retries are exhausted |
 | `--yes` | `-y` | false | Auto-confirm suggested fixes when using `--self-healing` |
 | `--require-lock` | | _(none)_ | Admission gate (GH #403): path to the composition lock the composing skill's release gate wrote (`check_score_release.py --write-lock`). The conductor verifies the lock's `score_sha256` against the exact bytes it is about to parse; a missing, stale, unreadable or malformed lock rejects the job with that reason. Omit for ordinary unlocked submission. |
-| `--fresh` | | false | Re-run a score from scratch: re-register all sheets and, when the score sets `workspace_lifecycle.archive_on_fresh`, archive non-preserved workspace files first. Auto-triggered for completed scores when the YAML changed. |
-| `--job-id` | | _(score filename)_ | Name this run (GH #505). The job ID defaults to the score file's stem; `--job-id NAME` lets one shipped score serve several commissions side by side without a renamed copy. When the score omits `workspace:`, the auto-managed workspace follows the name too (`~/workspaces/NAME`); an explicit `workspace:` still wins. Use the same name with `status`, `pause`, `resume`, `resolve` and `cancel`. Letters, digits, `.`, `_` and `-`, at most 100 characters. Not supported for fleet configs. A `type: fleet` member is named `<fleet>--<stem>` by the fleet itself (GH #514), so two fleets with an `integration.yaml` never share a job ID. |
+| `--fresh` | | false | Re-run a score from scratch: re-register all sheets and, when the score sets `workspace_lifecycle.archive_on_fresh`, archive non-preserved workspace files first. Auto-triggered for completed scores when the YAML changed. `skip_when` `unchanged` rules are evaluated on fresh runs; to force a sheet to re-run, use `mzt resume --force --from-sheet 1`, remove the rule, or delete `<workspace>/.marianne/pass-ledger/`. |
+| `--job-id` | | _(score filename)_ | Name this run (GH #505). The job ID defaults to the score file's stem; `--job-id NAME` lets one shipped score serve several commissions side by side without a renamed copy. When the score omits `workspace:`, the auto-managed workspace follows the name too (`~/workspaces/NAME`); an explicit `workspace:` still wins. Use the same name with `status`, `pause`, `resume`, `resolve` and `cancel`. Must start with a letter or digit; after that letters, digits, `.`, `_` and `-`, at most 100 characters. An invalid `--job-id` is a usage error (exit 2, reported on stderr) and nothing is submitted; with `--json` stdout stays empty for it. Not supported for fleet configs. A `type: fleet` member is named `<fleet>--<stem>` by the fleet itself (GH #514), so two fleets with an `integration.yaml` never share a job ID. |
 | `--var` | | _(none)_ | Per-invocation template variable as `key=value` (repeatable). Merges into the score's `prompt.variables`, CLI overriding YAML on collision — point one generic score at different inputs without editing it. Values are strings (typed vars belong in YAML). Persisted across resume and inherited by every job a concert trigger chains from this one. |
 
 #### Auto-Fresh Detection
@@ -147,6 +147,9 @@ mzt run job.yaml --fresh
 |------|---------|
 | 0 | Success or graceful shutdown |
 | 1 | Configuration error or score failure |
+| 2 | Usage error: an invalid option value such as `--job-id 'has spaces'`, or a `CONFIG_FILE` that does not exist. Reported on stderr with nothing on stdout, `--json` included |
+
+A score that does not load (malformed YAML, or one that fails the score schema) is checked before the conductor is contacted: exit 1, with `{"error": "..."}` on `--json` or the error and a `Validate with: mzt validate FILE` hint otherwise. `agents run` checks the score before probing the conductor too (GH #561): an invalid score is `SUBMIT_REFUSED` with `invalid score FILE: ` and the score's own error as the hint, cut to 300 characters, so with the conductor down it reports the score rather than the conductor.
 
 ---
 
@@ -696,11 +699,11 @@ The agents root is read, never written; `run` writes only under the runs directo
 | `AGENT_UNKNOWN` | No such agent with an installed targeted-work score |
 | `AGENT_BUSY` | The agent has a running, queued, pending or paused job |
 | `DEBT_REFUSED` | The agent has 3 or more pending lifecycle debts |
-| `SUBMIT_REFUSED` | No or unreadable inventory, binder refusal (stale evidence, no route), the conductor refused or is down, or the run already exists |
+| `SUBMIT_REFUSED` | No or unreadable inventory, binder refusal (stale evidence, no route), the conductor refused or is down, or the run already exists. Also printed when the conductor accepted the job and it failed immediately inside the early-failure poll — in that case the files are kept and the hint names the job (`mzt diagnose JOB`). Also printed when the bound score fails to load or fails the score schema (GH #561): the hint starts `invalid score FILE: ` and carries the score's own error, and no job exists, so the files are unbound. A conductor that is alive but not answering is reported as busy in the hint, not as down (it is never one to start) |
 
 `list` can also print `CONDUCTOR_DOWN` and `COMPILER_MISSING`.
 
-`run` calls the compiler's engage path in process (`bind_engagement`: shape `targeted-work` with `--defer-lifecycle`, the task copied read-only and injected into every sheet, `--class` passed through) and then submits through the function `mzt run` uses, with `--escalation` on, so a sheet that exhausts its retries stops at a fermata that `mzt next` reports and `mzt resolve` answers. Nothing shells out. If the conductor refuses, the bound files are removed so the same task can be run again. The job id is `targeted-work-NAME-task-<8 hex of the task file>-<date>`; `result_path` is the REPORT name inside the workspace.
+`run` calls the compiler's engage path in process (`bind_engagement`: shape `targeted-work` with `--defer-lifecycle`, the task copied read-only and injected into every sheet, `--class` passed through) and then submits through the function `mzt run` uses, with `--escalation` on, so a sheet that exhausts its retries stops at a fermata that `mzt next` reports and `mzt resolve` answers. Nothing shells out. If the conductor refuses, the bound files are removed so the same task can be run again. If the conductor accepted the job but it failed inside the early-failure poll, the files are kept — the conductor holds a registered job for that score — and the hint names the job with `mzt diagnose JOB`, so a retry reading `already bound` has a next step (`mzt cancel JOB`, then a new task file). The job id is `targeted-work-NAME-task-<8 hex of the task file>-<date>`; `result_path` is the REPORT name inside the workspace.
 
 **Interim.** `targeted-work` defers consolidate, reflect, maturity and resurrect: each run adds pending lifecycle debt, which `engage` refuses at 3. Pay it with a `lifecycle-integration` engagement.
 
@@ -756,8 +759,8 @@ code-registry and corpus-sweep tests.
 | ERROR | V008 | A validation rule is missing the field its type requires |
 | ERROR | V009 | An evolved score references its previous version's paths |
 | ERROR | V012 | Invalid `validate.suppress` entry (unknown code or ERROR-tier code) |
-| ERROR | V105, V108 | Undefined validation variable (declared `prompt.variables`, built-ins and declared loop indices are defined); missing static prelude/cadenza input. Cadenza outputs declared by movement `produces:`, `sheet.stdout_to`, or gated `file_exists` are exempt from V108; prelude inputs must already exist. |
-| ERROR | V209, V214, V216, V217 | Dependency cycle; expanded-sheet incoherence; missing cadenza target; missing or invalid static concert target |
+| ERROR | V105, V108 | Undefined validation variable (declared `prompt.variables`, built-ins and declared loop indices are defined); missing static prelude/cadenza input — movement cadenza items (`movements.<n>.cadenzas`, GH #571) are reported once per (stage, item). Cadenza outputs declared by movement `produces:`, `sheet.stdout_to`, or gated `file_exists` are exempt from V108; prelude inputs must already exist. |
+| ERROR | V209, V214, V216, V217 | Dependency cycle; expanded-sheet incoherence; missing cadenza target — a concrete `sheet.cadenzas` key outside the expanded range, or a movement cadenza whose stage has no sheet or whose `voice` is above the movement's voice count (GH #571); missing or invalid static concert target |
 | ERROR | V210, V211 | Instrument or fallback name cannot resolve to a known profile, score alias, or capability class |
 | ERROR | V221–V223, V227, V229, V233, V312–V314, V316–V317, V320 | Flow load errors and invalid flow references, reported with a code and hint rather than a raw schema trace |
 | ERROR | V305 | Bash `'${#...}'` length syntax in a prompt the Jinja engine eats as a comment |
@@ -767,12 +770,14 @@ code-registry and corpus-sweep tests.
 | INFO | V336 | A sheet (or fallback) runs on an instrument with `default_model: null` and a model flag, and no `model` is set at any scope (score, movement, per-sheet, alias/chain/class entry): it runs on the harness's own default, which follows the operator's CLI settings and is not the score's to control. Set `instrument_config.model: <id>` or an alias `config: {model: <id>}` (GH #538) |
 | ERROR | V335 | `instrument_config.effort` the resolved profile cannot apply: the profile declares no `effort:` block (reasoning-effort mapping), neither the profile's `effort.levels` nor the sheet's model row `effort_levels` maps the level, the sheet has a `response_format` and the level is outside `effort.schema_levels` (`claude-code` refuses `xhigh` and `max` there), or the sheet runs interactively on a mapping with `interactive: false` (`opencode`). The message names the accepted levels, the model when its row decides, and the sheets; alias and class fallback entries are judged against their own profile. Dispatch refuses the same sheets (GH #535) |
 | ERROR | V337 | `instrument_config.tools` the resolved profile cannot apply: the profile declares no `tools:` block, a name is outside the block's `known` list, or the sheet runs interactively on a mapping with `interactive: false`. The message names the known tools when a list is declared and the sheets; alias and class fallback entries are judged against their own profile. Dispatch refuses the same sheets (GH #534) |
-| WARNING | V010 | Unknown field at ANY depth — a whole block at the root (`deliver: {…}`, a list) is a feature the runtime does not implement and warns as such, since the loader drops it and nothing it configures will happen; the curated hint names a working key AT THE SURFACE the mistake sits in: a bare `timeout:` inside `instruments.<alias>.config`, a movement's or a sheet's `instrument_config` names that surface's `timeout_seconds`; inside a `run:` trigger action it names the action's own `timeout_seconds`; only at the root (or beside an action with no timeout of its own) does it name `instrument_config.timeout_seconds` (GH #451) |
+| WARNING | V010 | Unknown field at ANY depth — a whole block at the root (`deliver: {…}`, a list) is a feature the runtime does not implement and warns as such, since the loader drops it and nothing it configures will happen; the curated hint names a working key AT THE SURFACE the mistake sits in: a bare `timeout:` inside `instruments.<alias>.config`, a movement's or a sheet's `instrument_config` names that surface's `timeout_seconds`; inside a `run:` trigger action it names the action's own `timeout_seconds`; only at the root (or beside an action with no timeout of its own) does it name `instrument_config.timeout_seconds` (GH #451); a key that is real elsewhere but wrong here warns too and names its real path — `voice:` on a `sheet.prelude` or `sheet.cadenzas` item is ignored and points to `movements.cadenzas.voice` (GH #571) |
 | WARNING | V208, V219–V220, V224, V226, V231–V232, V235, V315 | Built-in shadowing (deprecation); advisory structure and flow risks |
 | WARNING | V234 | A loopback `http` profile in the score's chain declares a `context_window` for its default model larger than the server reports on `GET /props` (`default_generation_settings.n_ctx`, which llama-server and PolyStrata share); the executor would size `max_tokens` to the profile and the first request would be refused with HTTP 400 (GH #494). Quiet when the server does not expose `/props` |
 | WARNING | V228 | A loop's `cost_limit_usd` cannot bind because every route in the span reports no cost — the message names the route and why (raw shell profile, no token paths, no models, or a $0 price); a priced CLI route such as `claude-code` or `codex-cli` DOES report cost and the cap binds (GH #453) |
 | ERROR | V340 | `memory.backends.<name>.system` is not a memory backend this release ships (`files` or `cam`) |
 | ERROR | V342 | A `memory` `phases` entry is not `all`, a movement number, or a movement name the score defines |
+| ERROR | V338 | A `sheet.fan_out` width written as a `'{{ variable }}'` reference cannot be resolved. One issue per failing stage, each naming one reason: the reference is not a bare `{{ name }}` (it carries a filter, arithmetic or surrounding text); the variable is not declared under `prompt.variables` (which is also how a `null` value reads); its value is not a whole number (it must be an integer or a string of ASCII digits with no sign, optionally padded with whitespace — a float, a boolean or other text is refused); or it is outside 1-1000. The message names the variable and, for an out-of-range value, the number it resolves to unless that number has more digits than the bound. The issue's `metadata.span` is the stage. The width is fixed when the score loads, so `--var` cannot change it; the reference goes on the count — a stage key must stay an integer (GH #569) |
+| ERROR | V351 | A loop's `max_iterations` or `count` written as a `'{{ variable }}'` reference cannot be resolved. One issue per failing loop and field, each naming one reason: the reference is not a bare `{{ name }}` (it carries a filter, arithmetic or surrounding text); the variable is not declared under `prompt.variables` (which is also how a `null` value reads); its value is not a whole number (it must be an integer or a string of ASCII digits with no sign, optionally padded with whitespace — a float, a boolean or other text is refused); or it is outside 1-10000. The message names the loop, the field and the variable, and for an out-of-range value the number it resolves to unless that number has more digits than the bound. The issue's `metadata.span` is the loop key as written. The cap is fixed when the score loads, so `--var` cannot change it — while `until`'s `var.x` expressions still read `--var`, whose values are strings (GH #568) |
 | ERROR | V344 | A `memory` `scope` fails the scope grammar (`<family>/<id>` or `<family>:<id>`) |
 | ERROR | V345 | `memory` caps out of range (`recall_cap_bytes` 1024 to 1048576), an attachment cap above the score default, or an unknown `provenance` value |
 | INFO | V349 | `provenance: off` is deprecated and was read as `optional` |
@@ -786,12 +791,13 @@ code-registry and corpus-sweep tests.
 | WARNING | V102 | `\| string` filter applied to a subscript of an int-keyed variable dict |
 | WARNING | V103 | Sheet or instrument timeout outside the reasonable range (V103/V104) |
 | WARNING | V106 | Empty pattern in a `content_contains`/`content_regex` validation, or regex syntax (`[Pp]x`, `A\|B`, `\s`) in a `content_contains` pattern, which is matched as a literal substring |
-| WARNING | V109 | A cadenza reads a file without a guaranteed earlier producer. For the same path, movement `produces:` takes precedence over `sheet.stdout_to`, then the gated `file_exists` proxy. Add a dependency on a producer; declarations do not prove that a file exists at cadenza time. |
+| WARNING | V109 | A cadenza reads a file without a guaranteed earlier producer (a movement cadenza is judged per voice, at most one finding per stage and item — GH #571). A cadenza path is matched to producers by its file name as written, so a per-voice path such as `unit-{{ voice }}.md` matches only a producer declared under that same name. For the same path, movement `produces:` takes precedence over `sheet.stdout_to`, then the gated `file_exists` proxy. Add a dependency on a producer; declarations do not prove that a file exists at cadenza time. |
 | WARNING | V201 | Jinja `{{ }}` syntax inside a validation path or command (they are format strings, never rendered) |
 | WARNING | V202 | Python format-string (`%s`, `{x}`) syntax inside a Jinja template |
 | WARNING | V203 | No validation rules exist — nothing defines done |
 | WARNING | V206 | Fan-out declared without stage dependencies |
 | WARNING | V212 | A `skip_when` key names a sheet outside the expanded range |
+| WARNING | V339 | `skip_when` `unchanged` combined with `workspace_lifecycle.archive_on_fresh: true`: fresh runs archive pass records and outputs, so the rule never skips |
 | WARNING | V215 | No instrument in the score's chain appears installed on this machine (an installed CLI binary or a loopback HTTP server that serves the profile's model counts as installed) |
 | WARNING | V230 | Flow configuration error rendered from the loader (loops/triggers/goto) with position and hint |
 | ERROR | V233 | A loop `until` names `file("{{ … }}")`: Jinja braces inside a flow file path are kept verbatim, so the file never exists — write the workspace-relative or `{workspace}` validation form |
@@ -806,9 +812,9 @@ code-registry and corpus-sweep tests.
 | WARNING | V331 | A sheet sets `response_format` on a profile that runs interactively by default (`cli.interactive.enabled_by_default: true`, e.g. claude-code) and does not say `interactive: false`; the interactive backend cannot enforce a schema and dispatch would refuse the sheet (GH #478) |
 | WARNING | V332 | A CLI schema sheet's `response_format` schema has a top-level `oneOf`/`allOf`/`anyOf` or no top-level `type`; Claude Code forwards it as a tool `input_schema`, which the API refuses with 400 (GH #486). Wrap the branches under one required property |
 | WARNING | V333 | A `command_succeeds` command uses a `{placeholder}` in a shape the engine's shell-quoting defeats: a bash array literal `xs=({list})` (one element — use `read -r -a xs <<< {list}`), or a prompt variable whose default needs quoting (`~/path`, a space) spliced inside an interpreter's string literal (`python3 -c "...'{var}/x'..."` keeps the quotes — pass it as an argument and read `sys.argv`). GH #477. |
-| WARNING | V334 | An optional prelude/cadenza item with `max_bytes` whose static path is already over the cap (measured now; the runtime drops it at every sheet). GH #474. For a `required` item the same finding is an ERROR (the sheet cannot run; GH #515). |
+| WARNING | V334 | An optional prelude/cadenza item (sheet or movement, GH #571) with `max_bytes` whose static path is already over the cap (measured now, once per declaration; the runtime drops it at every sheet). GH #474. For a `required` item the same finding is an ERROR (the sheet cannot run; GH #515). |
 | WARNING | V311, V322 | Capability classes: part of a used class's chain cannot run here (binary missing, unsupported, local server not serving the profile's model, or unable to enforce the sheet's `response_format`). V311 also warns when a sheet bound straight to a CLI profile (no class) asks for a `json_schema` `response_format` the profile cannot enforce (no `cli.command.json_schema_flag`): every dispatch of those sheets would be refused, and the warning names them — the job starts at the first available entry; when no entry can run here the warning says so and names the install (availability is a fact about this machine, so the score is still admitted); a default-layer class shadowed by a same-named profile; a score alias shadowing a class name |
-| INFO | V011, V104, V110, V218, V225 | Distant unknown field; timeout above 7200 seconds (2 hours); unused variable; ambiguous file reference; mixed fan-out keying |
+| INFO | V011, V104, V110, V218, V225 | Distant unknown field; timeout above 7200 seconds (2 hours); unused variable; ambiguous file reference; mixed fan-out keying (flow spans use stage keys while `cadenzas`, `prompt_extensions` and `per_sheet_instruments` use concrete sheets; for cadenzas the finding names the stage-keyed home, `movements.<stage>.cadenzas`, GH #571) |
 | INFO | V205 | All validations are `file_exists` only — nothing checks content |
 | INFO | V207 | Fan-out declared without `parallel.enabled` (instances still run sequentially) |
 | INFO | V325 | Capability classes: per-used-class resolution summary (`Instruments: strong → claude-code, … (user layer, sha256 …)`); an entry with a reasoning level shows it (`codex-cli (effort medium)`) |
@@ -2189,6 +2195,36 @@ mzt restart --foreground
 
 ---
 
+### `mzt conductor reload`
+
+Hot-reload the conductor config and instrument profiles on the running conductor (GH #408): the same fail-closed path as `SIGHUP` and the file watcher. The whole new config is validated before anything is applied; a config file that fails to load leaves the running config unchanged. A broken instrument profile file keeps its previous entry and is reported as `Partial`.
+
+```
+Usage: mzt conductor reload [OPTIONS]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--socket` | | | Unix socket path. Default: the active clone's socket, else the configured `socket.path`, else the legacy socket of a pre-move conductor |
+| `--reason` | | `cli` | Trigger reason recorded in the reload log |
+
+```bash
+mzt conductor reload
+```
+
+The command prints the new config generation, the applied entries (one `+ <entry>` per line, or `Applied: (nothing changed)`), the declined entries (`- <entry>`, running values kept) and, last, the reload result as one JSON line. Which fields a reload can apply is listed under [Hot Reload](configuration-reference.md#hot-reload).
+
+A CAM endpoint added or changed under `memory_backends.cam` is applied and reported as `+ memory_backends` (GH #573): the next dispatch resolves against the new endpoint table, and a session that is already open keeps the backend it was opened with.
+
+#### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | The reload succeeded, whether or not anything changed |
+| 1 | No conductor socket was found, the IPC call failed, or the reload was declined and the running config is unchanged |
+
+---
+
 ### `mzt conductor-status`
 
 Check conductor status via health probes.
@@ -2606,7 +2642,7 @@ execution time.
 
 | Code | Name | Description |
 |------|------|-------------|
-| E301 | CONFIG_INVALID | Invalid score YAML; also an API refusal of the request itself (a 4xx other than 429 reported by the CLI, e.g. a `response_format` schema the API will not take as a tool `input_schema`) — the CLI's message is kept as the attempt's error and stderr tail (GH #486) |
+| E301 | CONFIG_INVALID | Invalid score YAML; also an API refusal of the request itself (a 4xx other than 429 reported by the CLI, e.g. a `response_format` schema the API will not take as a tool `input_schema`) — the CLI's message is kept as the attempt's error and stderr tail (GH #486); and a memory configuration refusal (`MEMORY_CONFIG_ERROR`: a `cam` attachment naming an endpoint the conductor does not have, or an operator-only setting) — fails the sheet at once (GH #572) |
 | E302 | CONFIG_MISSING_FIELD | Required field missing |
 | E303 | CONFIG_PATH_NOT_FOUND | Referenced path doesn't exist |
 | E304 | CONFIG_PARSE_ERROR | YAML syntax error |

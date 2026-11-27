@@ -58,6 +58,17 @@ known when the gate landed; it may only shrink. Close a gap by changing the
 language (schema description, doc line and skill line in the same commit), never
 by adding to the fixture.
 
+The gate also fails on a top-level `mzt` command that no shipped skill names
+(`L14 cli-untaught`, GH #559). A command counts as named only when some
+`plugins/marianne/skills/**/*.md` file carries the literal `mzt <name>` token; a
+bare word such as `config` teaches nothing. **A new command ships with its skill
+line in the same commit.** A command the skills deliberately do not teach goes in
+`INTERNAL_MZT_COMMANDS` in `tests/scripts/check_language.py`, with a one-line
+reason, never in the baseline fixture: the baseline lists gaps, and a reviewed
+exclusion is not a gap. The check runs CLI → skills only. Skills may name
+commands that do not exist as adversarial eval bait (`mzt maestro`), so do not
+add a reverse check over the whole skill tree.
+
 **Prove instruments against the CLIs actually installed.** CI cannot run the
 agent CLIs, so a change to an instrument profile, a backend parser or anything
 that builds a CLI command needs a live run on a machine that has them:

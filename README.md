@@ -189,6 +189,33 @@ sheet:
     4: [2, 3]   # Sheet 4 depends on both 2 and 3
 ```
 
+Fan-out counts can come from the score's `prompt.variables`:
+
+```yaml
+prompt:
+  variables:
+    chapter_count: 3
+sheet:
+  size: 1
+  total_items: 3
+  fan_out:
+    2: '{{ chapter_count }}'   # Stage 2 expands to 3 voices
+  dependencies:
+    2: [1]
+    3: [2]                   # Stage 3 waits for all 3 voices
+```
+
+Use numeric stage keys and quote the reference. A bare `{{ name }}` or dotted
+`{{ book.count }}` resolves at load time to an integer from `1` to `1000`;
+the variable may hold an integer or an ASCII digit string with surrounding
+whitespace. Invalid references or values produce `V338`. The width stays fixed
+for the run, so `mzt run --var` cannot change it. Literal counts remain uncapped.
+See [Width from a variable](docs/score-writing-guide.md#width-from-a-variable)
+for constraints and the effect on later sheet numbers. To give every voice of
+a stage the same context, declare it on the movement —
+`movements.<stage>.cadenzas` — instead of listing the expanded sheet numbers
+(see [Stage-Level Cadenzas](docs/score-writing-guide.md#stage-level-cadenzas-movementsncadenzas)).
+
 Concurrent fan-out voices can exchange notes while they run through the
 scratch-owned mailbox — `sheet.fan_out_messaging: file` (the default) prepares
 per-sheet inboxes and the musicians use `mzt mail send` / `mzt mail read`.
