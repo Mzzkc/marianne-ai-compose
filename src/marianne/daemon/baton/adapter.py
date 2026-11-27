@@ -2667,7 +2667,10 @@ class BatonAdapter:
             )
             return UnchangedVerdict(skip=False, reason="input_changed", detail=detail)
 
-        changed_prod = unchanged.changed_products(sheet.workspace, record.products)
+        # Hashing reads product files: off the baton loop, so a large product cannot stall it.
+        changed_prod = await asyncio.to_thread(
+            unchanged.changed_products, sheet.workspace, record.products
+        )
         if changed_prod is not None:
             _logger.info(
                 "adapter.skip_unchanged.product_changed",
@@ -2773,7 +2776,9 @@ class BatonAdapter:
         scope = self._job_ledger_scope.get(event.job_id, event.job_id)
         declared = self._job_declared_products.get(event.job_id, {}).get(event.sheet_num, [])
         try:
-            prod_hashes = unchanged.product_digests(sh.workspace, declared)
+            prod_hashes = await asyncio.to_thread(
+                unchanged.product_digests, sh.workspace, declared
+            )
             record = PassRecord(
                 job_id=event.job_id,
                 ledger_scope=scope,

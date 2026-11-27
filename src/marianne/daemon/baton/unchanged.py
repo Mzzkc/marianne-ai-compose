@@ -56,8 +56,9 @@ def sha256_text(value: str) -> str:
 
 
 def sha256_file(path: Path) -> str:
-    """sha256:<hex> of file contents."""
-    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+    """sha256:<hex> of file contents, read in chunks (a large product never sits in memory)."""
+    with path.open("rb") as handle:
+        return f"sha256:{hashlib.file_digest(handle, 'sha256').hexdigest()}"
 
 
 def dispatch_digest(
