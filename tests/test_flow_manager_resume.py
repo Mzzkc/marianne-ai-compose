@@ -697,3 +697,43 @@ async def test_concert_child_inherits_the_parent_runtime_variables(tmp_path: Pat
         assert child.runtime_variables == {"project_root": "/srv/checkout", "repo": "o/r"}
     finally:
         await manager.shutdown(graceful=False)
+
+
+# GH #584: a composer who reads a capped loop's result and wants another pass on the same work.
+def _capped_loop_checkpoint() -> CheckpointState:
+    checkpoint = _failed_loop_checkpoint("max_iterations")
+    for num in (2, 3, 4):
+        checkpoint.sheets[num] = SheetState(sheet_num=num, status=SheetStatus.COMPLETED, total_cost_usd=1)
+    return checkpoint
+
+
+def test_from_sheet_extends_capped_loop_when_reloaded_cap_is_higher() -> None:
+    checkpoint = _capped_loop_checkpoint()
+    manager_module._reset_sheets_for_resume(checkpoint, DaemonJobStatus.PAUSED, from_sheet=2)
+    assert manager_module._reopen_loops_for_resume(
+        checkpoint, DaemonJobStatus.PAUSED, from_sheet=2, loop_caps={"2-4": 4},
+    ) == 1
+    run = checkpoint.flow.loops["2-4"]
+    assert run.phase == "running"
+    assert run.completed_reason is None
+    assert run.iteration == 4, "the extra pass is numbered after the spent ones"
+
+
+def test_from_sheet_keeps_capped_loop_closed_without_a_higher_cap() -> None:
+    for caps in (None, {"2-4": 3}, {"9-9": 10}):
+        checkpoint = _capped_loop_checkpoint()
+        manager_module._reset_sheets_for_resume(checkpoint, DaemonJobStatus.PAUSED, from_sheet=2)
+        before = checkpoint.flow.model_dump()
+        assert manager_module._reopen_loops_for_resume(
+            checkpoint, DaemonJobStatus.PAUSED, from_sheet=2, loop_caps=caps,
+        ) == 0
+        assert checkpoint.flow.model_dump() == before
+
+
+def test_plain_resume_never_extends_a_capped_loop() -> None:
+    checkpoint = _capped_loop_checkpoint()
+    before = checkpoint.flow.model_dump()
+    assert manager_module._reopen_loops_for_resume(
+        checkpoint, DaemonJobStatus.FAILED, loop_caps={"2-4": 9},
+    ) == 0
+    assert checkpoint.flow.model_dump() == before

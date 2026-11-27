@@ -17,7 +17,7 @@ import shutil
 import time
 import traceback
 from collections import deque
-from collections.abc import Callable, Coroutine, Sequence
+from collections.abc import Callable, Coroutine, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -278,12 +278,19 @@ def _reopen_loops_for_resume(
     checkpoint: CheckpointState,
     pre_resume_status: DaemonJobStatus | None,
     from_sheet: int | None = None,
+    loop_caps: Mapping[str, int] | None = None,
 ) -> int:
     """Reopen failure-terminated loops with pending work after sheet recovery.
 
     Preserve the in-flight iteration so recovered dispatches receive its index.
     Deliberate loop completion and paused terminal work remain authoritative;
     an explicit ``from_sheet`` override follows the sheet-reset rules instead.
+
+    GH #584: a loop that ended at ``max_iterations`` is reopened only by an
+    explicit ``from_sheet`` and only when ``loop_caps`` (the reloaded score's
+    ``max_iterations`` per concrete span) allows more passes than were spent.
+    The next pass is numbered ``iteration + 1``. Without a raised cap the
+    loop stays closed, as before.
     """
     if from_sheet is None and (
         pre_resume_status is None
@@ -293,9 +300,15 @@ def _reopen_loops_for_resume(
 
     reopened = 0
     for span, run in checkpoint.flow.loops.items():
-        if run.phase != "completed" or run.completed_reason not in {
-            "range_failed", "condition_error",
-        }:
+        if run.phase != "completed":
+            continue
+        extend = (
+            run.completed_reason == "max_iterations"
+            and from_sheet is not None
+            and loop_caps is not None
+            and loop_caps.get(span, 0) > run.iteration
+        )
+        if run.completed_reason not in {"range_failed", "condition_error"} and not extend:
             continue
         members = [checkpoint.sheets[num] for num in span_range(span) if num in checkpoint.sheets]
         if not any(
@@ -306,6 +319,8 @@ def _reopen_loops_for_resume(
             continue
         run.phase = "running"
         run.completed_reason = None
+        if extend:
+            run.iteration += 1
         run.cost_baseline_usd = sum(sheet.total_cost_usd for sheet in members)
         run.iteration_started_at = time.time()
         reopened += 1
@@ -7218,7 +7233,8 @@ class JobManager:
             checkpoint, pre_resume_status, from_sheet=from_sheet
         )
         reopened_count = _reopen_loops_for_resume(
-            checkpoint, pre_resume_status, from_sheet=from_sheet
+            checkpoint, pre_resume_status, from_sheet=from_sheet,
+            loop_caps={span: loop.max_iterations for span, loop in (config.sheet.loops or {}).items()},
         )
         if reopened_count:
             _logger.info(
